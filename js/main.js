@@ -1,124 +1,206 @@
-// Bootstrap: world + map + hero + dummy, input, fixed-step loop with interpolated rendering.
+// App state machine: title -> loadout -> play -> end -> loadout. Owns the world, renderer, camera and the fixed-step loop.
 (function (G) {
   'use strict';
   const IT = G.IT;
-  const GM = IT.GAME, P = GM.UNIT_PX, VW = GM.VIEW_W, VH = GM.VIEW_H;
-  const cv = document.getElementById('game'), glowCv = document.getElementById('glow');
+  const GM = IT.GAME, VW = GM.VIEW_W, VH = GM.VIEW_H;
+  const cv = document.getElementById('game'), glowCv = document.getElementById('glow'), aimCv = document.getElementById('aim');
   const stage = document.getElementById('stage'), dbg = document.getElementById('dbg');
+  const aimG = aimCv.getContext('2d');
+  const UI = IT.UI, S = IT.Settings;
 
-  const loadout = IT.Loadout.default();
-  const map = IT.Map.build(IT.MAPDEF);
-  const w = IT.World.create({ seed: 7, map, loadout, fog: true, autoAttack: true });
-  const sp = map.spawns.hero;
-  const hero = IT.Hero.create(w, loadout, sp.x, sp.y);
-  const d0 = map.spawns.dummies[0];
-  IT.Units.spawnDummy(w, { x: d0.x, y: d0.y, preset: 'training', skin: 'pedro' });
+  let map = null, g = null, lastOpts = null, settingsOver = false, state = 'title';
 
-  const cam = IT.Camera.create(map);
-  cam.centerOn(hero.x, hero.y);
-  const R = IT.Render.create(w, cv, glowCv, cam);
-  const mouse = { x: 0, y: 0, in: false };
-  const keys = new Set();
-  const log = [];
-  w.on('*', e => {
-    if (['spawn', 'despawn', 'status', 'statusEnd', 'visibility', 'fx', 'order', 'attack', 'attackHit', 'damage'].includes(e.type)) return;
-    log.push(`${e.t.toFixed(1)} ${e.type} ${e.reason || e.spell || e.ability || e.orb || ''}`);
-    if (log.length > 8) log.shift();
-  });
-
+  // ---------------------------------------------------------------- sizing
   function fit() {
     const s = Math.max(1, Math.floor(Math.min(innerWidth / VW, innerHeight / VH)));
     stage.style.width = VW * s + 'px'; stage.style.height = VH * s + 'px'; stage.style.setProperty('--u', s + 'px');
+    const gs = Math.max(11, Math.min(26, Math.min(innerWidth / 1280, innerHeight / 720) * 14));
+    document.documentElement.style.setProperty('--g', gs.toFixed(2) + 'px');
   }
   addEventListener('resize', fit); fit();
 
-  const world = () => cam.toWorld(mouse.x, mouse.y);
-  function unitAt(p, team) {
-    let best = null, bd = 60 * 60;
-    for (const e of w.ents) {
-      if (e.dead || e.team !== team || e.kind === 'thinker' || e.kind === 'proj') continue;
-      if (w.fog && team === 1 && !e.visible) continue;
-      const d = IT.U.dist2(e.x, e.y, p.x, p.y);
-      if (d < bd) { bd = d; best = e; }
-    }
-    return best;
+  // ---------------------------------------------------------------- game session
+  function spawnDummyAt(i, lo) {
+    const sp = map.spawns.dummies[i % map.spawns.dummies.length];
+    return IT.Units.spawnDummy(g.w, { x: sp.x, y: sp.y, preset: lo.preset, skin: lo.skin });
   }
-  const setMouse = ev => {
-    const r = cv.getBoundingClientRect();
-    mouse.x = (ev.clientX - r.left) / r.width * VW; mouse.y = (ev.clientY - r.top) / r.height * VH;
+
+  function start(opts) {
+    teardown();
+    UI.clear(); UI.clearToasts();
+    lastOpts = opts;
+    if (!map) map = IT.Map.build(IT.MAPDEF);
+    const lo = IT.Loadout.normalize(opts.loadout), set = S.get();
+    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: opts.fog !== false, autoAttack: set.autoAttack });
+    const sp = map.spawns.hero;
+    const hero = IT.Hero.create(w, lo, sp.x, sp.y);
+    g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv };
+    g.cam.centerOn(hero.x, hero.y); g.cam.lock = !!set.camLock;
+    const n = opts.mode === 'sandbox' ? Math.max(1, opts.count | 0) : 1;
+    for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
+    g.nDummies = n;
+    if (IT.StatsCollector) IT.StatsCollector.create(w);
+    g.R = IT.Render.create(w, cv, glowCv, g.cam);
+    g.R.showDebug = !!(IT.dev && IT.dev.debug);
+    w.on('fail', p => {
+      if (p.unit !== hero.id) return;
+      const k = 'fail.' + p.reason;
+      UI.toast(IT.hasT(k) ? IT.t(k) : p.reason, 'bad');
+      if (IT.Input.sfx) IT.Input.sfx('fail');
+    });
+    w.on('modeEnd', p => finish(p));
+    if (IT.Combo) IT.Combo.mode(w, opts.mode, { loadout: lo, grantMissing: !!opts.grant, seconds: GM.TIMED_SECONDS });
+
+    stage.classList.add('on'); state = 'play'; settingsOver = false;
+    const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant };
+    IT.Input.hooks = hooks;
+    IT.Input.bind(ctx);
+    IT.HUD.bind(ctx);
+    acc = 0; last = performance.now();
+    IT.dev = Object.assign(IT.dev || {}, { w, hero, cam: g.cam, R: g.R, paused: false, render: devRender });
+  }
+
+  function teardown() {
+    if (!g) return;
+    IT.Input.unbind(); IT.HUD.unbind();
+    if (g.w._stats) g.w._stats.destroy();
+    aimG.clearRect(0, 0, VW, VH);
+    stage.classList.remove('on');
+    UI.clearToasts();
+    g = null;
+  }
+
+  function commitStats() {
+    if (!g || g.committed) return null;
+    g.committed = true;
+    const st = g.w._stats ? g.w._stats.summary() : null;
+    if (st && st.time > 1) IT.UI.Life.add(st);
+    return st;
+  }
+
+  function finish(modeInfo) {
+    if (!g || g.ended) return;
+    g.ended = true;
+    const st = commitStats() || (IT.StatsCollector ? IT.StatsCollector.blank() : null);
+    g.w.paused = true; IT.Input.enabled = false;
+    aimG.clearRect(0, 0, VW, VH);
+    state = 'end';
+    const info = { stats: st, mode: modeInfo };
+    UI.clear();
+    UI.push(() => IT.UI.endScreen(info), true);
+  }
+
+  // ---------------------------------------------------------------- screens
+  const App = IT.App = {
+    go(name) {
+      if (name === 'again') { if (lastOpts) start(lastOpts); else App.go('loadout'); return; }
+      commitStats();
+      teardown();
+      UI.clear(); settingsOver = false;
+      state = name;
+      if (name === 'title') UI.set(UI.title);
+      else if (name === 'loadout') UI.set(IT.UI.LoadoutScreen.build);
+      else if (name === 'stats') UI.set(IT.UI.statsScreen);
+      else if (name === 'settings') { IT.UI.settingsOpen(); UI.set(IT.UI.settingsPanel); }
+    },
+    start(opts) { start(opts); },
+    resume() { if (g && g.w.paused && !g.ended) { UI.pop(); g.w.paused = false; } },
+    restart() { if (lastOpts) { commitStats(); start(lastOpts); } },
+    endRun() {
+      if (!g) return;
+      UI.pop(); g.w.paused = false;
+      if (IT.Combo) IT.Combo.stop(g.w); else finish({ mode: g.mode });
+      if (g && !g.ended) finish({ mode: g.mode });
+    },
+    pauseSettings() { settingsOver = true; IT.UI.settingsOpen(); UI.push(IT.UI.settingsPanel, true); },
+    settingsBack() { if (settingsOver) { settingsOver = false; UI.pop(); } else App.go('title'); },
+    get state() { return state; },
   };
-  let mmDrag = false;
-  cv.addEventListener('mousemove', ev => { setMouse(ev); mouse.in = !mmDrag; if (mmDrag) miniMove(); });
-  cv.addEventListener('mouseleave', () => { mouse.in = false; });
-  addEventListener('mouseup', () => { mmDrag = false; });
-  cv.addEventListener('contextmenu', ev => ev.preventDefault());
-  function miniMove() {
-    const m = R.mmHit(mouse.x, mouse.y); if (!m) return false;
-    cam.lock = false; cam.centerOn(m.x, m.y); return true;
-  }
-  cv.addEventListener('mousedown', ev => {
-    setMouse(ev);
-    if (ev.button === 0 && miniMove()) { mmDrag = true; return; }
-    if (ev.button !== 2) return;
-    const m = R.mmHit(mouse.x, mouse.y);
-    const p = m || world(), t = m ? null : unitAt(p, 1);
-    IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: ev.shiftKey } : { type: 'move', x: p.x, y: p.y, queued: ev.shiftKey });
+
+  const hooks = {
+    pause() {
+      if (!g || g.ended) return;
+      if (settingsOver) { IT.UI.settingsCancel(); return; }
+      if (g.w.paused) App.resume();
+      else { g.w.paused = true; IT.Input.cancel(true); IT.HUD.statsShow(false); UI.push(UI.pause, true); }
+    },
+    statsHold(on) { if (g && !g.w.paused) IT.HUD.statsShow(on); else if (!on && g) IT.HUD.statsShow(false); },
+    cheat() { IT.HUD.cheatToggle(); },
+    debug() { if (g) { g.R.showDebug = !g.R.showDebug; IT.dev.debug = g.R.showDebug; } },
+    refresh() {
+      if (!g) return;
+      if (IT.Combo) IT.Combo.refreshAll(g.w, g.hero);
+      else { g.hero.cd = {}; g.hero.inv.invokeCd = 0; g.hero.mana = g.hero.maxMana; }
+      UI.toast(IT.t('toast.refreshed'), 'good');
+    },
+    spawn() {
+      if (!g || g.mode !== 'sandbox') return;
+      const alive = g.w.query(e => e.kind === 'dummy');
+      if (alive.length >= 8) return;
+      const spots = map.spawns.dummies;
+      for (const s of spots) if (!alive.some(d => Math.hypot(d.x - s.x, d.y - s.y) < 150)) {
+        IT.Units.spawnDummy(g.w, { x: s.x, y: s.y, preset: g.lo.preset, skin: g.lo.skin });
+        UI.toast(IT.t('toast.spawned'), 'info'); return;
+      }
+    },
+    resetDummies() {
+      if (!g || g.mode !== 'sandbox') return;
+      const ds = g.w.query(e => e.kind === 'dummy');
+      ds.forEach((d, i) => {
+        if (i >= g.nDummies) { g.w.remove(d); return; }
+        const sp = map.spawns.dummies[i % map.spawns.dummies.length];
+        d.x = sp.x; d.y = sp.y; d.hp = d.maxHp; d.mana = d.maxMana; d.orders.length = 0; d.path.length = 0;
+        for (const s of d.statuses.slice()) IT.Status.remove(g.w, d, s.type);
+      });
+      if (IT.HUD.resetMeter) IT.HUD.resetMeter();
+      UI.toast(IT.t('toast.dummiesReset'), 'info');
+    },
+  };
+
+  S.onChange(d => {
+    if (!g) return;
+    g.w.opts.autoAttack = d.autoAttack;
+    g.cam.lock = !!d.camLock;
   });
 
-  function castSlot(i, queued) {
-    const id = hero.inv.slots[i]; if (!id) return;
-    const d = IT.Abilities.get(id); if (!d) return;
-    const p = world(), o = { type: 'cast', ability: id, queued };
-    if (d.target === 'unit') { const t = unitAt(p, 1); if (!t) return; o.target = t.id; }
-    else if (d.target === 'point') { o.x = p.x; o.y = p.y; }
-    IT.Orders.issue(w, hero, o);
-  }
-
-  addEventListener('keydown', ev => {
-    const k = ev.key.toUpperCase();
-    keys.add(ev.key);
-    if (ev.repeat) return;
-    if (k === 'Q' || k === 'W' || k === 'E') IT.Invoke.orb(w, hero, k);
-    else if (k === 'R') IT.Invoke.invoke(w, hero);
-    else if (k === 'D') castSlot(0, ev.shiftKey);
-    else if (k === 'F') castSlot(1, ev.shiftKey);
-    else if (k === 'S') IT.Orders.issue(w, hero, { type: 'stop' });
-    else if (k === 'H') IT.Orders.issue(w, hero, { type: 'hold' });
-    else if (k === ' ') cam.centerOn(hero.x, hero.y);
-    else if (k === 'Y') cam.lock = !cam.lock;
-    else if (k === 'F3') R.showDebug = !R.showDebug;
-    else if (k === 'G') w.fog = !w.fog;
-    else if (k === 'C') { hero.cd = {}; hero.inv.invokeCd = 0; hero.mana = hero.maxMana; }
-    else return;
-    ev.preventDefault();
-  });
-  addEventListener('keyup', ev => keys.delete(ev.key));
-  addEventListener('blur', () => keys.clear());
-
-  function debugText() {
-    const S = R.stats, inv = hero.inv;
-    return `render ${S.ms.toFixed(2)}ms avg ${S.avg.toFixed(2)} max ${S.max.toFixed(1)}  lights ${S.lights} parts ${S.parts} items ${S.items}  lock ${cam.lock ? 'on' : 'off'}\n` +
-      `orbs ${inv.orbs.join('')}  slots ${inv.slots.map(s => s || '-').join(' | ')}  invokeCd ${inv.invokeCd.toFixed(1)}\n` +
-      `hp ${Math.round(hero.hp)}/${Math.round(hero.maxHp)}  mana ${Math.round(hero.mana)}/${Math.round(hero.maxMana)}\n` +
-      `QWE orbs  R invoke  D/F cast  RMB move  S stop  H hold  G fog  C refresh  Space cam  Y lock  F3 debug\n` + log.join('\n');
-  }
-
+  // ---------------------------------------------------------------- loop
   let last = performance.now(), acc = 0, dbgT = 0;
+  function debugText() {
+    const R = g.R, hero = g.hero, inv = hero.inv, S2 = R.stats;
+    return `render ${S2.ms.toFixed(2)}ms avg ${S2.avg.toFixed(2)} max ${S2.max.toFixed(1)}  lights ${S2.lights} parts ${S2.parts} items ${S2.items}  lock ${g.cam.lock ? 'on' : 'off'}\n` +
+      `orbs ${inv.orbs.join('')}  slots ${inv.slots.map(s => s || '-').join(' | ')}  invokeCd ${inv.invokeCd.toFixed(1)}\n` +
+      `hp ${Math.round(hero.hp)}/${Math.round(hero.maxHp)}  mana ${Math.round(hero.mana)}/${Math.round(hero.maxMana)}  t ${g.w.t.toFixed(1)}`;
+  }
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (G.IT.dev && G.IT.dev.paused) { requestAnimationFrame(frame); return; }
-    acc += dt;
-    while (acc >= w.dt) { R.snapshot(); w.step(); acc -= w.dt; }
-    cam.update(dt, keys, mouse, hero);
-    R.render(acc / w.dt, dt);
-    dbgT += dt;
-    if (dbgT > 0.25) { dbgT = 0; dbg.textContent = R.showDebug ? debugText() : ''; R.stats.max *= 0.5; }
+    if (g && !(IT.dev && IT.dev.paused)) {
+      const w = g.w;
+      if (!w.paused) {
+        acc += dt;
+        while (acc >= w.dt && !w.paused) { g.R.snapshot(); w.step(); acc -= w.dt; }
+        g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
+      }
+      g.R.render(w.paused ? 1 : acc / w.dt, dt);
+      IT.Input.drawAim(aimG);
+      if (g) IT.HUD.update(dt);
+      dbgT += dt;
+      if (g && dbgT > 0.25) { dbgT = 0; dbg.textContent = g.R.showDebug ? debugText() : ''; g.R.stats.max *= 0.5; }
+    }
     requestAnimationFrame(frame);
   }
+  // step the sim n ticks then draw once (rAF is throttled in hidden panes)
+  function devRender(n) {
+    if (!g) return;
+    const R = g.R, w = g.w;
+    for (let i = 0; i < (n || 0); i++) { R.snapshot(); w.step(); }
+    R.fogSnap = (n || 0) > 5; R.render(1, 1 / 60); R.fogSnap = false;
+    IT.Input.drawAim(aimG); IT.HUD.update(0);
+  }
+
+  UI.initTip();
+  S.apply(true);
+  IT.dev = { w: null, hero: null, cam: null, R: null, paused: false, render: devRender, debug: false };
+  IT.hooks = hooks;
+  App.go('title');
   requestAnimationFrame(frame);
-  G.IT.dev = {
-    w, hero, cam, R, paused: false,
-    // step the sim n ticks then draw once (rAF is throttled in hidden panes)
-    render(n) { for (let i = 0; i < (n || 0); i++) { R.snapshot(); w.step(); } R.fogSnap = (n || 0) > 5; R.render(1, 1 / 60); R.fogSnap = false; },
-  };
 })(window);
