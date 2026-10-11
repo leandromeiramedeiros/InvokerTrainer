@@ -76,8 +76,22 @@ const SFX = (() => {
   }
 
   // Schedules one sound, then disconnects its nodes after it ends.
-  function run(c, build) {
-    const b = { c, t0: c.currentTime + 0.01, out: master, nodes: [], end: 0 };
+  function run(c, build, o) {
+    let out = master;
+    const b = { c, t0: c.currentTime + 0.01, out, nodes: [], end: 0 };
+    if (o && (o.vol != null || o.pan)) {
+      const vg = c.createGain();
+      vg.gain.value = o.vol == null ? 1 : o.vol;
+      b.nodes.push(vg);
+      let last = vg;
+      if (o.pan && c.createStereoPanner) {
+        const p = c.createStereoPanner();
+        p.pan.value = Math.max(-1, Math.min(1, o.pan));
+        vg.connect(p); b.nodes.push(p); last = p;
+      }
+      last.connect(master);
+      b.out = vg;
+    }
     build(b);
     const ms = Math.max(0, (b.end - c.currentTime) * 1000) + 200;
     setTimeout(() => {
@@ -226,9 +240,57 @@ const SFX = (() => {
     },
   };
 
-  return {
+  // Looping filtered-noise bed (rumble). Returns {stop()}; auto-stops after maxSec.
+  function loopNoise(o) {
+    const c = getCtx();
+    if (!c) return { stop() {} };
+    if (c.state === 'suspended' && c.resume) { const p = c.resume(); if (p && p.catch) p.catch(() => {}); }
+    const src = c.createBufferSource(); src.buffer = getNoise(c); src.loop = true;
+    const f = c.createBiquadFilter(); f.type = o.ft || 'lowpass'; f.frequency.value = o.f || 160; f.Q.value = o.q || 1;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(o.g || 0.3, c.currentTime + 0.08);
+    const nodes = [src, f, g];
+    let lfo = null;
+    if (o.wob) { // amplitude wobble for a rolling feel
+      lfo = c.createOscillator(); lfo.frequency.value = o.wob; const lg = c.createGain(); lg.gain.value = (o.g || 0.3) * 0.5;
+      lfo.connect(lg); lg.connect(g.gain); lfo.start(); nodes.push(lfo, lg);
+    }
+    let out = master;
+    if (o.vol != null || o.pan) {
+      const vg = c.createGain(); vg.gain.value = o.vol == null ? 1 : o.vol; g.connect(vg); nodes.push(vg); out = vg;
+      if (o.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = o.pan; vg.connect(p); p.connect(master); nodes.push(p); } else vg.connect(master);
+    } else g.connect(master);
+    src.connect(f); f.connect(g);
+    master.gain.value = SFXAPI.volume;
+    src.start(0, Math.random() * 0.5);
+    let done = false, tm = null;
+    const stop = () => {
+      if (done) return; done = true; clearTimeout(tm);
+      try { g.gain.cancelScheduledValues(c.currentTime); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.15); } catch (e) {}
+      setTimeout(() => { for (const n of nodes) { try { if (n.stop) n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} } }, 250);
+    };
+    if (o.maxSec) tm = setTimeout(stop, o.maxSec * 1000);
+    return { stop };
+  }
+
+  const SFXAPI = {
     enabled: true,
     volume: 0.35,
+    // extension API used by js/sfx.js
+    T, N, define(name, fn) { DEFS[name] = fn; },
+    has(name) { return Object.prototype.hasOwnProperty.call(DEFS, name); },
+    unlock() { const c = getCtx(); if (c && c.state === 'suspended' && c.resume) { const p = c.resume(); if (p && p.catch) p.catch(() => {}); } return !!c; },
+    loop: loopNoise,
+    playEx(name, o) {
+      try {
+        if (!this.enabled || !this.has(name)) return;
+        const c = getCtx();
+        if (!c) return;
+        if (c.state === 'suspended' && c.resume) { const p = c.resume(); if (p && p.catch) p.catch(() => {}); }
+        master.gain.value = this.volume;
+        run(c, DEFS[name], o);
+      } catch (e) {}
+    },
     play(name) {
       try {
         if (!this.enabled) return;
@@ -244,4 +306,6 @@ const SFX = (() => {
       } catch (e) {}
     },
   };
+  return SFXAPI;
 })();
+if (typeof window !== 'undefined') { window.SFX = SFX; (window.IT = window.IT || {}).SFX = SFX; }

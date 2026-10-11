@@ -40,6 +40,7 @@
     for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
     g.nDummies = n;
     if (IT.StatsCollector) IT.StatsCollector.create(w);
+    IT.Sfx && IT.Sfx.attach(w);
     g.R = IT.Render.create(w, cv, glowCv, g.cam);
     g.R.showDebug = !!(IT.dev && IT.dev.debug);
     w.on('fail', p => {
@@ -64,6 +65,7 @@
     if (!g) return;
     IT.Input.unbind(); IT.HUD.unbind();
     if (g.w._stats) g.w._stats.destroy();
+    IT.Sfx && IT.Sfx.detach();
     aimG.clearRect(0, 0, VW, VH);
     stage.classList.remove('on');
     UI.clearToasts();

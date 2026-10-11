@@ -85,8 +85,8 @@
     const { w, hero, cam } = In.ctx, how = opts.hud ? 'hud' : 'key';
     if (w.paused) return;
     switch (action) {
-      case 'orbQ': case 'orbW': case 'orbE': { const k = action.slice(3); IT.Invoke.orb(w, hero, k); sfx('orb' + k); return; }
-      case 'invoke': IT.Invoke.invoke(w, hero); sfx('invoke'); return;
+      case 'orbQ': case 'orbW': case 'orbE': { const k = action.slice(3); IT.Invoke.orb(w, hero, k); return; }
+      case 'invoke': IT.Invoke.invoke(w, hero); return;
       case 'stop': In.cancel(true); IT.Orders.issue(w, hero, { type: 'stop' }); return;
       case 'hold': In.cancel(true); IT.Orders.issue(w, hero, { type: 'hold' }); return;
       case 'center': cam.centerOn(hero.x, hero.y); return;
