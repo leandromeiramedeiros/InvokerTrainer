@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invoker Trainer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="cells" hidden></canvas>
+  <canvas id="game"></canvas>
+  <canvas id="glow" class="bloom b1"></canvas>
+  <canvas id="glow2" class="bloom b2"></canvas>
+
+  <div id="hud" hidden>
+    <div id="info"><div id="modeName"></div><div id="score"></div><div id="timer"></div><div id="streak"></div></div>
+    <div id="prompt"><div id="targets"></div><div id="hint"></div></div>
+    <div id="bars"><div class="bar hp"><i id="hpFill"></i><b id="hpTxt"></b></div><div class="bar mp"><i id="mpFill"></i><b id="mpTxt"></b></div></div>
+    <div id="toast"></div>
+    <div id="wave"></div>
+    <div id="book"></div>
+    <div id="skillbar">
+      <div id="orbBtns"></div>
+      <div id="orbSlots"><span></span><span></span><span></span></div>
+      <button id="invokeBtn" data-act="invoke"></button>
+      <div id="spellSlots"><button data-slot="0"></button><button data-slot="1"></button></div>
+    </div>
+    <div id="menuHint">ESC menu &middot; H spellbook</div>
+  </div>
+
+  <div id="menu" class="panel">
+    <h1>INVOKER<small>TRAINER</small></h1>
+    <p class="sub">Quas &middot; Wex &middot; Exort &mdash; learn the combos. Aim with the mouse, cast with hotkeys.</p>
+    <button data-mode="free">Free Play</button>
+    <button data-mode="drill">Drill (60s)</button>
+    <button data-mode="combo">Combo Run</button>
+    <button data-mode="arena">Arena</button>
+    <button id="openSettings">Settings</button>
+    <div id="bests"></div>
+  </div>
+
+  <div id="settings" class="panel" hidden>
+    <h2>Settings</h2>
+    <div class="row"><label>Hotkeys</label><select id="sScheme"><option value="legacy">Legacy (key per spell)</option><option value="slot">Slots (D / F)</option></select></div>
+    <div class="row"><label>Invoke cooldown</label><select id="sCd"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option><option value="4">4s</option></select></div>
+    <div class="row"><label>Bloom</label><input type="checkbox" id="sBloom"></div>
+    <div class="row"><label>Sound</label><input type="checkbox" id="sSound"></div>
+    <div class="row"><label>Recipe hints</label><input type="checkbox" id="sHints"></div>
+    <h3>Keys <small>(click, then press a key)</small></h3>
+    <div id="keyGrid"></div>
+    <button id="closeSettings">Back</button>
+  </div>
+
+  <div id="result" class="panel" hidden></div>
+</div>
+<script src="js/sprites.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/sand.js"></script>
+<script src="js/invoker.js"></script>
+<script src="js/world.js"></script>
+<script src="js/modes.js"></script>
+</body>
+</html>
