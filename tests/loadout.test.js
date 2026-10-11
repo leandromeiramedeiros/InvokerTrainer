@@ -11,10 +11,11 @@ test('default loadout is valid level 30', () => {
 test('item validation', () => {
   const l = IT.Loadout.default();
   assert.ok(!IT.Loadout.validate(Object.assign({}, l, { items: ['blink', 'blink'] })).ok);
-  assert.ok(!IT.Loadout.validate(Object.assign({}, l, { items: ['boots', 'treads'] })).ok);
+  assert.ok(!IT.Loadout.validate(Object.assign({}, l, { items: ['boots', 'travels'] })).ok);
   assert.ok(!IT.Loadout.validate(Object.assign({}, l, { items: ['nope'] })).ok);
   assert.ok(!IT.Loadout.validate(Object.assign({}, l, { items: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'blink'] })).ok);
-  assert.ok(IT.Loadout.validate(Object.assign({}, l, { items: ['refresher', 'blink', 'treads'] })).ok);
+  assert.ok(IT.Loadout.validate(Object.assign({}, l, { items: ['refresher', 'blink', 'travels', 'orchid', 'gleipnir'] })).ok);
+  assert.ok(!IT.Loadout.validate(Object.assign({}, l, { items: ['treads'] })).ok, 'treads removed');
 });
 test('normalize fills defaults and ctx works', () => {
   const n = IT.Loadout.normalize({ heroLevel: 5, orbs: { quas: 2 } });
@@ -32,4 +33,19 @@ test('hero stats level 1 vs 30', () => {
   assert.equal(a.ms, 280);
   assert.equal(a.team, 0); assert.equal(a.kind, 'hero'); assert.equal(a.items.length, 6);
   assert.ok(b.attack.as > a.attack.as);
+});
+test('stats audit: level 30, orbs 8/8/8 vs real Dota (STR 100/AGI 80/INT 146, HP 2298, mana 1827)', () => {
+  const w = IT.World.create({ seed: 1 });
+  const h = IT.Hero.create(w, IT.Loadout.normalize({ heroLevel: 30, orbs: { quas: 8, wex: 8, exort: 8 } }), 0, 0);
+  assert.deepEqual(h.attr, { str: 99.5, agi: 80, int: 146 });   // 99.5 shows as 100
+  assert.equal(h.maxHp, 120 + 22 * 99);                         // derived stats use the whole attribute: 2298
+  assert.equal(h.maxMana, 1827);
+  assert.equal(h.maxHp, 2298);
+  assert.equal(Math.round(h.armor), 12); assert.equal(Math.round(h.magicRes * 100), 40);
+  assert.equal(h.attack.min, 165); assert.equal(h.attack.max, 171);   // avg 168
+  assert.ok(Math.abs(h.base.hpRegen - 10.2) < 1e-9 && Math.abs(h.base.manaRegen - 7.3) < 1e-9);
+  assert.equal(IT.Hero.maxHp(h.ctx), 2298);
+  // odd levels: STR x.5 floors (L2 = 21.5 -> 21)
+  const g = IT.Hero.create(IT.World.create({ seed: 1 }), IT.Loadout.normalize({ heroLevel: 2 }), 0, 0);
+  assert.equal(g.maxHp, 120 + 22 * 21);
 });

@@ -7,6 +7,7 @@ import { sStamps, nStamps } from './invoker_stamps.mjs';
 import { eStamps } from './invoker_stamps_e.mjs';
 import { buildForge } from './forge_gen.mjs';
 import { orbs, portrait } from './invoker_icons.mjs';
+import { genSkins } from './invoker_skins_gen.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 // ---------- poses ----------
@@ -49,3 +50,4 @@ IT.Art.sheet('forge', {
 // keep any tail the old file had? (old file ended with the IIFE close)
 fs.writeFileSync(path.join(ROOT, 'js/art/invoker.js'), src);
 console.log('wrote js/art/invoker.js', Object.keys(frames).length, 'invoker frames,', Object.keys(forge.frames).length, 'forge frames');
+genSkins();

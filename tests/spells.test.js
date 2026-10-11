@@ -216,6 +216,61 @@ test('emp: low-mana target burns only what it has; shard drags toward center', (
   assert.strictEqual(d2.x, 900);
 });
 
+test('shard upgrades only the chosen spell', () => {
+  const e = env({ quas: 4, wex: 4, exort: 4 }, { shard: true, shardSpell: 'sunstrike' });
+  assert.ok(e.V('sunstrike', 'create_forged_spirit_on_hero_damage') > 0);
+  assert.strictEqual(e.V('emp', 'drag_speed'), 0); assert.strictEqual(e.V('ghostwalk', 'apply_ice_wall_debuff'), 0);
+  const f = env({ quas: 4, wex: 4, exort: 4 }, { shard: true, shardSpell: 'ghostwalk' });
+  assert.ok(f.V('ghostwalk', 'apply_ice_wall_debuff') > 0); assert.strictEqual(f.V('sunstrike', 'create_forged_spirit_on_hero_damage'), 0);
+  assert.strictEqual(f.h.ctx.shardSpell, 'ghostwalk');
+  // legacy: shard without a spell upgrades all
+  const g = env({ quas: 4, wex: 4, exort: 4 }, { shard: true });
+  assert.ok(g.V('emp', 'drag_speed') > 0);
+});
+
+test('ghost walk shard: ice wall dps on enemy heroes (dummies) in the aura', () => {
+  const run = (shardSpell) => {
+    const e = env({ quas: 4, wex: 4, exort: 4 }, shardSpell ? { shard: true, shardSpell } : {});
+    const d = e.dummy(200, 0), far = e.dummy(2000, 0);
+    e.cast('ghostwalk'); e.run(3.2);
+    return { e, d, far };
+  };
+  const on = run('ghostwalk'), off = run('emp');
+  const dps = on.e.IT.Values.get('invoker_ice_wall', 'damage_per_second', on.e.h.ctx);
+  assert.ok(dps > 0);
+  const got = on.e.dealt('ghostwalk', on.d);
+  assert.ok(got >= dps * 2.5 && got <= dps * 3.5, 'dps ' + got);
+  assert.strictEqual(on.e.dealt('ghostwalk', on.far), 0);
+  assert.strictEqual(off.e.dealt('ghostwalk', off.d), 0);
+});
+
+test('sun strike shard: damaging an enemy hero spawns a forge spirit there without replacing others', () => {
+  const e = env({ quas: 4, wex: 1, exort: 4 }, { shard: true, shardSpell: 'sunstrike' });
+  e.cast('forgespirit'); e.run(0.1);
+  const had = e.w.query(u => u.kind === 'spirit').map(s => s.id);
+  assert.ok(had.length >= 1);
+  const d = e.dummy(800, 0);
+  e.cast('sunstrike', { x: 800, y: 0 }); e.run(e.V('sunstrike', 'delay') + 0.1);
+  const sp = e.w.query(u => u.kind === 'spirit');
+  assert.strictEqual(sp.length, had.length + 1);
+  assert.ok(had.every(id => sp.some(s => s.id === id)));
+  const ns = sp.find(s => !had.includes(s.id));
+  assert.strictEqual(ns.team, 0); assert.ok(Math.hypot(ns.x - 800, ns.y) < 80);
+  // miss: no spirit; no shard: no spirit
+  const f = env({ quas: 4, wex: 1, exort: 4 }, { shard: true, shardSpell: 'sunstrike' });
+  f.dummy(2000, 0); f.cast('sunstrike', { x: 800, y: 0 }); f.run(f.V('sunstrike', 'delay') + 0.1);
+  assert.strictEqual(f.w.query(u => u.kind === 'spirit').length, 0);
+  const g = env({ quas: 4, wex: 1, exort: 4 });
+  g.dummy(800, 0); g.cast('sunstrike', { x: 800, y: 0 }); g.run(g.V('sunstrike', 'delay') + 0.1);
+  assert.strictEqual(g.w.query(u => u.kind === 'spirit').length, 0);
+});
+
+test('forge spirit count = min(quas, exort) counts', () => {
+  const cnt = (q, x) => { const e = env({ quas: q, wex: 1, exort: x }); e.cast('forgespirit'); e.run(0.1); return e.w.query(u => u.kind === 'spirit').length; };
+  assert.strictEqual(cnt(1, 1), 1); assert.strictEqual(cnt(8, 1), 1); assert.strictEqual(cnt(1, 8), 1);
+  assert.strictEqual(cnt(4, 4), 2); assert.strictEqual(cnt(8, 8), 3); assert.strictEqual(cnt(8, 4), 2);
+});
+
 test('tornado: lift, land damage, invulnerable while lifted, path vision, miss', () => {
   const e = env({ quas: 8, wex: 4, exort: 1 });
   const d = e.dummy(600, 80), off = e.dummy(600, 600);
@@ -282,7 +337,7 @@ test('alacrity: stats applied to self and ally, removed on expiry; default targe
 
 test('forge spirit: count, recast replaces, melting strike stacks and caps', () => {
   const e = env({ quas: 4, wex: 1, exort: 4 }, null, { autoAttack: true });
-  const n = e.V('forgespirit', 'extra_spirit_count_quas') + e.V('forgespirit', 'extra_spirit_count_exort');
+  const n = Math.max(1, Math.min(e.V('forgespirit', 'extra_spirit_count_quas'), e.V('forgespirit', 'extra_spirit_count_exort')));
   e.cast('forgespirit'); e.run(0.1);
   let sp = e.w.query(u => u.kind === 'spirit');
   assert.strictEqual(sp.length, n); assert.ok(n >= 2);

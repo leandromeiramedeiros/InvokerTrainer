@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8"><title>Medals preview</title>
+<style>
+body{background:#14161c;color:#ccd;font:12px sans-serif;margin:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0;align-items:flex-end}
+canvas{image-rendering:pixelated;background:#222630}
+h3{margin:10px 0 2px}
+</style>
+<body>
+<script src="../../js/data/dota.js"></script>
+<script src="../../js/data/game.js"></script>
+<script src="../../js/data/i18n.js"></script>
+<script src="../../js/data/i18n/s6.js"></script>
+<script src="../../js/data/ranks.js"></script>
+<script src="../../js/art/art.js"></script>
+<script src="../../js/art/icons.js"></script>
+<script src="../../js/art/medals.js"></script>
+<script>
+const IT = window.IT, M = IT.Medals;
+function row(title, fn) { const h = document.createElement('h3'); h.textContent = title; document.body.appendChild(h); const r = document.createElement('div'); r.className = 'row'; document.body.appendChild(r); fn(r); }
+const q = new URLSearchParams(location.search);
+row('icons', r => { for (const k of ['orchid', 'gleipnir', 'atos', 'bkb', 'blink', 'boots']) { const c = IT.Art.canvas('icons', k); if (!c) continue; const n = clone(c); n.style.width = '80px'; n.style.height = '80px'; r.appendChild(n); const m = clone(c); r.appendChild(m); } });
+if (q.get('icons')) throw 0;
+const Z = +q.get('z') || 128, TS = (q.get('t') || '0,1,2,3,4,5,6,7').split(',').map(Number);
+row(Z + ' px, 3 stars (Immortal none)', r => { for (const t of TS) r.appendChild(clone(M.canvas(t, 3, Z))); });
+if (q.get('only')) throw 0;
+row('128 px', r => { for (let t = 0; t < 8; t++) r.appendChild(clone(M.canvas(t, 5, 128))); });
+row('64 px', r => { for (let t = 0; t < 8; t++) r.appendChild(clone(M.canvas(t, 3, 64))); });
+function clone(c) { const n = document.createElement('canvas'); n.width = c.width; n.height = c.height; n.getContext('2d').drawImage(c, 0, 0); return n; }
+row('64 px, stars 0..5 (tier row each)', r => { for (let t = 0; t < 7; t++) for (const s of [0, 1, 5]) r.appendChild(clone(M.canvas(t, s, 64))); });
+row('pips 18/32px', r => { for (let t = 0; t < 8; t++) r.appendChild(clone(M.pip(t, 18))); for (let t = 0; t < 8; t++) r.appendChild(clone(M.pip(t, 32))); });
+row('el(rating, px)', r => { for (const v of [100, 900, 1700, 2500, 3300, 4100, 4900, 6000]) r.appendChild(M.el(v, 64, 'MMR ' + v)); });
+</script>

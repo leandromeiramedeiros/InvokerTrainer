@@ -3,7 +3,7 @@ const test = require('node:test'), assert = require('node:assert');
 const IT = require('./_load.js')(['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js']);
 
 IT.Combat = {   // stub: plain damage
-  damage(w, o) { const t = w.get(o.target); t.hp -= o.amount; w.emit('damage', { src: o.src, target: o.target, ability: o.ability, type: o.type, raw: o.amount, dealt: o.amount, prevented: 0 }); return o.amount; },
+  damage(w, o) { const t = w.get(o.target); t.hp -= o.amount; w.emit('damage', { src: o.src, target: o.target, ability: o.ability, dmgType: o.type, raw: o.amount, dealt: o.amount, prevented: 0 }); return o.amount; },
 };
 let chanEnds = [], casts = [];
 IT.Abilities.def('fakept', { kind: 'spell', target: 'point', range: () => 300, castPoint: () => 0.3, manaCost: () => 50, cooldown: () => 5, cast(w, c, o) { casts.push({ t: w.t, x: o.x, y: o.y }); } });
@@ -18,7 +18,7 @@ function mk(opts) {
   return { w, h };
 }
 const run = (w, n) => { for (let i = 0; i < n; i++) w.step(); };
-const evs = (w, type) => w.log.filter(e => e.type === type);
+const evs = (w, type) => w.log.filter(e => e.ev === type);
 const dummy = (w, x, y) => w.add({ kind: 'dummy', team: 1, x, y, radius: 24, hp: 5000, maxHp: 5000, mana: 0, maxMana: 0, ms: 0, armor: 0, magicRes: 0, visible: true });
 
 test('move order arrives and completes', () => {

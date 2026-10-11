@@ -72,6 +72,11 @@ function play(w, h, id, o) {
       const ang = Math.atan2(h.y - t.y, h.x - t.x), ox = pull ? Math.cos(ang) * 300 : 0, oy = pull ? Math.sin(ang) * 300 : 0;
       IT.Orders.issue(w, h, { queued: !!(prev && prev.ability === 'meteorhammer'), type: 'cast', ability: s.ability, x: t.x + ox, y: t.y + oy, target: t === h ? h.id : t.id && s.targetVisibility !== 'hidden' ? t.id : undefined });
       for (let k = 0; k < 90 && w.combo.stepIndex <= i && act(w); k++) w.step();
+    } else if (s.type === 'position' || s.type === 'move') {
+      const d0 = dummyOf(w), ang = Math.atan2(h.y - d0.y, h.x - d0.x);
+      if (s.type === 'position') { const r = ((s.minDist || 0) + (s.maxDist || 600)) / 2; h.x = d0.x + Math.cos(ang) * r; h.y = d0.y + Math.sin(ang) * r; }
+      else { const k = s.dir === 'toward' ? -1 : 1; IT.Orders.issue(w, h, { type: 'move', x: h.x + Math.cos(ang) * k * (s.dist + 60), y: h.y + Math.sin(ang) * k * (s.dist + 60) }); }
+      for (let k = 0; k < 300 && w.combo.stepIndex <= i && act(w); k++) w.step();
     } else if (s.type === 'attack') {
       IT.Orders.issue(w, h, { type: 'attack', target: dummyOf(w).id });
       for (let k = 0; k < 600 && w.combo.stepIndex <= i && act(w); k++) w.step();
@@ -83,7 +88,7 @@ function play(w, h, id, o) {
 }
 
 test('data: every combo is well-formed', () => {
-  assert.ok(C.length >= 25);
+  assert.ok(C.length >= 40);
   const ids = new Set();
   for (const c of C) {
     assert.ok(!ids.has(c.id), 'dup ' + c.id); ids.add(c.id);
@@ -91,9 +96,12 @@ test('data: every combo is well-formed', () => {
     assert.ok(c.name.en && c.name.pt && c.tip.en && c.tip.pt, c.id);
     assert.ok(c.par > 0 && c.steps.length > 0, c.id);
     for (const s of c.steps) {
-      assert.ok(['cast', 'item', 'attack', 'react'].includes(s.type), c.id);
+      assert.ok(['cast', 'item', 'attack', 'react', 'position', 'move'].includes(s.type), c.id);
       if (s.type === 'cast') assert.ok(IT.GAME.SPELL_ORBS[s.ability], c.id + ' ' + s.ability);
       if (s.type === 'item') assert.ok(IT.GAME.ITEM_DOTA[s.ability], c.id + ' ' + s.ability);
+      if (s.type === 'position') assert.ok(s.minDist != null || s.maxDist != null, c.id);
+      if (s.type === 'move') assert.ok(s.dist > 0, c.id);
+      if (s.itemOnDummy) assert.equal(s.type, 'item', c.id);
     }
     assert.notEqual(c.steps[0].type, 'react', c.id);
   }
@@ -225,4 +233,43 @@ test('timed: ends after the limit with modeEnd summary', () => {
   const e = logOf(w, 'modeEnd');
   assert.equal(e.length, 1); assert.equal(e[0].mode, 'timed');
   assert.equal(w.combo.ended, true); assert.equal(w.combo.timeLeft, 0);
+});
+
+test('position step: completes only when the hero-dummy gap is in range', () => {
+  const { w, h, d, runT } = mk();
+  IT.Combo.start(w, 'i_icewall_position');
+  const dd = dummyOf(w);
+  h.x = dd.x - 500; h.y = dd.y; runT(0.5);
+  assert.equal(w.combo.stepIndex, 0);
+  h.x = dd.x - 200; runT(0.2);
+  assert.equal(w.combo.stepIndex, 1);
+});
+
+test('move step: needs the hero to walk the distance toward the dummy', () => {
+  const { w, h, runT } = mk();
+  IT.Combo.start(w, 'i_ghost_approach');
+  prep(w, h, 'ghostwalk');
+  IT.Orders.issue(w, h, { type: 'cast', ability: 'ghostwalk' });
+  runT(1);
+  assert.equal(w.combo.stepIndex, 1);
+  const dd = dummyOf(w), a = Math.atan2(dd.y - h.y, dd.x - h.x);
+  h.x += Math.cos(a) * 100; h.y += Math.sin(a) * 100; runT(0.2);
+  assert.equal(w.combo.stepIndex, 1);   // not far enough
+  h.x += Math.cos(a) * 250; h.y += Math.sin(a) * 250; runT(0.2);
+  assert.equal(w.combo.stepIndex, 2);
+});
+
+test('itemOnDummy: step stays pending until the item hits; a miss fails it', () => {
+  const { w, h, run, runT } = mk({ items: ['atos'] });
+  IT.Combo.start(w, 't_atos_sunstrike');
+  const dd = dummyOf(w);
+  h.x = dd.x - 700; h.y = dd.y; w.step();
+  assert.ok(w.combo.def.steps[0].itemOnDummy);
+  IT.Orders.issue(w, h, { type: 'cast', ability: 'atos', target: dd.id, x: dd.x, y: dd.y });
+  for (let k = 0; k < 90 && w.combo.stepIndex < 1; k++) run(1);
+  assert.equal(w.combo.steps[0].status, 'pending');
+  w.emit('miss', { src: h.id, ability: 'atos', x: dd.x, y: dd.y });
+  run(1);
+  assert.equal(logOf(w, 'comboFail')[0].reason, 'miss');
+  runT(0.1);
 });

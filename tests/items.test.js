@@ -259,9 +259,9 @@ test('shiva: ring damage + slow only for units inside, aura and armor passive', 
   assert.ok(!IT.Status.has(a, 'slow'));
 });
 
-test('boots / treads / travels: ms (and AS), only one counts, idempotent', () => {
+test('boots / travels: ms, only one counts, idempotent', () => {
   const ms0 = mk([]).h.base.ms;
-  for (const [id, ms, as] of [['boots', 45, 0], ['travels', 90, 0], ['treads', 45, 25]]) {
+  for (const [id, ms, as] of [['boots', 45, 0], ['travels', 90, 0]]) {
     const { w, h, run } = mk([id]);
     run(2);
     near(h.ms, ms0 + ms, 1e-6, id);
@@ -271,10 +271,189 @@ test('boots / treads / travels: ms (and AS), only one counts, idempotent', () =>
     run(2);
     near(h.ms, ms0 + ms, 1e-6);
   }
-  const m = mk(['boots', 'treads', 'travels']);
+  const m = mk(['boots', 'travels']);
   m.run(2);
   near(m.h.ms, ms0 + 90, 1e-6);   // travels wins; not stacked
   const n = mk([]);
   n.run(2);
   assert.equal(n.h.ms, ms0);
+});
+
+test('orchid: silence, stores damage taken, magic burst when it ends; bkb blocks', () => {
+  const { w, h, dummy, run, evs } = mk(['orchid']);
+  const d = dummy(600, 0); d.magicRes = 0; d.base.magicRes = 0;
+  assert.ok(cast(w, h, 'orchid', { target: d.id }));
+  run(3);
+  const s = IT.Status.find(d, 'silence');
+  assert.ok(s); near(s.until - w.t, iv('orchid', 'silence_duration'), 0.3);
+  assert.equal(evs('cast', e => e.ability === 'orchid' && e.kind === 'item').length, 1);
+  assert.equal(evs('hit', e => e.ability === 'orchid').length, 1);
+  assert.equal(evs('fx', e => e.name === 'orchidHit').length, 1);
+  run(30);
+  IT.Combat.damage(w, { src: h.id, target: d, ability: 'x', type: 'pure', amount: 100 });
+  IT.Combat.damage(w, { src: h.id, target: d, ability: 'x', type: 'pure', amount: 50 });
+  assert.equal(evs('fx', e => e.name === 'orchidBurst').length, 0);
+  run(30 * 5);
+  assert.ok(!IT.Status.has(d, 'silence'));
+  const b = evs('damage', e => e.ability === 'orchid');
+  assert.equal(b.length, 1); near(b[0].dealt, 150 * iv('orchid', 'silence_damage_percent') / 100, 1e-6);
+  assert.equal(b[0].dmgType, 'magical');
+  const bu = evs('fx', e => e.name === 'orchidBurst'); assert.equal(bu.length, 1); near(bu[0].amount, b[0].dealt, 1e-6);
+  // damage after the silence is not recorded
+  IT.Combat.damage(w, { src: h.id, target: d, ability: 'x', type: 'pure', amount: 100 });
+  run(10);
+  assert.equal(evs('damage', e => e.ability === 'orchid').length, 1);
+  // BKB blocks
+  const m = mk(['orchid']);
+  const d2 = m.dummy(600, 0);
+  IT.Status.add(m.w, d2, 'magicImmune', 5, {});
+  cast(m.w, m.h, 'orchid', { target: d2.id }); m.run(3);
+  assert.ok(!IT.Status.has(d2, 'silence'));
+  assert.equal(m.evs('miss', e => e.ability === 'orchid').length, 1);
+  assert.equal(m.evs('hit', e => e.ability === 'orchid').length, 0);
+  // passive stats
+  const p = mk(['orchid']); p.run(2);
+  near(p.h.attack.as, p.h.base.as + iv('orchid', 'bonus_attack_speed'), 1e-6);
+});
+
+test('orchid: no burst when the target dies silenced', () => {
+  const { w, h, dummy, run, evs } = mk(['orchid']);
+  const d = dummy(600, 0);
+  cast(w, h, 'orchid', { target: d.id }); run(3);
+  IT.Combat.damage(w, { src: h.id, target: d, ability: 'x', type: 'pure', amount: 100 });
+  w.remove(d);
+  run(30 * 6);
+  assert.equal(evs('damage', e => e.ability === 'orchid').length, 0);
+});
+
+test('gleipnir: projectiles root every enemy in the radius; BKB blocks; hit/miss events', () => {
+  const { w, h, dummy, run, evs } = mk(['gleipnir']);
+  const r = iv('gleipnir', 'radius_tooltip') || iv('gleipnir', 'radius');
+  const a = dummy(700, 0), b = dummy(700 + r - 40, 0), far = dummy(700, 900), imm = dummy(700, 80);
+  IT.Status.add(w, imm, 'magicImmune', 10, {});
+  assert.ok(cast(w, h, 'gleipnir', { x: h.x + 700, y: h.y }));
+  run(3);
+  assert.equal(evs('fx', e => e.name === 'gleipnirLaunch').length, 1);
+  assert.equal(evs('hit', e => e.ability === 'gleipnir').length, 0, 'in flight');
+  run(30);
+  const dur = iv('gleipnir', 'duration');
+  for (const u of [a, b]) { const s = IT.Status.find(u, 'root'); assert.ok(s); near(s.until - w.t, dur, 1.2); }
+  assert.ok(!IT.Status.has(far, 'root')); assert.ok(!IT.Status.has(imm, 'root'));
+  assert.equal(evs('hit', e => e.ability === 'gleipnir').length, 2);
+  assert.equal(evs('miss', e => e.ability === 'gleipnir').length, 1, 'bkb target = miss');
+  assert.equal(evs('fx', e => e.name === 'gleipnirHit').length, 2);
+  run(30 * 3);
+  assert.ok(!IT.Status.has(a, 'root'));
+  // empty area = miss
+  const m = mk(['gleipnir']);
+  cast(m.w, m.h, 'gleipnir', { x: m.h.x + 600, y: m.h.y }); m.run(5);
+  assert.equal(m.evs('miss', e => e.ability === 'gleipnir').length, 1);
+});
+
+test('items.swap swaps slots, emits itemSwap, rejects bad indices', () => {
+  const { w, h, evs } = mk(['refresher', 'bkb', 'blink']);
+  const ids = () => h.items.map(s => s && s.id);
+  const [x, y, z] = ids();
+  assert.equal(IT.Items.swap(w, h, 0, 2), true);
+  assert.deepEqual(ids().slice(0, 3), [z, y, x]);
+  const e = evs('itemSwap');
+  assert.equal(e.length, 1); assert.equal(e[0].unit, h.id); assert.equal(e[0].from, 0); assert.equal(e[0].to, 2);
+  h.cd.bkb = 12; h.items[1].cd = 12;   // cooldown follows the item
+  assert.equal(IT.Items.swap(w, h, 1, 0), true);
+  assert.equal(h.items[0].id, 'bkb'); assert.equal(h.items[0].cd, 12); assert.equal(h.cd.bkb, 12);
+  const n = evs('itemSwap').length;
+  assert.equal(IT.Items.swap(w, h, 1, 1), false);
+  assert.equal(IT.Items.swap(w, h, -1, 1), false);
+  assert.equal(IT.Items.swap(w, h, 0, h.items.length), false);
+  assert.equal(IT.Items.swap(w, null, 0, 1), false);
+  assert.equal(evs('itemSwap').length, n);
+  // swapping with an empty slot
+  assert.equal(IT.Items.swap(w, h, 0, 5), true);
+  assert.equal(h.items[0], null); assert.equal(h.items[5].id, 'bkb');
+});
+
+test('dummy items: spawnDummy items/useBkb options (hero-shaped slots)', () => {
+  const { dummy } = mk([]);
+  const d = dummy(500, 0, { items: ['bkb', 'blink'], useBkb: true });
+  assert.equal(d.items.length, 6);
+  assert.deepEqual(d.items.slice(0, 2).map(s => s.id), ['bkb', 'blink']);
+  assert.ok(d.items.slice(2).every(s => s === null));
+  assert.equal(d.items[0].cd, 0); assert.equal(d.ai.useBkb, true);
+  const e = dummy(600, 0);
+  assert.equal(e.items, undefined); assert.equal(e.ai.useBkb, false);
+});
+
+test('dummy useBkb: reaction 0 blocks atos / gleipnir / orchid; cooldown shows on the item', () => {
+  const { w, h, dummy, run, evs } = mk(['atos', 'orchid', 'gleipnir']);
+  const d = dummy(700, 0, { items: ['bkb'], useBkb: true });   // training: reaction 0
+  assert.ok(cast(w, h, 'atos', { target: d.id }));
+  run(25);
+  assert.ok(IT.Status.has(d, 'magicImmune'), 'bkb on');
+  assert.ok(!IT.Status.has(d, 'atosRoot'));
+  assert.equal(evs('miss', e => e.ability === 'atos').length, 1);
+  assert.equal(evs('hit', e => e.ability === 'atos').length, 0);
+  assert.equal(evs('itemUse', e => e.unit === d.id && e.ability === 'bkb').length, 1);
+  near(d.cd.bkb, iv('bkb', 'cooldown'), 1); near(d.items[0].cd, d.cd.bkb, 1e-9);
+  assert.equal(d.items[0].charges, 1);
+  // other disables are blocked while it lasts
+  run(30 * 2);
+  IT.Status.remove(w, d, 'magicImmune');
+  h.cd.orchid = 0;
+  assert.ok(cast(w, h, 'orchid', { target: d.id })); run(5);
+  assert.equal(evs('itemUse', e => e.unit === d.id).length, 1, 'bkb on cooldown: no second use');
+  assert.ok(IT.Status.has(d, 'silence'));
+});
+
+test('dummy useBkb: reaction delay, aim filters, needs a carried ready bkb', () => {
+  const { w, h, dummy, run, evs } = mk(['atos', 'gleipnir', 'orchid']);
+  const slow = dummy(2500, 0, { preset: 'standard', behavior: 'stationary', items: ['bkb'], useBkb: true });   // reaction 0.6
+  const noItem = dummy(600, 300, { useBkb: true });
+  const noFlag = dummy(600, -300, { items: ['bkb'] });
+  const other = dummy(900, 0, { items: ['bkb'], useBkb: true });
+  assert.equal(slow.reaction, 0.6);
+  // gleipnir at `other`: only `other` is under it
+  assert.ok(cast(w, h, 'gleipnir', { x: other.x, y: other.y }));
+  run(2);
+  assert.ok(IT.Status.has(other, 'magicImmune'));
+  assert.ok(!IT.Status.has(slow, 'magicImmune') && !IT.Status.has(noItem, 'magicImmune') && !IT.Status.has(noFlag, 'magicImmune'));
+  assert.equal(slow.ai.bkbAt, null);
+  // reaction delay: orchid (instant) lands first, bkb then dispels the silence 0.6s later
+  h.cd.orchid = 0; h.mana = h.maxMana;
+  slow.x = h.x + 700;
+  assert.ok(cast(w, h, 'orchid', { target: slow.id }));
+  run(3);
+  assert.ok(IT.Status.has(slow, 'silence'), 'landed before the reaction');
+  assert.ok(!IT.Status.has(slow, 'magicImmune'));
+  run(25);
+  assert.ok(IT.Status.has(slow, 'magicImmune')); assert.ok(!IT.Status.has(slow, 'silence'), 'bkb dispel');
+  // respawn/reset restores the bkb
+  IT.Units.resetCombo(w, slow);
+  assert.equal(slow.cd.bkb, 0); assert.equal(slow.items[0].cd, 0); assert.equal(slow.items[0].charges, 0);
+});
+
+test('dummy useBkb: tornado lane only reacts for dummies in it', () => {
+  const { w, h, dummy, run, orbs } = mk([]);
+  orbs('QWW');
+  const inLane = dummy(800, 0, { items: ['bkb'], useBkb: true });
+  const off = dummy(800, 700, { items: ['bkb'], useBkb: true });
+  h.mana = h.maxMana;
+  assert.ok(cast(w, h, 'tornado', { x: h.x + 1500, y: h.y }));
+  run(3);
+  assert.ok(IT.Status.has(inLane, 'magicImmune'));
+  assert.ok(!IT.Status.has(off, 'magicImmune'));
+});
+
+test('Abilities.check folds in def.canUse (blink veto) after the generic checks', () => {
+  const { w, h } = mk(['blink']);
+  assert.equal(IT.Abilities.check(w, h, 'blink', { x: h.x + 500, y: h.y }), null);
+  IT.Status.add(w, h, 'root', 3, {});
+  assert.equal(IT.Abilities.check(w, h, 'blink', { x: h.x + 500, y: h.y }), 'rooted');
+  IT.Status.remove(w, h, 'root');
+  h._blinkLock = w.t + 3;
+  assert.equal(IT.Abilities.check(w, h, 'blink', {}), 'blinkDamaged');
+  h.cd.blink = 5;
+  assert.equal(IT.Abilities.check(w, h, 'blink', {}), 'cooldown', 'generic checks come first');
+  const d = IT.Abilities.def('canusetest', { kind: 'item', canUse: () => 'vetoed', manaCost: () => 0, cooldown: () => 0 });
+  h.items[5] = { id: 'canusetest', cd: 0, charges: 0 };
+  assert.equal(IT.Abilities.check(w, h, 'canusetest', {}), 'vetoed'); assert.ok(d);
 });

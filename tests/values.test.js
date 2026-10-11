@@ -86,6 +86,20 @@ test('scepter bonus levels', () => {
   assert.strictEqual(V.get('invoker_tornado', 'twister_damage', L({ wex: 1 }, { scepter: true, scepterOrb: 'wex' })), 60);
 });
 
+test('shard applies only to ctx.shardSpell', () => {
+  const sh = (sp) => L({}, { shard: true, shardSpell: sp });
+  assert.strictEqual(V.get('invoker_emp', 'drag_speed', sh('emp')), 125);
+  assert.strictEqual(V.get('invoker_emp', 'drag_speed', sh('sunstrike')), 0);
+  near(V.get('invoker_emp', 'damage_per_mana_pct', sh('ghostwalk')), 60);
+  near(V.get('invoker_emp', 'damage_per_mana_pct', sh('emp')), 90);
+  assert.strictEqual(V.get('invoker_ghost_walk', 'apply_ice_wall_debuff', sh('ghostwalk')), 1);
+  assert.strictEqual(V.get('invoker_ghost_walk', 'apply_ice_wall_debuff', sh('emp')), 0);
+  assert.strictEqual(V.get('invoker_sun_strike', 'create_forged_spirit_on_hero_damage', sh('sunstrike')), 1);
+  assert.strictEqual(V.get('invoker_sun_strike', 'create_forged_spirit_on_hero_damage', sh('ghostwalk')), 0);
+  assert.strictEqual(V.ctx({ shardSpell: 'emp' }).shard, false);
+  assert.strictEqual(V.get('invoker_emp', 'drag_speed', V.ctx({ shardSpell: 'emp' })), 0);   // spell without shard
+});
+
 test('requiresScepter / requiresShard gating', () => {
   const I = fresh();
   I.DOTA.abilities.invoker_sun_strike.values.damage.requiresScepter = true;

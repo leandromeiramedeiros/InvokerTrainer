@@ -42,11 +42,33 @@
     return out;
   }
 
+  // ranked result: medal next to the new rank, rating before -> after, delta, rank up / down message (+ stinger once)
+  function rankBlock(info, m) {
+    const { h } = IT.UI, t = IT.t, rk = m.rank;
+    if (!rk) return h('p', { class: 'fine', text: t('end.noRating') });
+    const a = rk.after.rank, nm = a.name + (a.stars ? ' ' + a.stars : '');
+    let cv = null;
+    try { cv = IT.Medals ? IT.Medals.canvas(a.tier, a.stars, 72) : null; } catch (e) { cv = null; }
+    const msg = rk.up ? t('end.rankUp', { rank: nm }) : rk.down ? t('end.rankDown', { rank: nm }) : t('end.rankSame', { rank: nm });
+    if (!info.sting) {
+      info.sting = true;
+      try { if (IT.Music && (rk.up || rk.down)) IT.Music.stinger(rk.up ? 'up' : 'down'); } catch (e) { /* audio optional */ }
+    }
+    const col = rk.delta > 0 ? '#7bd88f' : rk.delta < 0 ? '#ff7a7a' : '#cfd6dc';
+    return h('div', { class: 'rkres', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1em', margin: '.5em 0 .8em' } },
+      cv ? h('div', { class: 'rmed' }, cv) : null,
+      h('div', { style: { textAlign: 'left' } },
+        h('div', { text: t('end.rating') + ' ' + Math.round(rk.before.rating) + ' > ' + Math.round(rk.after.rating) }),
+        h('b', { text: (rk.delta > 0 ? '+' : '') + rk.delta, style: { color: col, fontSize: '1.6em' } }),
+        h('div', { class: rk.up ? 'ok' : '', text: msg, style: { fontWeight: 'bold' } })));
+  }
+
   function end(info) {
     const { h, btn } = IT.UI, t = IT.t, A = IT.App;
     const S = info.stats, m = info.mode || {};
+    const scn = m.mode === 'ranked' || m.mode === 'practice';
     const head = [
-      h('div', { class: 'kcard big' }, h('span', { text: t('end.score') }), h('b', { text: String(Math.round(m.score != null ? m.score : (S.combos ? S.combos.score : 0))) })),
+      h('div', { class: 'kcard big' }, h('span', { text: t(m.mode === 'ranked' ? 'end.score' : 'end.solved') }), h('b', { text: String(m.mode === 'ranked' ? Math.round(m.score || 0) : scn ? (m.solved || 0) : Math.round(m.score != null ? m.score : (S.combos ? S.combos.score : 0))) })),
       h('div', { class: 'kcard' }, h('span', { text: t('end.combos') }), h('b', { text: String(m.combos != null ? m.combos : (S.combos ? S.combos.done : 0)) })),
       h('div', { class: 'kcard' }, h('span', { text: t('end.bestStreak') }), h('b', { text: String(m.bestStreak || 0) })),
       h('div', { class: 'kcard' }, h('span', { text: t('end.fails') }), h('b', { text: String(m.fails != null ? m.fails : (S.combos ? S.combos.fails : 0)) })),
@@ -54,6 +76,8 @@
     return h('div', { class: 'scr endscr' },
       h('div', { class: 'panel wide' },
         h('h2', { class: 'ph', text: t('end.title') + ' - ' + t('mode.' + (m.mode || 'sandbox')) }),
+        m.mode === 'ranked' ? rankBlock(info, m) : null,
+        m.reason && IT.hasT('end.reason.' + m.reason) && scn ? h('p', { class: 'fine', text: t('end.reason.' + m.reason) }) : null,
         statsView(S, head),
         h('p', { class: 'fine ok', text: t('end.saved') }),
         h('div', { class: 'row end' },

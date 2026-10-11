@@ -26,7 +26,8 @@
       bat: h.AttackRate, point: h.AttackAnimationPoint, attackRange: h.AttackRange, projSpeed: h.ProjectileSpeed,
       acq: h.AttackAcquisitionRange,
     };
-    return { attr: a, base, maxHp: h.StatusHealth + 22 * a.str, maxMana: h.StatusMana + 12 * a.int };
+    // Max HP/mana use the whole part of the attribute (audit: L30 Invoker, STR 99.5 -> 2298 = 120 + 22*99, as in Dota)
+    return { attr: a, base, maxHp: h.StatusHealth + 22 * Math.floor(a.str + 1e-9), maxMana: h.StatusMana + 12 * Math.floor(a.int + 1e-9) };
   }
 
   function create(w, loadout, x, y) {
@@ -113,5 +114,5 @@
     }
   });
 
-  IT.Hero = { create, refresh, attackTime, attackPoint, attrs };
+  IT.Hero = { create, refresh, attackTime, attackPoint, attrs, maxHp: ctx => build(ctx).maxHp, maxMana: ctx => build(ctx).maxMana };
 })(typeof window !== 'undefined' ? window : globalThis);

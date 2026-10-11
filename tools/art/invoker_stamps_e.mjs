@@ -1,5 +1,5 @@
 // East (side view, facing right) composer.
-import { G, stamp, arm, glow, spark } from './invoker_gen_core.mjs';
+import { G, stamp, arm, glow, glint, spark } from './invoker_gen_core.mjs';
 
 const chk = (name, rows, w) => { rows.forEach((r, i) => { if (r.length !== w) throw new Error(`${name} row ${i} len ${r.length} != ${w}: ${r}`); }); return rows; };
 
@@ -73,7 +73,7 @@ function bootE(g, x, kind, far) {
   stamp(g, rows.map(r => r.padEnd(w, '.')).map(r => far ? r.replace(/b/g, 'B').replace(/B/g, 'B') : r), x, oy, { outline: true });
 }
 
-function poseE(anim, i) {
+export function poseE(anim, i) {
   const p = { hb: 0, near: [15, 22], far: [11, 22], boots: [[12, 'stand', 0], [10, 'stand', 1]], sway: 0, glow: null, sparks: [], eyes: null, wing: 0 };
   if (anim === 'idle') { p.hb = [0, 0, 1, 1][i]; p.near = [15, [21, 22, 22, 21][i]]; p.far = [11, [22, 22, 21, 21][i]]; p.sway = [0, 0, 1, 1][i]; }
   if (anim === 'walk') {
@@ -83,9 +83,9 @@ function poseE(anim, i) {
     if (i === 2) { p.boots = [[7, 'back', 0], [14, 'fwd', 1]]; p.near = [18, 20]; p.far = [9, 20]; }
     if (i === 3) { p.boots = [[11, 'up', 0], [11, 'stand', 1]]; p.near = [14, 22]; p.far = [12, 22]; }
   }
-  if (anim === 'cast') {
-    p.hb = [0, 0, 1][i]; p.near = [[17, 17], [21, 13], [22, 12]][i]; p.far = [11, 22];
-    p.glow = [null, { x: 22, y: 12, s: 1 }, { x: 22, y: 11, s: 2 }][i];
+  if (anim === 'cast') { // Force Push: both arms out to the right
+    p.hb = [0, 0, 1][i]; p.near = [[16, 18], [22, 17], [18, 18]][i]; p.far = [[15, 17], [21, 15], [17, 17]][i];
+    p.palm = i === 1 ? [p.near, p.far] : null;
   }
   if (anim === 'attack') {
     p.hb = [0, 1, 0][i]; p.near = [[11, 19], [22, 18], [20, 18]][i]; p.far = [11, 22];
@@ -111,6 +111,7 @@ export function eStamps(g, anim, i) {
   stamp(g, COLLAR_E, 2, hy, { outline: true });
   arm(g, 13, 16, p.near[0], p.near[1], { w: 3, hand: anim === 'cast' || anim === 'attack' ? 1 : 1 });
   if (p.glow) glow(g, p.glow.x, p.glow.y, p.glow.s);
+  if (p.palm) for (const [px, py] of p.palm) glint(g, px, py, 1, 0);
   stamp(g, HEAD_E, 7, 1 + hy, { outline: true });
   stamp(g, WING_E, 12, 14 + hy, { outline: true });
   if (p.eyes === 'x') {

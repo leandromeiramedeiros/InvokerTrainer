@@ -44,7 +44,9 @@
       },
       emit(type, p) {
         p = p || {};
-        p.type = type; p.t = w.t;
+        // p.ev = event name (always). p.type = name too, unless the payload carries its own `type` (re-emitted payloads don't count)
+        if (p.type === undefined || p.type === p.ev) p.type = type;
+        p.ev = type; p.t = w.t;
         w.log.push(p); if (w.log.length > LOG_MAX) w.log.shift();
         const a = listeners.get(type); if (a) for (const fn of a.slice()) fn(p, w);
         const b = listeners.get('*'); if (b) for (const fn of b.slice()) fn(p, w);

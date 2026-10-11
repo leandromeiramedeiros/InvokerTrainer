@@ -31,6 +31,7 @@
       h('div', { class: 'kcard' }, h('span', { text: t('end.combos') }), h('b', { text: String(life.combos.done) })),
       h('div', { class: 'kcard' }, h('span', { text: t('stats.sessions') }), h('b', { text: String(life.sessions || 0) })),
       h('div', { class: 'kcard' }, h('span', { text: t('end.fails') }), h('b', { text: String(life.combos.fails) })),
+      IT.Ranked && IT.Ranked.profile ? h('div', { class: 'kcard' }, h('span', { text: t('stats.rankedGames') }), h('b', { text: String(IT.Ranked.profile().games) })) : null,
     ]) : h('p', { text: t('end.noData') });
 
     // best times
@@ -38,7 +39,7 @@
     if (life && life.combos && life.combos.best) {
       const ids = Object.keys(life.combos.best);
       if (ids.length) {
-        const rows = ids.map(id => { const c = IT.Combo && IT.Combo.get ? IT.Combo.get(id) : null; return h('div', { class: 'srow' }, h('span', { text: c && c.name ? (c.name[IT.lang] || c.name.en) : id }), h('b', { text: Math.round(life.combos.best[id] * 100) / 100 + 's' })); });
+        const rows = ids.map(id => { const c = (IT.Combo && IT.Combo.get ? IT.Combo.get(id) : null) || (IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(id) : null); return h('div', { class: 'srow' }, h('span', { text: c && c.name ? (c.name[IT.lang] || c.name.en) : id }), h('b', { text: Math.round(life.combos.best[id] * 100) / 100 + 's' })); });
         best = h('div', { class: 'blk' }, h('h3', { text: t('stats.bestTimes') }), h('div', { class: 'bestgrid' }, rows));
       }
     }

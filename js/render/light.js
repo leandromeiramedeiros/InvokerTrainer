@@ -22,6 +22,7 @@
     let lights = 0;
     const L = {
       canvas: cv,
+      buf: { lr, lg, lb, w: LW, h: LH },   // raw light grid (sand.js adds emissive cells)
       begin() {
         for (let i = 0; i < LW * LH; i++) { lr[i] = AMB[0]; lg[i] = AMB[1]; lb[i] = AMB[2]; }
         lights = 0;

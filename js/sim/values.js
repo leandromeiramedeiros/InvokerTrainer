@@ -24,16 +24,25 @@
   const ORB = { quas: 'invoker_quas', wex: 'invoker_wex', exort: 'invoker_exort' };
   const LEVELKEY = { quaslevel: 'quas', wexlevel: 'wex', exortlevel: 'exort' };
   const ORB_OF = { invoker_quas: 'quas', invoker_wex: 'wex', invoker_exort: 'exort' };
+  const SPELL_IDS = {
+    coldsnap: 'invoker_cold_snap', ghostwalk: 'invoker_ghost_walk', icewall: 'invoker_ice_wall', emp: 'invoker_emp',
+    tornado: 'invoker_tornado', alacrity: 'invoker_alacrity', sunstrike: 'invoker_sun_strike',
+    forgespirit: 'invoker_forge_spirit', chaosmeteor: 'invoker_chaos_meteor', deafeningblast: 'invoker_deafening_blast',
+  };
 
-  function active(m, ctx) {
+  // Shard (7.41): upgrades ONE chosen spell (ctx.shardSpell). Legacy ctx with shard but no spell upgrades every spell.
+  function shardOn(ability, ctx) {
+    return !!ctx.shard && (!ctx.shardSpell || SPELL_IDS[ctx.shardSpell] === ability);
+  }
+  function active(m, ctx, ability) {
     if (m.src === 'scepter') return !!ctx.scepter;
-    if (m.src === 'shard') return !!ctx.shard;
+    if (m.src === 'shard') return shardOn(ability, ctx);
     return ctx.talentSet.has(m.src);
   }
   // modded array for an entry (no level selection)
-  function applyMods(e, ctx) {
+  function applyMods(e, ctx, ability) {
     let v = e.v.slice();
-    const ms = e.mods.filter((m) => active(m, ctx));
+    const ms = e.mods.filter((m) => active(m, ctx, ability));
     for (const m of ms) if (m.op === '=') v = m.v ? m.v.slice() : v.map(() => m.n);
     for (const m of ms) {
       if (m.op === '+') v = v.map((x) => x + m.n);
@@ -51,8 +60,8 @@
     const e = entry(ability, key);
     if (!e) return 0;
     if (e.requiresScepter && !ctx.scepter) return 0;
-    if (e.requiresShard && !ctx.shard) return 0;
-    const v = applyMods(e, ctx);
+    if (e.requiresShard && !shardOn(ability, ctx)) return 0;
+    const v = applyMods(e, ctx, ability);
     return v[Math.max(0, Math.min(v.length - 1, idx))];
   }
   function bonusLevels(orb, ctx) {
@@ -61,11 +70,7 @@
   }
 
   const Values = {};
-  Values.SPELL_IDS = {
-    coldsnap: 'invoker_cold_snap', ghostwalk: 'invoker_ghost_walk', icewall: 'invoker_ice_wall', emp: 'invoker_emp',
-    tornado: 'invoker_tornado', alacrity: 'invoker_alacrity', sunstrike: 'invoker_sun_strike',
-    forgespirit: 'invoker_forge_spirit', chaosmeteor: 'invoker_chaos_meteor', deafeningblast: 'invoker_deafening_blast',
-  };
+  Values.SPELL_IDS = SPELL_IDS;
 
   // loadout: { heroLevel, orbs:{quas,wex,exort}, talents:[names], scepter, scepterOrb:'quas'|'wex'|'exort', shard } -> immutable-ish ctx
   Values.ctx = function (loadout) {

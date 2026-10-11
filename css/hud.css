@@ -1,1 +1,47 @@
 /* hud styles. Owner: H3. Loaded after v2.css. */
+
+/* bottom bar starts right of the minimap (bottom-left, x 3..138 of 480) */
+.hbar{left:30%}
+.hpor.foe{border-color:var(--bad)}
+.hpor .hgen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:max(4em,20px);color:var(--dim)}
+.bar.hp.foe i{background:linear-gradient(#ff5a6a,#8c1c28)}
+.uname{color:var(--gold);font-size:max(1.2em,11px);text-transform:uppercase;margin-bottom:.4em}
+.ustats{display:flex;gap:1.4em;margin-top:.6em;font-size:max(1em,10px);color:var(--dim)}
+.ustats b{color:var(--ink)}
+.hbtn.item.empty{opacity:.55}
+
+/* orbs float above the hero (centred over the portrait), status icons to their right */
+.hstat{position:absolute;left:calc(30% + 1.1em);bottom:18em;display:flex;align-items:flex-end;gap:.8em;pointer-events:none}
+.hstat .horbs{width:12.4em;justify-content:center;gap:.5em;margin:0;flex:none}
+.hstat .os{width:3.2em;height:3.2em}
+.hstat .hbuffs{position:static}
+.aimhint{bottom:24em}
+
+/* hero item drag and drop */
+.hbtn.drop{border-color:var(--gold);box-shadow:inset 0 0 0 .2em var(--gold)}
+.hbtn.dragsrc{opacity:.35}
+.hdrag{position:absolute;z-index:9;width:5.6em;height:5.6em;margin:-2.8em 0 0 -2.8em;pointer-events:none;background:#0b0618;border:.2em solid var(--gold);box-shadow:0 0 1em var(--gold)}
+.hdrag canvas{width:100%;height:100%;display:block}
+
+/* top-centre stack: ranked panel above the combo bar */
+.htop{position:absolute;left:17.5%;top:.8em;width:62%;display:flex;flex-direction:column;gap:.5em;pointer-events:none}
+.htop .combobar{position:relative;left:auto;top:auto;width:auto}
+.htop.rk .combobar .tm{display:none}
+.rkp{display:flex;flex-direction:column;align-items:center;gap:.3em;padding:.5em .8em;background:#150d27e6;border:.25em solid var(--mag);box-shadow:0 0 0 .15em #000;text-align:center}
+.rknum{color:var(--gold);font-size:6em;line-height:1;text-shadow:0 .08em 0 #000,0 0 .6em #ffd23f88}
+.rkhint{color:var(--dim);font-size:max(1em,10px)}
+.rkscen{display:flex;flex-direction:column;align-items:center;gap:.1em}
+.rkname{color:var(--mag);font-size:max(1.2em,11px);text-transform:uppercase}
+.rkobj{color:var(--ink);font-size:max(.95em,10px);font-weight:normal}
+.rkrow{display:flex;justify-content:center;align-items:center;gap:2.4em}
+.rkt{display:flex;flex-direction:column;align-items:center;gap:.1em;color:var(--dim);font-size:max(.85em,9px)}
+.rkt b{color:var(--gold);font-size:1.5em}
+.rkt b.low{color:var(--bad)}
+.rkmed{display:flex}
+.rkmed canvas{width:3em;height:3em;image-rendering:pixelated}
+
+/* ranked/practice hint row (difficulty with hints) */
+.rkp .rktip { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .3em .6em; margin-top: .3em; font-size: .8em; color: #cfd8e0; }
+.rkp .rksp { display: inline-flex; align-items: center; gap: .2em; }
+.rkp .rksp canvas, .rkp .rksp img { width: 1.4em; height: 1.4em; image-rendering: pixelated; }
+.rkp .rksp em { font-style: normal; color: #ffd36a; letter-spacing: .05em; }

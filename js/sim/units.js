@@ -34,14 +34,41 @@
   // ---------- spawning ----------
   function newAI(behavior, x, y, t) {
     return { behavior, home: { x, y }, mode: 'idle', moving: false, pauseUntil: 0, nextPeek: 0, peekUntil: 0,
-      hideSpot: null, nextThink: 0, dodgeId: 0, dodgeUntil: 0,
+      hideSpot: null, nextThink: 0, dodgeId: 0, dodgeUntil: 0, useBkb: false, bkbAt: null,
       bolt: { readyAt: t, active: false, castEnd: 0 },
       blink: { used: false, pending: false, tellEnd: 0, t0: t } };
   }
 
-  function hook(w) {   // first-hit trigger for blink_on_first_hit
+  // Disables a bkb-using dummy reacts to (cast START by the hero): ability -> how it is aimed.
+  const DISABLES = { coldsnap: 'unit', atos: 'unit', vyse: 'unit', orchid: 'unit', tornado: 'line', gleipnir: 'circle', meteorhammer: 'circle' };
+  function aimedAt(w, c, d, p) {
+    const k = DISABLES[p.ability], o = p.order || {};
+    if (k === 'unit') return o.target === d.id;
+    if (o.x == null) return false;
+    if (k === 'circle') {
+      const r = p.ability === 'gleipnir' ? (IT.Values.item(GM().ITEM_DOTA.gleipnir, 'radius_tooltip') || IT.Values.item(GM().ITEM_DOTA.gleipnir, 'radius'))
+        : IT.Values.item(GM().ITEM_DOTA.meteorhammer, 'impact_radius');
+      return U.dist(o, d) <= r + d.radius;
+    }
+    const V = IT.Values, ctx = c.ctx || w.ctx;   // tornado: lane along the cast direction
+    const len = V.get('invoker_tornado', 'travel_distance', ctx), r = V.get('invoker_tornado', 'area_of_effect', ctx);
+    const dir = (o.x === c.x && o.y === c.y) ? c.facing : Math.atan2(o.y - c.y, o.x - c.x);
+    const dx = d.x - c.x, dy = d.y - c.y, along = dx * Math.cos(dir) + dy * Math.sin(dir), side = Math.abs(-dx * Math.sin(dir) + dy * Math.cos(dir));
+    return along >= -d.radius && along <= len + d.radius && side <= r + d.radius;
+  }
+
+  function hook(w) {   // first-hit trigger for blink_on_first_hit; hero disable casts -> bkb reaction timer
     if (w._unitsHook) return;
     w._unitsHook = true;
+    w.on('castStart', (p) => {
+      if (!DISABLES[p.ability]) return;
+      const c = w.get(p.unit);
+      if (!c) return;
+      for (const d of w.ents) {
+        if (d.dead || d.kind !== 'dummy' || !d.ai || !d.ai.useBkb || d.team === c.team || d.ai.bkbAt != null || !aimedAt(w, c, d, p)) continue;
+        d.ai.bkbAt = w.t + (d.reaction || 0);
+      }
+    });
     w.on('damage', (p) => {
       const d = w.get(p.target);
       if (!d || d.kind !== 'dummy' || !d.ai || !d.scenario) return;
@@ -64,6 +91,12 @@
       reaction: p.reaction, scenario: sc,
     };
     e.ai = newAI(behavior, o.x, o.y, w.t);
+    e.ai.useBkb = !!o.useBkb;   // activates its BKB (if carried + ready) `reaction` s after the hero starts casting a disable at it
+    e.cd = {};
+    if (Array.isArray(o.items)) {   // same slot shape as the hero (HUD can show them)
+      e.items = [];
+      for (let i = 0; i < 6; i++) e.items.push(typeof o.items[i] === 'string' ? { id: o.items[i], cd: 0, charges: 0 } : null);
+    }
     return w.add(e);
   }
 
@@ -85,11 +118,18 @@
   }
 
   // ---------- respawn / reset ----------
+  function resetItems(d) {   // fresh cooldowns / BKB use count + pending reaction
+    if (d.cd) for (const k in d.cd) d.cd[k] = 0;
+    if (d.items) for (const it of d.items) if (it) { it.cd = 0; it.charges = 0; }
+    d.ai.bkbAt = null;
+  }
+
   function resetCombo(w, d) {
     const a = d.ai;
     if (a.bolt.active) { a.bolt.active = false; w.emit('bolt', { unit: d.id, phase: 'cancel', target: w.hero && w.hero.id, reason: 'reset' }); }
     a.bolt.readyAt = w.t;
     a.blink.used = false; a.blink.pending = false; a.blink.tellEnd = 0; a.blink.t0 = w.t;
+    resetItems(d);
     if (d.anim.name === 'cast' || d.anim.name === 'blink') setAnim(d, 'idle');
   }
 
@@ -114,7 +154,9 @@
     d.hp = d.maxHp; d.mana = d.maxMana;
     d.statuses.length = 0; d.orders.length = 0; d.path.length = 0;
     setAnim(d, 'idle');
+    const ub = d.ai.useBkb;
     d.ai = newAI(d.ai.behavior, spot.x, spot.y, w.t);
+    d.ai.useBkb = ub; resetItems(d);
     d.lastSeen = { x: spot.x, y: spot.y, t: w.t };
     w.emit('fx', { name: 'respawn', x: spot.x, y: spot.y, unit: d.id });
     return spot;
@@ -173,13 +215,21 @@
     if (!owner) return null;
     const ok = t => t && !t.dead && t.team !== s.team && (t.kind === 'dummy' || t.kind === 'hero' || t.kind === 'spirit') &&
       !hasS(t, 'lift') && (!w.fog || t.visible);
-    let t = owner.attack && owner.attack.target != null ? w.get(owner.attack.target) : null;
+    const auto = !w.opts || w.opts.autoAttack !== false;   // setting autoAttack: OFF = spirits only help with attacks the hero orders
+    const oo = owner.orders && owner.orders[0], at = owner.attack;
+    let t = null;
+    if (at && at.target != null && (auto || (oo && (oo.type === 'attack' || oo.type === 'hold')))) {
+      t = oo && oo.type === 'attack' && oo.target != null ? w.get(oo.target) : w.get(at.target);
+    }
     if (!ok(t)) {
-      t = null; let bd = 700;
-      for (const e of w.ents) {
-        if (e.dead || !ok(e)) continue;
-        const dd = U.dist(s, e);
-        if (dd <= bd) { bd = dd; t = e; }
+      t = null;
+      if (auto) {
+        let bd = 700;
+        for (const e of w.ents) {
+          if (e.dead || !ok(e)) continue;
+          const dd = U.dist(s, e);
+          if (dd <= bd) { bd = dd; t = e; }
+        }
       }
     }
     if (t) return { type: 'attack', target: t.id };
@@ -357,8 +407,22 @@
     if (best && U.dist(d, best) > 20) issueMove(w, d, best.x, best.y);
   }
 
+  // BKB reaction: fires once the timer set by the hero's disable cast elapses; vetoed while stunned/hexed/on cd.
+  function tickBkb(w, d) {
+    const a = d.ai;
+    if (a.bkbAt == null || w.t < a.bkbAt - 1e-9) return;
+    a.bkbAt = null;
+    const A = IT.Abilities, def = A && A.get('bkb');
+    if (!def || !d.items || A.check(w, d, 'bkb')) return;
+    A.spend(w, d, 'bkb');
+    const it = d.items.find(x => x && x.id === 'bkb'); if (it) it.cd = d.cd.bkb;
+    w.emit('itemUse', { unit: d.id, ability: 'bkb' });
+    def.cast(w, d, {});
+  }
+
   function tickDummy(w, d) {
     const a = d.ai;
+    tickBkb(w, d);
     if (tickBlink(w, d)) return;
     if (disabled(d)) { if (a.bolt.active) cancelBolt(w, d, 'disabled'); return; }
     tickBolt(w, d);

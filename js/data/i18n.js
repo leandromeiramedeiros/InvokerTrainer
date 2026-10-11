@@ -55,7 +55,8 @@
   D('item.bkb', 'Black King Bar', 'Black King Bar');
   D('item.blink', 'Blink Dagger', 'Adaga Blink');
   D('item.boots', 'Boots of Speed', 'Botas de Velocidade');
-  D('item.treads', 'Power Treads', 'Power Treads');
+  D('item.orchid', 'Orchid Malevolence', 'Orchid Malevolence');
+  D('item.gleipnir', 'Gleipnir', 'Gleipnir');
   D('item.travels', 'Boots of Travel', 'Botas de Viagem');
   D('item.scepter', "Aghanim's Scepter", 'Cetro de Aghanim');
   D('item.shard', "Aghanim's Shard", 'Fragmento de Aghanim');

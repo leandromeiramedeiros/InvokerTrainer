@@ -24,10 +24,10 @@
     ITEM_DOTA: {
       refresher: 'item_refresher', atos: 'item_rod_of_atos', vyse: 'item_sheepstick', shiva: 'item_shivas_guard',
       meteorhammer: 'item_meteor_hammer', bkb: 'item_black_king_bar', blink: 'item_blink',
-      treads: 'item_power_treads', travels: 'item_travel_boots', boots: 'item_boots',
+      orchid: 'item_orchid', gleipnir: 'item_gungir', travels: 'item_travel_boots', boots: 'item_boots',
     },
-    ITEMS_MAIN: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb'],
-    ITEMS_EXTRA: ['blink', 'boots', 'treads', 'travels'],
+    ITEMS_MAIN: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir'],
+    ITEMS_EXTRA: ['blink', 'boots', 'travels'],
     SKINS: ['pedro', 'renan', 'vitinho'],
     SKIN_NAMES: { pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho' },
     // Dummy stat presets. Behavior: stationary | wander | evasive.

@@ -749,26 +749,52 @@
       "cost": 1400,
       "values": {}
     },
-    "item_power_treads": {
-      "behavior": ["IMMEDIATE","NO_TARGET"],
-      "targetTeam": null,
-      "targetType": [],
+    "item_orchid": {
+      "behavior": ["UNIT_TARGET"],
+      "targetTeam": "ENEMY",
+      "targetType": ["HERO","BASIC"],
       "damageType": null,
       "spellImmunity": null,
       "maxLevel": 1,
       "innate": false,
       "castPoint": [0],
-      "castRange": [0],
-      "cooldown": [0],
-      "manaCost": [0],
+      "castRange": [900],
+      "cooldown": [18],
+      "manaCost": [125],
       "channelTime": [0],
-      "cost": 1400,
+      "cost": 3275,
       "values": {
-        "bonus_movement_speed_ranged": {"v":[45],"levelkey":null,"mods":[]},
-        "bonus_movement_speed_melee": {"v":[55],"levelkey":null,"mods":[]},
-        "bonus_stat": {"v":[10],"levelkey":null,"mods":[]},
-        "bonus_attack_speed": {"v":[25],"levelkey":null,"mods":[]},
-        "bonus_damage": {"v":[0],"levelkey":null,"mods":[]}
+        "bonus_attack_speed": {"v":[35],"levelkey":null,"mods":[]},
+        "bonus_damage": {"v":[20],"levelkey":null,"mods":[]},
+        "bonus_mana_regen": {"v":[2.5],"levelkey":null,"mods":[]},
+        "bonus_health_regen": {"v":[0],"levelkey":null,"mods":[]},
+        "bonus_intellect": {"v":[12],"levelkey":null,"mods":[]},
+        "silence_damage_percent": {"v":[30],"levelkey":null,"mods":[]},
+        "silence_duration": {"v":[5],"levelkey":null,"mods":[]}
+      }
+    },
+    "item_gungir": {
+      "behavior": ["POINT","AOE"],
+      "targetTeam": "ENEMY",
+      "targetType": ["HERO","BASIC"],
+      "damageType": null,
+      "spellImmunity": null,
+      "maxLevel": 1,
+      "innate": false,
+      "castPoint": [0],
+      "castRange": [1100],
+      "cooldown": [18],
+      "manaCost": [150],
+      "channelTime": [0],
+      "cost": 4650,
+      "values": {
+        "bonus_hp": {"v":[450],"levelkey":null,"mods":[]},
+        "bonus_mana": {"v":[200],"levelkey":null,"mods":[]},
+        "bonus_intellect": {"v":[12],"levelkey":null,"mods":[]},
+        "bonus_aoe": {"v":[75],"levelkey":null,"mods":[]},
+        "radius": {"v":[325],"levelkey":null,"mods":[]},
+        "radius_tooltip": {"v":[400],"levelkey":null,"mods":[]},
+        "duration": {"v":[2],"levelkey":null,"mods":[]}
       }
     },
     "item_travel_boots": {

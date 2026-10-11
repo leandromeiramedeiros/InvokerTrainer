@@ -69,6 +69,7 @@
 
   function onFx(p) {
     const name = p.name, x = p.x, y = p.y;
+    if (IT.Sand && IT.Sand.event) IT.Sand.event(p);
     switch (name) {
       case 'sunstrikeBeam': break;
       case 'sunstrikeHit': {
@@ -161,6 +162,7 @@
   }
 
   function onBlink(p) {
+    if (IT.Sand && IT.Sand.blink) IT.Sand.blink(p);
     addFx({ k: 'wave', x: p.fromX, y: p.fromY, r0: 90, r1: 10, dur: 0.3, color: '#b070ff' });
     burst(p.fromX, p.fromY, 'purple', 50, { spread: 30, speed: 40, up: 110, life: 0.7 });
     addFx({ k: 'wave', x: p.x, y: p.y, r0: 10, r1: 100, dur: 0.35, color: '#e0c0ff' });
@@ -220,6 +222,7 @@
       let r = Math.min(80, Math.max(26, (e.r || e.radius || 60) / R.P * 1.1)), inten = 0.55;
       if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; inten = 0.25 + 0.5 * clamp(1 - rem, 0, 1); }
       else if (key === 'bolt') { r = 30; inten = 0.8; }
+      else if (key === 'attack') { r = 30; inten = 0.75; c[0] = 255; c[1] = 150; c[2] = 55; R.light(sx, sy - 9, r, c, inten); continue; }
       else if (key === 'chaosmeteor') { r = 80; inten = 0.9; }
       R.light(sx, sy - 6, r, c, inten);
       R.glow(sx, sy - 6, Math.min(r * 0.4, 18), rgbHex(c), 0.4);
@@ -383,6 +386,37 @@
     }
   }
 
+  // basic attack projectile: solid pixel fireball (hero: faint arcane edge, spirit: pure molten)
+  function drawFireball(R, e, x, by, gy) {
+    const cx = R.cx, t = R.time, src = R.w.byId.get(e.src), arc = src && src.kind === 'hero', tg = R.w.byId.get(e.target);
+    let dx = 1, dy = 0;
+    if (tg) { dx = tg.x - e.x; dy = tg.y - e.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
+    shadow(R, x, gy, 3);
+    const fr = (t * 24 + e.id) | 0;
+    for (let k = 5; k >= 1; k--) {     // flickering tail, hash-jittered
+      const j = PX.hash2(fr + k * 7, e.id, 3);
+      if (j < 0.18 * k) continue;
+      const tx = Math.round(x - dx * (k * 1.7 + 1.5) + (PX.hash2(fr, k, 5) - 0.5) * 2), ty = Math.round(by - dy * (k * 1.7 + 1.5) * 0.8 + (PX.hash2(fr, k, 9) - 0.5) * 2 - k * 0.3);
+      cx.fillStyle = PX.RAMPS.fire[Math.min(5, 1 + (k + 1) / 2 | 0)];
+      cx.fillRect(tx, ty, k < 3 ? 2 : 1, k < 3 ? 2 : 1);
+    }
+    ddisc(R, x, by, 3.6, '#3a1408', 1);
+    ddisc(R, x, by, 3, spiritOrHero(arc, '#c8480c'), 1);
+    ddisc(R, x, by, 2.3, '#ff8a1c', 1);
+    ddisc(R, x, by, 1.5, '#ffc040', 1);
+    ddisc(R, x, by, 0.9, '#fff2b0', 1);
+    cx.fillStyle = '#fff'; cx.fillRect(Math.round(x), Math.round(by), 1, 1);
+    if (arc) {      // arcane tint at the core edge
+      cx.fillStyle = '#d8a8ff';
+      cx.fillRect(Math.round(x - dx * 2), Math.round(by - dy * 2), 1, 1); cx.fillRect(Math.round(x + dy * 2), Math.round(by - dx * 2), 1, 1);
+    }
+    cx.fillStyle = '#7a2208';        // lick pixels on the rim
+    const f2 = (t * 18 + e.id) | 0;
+    cx.fillRect(Math.round(x + Math.cos(f2) * 3), Math.round(by + Math.sin(f2) * 3), 1, 1);
+    R.glow(x, by, 12, '#ff9a30', 0.7);
+  }
+  const spiritOrHero = (arc, c) => arc ? '#c04a10' : c;
+
   // ---------- air layer ----------
   function air(R) {
     const w = R.w, cx = R.cx, t = R.time;
@@ -435,6 +469,7 @@
           R.glow(x, by, 22, '#9a50ff', 0.7);
           break;
         }
+        case 'attack': drawFireball(R, e, x, y - 9 - zp, y); break;
         case 'chaosmeteor': drawMeteor(R, e, x, y); break;
         case 'deafeningblast': drawBlast(R, e, x, y); break;
         case 'meteorhammer': drawHammer(R, e, x, y); break;

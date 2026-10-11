@@ -28,7 +28,7 @@
   }
   function itemNeeds(c) {
     const set = new Set((c.requires && c.requires.items) || []);
-    for (const s of c.steps) if ((s.type === 'item' || s.type === 'cast') && IT.GAME.ITEM_DOTA[s.ability]) set.add(s.ability);
+    for (const s of c.steps) if (s.type === 'item' || (s.type === 'cast' && IT.GAME.ITEM_DOTA[s.ability])) set.add(s.ability);
     return Array.from(set);
   }
   // what `loadout` lacks for `c`: { orbs:[keys], items:[ids], scepter, shard }
@@ -119,7 +119,7 @@
     if (m.scepter || m.shard) {
       const lo = JSON.parse(JSON.stringify(w.loadout));
       if (m.scepter) { lo.scepter = true; lo.scepterOrb = lo.scepterOrb || 'exort'; }
-      if (m.shard) lo.shard = true;
+      if (m.shard) { lo.shard = true; if (!lo.shardSpell) { const st0 = (c.steps || []).find(q => ['ghostwalk', 'emp', 'sunstrike'].includes(q.ability)); lo.shardSpell = st0 ? st0.ability : 'emp'; } }
       IT.Hero.refresh(w, hero, lo);
     }
     st.granted = g;
@@ -176,6 +176,7 @@
     st.attempt = retry ? st.attempt + 1 : 0;
     st.hint = hidden ? { x: d.x, y: d.y } : null;
     st.pull = null;
+    armMove(w, st);
     emit(w, 'comboStart', { id: c.id, tier: c.tier, attempt: st.attempt, retry: !!retry });
     return true;
   }
@@ -228,11 +229,30 @@
   // ------------------------------------------------------------ step matching
   function nextStep(st) { return st.def.steps[st.stepIndex] || null; }
 
+  // movement steps are polled each tick. 'move' remembers where the hero (and the hero-dummy gap) were when it became active.
+  function armMove(w, st) {
+    const s = nextStep(st), h = w.hero, d = dummyOf(w, st);
+    st.moveRef = s && s.type === 'move' && h ? { x: h.x, y: h.y, gap: d ? Math.hypot(d.x - h.x, d.y - h.y) : 0 } : null;
+  }
+  // position: hero-dummy gap within [minDist, maxDist]; move: hero travelled `dist` (default 150), optionally dir 'away'|'toward' the dummy
+  function positionOk(w, st, s) {
+    const h = w.hero, d = dummyOf(w, st);
+    if (!h || !d) return false;
+    const gap = Math.hypot(d.x - h.x, d.y - h.y);
+    if (s.type === 'position') return (s.maxDist == null || gap <= s.maxDist) && (s.minDist == null || gap >= s.minDist);
+    const r = st.moveRef, dist = s.dist != null ? s.dist : 150;
+    if (!r || Math.hypot(h.x - r.x, h.y - r.y) < dist) return false;
+    if (s.dir === 'away') return gap >= r.gap + dist * 0.5;
+    if (s.dir === 'toward') return gap <= r.gap - dist * 0.5;
+    return true;
+  }
+
   function completeStep(w, st, extra) {
     const i = st.stepIndex, s = st.def.steps[i];
     st.steps[i].status = 'done'; st.steps[i].t = w.t;
     st.stepIndex++; st.lastT = w.t;
     if (st.steps[st.stepIndex]) st.steps[st.stepIndex].status = 'active';
+    armMove(w, st);
     if (i === 0 && st.dummy != null) { const d = dummyOf(w, st); if (d && d.ai && d.ai.blink.t0 === Infinity) d.ai.blink.t0 = w.t; }
     emit(w, 'comboStep', Object.assign({ id: st.def.id, index: i, ability: s.ability, react: s.react, done: st.stepIndex >= st.def.steps.length }, extra || {}));
   }
@@ -247,10 +267,10 @@
     if (ok && s.selfCast && Math.hypot(p.x - w.hero.x, p.y - w.hero.y) > 100) ok = false;
     if (!ok) { st.extra++; return; }
     const i = st.stepIndex;
-    if (s.mustHitDummy) { st.pending.push({ idx: i, ability: p.ability, t: w.t, state: 'open' }); st.steps[i].status = 'pending'; }
+    if (s.mustHitDummy || (s.type === 'item' && s.itemOnDummy)) st.pending.push({ idx: i, ability: p.ability, t: w.t, state: 'open' });
     if (s.react === 'empPull' || s.ability === 'emp') st.pull = d ? { x: d.x, y: d.y } : null;
     completeStep(w, st);
-    if (!s.mustHitDummy) { /* instant */ }
+    if (st.pending.some(q => q.idx === i && q.state === 'open')) st.steps[i].status = 'pending';   // advanced, hit unconfirmed
     checkDone(w, st);
   }
 
@@ -365,6 +385,7 @@
       const s = nextStep(st), i = st.stepIndex, d = dummyOf(w, st);
       if (s) {
         if (s.within != null && i > 0 && w.t - st.lastT > s.within + EPS) { fail(w, st, 'within', i); }
+        else if ((s.type === 'position' || s.type === 'move') && positionOk(w, st, s)) { completeStep(w, st); checkDone(w, st); }
         else if (s.type === 'react' && d) {
           if (s.react === 'blinkPrevented' && blinkBlocked(d)) { completeStep(w, st); checkDone(w, st); }
           else if (s.react === 'empPull' && st.pull && Math.hypot(d.x - st.pull.x, d.y - st.pull.y) >= PULL_MIN) { completeStep(w, st); checkDone(w, st); }
@@ -410,6 +431,6 @@
 
   IT.World.system('combo', 90, (w, dt) => update(w, dt));
 
-  IT.Combo = { get, available, missing, orbNeeds, itemNeeds, start, mode, stop, skip, cancel, score, speedBonus, streakMult, blinkBlocked, refreshAll,
+  IT.Combo = { get, available, missing, orbNeeds, itemNeeds, start, mode, stop, skip, cancel, score, speedBonus, streakMult, blinkBlocked, refreshAll, positionOk,
     TIMEOUT: RESOLVE_TIMEOUT, FAIL_DELAY, DONE_DELAY, PULL_MIN };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -4,6 +4,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const ctx = vm.createContext({ console, Math });
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/art.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/invoker.js'), 'utf8'), ctx);
+if (fs.existsSync(path.join(ROOT, 'js/art/invoker_skins.js'))) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/invoker_skins.js'), 'utf8'), ctx);
 const [name, re, sc = '10', out = 'x'] = process.argv.slice(2);
 const S = ctx.IT.Art.sheets[name]; const s = +sc; const rx = new RegExp(re);
 const keys = Object.keys(S.frames).filter(k => rx.test(k));

@@ -3,7 +3,7 @@
   'use strict';
   const IT = G.IT;
   IT.i18nAdd({
-    en: {},
-    pt: {},
+    en: { 'in.fullscreen': 'Fullscreen', 'in.fullscreenExit': 'Exit fullscreen' },
+    pt: { 'in.fullscreen': 'Tela cheia', 'in.fullscreenExit': 'Sair da tela cheia' },
   });
 })(typeof window !== 'undefined' ? window : globalThis);

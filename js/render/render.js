@@ -4,7 +4,7 @@
   const IT = G.IT = G.IT || {};
   const PX = IT.Pixel;
 
-  const MM_W = 90, MM_H = 50;
+  const MM_W = 135, MM_H = 75;
 
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX, VW = GM.VIEW_W, VH = GM.VIEW_H;
@@ -15,7 +15,7 @@
     const light = IT.Light.create(VW, VH);
     IT.Particles.init(VW, VH);
     const prev = new Map();
-    const MMX = VW - MM_W - 3, MMY = VH - MM_H - 3;
+    const MMX = 3, MMY = VH - MM_H - 3;
 
     // minimap layers
     const mmBase = document.createElement('canvas'); mmBase.width = MM_W; mmBase.height = MM_H;
@@ -27,11 +27,15 @@
     const mmFog = document.createElement('canvas'); mmFog.width = MM_W; mmFog.height = MM_H;
     const mmFogC = mmFog.getContext('2d'), mmImg = mmFogC.createImageData(MM_W, MM_H);
     let mmTick = 0;
+    // minimap pixel -> tile index pairs for fog sampling (2x2 around the pixel centre)
+    const mmIx0 = new Int32Array(MM_W), mmIx1 = new Int32Array(MM_W), mmIy0 = new Int32Array(MM_H), mmIy1 = new Int32Array(MM_H);
+    for (let x = 0; x < MM_W; x++) { const c = (x + 0.5) * w.map.w / MM_W - 0.5; mmIx0[x] = Math.max(0, Math.min(w.map.w - 1, Math.floor(c))); mmIx1[x] = Math.min(w.map.w - 1, mmIx0[x] + 1); }
+    for (let y = 0; y < MM_H; y++) { const c = (y + 0.5) * w.map.h / MM_H - 0.5; mmIy0[y] = Math.max(0, Math.min(w.map.h - 1, Math.floor(c))); mmIy1[y] = Math.min(w.map.h - 1, mmIy0[y] + 1); }
 
     const R = {
-      cx, w, P, VW, VH, camX: 0, camY: 0, time: 0, simT: 0, alpha: 1, fog, ter, light,
+      cx, gx, w, P, VW, VH, camX: 0, camY: 0, time: 0, simT: 0, alpha: 1, fog, ter, lightmap: light,
       ix: 0, iy: 0, iz: 0, shakeAmp: 0, shakeEnd: 0, shakeT: 0,
-      stats: { ms: 0, avg: 0, max: 0, lights: 0, parts: 0, items: 0, frames: 0 },
+      stats: { ms: 0, avg: 0, max: 0, lights: 0, parts: 0, items: 0, sand: 0, frames: 0 },
       showDebug: false,
       snapshot() {
         for (const e of w.ents) {
@@ -69,6 +73,8 @@
       },
     };
     IT.FX.init(R);
+    IT.Sand.init(R);
+    w.on('cast', p => { if (p.kind !== 'item') IT.UnitDraw.castFlash(R, p); });   // spells only; items have no pose
 
     const items = [];
     function push(y, fn, a) { items.push({ y, fn, a }); }
@@ -101,9 +107,10 @@
         if ((mmTick++ % 6) === 0) {
           const u = new Uint32Array(mmImg.data.buffer), cur = fog.cur;
           for (let y = 0; y < MM_H; y++) for (let x = 0; x < MM_W; x++) {
-            const i = (y * 2) * W + x * 2, f = (cur[i] + cur[i + 1] + cur[i + W] + cur[i + W + 1]) * 0.25;
+            const k = y * MM_W + x, x0 = mmIx0[x], x1 = mmIx1[x], y0 = mmIy0[y] * W, y1 = mmIy1[y] * W;
+            const f = (cur[y0 + x0] + cur[y0 + x1] + cur[y1 + x0] + cur[y1 + x1]) * 0.25;
             const a = f >= 2 ? 0 : f >= 1 ? (2 - f) * 90 : 90 + (1 - f) * 150;
-            u[y * MM_W + x] = (Math.round(a) << 24) | 0x100804;
+            u[k] = (Math.round(a) << 24) | 0x100804;
           }
           mmFogC.putImageData(mmImg, 0, 0);
         }
@@ -136,10 +143,12 @@
       fog.update(w, R.fogSnap ? 1 : dtReal, R.camX, R.camY, VW, VH);
       IT.Particles.update(dtReal);
       IT.FX.update(R, dtReal);
+      IT.Sand.update(R, dtReal);
       gx.globalCompositeOperation = 'source-over'; gx.clearRect(0, 0, VW, VH); gx.globalCompositeOperation = 'lighter';
       light.begin();
 
       IT.Terrain.draw(R, ter);
+      IT.Sand.drawGround(R);
       IT.Particles.draw(R, 0);
       IT.FX.ground(R);
 
@@ -167,11 +176,13 @@
       }
 
       IT.FX.air(R);
+      IT.Sand.drawAir(R);
       IT.Particles.draw(R, 1);
 
       // lighting
       for (const e of w.ents) if (!e.dead && IT.UnitDraw.isUnit(e) && IT.UnitDraw.visible(R, e)) IT.UnitDraw.lights(R, e);
       IT.FX.lights(R);
+      IT.Sand.lights(R);
       light.compose(R.camX, R.camY, fog, fogOn);
       cx.globalCompositeOperation = 'multiply';
       cx.drawImage(light.canvas, 0, 0);
@@ -186,7 +197,7 @@
 
       const ms = performance.now() - t0, S = R.stats;
       S.ms = ms; S.avg = S.avg ? S.avg * 0.95 + ms * 0.05 : ms; if (ms > S.max) S.max = ms; S.frames++;
-      S.lights = light.count; S.parts = IT.Particles.live;
+      S.lights = light.count; S.parts = IT.Particles.live; S.sand = IT.Sand.count;
     };
     return R;
   }

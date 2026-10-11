@@ -1,5 +1,5 @@
 // Hand-authored stamps + per-direction composers for the invoker sheet.
-import { G, stamp, mirror, arm, glow, spark, disc, W, H } from './invoker_gen_core.mjs';
+import { G, stamp, mirror, arm, glow, glint, spark, disc, W, H } from './invoker_gen_core.mjs';
 
 const chk = (name, rows, w) => { rows.forEach((r, i) => { if (r.length !== w) throw new Error(`${name} row ${i} len ${r.length} != ${w}: ${r}`); }); return rows; };
 
@@ -98,7 +98,7 @@ function bootS(g, side, kind) {
   stamp(g, rows.map(r => r.padEnd(wmax, '.')), flip ? x0 + 4 - wmax : x0, oy, { outline: true });
 }
 
-function basePose(anim, i) {
+export function basePose(anim, i) {
   const p = { hb: 0, hand: [[4, 21], [21, 21]], boots: ['stand', 'stand'], lift: [0, 0], sway: 0, glow: null, sparks: [], eyes: null, handR: [1, 1] };
   if (anim === 'idle') { p.hb = [0, 0, 1, 1][i]; p.hand = [[4, [21, 22, 22, 21][i]], [21, [21, 22, 22, 21][i]]]; p.sway = [0, 1, 1, 0][i]; }
   if (anim === 'walk') {
@@ -106,10 +106,11 @@ function basePose(anim, i) {
     if (i === 0) { p.boots = ['fwd', 'up']; p.lift = [0, 1]; p.hand = [[4, 19], [21, 23]]; }
     if (i === 2) { p.boots = ['up', 'fwd']; p.lift = [1, 0]; p.hand = [[4, 23], [21, 19]]; }
   }
-  if (anim === 'cast') {
+  if (anim === 'cast') { // Force Push: wind-up, both palms thrust forward, recover
     p.hb = [0, 0, 1][i];
-    p.hand = [[4, 21], [[21, 17], [22, 13], [22, 12]][i]];
-    p.glow = [null, { x: 22, y: 13, s: 1 }, { x: 22, y: 12, s: 2 }][i];
+    p.hand = [[[7, 18], [18, 18]], [[6, 18], [19, 18]], [[5, 20], [20, 20]]][i];
+    p.handR = [[1, 1], [2, 2], [1, 1]][i];
+    p.palm = [null, [[6, 18], [19, 18]], null][i];
   }
   if (anim === 'attack') {
     p.hand = [[4, 21], [[21, 14], [18, 20], [19, 19]][i]];
@@ -137,6 +138,7 @@ export function sStamps(g, anim, i) {
   arm(g, 4, 16, p.hand[0][0], p.hand[0][1], { w: 3, hand: p.handR[0] });
   arm(g, 21, 16, p.hand[1][0], p.hand[1][1], { w: 3, hand: p.handR[1] });
   if (p.glow) glow(g, p.glow.x, p.glow.y, p.glow.s);
+  if (p.palm) for (const [px, py] of p.palm) glint(g, px, py);
   const hy = p.hb;
   stamp(g, mirror(FAN_S, { shiftFrom: 14 }), 0, hy, { outline: true });
   stamp(g, mirror(HEAD_S, { shiftFrom: 12, cap: 2, noRim: true, keep: 'EIWKaYj' }), 5, 1 + hy, { outline: true });
@@ -190,17 +192,25 @@ function capeN(sw) {
   return g.rows();
 }
 
-export function nStamps(g, anim, i) {
+export function poseN(anim, i) {
   const p = basePose(anim, i);
   if (anim === 'walk') { if (i === 0) p.hand = [[4, 23], [21, 19]]; if (i === 2) p.hand = [[4, 19], [21, 23]]; }
   if (anim === 'attack') { p.hand = [[4, 21], [[21, 14], [17, 12], [19, 14]][i]]; p.glow = [null, { x: 16, y: 10, s: 3 }, { x: 18, y: 12, s: 1 }][i]; }
+  if (anim === 'cast') p.hand = [[[7, 18], [18, 18]], [[6, 8], [19, 8]], [[6, 19], [19, 19]]][i]; // push: hands out ahead past the head
+  return p;
+}
+export function nStamps(g, anim, i) {
+  const p = poseN(anim, i);
   stamp(g, mirror(capeN(p.sway), { shiftFrom: 14 }), 0, 14, { outline: true });
   bootS(g, 'L', p.boots[0]); bootS(g, 'R', p.boots[1]);
-  arm(g, 4, 16, p.hand[0][0], p.hand[0][1], { w: 3 });
-  arm(g, 21, 16, p.hand[1][0], p.hand[1][1], { w: 3 });
-  const hy = p.hb;
+  const cast = anim === 'cast', hy = p.hb;
+  if (!cast || i !== 1) { arm(g, 4, 16, p.hand[0][0], p.hand[0][1], { w: 3 }); arm(g, 21, 16, p.hand[1][0], p.hand[1][1], { w: 3 }); }
   stamp(g, mirror(HAIR_N, { shiftFrom: 12, cap: 2, noRim: true }), 5, 1 + hy, { outline: true });
   stamp(g, mirror(FAN_N, { shiftFrom: 14 }), 0, hy, { outline: true });
+  if (cast && i === 1) {
+    arm(g, 4, 15, p.hand[0][0], p.hand[0][1], { w: 3 }); arm(g, 21, 15, p.hand[1][0], p.hand[1][1], { w: 3 });
+    glint(g, p.hand[0][0], p.hand[0][1], 0, -1); glint(g, p.hand[1][0], p.hand[1][1], 0, -1);
+  }
   if (p.glow) glow(g, p.glow.x, p.glow.y, p.glow.s);
   for (const [sx, sy] of p.sparks) spark(g, sx, sy);
 }

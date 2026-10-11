@@ -49,6 +49,27 @@ test('spirit expires; spiritAction follows owner / attacks nearest', () => {
   assert.ok(s.dead);
 });
 
+test('spirit autoAttack setting: ON auto-acquires, OFF only helps ordered attacks', () => {
+  const { IT, w, hero } = env();
+  const s = IT.Units.spawnSpirit(w, hero, 0, 0);
+  const a = IT.Units.spawnDummy(w, { x: 400, y: 0, preset: 'training', skin: 'pedro' }); a.visible = true;
+  const b = IT.Units.spawnDummy(w, { x: -300, y: 0, preset: 'training', skin: 'pedro' }); b.visible = true;
+  w.opts.autoAttack = true;
+  assert.strictEqual(IT.Units.spiritAction(w, s).target, b.id);   // nearest
+  w.opts.autoAttack = false;
+  assert.strictEqual(IT.Units.spiritAction(w, s), null);          // idle (near owner)
+  s.x = 600;
+  assert.strictEqual(IT.Units.spiritAction(w, s).type, 'move');   // follows owner
+  // hero explicitly attacks a: spirits join that target even though b is nearer
+  s.x = 0; hero.orders = [{ type: 'attack', target: a.id }]; hero.attack = { target: a.id };
+  assert.strictEqual(JSON.stringify(IT.Units.spiritAction(w, s)), JSON.stringify({ type: 'attack', target: a.id }));
+  // hero attack target without an explicit order (auto-acquired) is ignored when OFF
+  hero.orders = []; hero.attack = { target: a.id };
+  assert.strictEqual(IT.Units.spiritAction(w, s), null);
+  w.opts.autoAttack = true;
+  assert.strictEqual(IT.Units.spiritAction(w, s).target, a.id);   // ON: follows hero target
+});
+
 test('wander stays within 500 of home and moves', () => {
   const { IT, w, run } = env();
   const d = IT.Units.spawnDummy(w, { x: 1000, y: 1000, preset: 'standard', skin: 'pedro' });

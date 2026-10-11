@@ -24,3 +24,21 @@ test('util: angDiff and rng determinism', () => {
   const r1 = IT.U.mulberry32(5), r2 = IT.U.mulberry32(5);
   assert.strictEqual(r1(), r2());
 });
+
+test('world.emit: p.ev is the event name; payload.type is preserved, otherwise defaults to the name', () => {
+  const IT = load(['js/sim/util.js', 'js/sim/world.js']);
+  const w = IT.World.create({ seed: 1 });
+  const star = [], named = [];
+  w.on('*', p => star.push(p.ev)); w.on('dmg', p => named.push(p));
+  const a = w.emit('dmg', { type: 'magical', amount: 5 });
+  assert.strictEqual(a.type, 'magical'); assert.strictEqual(a.ev, 'dmg'); assert.strictEqual(a.t, w.t);
+  const b = w.emit('plain', { x: 1 });
+  assert.strictEqual(b.type, 'plain'); assert.strictEqual(b.ev, 'plain');
+  assert.strictEqual(w.emit('empty').ev, 'empty');
+  // re-emitting a received payload under another name renames it (old name is not "own")
+  const c = w.emit('other', b);
+  assert.strictEqual(c.type, 'other'); assert.strictEqual(c.ev, 'other');
+  assert.deepStrictEqual(star, ['dmg', 'plain', 'empty', 'other']);
+  assert.strictEqual(named.length, 1); assert.strictEqual(named[0].type, 'magical');
+  assert.strictEqual(w.log.filter(e => e.ev === 'dmg').length, 1);
+});

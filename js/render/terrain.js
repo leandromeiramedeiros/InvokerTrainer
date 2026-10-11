@@ -146,14 +146,16 @@
     return { base, W, H, T, trees, treeRows, spr, shimmer, waterIdx, mini: mm };
   }
 
-  // minimap colour per mini pixel (2x2 tiles averaged)
+  // minimap colour per mini pixel (covered tiles averaged); 135x75
+  const MINI_W = 135, MINI_H = 75;
   const MINI = [[44, 76, 44], [18, 40, 24], [92, 88, 104], [40, 88, 150], [104, 82, 56]];
   function buildMini(map) {
-    const w = map.w >> 1, h = map.h >> 1, rgb = new Uint8Array(w * h * 3);
+    const w = MINI_W, h = MINI_H, rgb = new Uint8Array(w * h * 3);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      let r = 0, g = 0, b = 0;
-      for (let k = 0; k < 4; k++) { const c = MINI[map.at(x * 2 + (k & 1), y * 2 + (k >> 1))]; r += c[0]; g += c[1]; b += c[2]; }
-      const i = (y * w + x) * 3; rgb[i] = r >> 2; rgb[i + 1] = g >> 2; rgb[i + 2] = b >> 2;
+      const x0 = Math.floor(x * map.w / w), x1 = Math.max(x0, Math.ceil((x + 1) * map.w / w) - 1), y0 = Math.floor(y * map.h / h), y1 = Math.max(y0, Math.ceil((y + 1) * map.h / h) - 1);
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) { const c = MINI[map.at(tx, ty)]; r += c[0]; g += c[1]; b += c[2]; n++; }
+      const i = (y * w + x) * 3; rgb[i] = r / n; rgb[i + 1] = g / n; rgb[i + 2] = b / n;
     }
     return { w, h, rgb };
   }
@@ -179,5 +181,5 @@
     }
   }
 
-  IT.Terrain = { build, draw, TW, TH, TAX, TAY };
+  IT.Terrain = { build, draw, TW, TH, TAX, TAY, MINI_W, MINI_H };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -9,11 +9,15 @@
   const UI = IT.UI, S = IT.Settings;
 
   let map = null, g = null, lastOpts = null, settingsOver = false, state = 'title';
+  const THEME = { ranked: 'ranked', practice: 'practice', sandbox: 'sandbox' };
+  const music = n => { try { IT.Music && IT.Music.play(n); } catch (e) { /* audio is optional */ } };
+  const isScn = o => o.mode === 'ranked' || o.mode === 'practice' || (o.mode === 'sandbox' && !!o.scenario);
 
   // ---------------------------------------------------------------- sizing
   function fit() {
-    const s = Math.max(1, Math.floor(Math.min(innerWidth / VW, innerHeight / VH)));
-    stage.style.width = VW * s + 'px'; stage.style.height = VH * s + 'px'; stage.style.setProperty('--u', s + 'px');
+    const s = Math.max(0.5, Math.min(innerWidth / VW, innerHeight / VH));   // fractional: fill the window, keep 16:9
+    const sw = Math.max(2, Math.floor(VW * s / 2) * 2), sh = Math.max(2, Math.round(sw * VH / VW / 2) * 2);   // even px (no half-pixel blur from the centering transform)
+    stage.style.width = sw + 'px'; stage.style.height = sh + 'px'; stage.style.setProperty('--u', (sw / VW).toFixed(4) + 'px');
     const gs = Math.max(11, Math.min(26, Math.min(innerWidth / 1280, innerHeight / 720) * 14));
     document.documentElement.style.setProperty('--g', gs.toFixed(2) + 'px');
   }
@@ -30,13 +34,20 @@
     UI.clear(); UI.clearToasts();
     lastOpts = opts;
     if (!map) map = IT.Map.build(IT.MAPDEF);
-    const lo = IT.Loadout.normalize(opts.loadout), set = S.get();
-    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: opts.fog !== false, autoAttack: set.autoAttack });
+    const set = S.get(), scn = isScn(opts);
+    let run = null, pr = null;
+    if (scn) {   // ranked / practice / scenario sandbox: a run feeds scenarios; the first one builds the world
+      const LS = IT.UI.LoadoutScreen, skin = opts.skin || (opts.loadout && opts.loadout.skin) || (LS && LS.state.lo && LS.state.lo.skin) || undefined;
+      run = IT.Ranked.create({ mode: opts.mode, diff: opts.diff, scenario: opts.scenario, skin });
+      pr = run.next();
+    }
+    const lo = IT.Loadout.normalize(scn ? pr.lo : opts.loadout);
+    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: scn ? pr.fog : opts.fog !== false, autoAttack: set.autoAttack });
     const sp = map.spawns.hero;
     const hero = IT.Hero.create(w, lo, sp.x, sp.y);
-    g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv };
+    g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv, run, menu: false, quiet: false, failAt: {} };
     g.cam.centerOn(hero.x, hero.y); g.cam.lock = !!set.camLock;
-    const n = opts.mode === 'sandbox' ? Math.max(1, opts.count | 0) : 1;
+    const n = run ? 0 : opts.mode === 'sandbox' ? Math.max(1, opts.count | 0) : 1;
     for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
     g.nDummies = n;
     if (IT.StatsCollector) IT.StatsCollector.create(w);
@@ -45,15 +56,33 @@
     g.R.showDebug = !!(IT.dev && IT.dev.debug);
     w.on('fail', p => {
       if (p.unit !== hero.id) return;
+      const now = performance.now();
+      if (now - (g.failAt[p.reason] || -1e9) < 1000) return;   // one toast per reason per second
+      g.failAt[p.reason] = now;
       const k = 'fail.' + p.reason;
       UI.toast(IT.hasT(k) ? IT.t(k) : p.reason, 'bad');
       if (IT.Input.sfx) IT.Input.sfx('fail');
     });
-    w.on('modeEnd', p => finish(p));
-    if (IT.Combo) IT.Combo.mode(w, opts.mode, { loadout: lo, grantMissing: !!opts.grant, seconds: GM.TIMED_SECONDS });
+    w.on('modeEnd', p => { if (!g.quiet) finish(p); });
+    w.on('scnResult', p => {
+      if (p.ok) UI.toast(IT.t(g.mode === 'ranked' ? 'scn.solvedRk' : 'scn.solved', { n: p.points }), 'good');
+      else UI.toast(IT.t('scn.fail.' + p.reason), 'bad');
+    });
+    const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant };
+    if (run) {
+      run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout
+        g.lo = run.pr.lo; g.nDummies = run.dummies.length;
+        IT.Input.cancel(true); aimG.clearRect(0, 0, VW, VH);
+        g.cam.centerOn(hero.x, hero.y); acc = 0;
+        if (IT.HUD.resetMeter) IT.HUD.resetMeter();
+        IT.HUD.bind(ctx);
+      });
+      g.nDummies = run.dummies.length;
+    }
+    if (IT.Combo) IT.Combo.mode(w, scn ? 'sandbox' : opts.mode, { loadout: lo, grantMissing: !scn && !!opts.grant, seconds: GM.TIMED_SECONDS });
 
     stage.classList.add('on'); state = 'play'; settingsOver = false;
-    const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant };
+    music(THEME[opts.mode] || 'sandbox');
     IT.Input.hooks = hooks;
     IT.Input.bind(ctx);
     IT.HUD.bind(ctx);
@@ -61,8 +90,14 @@
     IT.dev = Object.assign(IT.dev || {}, { w, hero, cam: g.cam, R: g.R, paused: false, render: devRender });
   }
 
+  // leaving a scenario run early: ranked folds the partial score into the rating (no end screen)
+  function abandon() {
+    if (g && g.run && !g.run.ended) { g.quiet = true; g.run.finish('quit'); }
+  }
+
   function teardown() {
     if (!g) return;
+    IT.Music && IT.Music.intensity(0);
     IT.Input.unbind(); IT.HUD.unbind();
     if (g.w._stats) g.w._stats.destroy();
     IT.Sfx && IT.Sfx.detach();
@@ -84,8 +119,9 @@
     if (!g || g.ended) return;
     g.ended = true;
     const st = commitStats() || (IT.StatsCollector ? IT.StatsCollector.blank() : null);
-    g.w.paused = true; IT.Input.enabled = false;
+    g.w.paused = true; IT.Input.enabled = false; g.menu = false;
     aimG.clearRect(0, 0, VW, VH);
+    if (IT.Music) { IT.Music.intensity(0); music('menu'); }
     state = 'end';
     const info = { stats: st, mode: modeInfo };
     UI.clear();
@@ -95,28 +131,46 @@
   // ---------------------------------------------------------------- screens
   const App = IT.App = {
     go(name) {
-      if (name === 'again') { if (lastOpts) start(lastOpts); else App.go('loadout'); return; }
+      if (name === 'again') { abandon(); if (lastOpts) start(lastOpts); else App.go('loadout'); return; }
+      if (name === 'sandbox') name = 'loadout';
+      if (name === 'ranked') { abandon(); commitStats(); start({ mode: 'ranked' }); return; }
+      abandon();
       commitStats();
       teardown();
       UI.clear(); settingsOver = false;
       state = name;
+      music('menu');
       if (name === 'title') UI.set(UI.title);
       else if (name === 'loadout') UI.set(IT.UI.LoadoutScreen.build);
+      else if (name === 'practice') UI.set(IT.UI.Modes.picker);
       else if (name === 'stats') UI.set(IT.UI.statsScreen);
       else if (name === 'settings') { IT.UI.settingsOpen(); UI.set(IT.UI.settingsPanel); }
     },
     start(opts) { start(opts); },
-    resume() { if (g && g.w.paused && !g.ended) { UI.pop(); g.w.paused = false; } },
-    restart() { if (lastOpts) { commitStats(); start(lastOpts); } },
+    resume() {
+      if (!g || !g.menu || g.ended) return;
+      g.menu = false; UI.pop();
+      g.w.paused = !!(g.run && g.run.frozen());   // countdown / result stay frozen
+    },
+    restart() { if (lastOpts) { abandon(); commitStats(); start(lastOpts); } },
     endRun() {
       if (!g) return;
-      UI.pop(); g.w.paused = false;
+      g.menu = false; UI.pop();
+      if (g.run) { g.run.finish('quit'); return; }
+      g.w.paused = false;
       if (IT.Combo) IT.Combo.stop(g.w); else finish({ mode: g.mode });
       if (g && !g.ended) finish({ mode: g.mode });
     },
     pauseSettings() { settingsOver = true; IT.UI.settingsOpen(); UI.push(IT.UI.settingsPanel, true); },
     settingsBack() { if (settingsOver) { settingsOver = false; UI.pop(); } else App.go('title'); },
-    back() { if (state === 'play') { if (hooks.pause) hooks.pause(); return; } if (state !== 'title') App.go('title'); },   // ESC: one level up (S3 refines)
+    // ESC: one level up. play -> pause -> resume; pause-settings -> pause; settings / loadout / picker / stats / end -> title
+    back() {
+      if (state === 'title') return;
+      try { IT.UISound && IT.UISound.play('back'); } catch (e) { /* ignore */ }
+      if (state === 'play') { hooks.pause(); return; }
+      if (state === 'settings' && IT.UI.settingsCancel) { IT.UI.settingsCancel(); return; }
+      App.go('title');
+    },
     get state() { return state; },
   };
 
@@ -124,10 +178,11 @@
     pause() {
       if (!g || g.ended) return;
       if (settingsOver) { IT.UI.settingsCancel(); return; }
-      if (g.w.paused) App.resume();
-      else { g.w.paused = true; IT.Input.cancel(true); IT.HUD.statsShow(false); UI.push(UI.pause, true); }
+      if (g.menu) App.resume();
+      else { g.menu = true; g.w.paused = true; IT.Input.cancel(true); IT.HUD.statsShow(false); UI.push(UI.pause, true); }
     },
-    statsHold(on) { if (g && !g.w.paused) IT.HUD.statsShow(on); else if (!on && g) IT.HUD.statsShow(false); },
+    inspect() { return !!(g && g.run && g.run.frozen() && !g.menu && !g.ended && !settingsOver); },   // ranked countdown/result: camera + inspect only
+    statsHold(on) { if (g && !g.menu && !g.ended) IT.HUD.statsShow(on); else if (!on && g) IT.HUD.statsShow(false); },
     cheat() { IT.HUD.cheatToggle(); },
     debug() { if (g) { g.R.showDebug = !g.R.showDebug; IT.dev.debug = g.R.showDebug; } },
     refresh() {
@@ -139,7 +194,7 @@
     spawn() {
       if (!g || g.mode !== 'sandbox') return;
       const alive = g.w.query(e => e.kind === 'dummy');
-      if (alive.length >= 8) return;
+      if (alive.length >= 8 || g.run) return;
       const spots = map.spawns.dummies;
       for (const s of spots) if (!alive.some(d => Math.hypot(d.x - s.x, d.y - s.y) < 150)) {
         IT.Units.spawnDummy(g.w, { x: s.x, y: s.y, preset: g.lo.preset, skin: g.lo.skin });
@@ -148,6 +203,7 @@
     },
     resetDummies() {
       if (!g || g.mode !== 'sandbox') return;
+      if (g.run) { g.run.redo(); UI.toast(IT.t('toast.dummiesReset'), 'info'); return; }   // scenario sandbox: replay it
       const ds = g.w.query(e => e.kind === 'dummy');
       ds.forEach((d, i) => {
         if (i >= g.nDummies) { g.w.remove(d); return; }
@@ -170,7 +226,7 @@
   let last = performance.now(), acc = 0, dbgT = 0;
   function debugText() {
     const R = g.R, hero = g.hero, inv = hero.inv, S2 = R.stats;
-    return `render ${S2.ms.toFixed(2)}ms avg ${S2.avg.toFixed(2)} max ${S2.max.toFixed(1)}  lights ${S2.lights} parts ${S2.parts} items ${S2.items}  lock ${g.cam.lock ? 'on' : 'off'}\n` +
+    return `render ${S2.ms.toFixed(2)}ms avg ${S2.avg.toFixed(2)} max ${S2.max.toFixed(1)}  lights ${S2.lights} parts ${S2.parts} items ${S2.items} sand ${S2.sand || 0}  lock ${g.cam.lock ? 'on' : 'off'}\n` +
       `orbs ${inv.orbs.join('')}  slots ${inv.slots.map(s => s || '-').join(' | ')}  invokeCd ${inv.invokeCd.toFixed(1)}\n` +
       `hp ${Math.round(hero.hp)}/${Math.round(hero.maxHp)}  mana ${Math.round(hero.mana)}/${Math.round(hero.maxMana)}  t ${g.w.t.toFixed(1)}`;
   }
@@ -181,7 +237,12 @@
       if (!w.paused) {
         acc += dt;
         while (acc >= w.dt && !w.paused) { g.R.snapshot(); w.step(); acc -= w.dt; }
-        g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
+        if (g.run && g.run.runLeft != null && g.run.runLeft < 30 && IT.Music) IT.Music.intensity(1 - g.run.runLeft / 30);
+        if (!g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
+      } else if (g.run && !g.menu && !g.ended) {   // countdown / result: sim frozen, camera + inspect stay live
+        acc = 0;
+        g.run.tick(dt);
+        if (g && !g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
       }
       g.R.render(w.paused ? 1 : acc / w.dt, dt);
       IT.Input.drawAim(aimG);

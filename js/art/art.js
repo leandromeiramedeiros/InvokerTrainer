@@ -53,5 +53,13 @@
     return n;
   }
 
-  IT.Art = { sheet, frame, canvas, count, sheets };
+  // Hero skin sheet from settings ('default'|'kid'|'dark'); falls back to 'invoker' if a sheet is missing.
+  const HERO_SKINS = { default: 'invoker', kid: 'invoker_kid', dark: 'invoker_dark' };
+  function heroSheet() {
+    const sk = IT.Settings && IT.Settings.get && IT.Settings.get().heroSkin;
+    const n = HERO_SKINS[sk];
+    return n && sheets[n] ? n : 'invoker';
+  }
+
+  IT.Art = { sheet, frame, canvas, count, sheets, heroSheet, HERO_SKINS };
 })(typeof window !== 'undefined' ? window : globalThis);

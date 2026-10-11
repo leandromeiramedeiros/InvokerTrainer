@@ -15,6 +15,7 @@
   const METEOR_SPACING = 1.5;       // extra meteors are spread perpendicular, METEOR_SPACING * area_of_effect apart
   const SPIRIT_RING = 90;           // forge spirit spawn ring radius
   const COMBATANT = { dummy: 1, hero: 1, spirit: 1 };
+  const HEROISH = { dummy: 1, hero: 1 };   // 'enemy heroes' for shard effects (dummies stand in for heroes)
 
   // living, targetable (not lifted) enemies of caster `c`
   const foes = (w, c) => w.query(u => u.team !== c.team && COMBATANT[u.kind] && u.hp > 0 && !IT.Status.has(u, 'lift'));
@@ -93,10 +94,18 @@
       upd(w, e) {
         if (e.age < delay - 1e-9) return false;
         const hit = foesNear(w, c, e.x, e.y, r);
+        let heroHit = false;
         w.emit('fx', { name: 'sunstrikeHit', x: e.x, y: e.y, r });
         for (const u of hit) {
           tr.touch(u);
-          dmg(w, c, u, 'sunstrike', 'pure', amount / hit.length);
+          const dealt = dmg(w, c, u, 'sunstrike', 'pure', amount / hit.length);
+          if (dealt > 0 && HEROISH[u.kind]) heroHit = true;
+        }
+        // Shard: damaging an enemy hero creates a Forge Spirit of current level there (does not replace existing ones).
+        if (heroHit && val(c, D.sunstrike, 'create_forged_spirit_on_hero_damage') > 0 && IT.Units) {
+          hookMelt(w);
+          IT.Units.spawnSpirit(w, c, e.x, e.y);
+          w.emit('fx', { name: 'forgeSpirit', x: e.x, y: e.y, count: 1 });
         }
         tr.done(e.x, e.y);
         return true;
@@ -140,6 +149,9 @@
       const d = D.ghostwalk;
       const dur = val(c, d, 'duration'), r = val(c, d, 'area_of_effect');
       const eslow = -val(c, d, 'enemy_slow') / 100, fade = val(c, d, 'aura_fade_time');
+      // Shard: also applies Ice Wall's damage per second to enemy heroes (dummies count as heroes) in the area.
+      const iw = D.icewall, shardDps = val(c, d, 'apply_ice_wall_debuff') > 0 ? val(c, iw, 'damage_per_second') : 0;
+      const shardIv = val(c, iw, 'tick_interval') || 1;
       IT.Status.add(w, c, 'ghost', dur, {
         src: c.id, ability: 'ghostwalk',
         data: { stats: { msPct: val(c, d, 'self_slow'), hpRegen: val(c, d, 'health_regen'), manaRegen: val(c, d, 'mana_regen') } },
@@ -149,13 +161,17 @@
       offs.push(w.on('attack', p => { if (p.src === c.id) brk(); }), w.on('cast', p => { if (p.unit === c.id) brk(); }));
       w.emit('fx', { name: 'ghostWalk', x: c.x, y: c.y, r, unit: c.id });
       w.thinker({
-        x: c.x, y: c.y, r, color: '#9cf', team: c.team, ability: 'ghostwalk', next: 0,
+        x: c.x, y: c.y, r, color: '#9cf', team: c.team, ability: 'ghostwalk', next: 0, nextDmg: 0,
         upd(w, e) {
           if (c.dead || !IT.Status.has(c, 'ghost')) { offs.forEach(f => f()); return true; }
           e.x = c.x; e.y = c.y;
           if (w.t >= e.next - 1e-9) {
             e.next = w.t + 0.5;
             for (const u of foesNear(w, c, e.x, e.y, r)) slow(w, u, eslow, fade, c.id, 'ghostwalk');
+          }
+          if (shardDps > 0 && w.t >= e.nextDmg - 1e-9) {
+            e.nextDmg = w.t + shardIv;
+            for (const u of foesNear(w, c, e.x, e.y, r)) if (HEROISH[u.kind]) dmg(w, c, u, 'ghostwalk', 'magical', shardDps * shardIv);
           }
           return false;
         },
@@ -339,12 +355,17 @@
     });
   }
 
+  // Dota: "number of spirits is determined by the LOWER level of Quas and Exort" (extra_spirit_count_* are per-level counts).
+  function spiritCount(c) {
+    return Math.max(1, Math.min(val(c, D.forgespirit, 'extra_spirit_count_quas'), val(c, D.forgespirit, 'extra_spirit_count_exort')));
+  }
+
   A.def('forgespirit', {
     kind: 'spell', dota: D.forgespirit, target: 'none',
     cast(w, c) {
       hookMelt(w);
       for (const s of w.query(u => u.kind === 'spirit' && u.owner === c.id)) w.remove(s);
-      const n = val(c, D.forgespirit, 'extra_spirit_count_quas') + val(c, D.forgespirit, 'extra_spirit_count_exort');
+      const n = spiritCount(c);
       for (let i = 0; i < n; i++) {
         const a = c.facing + U.TAU * i / Math.max(1, n);
         const sp = IT.Units.spawnSpirit(w, c, c.x + Math.cos(a) * SPIRIT_RING, c.y + Math.sin(a) * SPIRIT_RING);

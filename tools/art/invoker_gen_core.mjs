@@ -19,8 +19,8 @@ export const PAL = {
 };
 
 export const RAMPS = ['jHhi', 'tSsz', 'NmMQ', 'YyGg', 'RwcT', 'lLDd', 'UuvVX', 'bBn'];
-export const darker = (c, cap = 9) => { for (const r of RAMPS) { const i = r.indexOf(c); if (i >= 0) return r[Math.min(i + 1, r.length - 1, Math.max(cap, i))]; } return c; };
-export const lighter = c => { for (const r of RAMPS) { const i = r.indexOf(c); if (i >= 0) return r[Math.max(i - 1, 0)]; } return c; };
+export const darker = (c, cap = 9, ramps = RAMPS) => { for (const r of ramps) { const i = r.indexOf(c); if (i >= 0) return r[Math.min(i + 1, r.length - 1, Math.max(cap, i))]; } return c; };
+export const lighter = (c, ramps = RAMPS) => { for (const r of ramps) { const i = r.indexOf(c); if (i >= 0) return r[Math.max(i - 1, 0)]; } return c; };
 
 export class G {
   constructor(w = W, h = H) { this.w = w; this.h = h; this.a = Array.from({ length: h }, () => Array(w).fill('.')); }
@@ -56,8 +56,8 @@ export function mirror(left, o = {}) {
     right.forEach((c, i) => {
       const gx = w + i;
       let d = c;
-      if (c !== '.' && !keep.includes(c) && gx >= shiftFrom) d = darker(c, cap);
-      if (c !== '.' && i === last && i >= rimFrom && !o.noRim && !keep.includes(c)) d = lighter(c);
+      if (c !== '.' && !keep.includes(c) && gx >= shiftFrom) d = darker(c, cap, o.ramps);
+      if (c !== '.' && i === last && i >= rimFrom && !o.noRim && !keep.includes(c)) d = lighter(c, o.ramps);
       out.push(d);
     });
     return out.join('');
@@ -73,6 +73,8 @@ function line(x0, y0, x1, y1) {
 // arm: sleeve (cream) with gold bracer and skin hand. returns hand centre.
 export function arm(g, sx, sy, ex, ey, o = {}) {
   const wd = o.w ?? 3, sleeve = o.sleeve ?? 'w', hr = o.hand ?? 1;
+  const br = o.br ?? [0.5, 0.86];
+  const C = { sl: 'R', b1: 'y', b2: 'G', h1: 't', h2: 'S', h3: 's', ...o.c }; // colour overrides: sl lit, sd shade, b1/b2 bracer, h1..h3 skin
   const sl = new Map();
   const off = Math.floor(wd / 2);
   for (const [x, y, t] of line(sx, sy, ex, ey)) {
@@ -87,10 +89,10 @@ export function arm(g, sx, sy, ex, ey, o = {}) {
   stampMask(g, all, (x, y) => {
     const lit = !has(x, y - 1) || !has(x - 1, y), shd = !has(x, y + 1) || !has(x + 1, y);
     const k = x + ',' + y;
-    if (hand.has(k) && !(sl.has(k) && sl.get(k) < 0.72)) return lit && !shd ? 't' : shd ? 's' : 'S';
+    if (hand.has(k) && !(sl.has(k) && sl.get(k) < 0.72)) return lit && !shd ? C.h1 : shd ? C.h3 : C.h2;
     const t = sl.get(k);
-    if (t > 0.5 && t <= 0.86) return shd && !lit ? 'G' : 'y';
-    return lit && !shd ? 'R' : shd ? (sleeve === 'u' ? 'v' : 'c') : sleeve;
+    if (t > br[0] && t <= br[1]) return shd && !lit ? C.b2 : C.b1;
+    return lit && !shd ? C.sl : shd ? (C.sd ?? (sleeve === 'u' ? 'v' : 'c')) : sleeve;
   }, { outline: true });
   return [ex, ey];
 }
@@ -107,3 +109,43 @@ export function glow(g, cx, cy, size = 2, pal = ['a', 'p', '5', '6']) {
 }
 export function spark(g, x, y, c = 'Y', c2 = 'y') { g.set(x, y, c); g.set(x - 1, y, c2); g.set(x + 1, y, c2); g.set(x, y - 1, c2); g.set(x, y + 1, c2); }
 
+
+// palm glint (Force Push): bright centre; (dx,dy) = push direction, sparkles fly out that way; (0,0) = towards the viewer
+export function glint(g, x, y, dx = 0, dy = 0) {
+  g.set(x, y, 'W');
+  if (!dx && !dy) { g.set(x - 1, y, 'a'); g.set(x + 1, y, 'a'); g.set(x, y - 1, 'a'); return; }
+  g.set(x + dx * 2, y + dy * 2, 'W'); g.set(x + dx * 2 + dy, y + dy * 2 + dx, 'a'); g.set(x + dx * 2 - dy, y + dy * 2 - dx, 'a'); g.set(x + dx * 3, y + dy * 3, 'a');
+}
+
+// generic boot (south/north): rows use top/base/sole colour map m = {b,B,n}
+export function bootT(g, side, kind, m, oy0 = 25) {
+  const x0 = side === 'L' ? 7 : 14;
+  const A = { stand: ['bBBB', 'nnnn'], fwd: ['bBB.', 'bBBBn', 'nnnnn'], up: ['bBBn'] }[kind];
+  const oy = kind === 'fwd' ? oy0 - 1 : oy0;
+  const flip = side === 'R';
+  const rows = A.map(r => [...(flip ? [...r].reverse().join('') : r)].map(c => m[c] ?? c).join(''));
+  const wmax = Math.max(...rows.map(r => r.length));
+  stamp(g, rows.map(r => r.padEnd(wmax, '.')), flip ? x0 + 4 - wmax : x0, oy, { outline: true });
+}
+// flip rows horizontally; optional per-char map (e.g. darken for the far side)
+export const flipRows = (rows, f = c => c) => rows.map(r => [...r].reverse().map(f).join(''));
+// fill a column-wise silhouette: top(x)..bot(x) with colour fn(x,y,top,bot); returns nothing, draws with outline
+export function columns(g, x0, x1, top, bot, col, outline = true) {
+  const mask = new Set();
+  for (let x = x0; x <= x1; x++) for (let y = top(x); y <= bot(x); y++) mask.add(x + ',' + y);
+  stampMask(g, mask, (x, y) => col(x, y, top(x), bot(x)), { outline });
+}
+
+// tapered curved spike along points [[x,y,width]...] (width = pixels thick, horizontal). cols = [lit, base, shade]
+export function spike(g, pts, cols, dx = 0, dy = 0, dark = null) {
+  const mask = new Set();
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [x0, y0, w0] = pts[k], [x1, y1, w1] = pts[k + 1], n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+    for (let i = 0; i <= n; i++) {
+      const x = Math.round(x0 + (x1 - x0) * i / n), y = Math.round(y0 + (y1 - y0) * i / n), w = Math.max(1, Math.round(w0 + (w1 - w0) * i / n));
+      for (let a = 0; a < w; a++) mask.add((x + a + dx) + ',' + (y + dy));
+    }
+  }
+  const has = (x, y) => mask.has(x + ',' + y);
+  stampMask(g, mask, (x, y) => { const c = !has(x - 1, y) ? cols[0] : !has(x + 1, y) ? cols[2] : cols[1]; return dark ? dark(c) : c; }, { outline: true });
+}

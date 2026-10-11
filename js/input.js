@@ -1,43 +1,49 @@
-// Play-time input: keyboard (rebindable via IT.Settings), mouse, cast modes, camera keys. IT.Input singleton.
+// Play-time input: keyboard/mouse (rebindable via IT.Settings), cast modes, attack-move, self-cast, camera keys, selection,
+// window-edge scroll, fullscreen, optional pointer lock. IT.Input singleton.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
   const GM = IT.GAME, P = GM.UNIT_PX, VW = GM.VIEW_W, VH = GM.VIEW_H;
   const sfx = n => { if (typeof G.SFX !== 'undefined' && G.SFX.enabled && G.SFX.play) { try { G.SFX.play(n); } catch (e) { /* ignore */ } } };
+  const HOVER = 70;          // extra pick radius (world units) around a unit's hull: quick-cast must forgive sloppy aim
+  const EDGE_PX = 3;         // window-edge scroll band (CSS px)
+  const PEND_MAX = 1.5;      // s: a pending cast older than this is replaced, not queued behind
+  const DEFER_MAX = 2000;    // ms: deferred invoke runs anyway after this
 
   const In = {
     enabled: false, ctx: null, armed: null, selected: null,   // selected: unit id shown in the HUD (null = hero)
     keys: new Set(), mouse: { x: 0, y: 0, in: false },
+    win: { x: 0, y: 0, in: false },     // cursor in window (client) px, for edge scroll
+    locked: false, vx: 0, vy: 0,        // pointer lock: virtual cursor (client px)
     hooks: {},    // pause, statsHold(bool), cheat, refresh, spawn, resetDummies, debug
     sfx,
+    now: () => (G.performance && G.performance.now ? G.performance.now() : Date.now()),
+    _q: [], _tap: {}, _ctap: 0,
   };
 
   const S = () => IT.Settings.get();
-  const TOGGLE_KEYS = {};
+  const cur = k => { if (IT.Cursor) IT.Cursor.set(k); };
 
   // ---------------------------------------------------------------- helpers
   function worldMouse() { return In.ctx.cam.toWorld(In.mouse.x, In.mouse.y); }
-  function unitAt(p, team) {
+  // nearest unit to point p within (hull + HOVER); ok(e) filters
+  function hover(p, ok) {
     const w = In.ctx.w;
-    let best = null, bd = 60 * 60;
+    let best = null, bd = Infinity;
     for (const e of w.ents) {
-      if (e.dead || e.team !== team || e.kind === 'thinker' || e.kind === 'proj') continue;
-      if (w.fog && team === 1 && !e.visible) continue;
-      const d = IT.U.dist2(e.x, e.y, p.x, p.y);
-      if (d < bd) { bd = d; best = e; }
+      if (e.dead || e.kind === 'thinker' || e.kind === 'proj' || !ok(e)) continue;
+      const d = IT.U.dist2(e.x, e.y, p.x, p.y), lim = (e.radius || 0) + HOVER;
+      if (d <= lim * lim && d < bd) { bd = d; best = e; }
     }
     return best;
   }
+  function unitAt(p, team) {
+    const w = In.ctx.w;
+    return hover(p, e => e.team === team && !(w.fog && team === 1 && !e.visible));
+  }
   function pickTarget(d, p) {
     const { w, hero } = In.ctx;
-    let best = null, bd = 60 * 60;
-    for (const e of w.ents) {
-      if (e.dead || e.kind === 'thinker' || e.kind === 'proj') continue;
-      if (!d.filter(w, hero, e)) continue;
-      const dd = IT.U.dist2(e.x, e.y, p.x, p.y);
-      if (dd < bd) { bd = dd; best = e; }
-    }
-    return best;
+    return hover(p, e => d.filter(w, hero, e));
   }
   const fail = reason => { const c = In.ctx; c.w.emit('fail', { unit: c.hero.id, reason }); };
 
@@ -49,15 +55,34 @@
     if (IT.Abilities.get(action) && IT.Abilities.get(action).kind === 'spell') return action;
     return null;
   }
+  const isAbilityAction = a => /^(slot[12]|item[1-6])$/.test(a) || !!(IT.Abilities.get(a) && IT.Abilities.get(a).kind === 'spell');
+  const isSeq = a => /^orb[QWE]$/.test(a) || a === 'invoke' || isAbilityAction(a);
 
-  // Try to cast `id`. mode: 'key' (quick -> at cursor), 'hud' (always arms if targeted), 'click' (armed click).
-  function cast(id, how, queued) {
+  // Is a different cast still on its way (turning / walking / cast point)? Then a new cast must queue behind it, not drop it.
+  function pendingCast(id) {
+    const { w, hero } = In.ctx, o = hero.orders[0];
+    return !!(o && o.type === 'cast' && o._ph !== 'channel' && o.ability !== id && w.t - (o.at || 0) < PEND_MAX && hero.orders.length < 4);
+  }
+  function issueCast(o) {
+    const { w, hero } = In.ctx;
+    if (!o.queued && pendingCast(o.ability)) {
+      const r = IT.Abilities.check(w, hero, o.ability, o);
+      if (r) { fail(r); return false; }
+      o.queued = true;
+    }
+    o.at = w.t;
+    return IT.Orders.issue(w, hero, o);
+  }
+
+  // Try to cast `id`. how: 'key' (quick -> at cursor), 'hud' (always arms if targeted), 'click' (armed click).
+  // snap: {p} cursor position captured when a deferred key was pressed.
+  function cast(id, how, queued, snap) {
     const { w, hero } = In.ctx;
     if (!id) return;
     if (id === '__none') { fail('noItem'); return; }
     const d = IT.Abilities.get(id);
     if (!d) return;
-    if (d.target === 'none') { In.cancel(true); IT.Orders.issue(w, hero, { type: 'cast', ability: id, queued: !!queued }); return; }
+    if (d.target === 'none') { In.cancel(true); issueCast({ type: 'cast', ability: id, queued: !!queued }); return; }
     const normal = S().castMode === 'normal';
     if (how !== 'click' && (normal || how === 'hud')) {
       // pre-check castability so we don't arm something that cannot be used
@@ -67,7 +92,7 @@
       sfx('click');
       return;
     }
-    const p = worldMouse(), o = { type: 'cast', ability: id, queued: !!queued };
+    const p = snap ? snap.p : worldMouse(), o = { type: 'cast', ability: id, queued: !!queued };
     if (d.target === 'point') { o.x = p.x; o.y = p.y; }
     else {
       let t = pickTarget(d, p);
@@ -76,68 +101,253 @@
       o.target = t.id;
     }
     if (how !== 'click') In.armed = null;
-    IT.Orders.issue(w, hero, o);
+    issueCast(o);
+  }
+
+  // Self-cast: alacrity -> hero; blink -> max range toward the bottom-left corner (fountain). Others: not self-castable.
+  function selfCast(id, queued) {
+    const { w, hero } = In.ctx;
+    if (id === 'alacrity') { In.armed = null; issueCast({ type: 'cast', ability: id, target: hero.id, queued: !!queued }); return true; }
+    if (id === 'blink') {
+      const m = w.map, ty = m && m.H ? m.H : hero.y;
+      const dx = 0 - hero.x, dy = ty - hero.y, d = Math.hypot(dx, dy);
+      const R = (IT.Values.item(GM.ITEM_DOTA.blink, 'blink_range') || 1200) - 1;
+      In.armed = null;
+      if (d < 1) { fail('noTarget'); return true; }
+      const k = Math.min(R, d) / d;
+      issueCast({ type: 'cast', ability: id, x: hero.x + dx * k, y: hero.y + dy * k, queued: !!queued });
+      return true;
+    }
+    return false;
+  }
+
+  // ---------------------------------------------------------------- deferred sequence (orbs / invoke / casts keep their order)
+  // An invoke that would evict a spell whose cast has not fired yet waits for that cast; later keys wait behind it.
+  function evictsPending() {
+    const { hero } = In.ctx, inv = hero.inv, sp = IT.Invoke.recipeOf(inv.orbs);
+    if (!sp || inv.slots.includes(sp)) return false;
+    const victim = inv.slots[1];
+    return !!victim && hero.orders.some(o => o.type === 'cast' && o.ability === victim && o._ph !== 'channel');
+  }
+  function flush() {
+    const c = In.ctx; if (!c || c.w.paused) return;
+    const q = In._q, now = In.now();
+    while (q.length) {
+      const j = q[0];
+      if (j.action === 'invoke' && now - j.t < DEFER_MAX && evictsPending()) break;
+      q.shift();
+      exec(j.action, j.opts, j.snap);
+    }
   }
 
   // ---------------------------------------------------------------- actions (shared by keys and HUD buttons)
   In.doAction = function (action, opts) {
     if (!In.ctx) return;
-    opts = opts || {};
-    const { w, hero, cam } = In.ctx, how = opts.hud ? 'hud' : 'key';
+    opts = Object.assign({}, opts);
+    const { w } = In.ctx;
     if (w.paused) return;
+    In.selected = null;     // any player action returns the HUD to the hero
+    if (isAbilityAction(action) && !opts.hud) {   // double-tap (same key twice within the timeout) = self-cast
+      const now = In.now(), s = S(), prev = In._tap[action];
+      if (s.doubleTap && prev && now - prev <= s.doubleTapTimeout * 1000) { opts.self = true; In._tap[action] = 0; } else In._tap[action] = now;
+    }
+    flush();
+    if (isSeq(action) && (In._q.length || (action === 'invoke' && evictsPending()))) {
+      In._q.push({ action, opts, snap: { p: worldMouse() }, t: In.now() });
+      return;
+    }
+    exec(action, opts, null);
+  };
+
+  function exec(action, opts, snap) {
+    const { w, hero, cam } = In.ctx, how = opts.hud ? 'hud' : 'key';
     switch (action) {
-      case 'orbQ': case 'orbW': case 'orbE': { const k = action.slice(3); IT.Invoke.orb(w, hero, k); return; }
+      case 'orbQ': case 'orbW': case 'orbE': IT.Invoke.orb(w, hero, action.slice(3)); return;
       case 'invoke': IT.Invoke.invoke(w, hero); return;
-      case 'stop': In.cancel(true); IT.Orders.issue(w, hero, { type: 'stop' }); return;
+      case 'attack': In.armed = { id: 'attack', attack: true, queued: !!opts.queued }; sfx('click'); return;
+      case 'stop': In.cancel(true); In._q = In._q.filter(j => !isAbilityAction(j.action)); IT.Orders.issue(w, hero, { type: 'stop' }); return;
       case 'hold': In.cancel(true); IT.Orders.issue(w, hero, { type: 'hold' }); return;
-      case 'center': cam.centerOn(hero.x, hero.y); return;
+      case 'center': {
+        const now = In.now(), s = S();
+        if (!s.doubleTap || (In._ctap && now - In._ctap <= s.doubleTapTimeout * 1000)) { cam.centerOn(hero.x, hero.y); cam.follow = true; In._ctap = 0; } else In._ctap = now;
+        return;
+      }
       case 'camLock': cam.lock = !cam.lock; return;
       case 'cheat': case 'refresh': case 'spawn': case 'resetDummies': if (In.hooks[action]) In.hooks[action](); return;
-      default: { const id = abilityId(action); if (id !== null) cast(id, how, opts.queued); }
+      default: {
+        const id = abilityId(action);
+        if (id === null) return;
+        if (opts.self && selfCast(id, opts.queued)) return;
+        cast(id, how, opts.queued, snap);
+      }
     }
+  }
+  In.castId = (id, opts) => {
+    if (!In.ctx || In.ctx.w.paused) return;
+    In.selected = null;
+    cast(id, opts && opts.hud ? 'hud' : 'key', opts && opts.queued);
   };
-  In.castId = (id, opts) => { if (In.ctx && !In.ctx.w.paused) cast(id, opts && opts.hud ? 'hud' : 'key', opts && opts.queued); };
   In.cancel = function (silent) {
     if (In.armed) { In.armed = null; if (!silent) IT.UI.toast(IT.t('toast.cancelled'), 'info'); return true; }
     return false;
   };
 
+  // Mouse side buttons as bindable keys. Settings key-capture calls this for mousedown events.
+  In.mouseKeyName = ev => (ev && ev.button === 3 ? 'Mouse4' : ev && ev.button === 4 ? 'Mouse5' : null);
+
+  // key name pressed -> action (H falls back to the recipe cheat sheet)
+  function press(k, mods) {
+    let a = IT.Settings.actionFor(k);
+    if (!a && k === 'H') a = 'cheat';
+    if (!a) return false;
+    In.doAction(a, { queued: !!mods.shift, self: !!mods.alt });
+    return true;
+  }
+  function release(k) {
+    if (k && IT.Settings.actionFor(k) === 'center' && In.ctx) In.ctx.cam.follow = false;
+  }
+
+  In.inspecting = () => !!(In.hooks.inspect && In.hooks.inspect());
+  In.keyDown = function (ev) {
+    if (!In.enabled || !In.ctx) return;
+    const tg = ev.target, tag = tg && tg.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const w = In.ctx.w;
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      if (ev.repeat) return;
+      if (w.paused) { if (In.now() - (In._unlockAt || -1e9) > 250 && In.hooks.pause) In.hooks.pause(); return; }   // (ESC that just left pointer lock already paused)
+      if (In.armed) In.cancel();
+      else if (In.selected != null) In.selected = null;
+      else if (In.hooks.pause) In.hooks.pause();
+      return;
+    }
+    if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && In.hooks.statsHold) In.hooks.statsHold(true); return; }
+    const insp = w.paused && In.inspecting();
+    if (w.paused && !insp) return;
+    if (ev.key === 'Alt') { ev.preventDefault(); return; }      // keep Alt from focusing the browser menu
+    if (ev.metaKey) return;
+    In.keys.add(ev.key);
+    if (ev.key === 'F3') { ev.preventDefault(); if (!ev.repeat && In.hooks.debug) In.hooks.debug(); return; }
+    if (ev.repeat) { if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
+    const k = IT.Settings.keyName(ev);
+    if (!k) return;
+    if (insp) { const a = IT.Settings.actionFor(k); if (a === 'center' || a === 'camLock') press(k, {}); if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
+    if (!press(k, { shift: ev.shiftKey, alt: ev.altKey })) { if (/^Arrow/.test(ev.key)) ev.preventDefault(); return; }
+    ev.preventDefault();
+  };
+  In.keyUp = function (ev) {
+    In.keys.delete(ev.key);
+    if (ev.key === 'Tab' && In.hooks.statsHold) In.hooks.statsHold(false);
+    if (In.ctx) release(IT.Settings.keyName(ev));
+  };
+
+  // ---------------------------------------------------------------- fullscreen / pointer lock
+  In.toggleFullscreen = function () {
+    const d = G.document; if (!d) return;
+    try {
+      if (d.fullscreenElement || d.webkitFullscreenElement) { const x = d.exitFullscreen || d.webkitExitFullscreen; if (x) { const r = x.call(d); if (r && r.catch) r.catch(() => {}); } }
+      else { const el = d.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen; if (f) { const r = f.call(el); if (r && r.catch) r.catch(() => {}); } }
+    } catch (e) { /* ignore */ }
+  };
+  const lockEl = () => (G.document && G.document.pointerLockElement) || null;
+  function unlock() { if (lockEl() && G.document.exitPointerLock) G.document.exitPointerLock(); }
+
   // ---------------------------------------------------------------- binding
   In.bind = function (ctx) {
     In.unbind();
-    In.ctx = ctx; In.enabled = true; In.armed = null; In.keys.clear();
-    const cv = ctx.cv;
+    In.ctx = ctx; In.enabled = true; In.armed = null; In.keys.clear(); In._q = []; In._tap = {}; In._ctap = 0; In.selected = null;
+    ctx.cam.follow = false;
+    const cv = ctx.cv, doc = G.document;
     let mmDrag = false;
+    const isUi = el => !!(el && el.closest && el.closest('.hudp,.itfs'));
+    const pos = ev => (In.locked && ev.isTrusted !== false ? { x: In.vx, y: In.vy } : { x: ev.clientX, y: ev.clientY });
     const setMouse = ev => {
-      const r = cv.getBoundingClientRect();
-      In.mouse.x = (ev.clientX - r.left) / r.width * VW; In.mouse.y = (ev.clientY - r.top) / r.height * VH;
+      const r = cv.getBoundingClientRect(), p = pos(ev);
+      In.mouse.x = (p.x - r.left) / r.width * VW; In.mouse.y = (p.y - r.top) / r.height * VH;
+      In.win.x = p.x; In.win.y = p.y;
     };
     const miniMove = () => {
       const m = ctx.R.mmHit(In.mouse.x, In.mouse.y); if (!m) return false;
       ctx.cam.lock = false; ctx.cam.centerOn(m.x, m.y); return true;
     };
+    const synth = (el, type, p, button) => { try { el.dispatchEvent(new G.MouseEvent(type, { bubbles: true, cancelable: true, clientX: p.x, clientY: p.y, button: button || 0, view: G })); } catch (e) { /* ignore */ } };
     const onWinMove = ev => {   // track the cursor over HUD too (for edge scroll and aim)
+      if (In.locked && ev.isTrusted !== false) {
+        In.vx = Math.max(0, Math.min(G.innerWidth - 1, In.vx + (ev.movementX || 0)));
+        In.vy = Math.max(0, Math.min(G.innerHeight - 1, In.vy + (ev.movementY || 0)));
+        if (IT.Cursor) IT.Cursor.virtual(In.vx, In.vy);
+        const el = doc.elementFromPoint(In.vx, In.vy);
+        if (el && el !== cv) synth(el, 'mousemove', { x: In.vx, y: In.vy });   // HUD tooltips
+        setMouse(ev);
+        In.win.in = true;
+        In.mouse.in = !mmDrag && !isUi(el) && el === cv;
+        if (mmDrag) miniMove();
+        return;
+      }
       setMouse(ev);
-      const r = cv.getBoundingClientRect();
-      const inside = ev.clientX >= r.left && ev.clientX < r.right && ev.clientY >= r.top && ev.clientY < r.bottom;
-      const overUi = ev.target && ev.target.closest && ev.target.closest('.hudp');
-      In.mouse.in = inside && !mmDrag && !overUi;
+      const r = cv.getBoundingClientRect(), p = pos(ev);
+      const inside = p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom;
+      In.win.in = true;
+      In.mouse.in = inside && !mmDrag && !isUi(ev.target);
       if (mmDrag) miniMove();
     };
     const onLeave = () => { In.mouse.in = false; };
+    const onDocLeave = () => { if (!In.locked) In.win.in = false; };
     const onUp = () => { mmDrag = false; };
     const onCtx = ev => ev.preventDefault();
+    const onLockChange = () => {
+      const was = In.locked;
+      In.locked = lockEl() === cv;
+      if (In.locked) { if (IT.Cursor) IT.Cursor.virtual(In.vx, In.vy); }
+      else {
+        if (IT.Cursor) IT.Cursor.virtual(null);
+        if (was && In.enabled && !ctx.w.paused && In.hooks.pause) { In._unlockAt = In.now(); In.hooks.pause(); }   // ESC / alt-tab left the lock: pause
+      }
+    };
+    const attackClick = shift => {
+      const { w, hero } = ctx, p = worldMouse(), t = unitAt(p, 1);
+      IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: shift } : { type: 'attack', x: p.x, y: p.y, queued: shift });
+      if (!shift) In.armed = null;
+    };
     const onDown = ev => {
-      if (!In.enabled || ctx.w.paused) return;
+      if (!In.enabled) return;
+      if (ctx.w.paused) {   // frozen inspect (ranked countdown): minimap + dummy select only
+        if (!In.inspecting() || ev.button !== 0) return;
+        setMouse(ev);
+        if (miniMove()) { mmDrag = true; return; }
+        const t = unitAt(worldMouse(), 1); In.selected = t && t.kind === 'dummy' ? t.id : null;
+        return;
+      }
+      if (In.locked && ev.isTrusted !== false) {   // locked: the event targets the canvas, so route UI clicks by hand
+        const el = doc.elementFromPoint(In.vx, In.vy), p = { x: In.vx, y: In.vy };
+        if (el && el !== cv && isUi(el)) {
+          synth(el, 'mousedown', p, ev.button);
+          const up = () => { G.removeEventListener('mouseup', up, true); synth(el, 'mouseup', p, ev.button); if (ev.button === 0) synth(el, 'click', p, 0); };
+          G.addEventListener('mouseup', up, true);
+          return;
+        }
+      } else if (S().pointerLock && !In.locked && cv.requestPointerLock && (ev.button === 0 || ev.button === 2)) {
+        In.vx = ev.clientX; In.vy = ev.clientY;
+        try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ }
+      }
       setMouse(ev);
       const { w, hero } = ctx;
       if (ev.button === 0) {
         if (miniMove()) { mmDrag = true; return; }
-        if (In.armed) { const a = In.armed; cast(a.id, 'click', ev.shiftKey || a.queued); afterClick(a, ev.shiftKey); }
+        if (In.armed) {
+          const a = In.armed;
+          if (a.attack) { attackClick(ev.shiftKey || a.queued); return; }
+          cast(a.id, 'click', ev.shiftKey || a.queued); afterClick(a, ev.shiftKey);
+          return;
+        }
+        const t = unitAt(worldMouse(), 1);
+        if (t && t.kind === 'dummy') In.selected = t.id;
         return;
       }
       if (ev.button !== 2) return;
       if (In.armed) { In.cancel(); return; }
+      In.selected = null;
       const m = ctx.R.mmHit(In.mouse.x, In.mouse.y);
       const p = m || worldMouse(), t = m ? null : unitAt(p, 1);
       IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: ev.shiftKey } : { type: 'move', x: p.x, y: p.y, queued: ev.shiftKey });
@@ -152,53 +362,75 @@
       }
       In.armed = null;
     }
-    const onKey = ev => {
-      if (!In.enabled) return;
-      const tg = ev.target, tag = tg && tg.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      const w = ctx.w;
-      if (ev.key === 'Escape') { ev.preventDefault(); if (!ev.repeat) { if (In.armed && !w.paused) In.cancel(); else if (In.hooks.pause) In.hooks.pause(); } return; }
-      if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && In.hooks.statsHold) In.hooks.statsHold(true); return; }
-      if (w.paused) return;
-      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-      In.keys.add(ev.key);
-      if (ev.key === 'F3') { ev.preventDefault(); if (!ev.repeat && In.hooks.debug) In.hooks.debug(); return; }
-      if (ev.repeat) { if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
-      const k = IT.Settings.keyName(ev);
-      if (!k) return;
-      let a = IT.Settings.actionFor(k);
-      if (!a && k === 'H') a = 'cheat';      // H shows the recipes only while Hold is not on H
-      if (!a) { if (/^Arrow/.test(ev.key)) ev.preventDefault(); return; }
+    // Mouse4 / Mouse5 as keys (window-wide so they work over the HUD too); also stops the browser's back/forward
+    const onAuxDown = ev => {
+      const k = In.mouseKeyName(ev);
+      if (!k || !In.enabled) return;
       ev.preventDefault();
-      In.doAction(a, { queued: ev.shiftKey });
+      if (ctx.w.paused) return;
+      press(k, { shift: ev.shiftKey, alt: ev.altKey });
     };
-    const onKeyUp = ev => {
-      In.keys.delete(ev.key);
-      if (ev.key === 'Tab' && In.hooks.statsHold) In.hooks.statsHold(false);
+    const onAuxUp = ev => {
+      const k = In.mouseKeyName(ev);
+      if (!k) return;
+      if (In.enabled) ev.preventDefault();
+      release(k);
     };
-    const onBlur = () => { In.keys.clear(); mmDrag = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
+    const onBlur = () => { In.keys.clear(); mmDrag = false; In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
+    const onKeyD = ev => In.keyDown(ev), onKeyU = ev => In.keyUp(ev);
+    const offOrder = ctx.w.on('orderDone', flush);
 
     cv.addEventListener('mouseleave', onLeave);
     cv.addEventListener('contextmenu', onCtx);
     cv.addEventListener('mousedown', onDown);
     G.addEventListener('mousemove', onWinMove);
     G.addEventListener('mouseup', onUp);
-    G.addEventListener('keydown', onKey);
-    G.addEventListener('keyup', onKeyUp);
+    G.addEventListener('mousedown', onAuxDown);
+    G.addEventListener('mouseup', onAuxUp);
+    G.addEventListener('auxclick', onAuxUp);
+    G.addEventListener('keydown', onKeyD);
+    G.addEventListener('keyup', onKeyU);
     G.addEventListener('blur', onBlur);
+    if (doc) { doc.addEventListener('pointerlockchange', onLockChange); doc.documentElement.addEventListener('mouseleave', onDocLeave); }
     In._off = () => {
       cv.removeEventListener('mouseleave', onLeave); cv.removeEventListener('contextmenu', onCtx); cv.removeEventListener('mousedown', onDown);
       G.removeEventListener('mousemove', onWinMove); G.removeEventListener('mouseup', onUp);
-      G.removeEventListener('keydown', onKey); G.removeEventListener('keyup', onKeyUp); G.removeEventListener('blur', onBlur);
+      G.removeEventListener('mousedown', onAuxDown); G.removeEventListener('mouseup', onAuxUp); G.removeEventListener('auxclick', onAuxUp);
+      G.removeEventListener('keydown', onKeyD); G.removeEventListener('keyup', onKeyU); G.removeEventListener('blur', onBlur);
+      if (doc) { doc.removeEventListener('pointerlockchange', onLockChange); doc.documentElement.removeEventListener('mouseleave', onDocLeave); }
+      offOrder();
     };
   };
   In.unbind = function () {
     if (In._off) In._off();
-    In._off = null; In.ctx = null; In.enabled = false; In.armed = null; In.keys.clear();
+    unlock();
+    if (IT.Cursor) { IT.Cursor.virtual(null); IT.Cursor.set('default'); }
+    In._off = null; In.ctx = null; In.enabled = false; In.armed = null; In.selected = null; In.locked = false; In.keys.clear(); In._q = [];
   };
 
-  // mouse as camera sees it (edge scroll respects the setting)
-  In.camMouse = () => ({ x: In.mouse.x, y: In.mouse.y, in: In.mouse.in && S().edgeScroll && !In.armed });
+  // mouse as camera sees it: edge scroll triggers at the WINDOW edge (even over the letterbox / HUD), not the canvas edge
+  In.camMouse = () => {
+    const m = { x: In.mouse.x, y: In.mouse.y, in: false, edge: null };
+    if (S().edgeScroll && In.win.in && G.innerWidth) {
+      const x = In.win.x, y = In.win.y;
+      m.edge = { l: x < EDGE_PX, r: x >= G.innerWidth - EDGE_PX, u: y < EDGE_PX, d: y >= G.innerHeight - EDGE_PX };
+    }
+    return m;
+  };
+
+  // per-frame upkeep (called from drawAim, which main calls every frame): deferred keys, selection validity, cursor, lock
+  function frame() {
+    const c = In.ctx;
+    if (!c || !In.enabled) { cur('default'); if (In.locked) unlock(); return; }
+    const w = c.w;
+    if (w.paused) { cur('default'); if (In.locked) unlock(); return; }
+    flush();
+    if (In.selected != null && !w.get(In.selected)) In.selected = null;
+    let kind = 'default';
+    if (In.armed) kind = In.armed.attack ? 'attack' : 'aim';
+    else if (In.mouse.in && unitAt(worldMouse(), 1)) kind = 'attack';
+    cur(kind);
+  }
 
   // ---------------------------------------------------------------- aim overlay (range circle + AoE preview)
   function aoeRadius(id, ctx) {
@@ -214,6 +446,7 @@
   }
   In.drawAim = function (g) {
     g.clearRect(0, 0, VW, VH);
+    frame();
     const c = In.ctx;
     if (!c || !In.armed || c.w.paused) return;
     const d = IT.Abilities.get(In.armed.id); if (!d) return;
@@ -221,19 +454,18 @@
     const hs = cam.toScreen(hero.x, hero.y);
     const rng = (d.range(w, hero) || 0) / P;
     g.lineWidth = 1;
-    if (rng > 0) {
+    if (rng > 0 && isFinite(rng)) {
       g.strokeStyle = 'rgba(255,230,120,0.75)'; g.fillStyle = 'rgba(255,230,120,0.05)';
       g.beginPath(); g.ellipse(hs.x, hs.y, rng, rng * 0.8, 0, 0, Math.PI * 2); g.fill(); g.stroke();
     }
     const ctx2 = hero.ctx || w.ctx, ar = aoeRadius(In.armed.id, ctx2) / P;
     const mx = Math.round(In.mouse.x), my = Math.round(In.mouse.y);
     const p = worldMouse();
-    const inRange = !rng || IT.U.dist2(hero.x, hero.y, p.x, p.y) <= (rng * P) * (rng * P);
+    const inRange = !rng || !isFinite(rng) || IT.U.dist2(hero.x, hero.y, p.x, p.y) <= (rng * P) * (rng * P);
     g.strokeStyle = inRange ? 'rgba(255,90,200,0.95)' : 'rgba(255,255,255,0.45)';
     g.fillStyle = inRange ? 'rgba(255,90,200,0.16)' : 'rgba(255,255,255,0.06)';
     if (ar > 1) { g.beginPath(); g.ellipse(mx, my, ar, ar * 0.8, 0, 0, Math.PI * 2); g.fill(); g.stroke(); }
-    g.beginPath(); g.moveTo(mx - 3, my); g.lineTo(mx + 3, my); g.moveTo(mx, my - 3); g.lineTo(mx, my + 3); g.stroke();
-    if (d.target === 'point' && rng > 0) { g.globalAlpha = 0.35; g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(mx, my); g.stroke(); g.globalAlpha = 1; }
+    if (d.target === 'point' && rng > 0 && isFinite(rng)) { g.globalAlpha = 0.35; g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(mx, my); g.stroke(); g.globalAlpha = 1; }
   };
 
   IT.Input = In;

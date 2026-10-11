@@ -1,17 +1,21 @@
-// Loadout screen. State persisted in localStorage 'it2.loadout'. IT.UI.LoadoutScreen = { state, build, startOpts, save }.
+// Loadout screen (SANDBOX). State persisted in localStorage 'it2.loadout'. IT.UI.LoadoutScreen = { state, build, startOpts, save, load, derived, trim }.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
   const KEY = 'it2.loadout';
   const ORBS = ['quas', 'wex', 'exort'];
   const ORBK = { quas: 'Q', wex: 'W', exort: 'E' };
-  const MODES = ['sandbox', 'practice', 'timed'];
 
-  const st = { lo: null, count: 1, fog: true, grant: true, mode: 'sandbox' };
+  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null };
+
+  const scenarios = () => IT.SCENARIOS || [];
+  const scnOf = id => (id == null ? null : scenarios().find(s => s.id === id) || null);
+  const scnName = s => (s.name && typeof s.name === 'object' ? (s.name[IT.lang] || s.name.en) : s.name) || IT.t(s.nameKey || ('scn.' + s.id));
+  const scnTip = s => (s.descKey ? IT.t(s.descKey) : '');
 
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.grant = true; st.mode = 'sandbox';
+    st.count = 1; st.fog = true; st.grant = true; st.scenario = null;
   }
   function load() {
     fresh();
@@ -23,11 +27,11 @@
     st.lo = lo;
     st.count = Math.max(1, Math.min(5, raw.count | 0 || 1));
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
-    st.mode = MODES.includes(raw.mode) ? raw.mode : 'sandbox';
+    st.scenario = scnOf(raw.scenario) ? raw.scenario : null;
   }
   function save() {
-    st.lo.mode = st.mode;
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, mode: st.mode })); } catch (e) { /* ignore */ }
+    st.lo.mode = 'sandbox';
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -81,12 +85,11 @@
     const ctx = IT.Loadout.ctx(lo), a = IT.Hero.attrs(ctx), D = IT.DOTA.hero, V = IT.Values, GM = IT.GAME;
     let ms = D.MovementSpeed, as = (D.BaseAttackSpeed || 100) + a.agi;
     const boots = IT.Loadout.BOOTS.find(b => lo.items.includes(b));
-    if (boots === 'boots' || boots === 'travels') ms += V.item(GM.ITEM_DOTA[boots], 'bonus_movement_speed');
-    else if (boots === 'treads') { ms += V.item(GM.ITEM_DOTA.treads, 'bonus_movement_speed_ranged'); as += V.item(GM.ITEM_DOTA.treads, 'bonus_attack_speed'); }
+    if (boots) ms += V.item(GM.ITEM_DOTA[boots], 'bonus_movement_speed');
     const armorItem = lo.items.includes('shiva') ? V.item(GM.ITEM_DOTA.shiva, 'bonus_armor') : 0;
     return {
       ctx, a,
-      hp: D.StatusHealth + 22 * a.str, mana: D.StatusMana + 12 * a.int,
+      hp: IT.Hero.maxHp(ctx), mana: IT.Hero.maxMana(ctx),
       hpRegen: D.StatusHealthRegen + 0.1 * a.str, manaRegen: D.StatusManaRegen + 0.05 * a.int,
       armor: D.ArmorPhysical + a.agi / 6 + armorItem, magicRes: ((D.MagicalResistance != null ? D.MagicalResistance : 25) / 100 + 0.001 * a.int) * 100,
       dmgMin: D.AttackDamageMin + a.int, dmgMax: D.AttackDamageMax + a.int, as, bat: D.AttackRate, ms,
@@ -104,7 +107,6 @@
     const flash = msg => { note.textContent = msg; clearTimeout(noteT); noteT = setTimeout(() => { note.textContent = ''; }, 2600); };
 
     const changed = () => { save(); all(); };
-    const maxOrbFor = k => lo.orbs[k];
 
     // ---- level + points
     const lvlVal = h('span', { class: 'big', text: lo.heroLevel });
@@ -205,19 +207,35 @@
       }
     }
 
-    // ---- aghs
+    // ---- aghs: one toggle per item; scepter -> orb pick, shard -> spell pick
     const aghBox = reg('aghs', 'aghs');
     function renderAghs() {
       aghBox.textContent = '';
-      aghBox.appendChild(h('div', { class: 'row' },
-        h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: lo.scepter ? true : null, onchange: ev => { lo.scepter = ev.target.checked; if (!lo.scepter) lo.scepterOrb = null; changed(); } }), h('span', { class: 'box' }), icon('scepter', 'mini'), h('span', { text: t('item.scepter') })),
-        h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: lo.shard ? true : null, onchange: ev => { lo.shard = ev.target.checked; changed(); } }), h('span', { class: 'box' }), icon('shard', 'mini'), h('span', { text: t('item.shard') }))));
+      aghBox.appendChild(h('div', { class: 'row agh-row' },
+        h('button', {
+          type: 'button', class: 'agh' + (lo.scepter ? ' on' : ''), 'data-tip': t('agh.scepter'),
+          onclick: () => { lo.scepter = !lo.scepter; if (!lo.scepter) lo.scepterOrb = null; changed(); },
+        }, icon('scepter', 'mini')),
+        h('button', {
+          type: 'button', class: 'agh' + (lo.shard ? ' on' : ''), 'data-tip': t('agh.shard'),
+          onclick: () => { lo.shard = !lo.shard; if (!lo.shard) lo.shardSpell = null; changed(); },
+        }, icon('shard', 'mini'))));
       if (lo.scepter) {
         const need = !lo.scepterOrb;
         aghBox.appendChild(h('div', { class: 'row scorb' + (need ? ' need' : '') },
           h('span', { class: 'lbl', text: t('lo.scepterOrb') }),
           ORBS.map(k => h('button', { type: 'button', class: 'orbsel ' + k + (lo.scepterOrb === k ? ' on' : ''), onclick: () => { lo.scepterOrb = k; changed(); }, 'data-tip': t('orb.' + k) }, icon(k)))));
         if (need) aghBox.appendChild(h('div', { class: 'warn', text: t('err.scepter') }));
+      }
+      if (lo.shard) {
+        const need = !lo.shardSpell;
+        aghBox.appendChild(h('div', { class: 'row shsp' + (need ? ' need' : '') },
+          h('span', { class: 'lbl', text: t('lo.shardSpell') }),
+          IT.Loadout.SHARD_SPELLS.map(s => h('button', {
+            type: 'button', class: 'spsel' + (lo.shardSpell === s ? ' on' : ''), 'data-tip': t('spell.' + s) + ': ' + t('shard.' + s),
+            onclick: () => { lo.shardSpell = s; changed(); },
+          }, icon(s)))));
+        if (need) aghBox.appendChild(h('div', { class: 'warn', text: t('err.shard') }));
       }
     }
 
@@ -264,26 +282,26 @@
       dumBox.appendChild(h('div', { class: 'row skins' }, GM.SKINS.map(s => h('button', {
         type: 'button', class: 'skin' + (lo.skin === s ? ' on' : ''), onclick: () => { lo.skin = s; changed(); },
       }, portrait(s), h('span', { text: GM.SKIN_NAMES[s] })))));
-      const sb = st.mode === 'sandbox';
-      dumBox.appendChild(h('div', { class: 'row cnt' + (sb ? '' : ' off') },
+      dumBox.appendChild(h('div', { class: 'row cnt' },
         h('span', { class: 'lbl', text: t('lo.count') }),
-        [1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (st.count === n ? ' on' : ''), text: n, disabled: sb ? null : true, onclick: () => { st.count = n; changed(); } }))));
+        [1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (st.count === n ? ' on' : ''), text: n, onclick: () => { st.count = n; changed(); } }))));
     }
 
-    // ---- mode
-    const modeBox = reg('mode', 'modebox');
+    // ---- scenario (optional) + sandbox options
+    const scnBox = reg('scenario', 'scenario');
     function avail() { try { return IT.Combo ? IT.Combo.available(lo, { grantMissing: st.grant }).length : -1; } catch (e) { return -1; } }
-    function renderMode() {
-      modeBox.textContent = '';
-      modeBox.appendChild(h('div', { class: 'seg' }, MODES.map(m => h('button', {
-        type: 'button', class: 'seg-b' + (st.mode === m ? ' on' : ''), text: t('mode.' + m), onclick: () => { st.mode = m; changed(); },
+    function renderScenario() {
+      scnBox.textContent = '';
+      const list = scenarios();
+      const opts = [{ id: null, name: t('lo.freePlay'), tip: t('lo.freePlay.d') }].concat(list.map(s => ({ id: s.id, name: scnName(s), tip: scnTip(s) })));
+      scnBox.appendChild(h('div', { class: 'row wrap scns' }, opts.map(o => h('button', {
+        type: 'button', class: 'chipb' + (st.scenario === o.id ? ' on' : ''), 'data-tip': o.tip, text: o.name,
+        onclick: () => { st.scenario = o.id; changed(); },
       }))));
-      modeBox.appendChild(h('p', { class: 'fine', text: t('mode.' + st.mode + '.d', { secs: GM.TIMED_SECONDS }) }));
-      if (st.mode !== 'sandbox' || true) {
-        const n = avail();
-        if (n >= 0) modeBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
-      }
-      modeBox.appendChild(h('div', { class: 'row wrap' },
+      if (!list.length) scnBox.appendChild(h('p', { class: 'fine', text: t('lo.noScenarios') }));
+      const n = avail();
+      if (n >= 0) scnBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
+      scnBox.appendChild(h('div', { class: 'row wrap' },
         h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: st.grant ? true : null, onchange: ev => { st.grant = ev.target.checked; changed(); } }), h('span', { class: 'box' }), h('span', { text: t('lo.grant') })),
         h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: st.fog ? true : null, onchange: ev => { st.fog = ev.target.checked; changed(); } }), h('span', { class: 'box' }), h('span', { text: t('lo.fog') }))));
     }
@@ -305,7 +323,6 @@
       const tb = h('div', { class: 'sptab' });
       for (const s of Object.keys(SPV)) {
         const dota = GM.SPELL_DOTA[s], rec = GM.SPELL_ORBS[s];
-        const need = []; for (const ch of rec) { const o = Object.keys(ORBK).find(x => ORBK[x] === ch) ; }
         const miss = ORBS.filter(k => rec.includes(ORBK[k]) && d.ctx.eff[k] < 1);
         const vals = SPV[s].map(([key, lab, pct]) => { const v = IT.Values.get(dota, key, d.ctx); return v ? t(lab) + ' ' + fmt(pct ? Math.abs(v) : v) + (pct ? '%' : '') : null; }).filter(Boolean);
         tb.appendChild(h('div', { class: 'sprow' + (miss.length ? ' off' : '') },
@@ -322,8 +339,8 @@
       const errs = [];
       const v = IT.Loadout.validate(lo);
       if (lo.scepter && !lo.scepterOrb) errs.push(t('err.scepter'));
-      else if (!v.ok) errs.push(t('err.generic', { msg: v.errors[0] }));
-      if (st.mode !== 'sandbox') { const n = avail(); if (n === 0) errs.push(t('lo.noCombos')); }
+      if (lo.shard && !lo.shardSpell) errs.push(t('err.shard'));
+      if (!errs.length && !v.ok) errs.push(t('err.generic', { msg: v.errors[0] }));
       return errs;
     }
     function renderGo() {
@@ -335,7 +352,7 @@
         h('button', { type: 'button', class: 'btn big gold go' + (errs.length ? ' dis' : ''), text: t('ui.go'), 'data-tip': errs.length ? errs[0] : '', onclick: () => { const e2 = problems(); if (e2.length) { flash(e2[0]); return; } save(); IT.App.start(startOpts()); } })));
     }
 
-    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderMode(); renderPrev(); renderGo(); }
+    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderScenario(); renderPrev(); renderGo(); }
     const sec = (title, ...kids) => h('section', { class: 'sec' }, h('h3', { text: title }), kids);
 
     const el = h('div', { class: 'scr loadout' },
@@ -349,7 +366,7 @@
         h('div', { class: 'col' },
           sec(t('lo.items'), itemBox, h('p', { class: 'fine', text: t('lo.itemsHint') })),
           sec(t('lo.dummy'), dumBox),
-          sec(t('lo.mode'), modeBox)),
+          sec(t('lo.scenario'), scnBox)),
         h('div', { class: 'col' },
           sec(t('lo.preview'), prevBox),
           note, goBox)));
@@ -359,7 +376,7 @@
 
   function startOpts() {
     save();
-    return { loadout: IT.Loadout.normalize(st.lo), mode: st.mode, count: st.mode === 'sandbox' ? st.count : 1, fog: st.fog, grant: st.grant };
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null };
   }
 
   load();

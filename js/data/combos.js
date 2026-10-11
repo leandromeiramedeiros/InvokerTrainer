@@ -1,7 +1,9 @@
 // Combo catalogue (data only). Engine: js/sim/combo.js. See DECISIONS.md "Combos / stats".
 // combo = { id, tier:'basic'|'intermediate'|'advanced'|'items', name:{en,pt}, tip:{en,pt}, par (s), steps[], requires, scenario }
-// step  = { type:'cast'|'item'|'attack'|'react', ability, mustHitDummy, targetVisibility:'any'|'visible'|'hidden',
+// step  = { type:'cast'|'item'|'attack'|'react'|'position'|'move', ability, mustHitDummy, targetVisibility:'any'|'visible'|'hidden',
 //           within (max s since previous step), wait (suggested s since previous step: tip/bot only),
+//           itemOnDummy (item step: the item must hit the dummy; ihit() sets it),
+//           position: { minDist, maxDist } hero-dummy gap (units) must be inside; move: { dist (def 150), dir:'away'|'toward' } hero walks that far,
 //           count (attack hits), selfCast (cast on the hero), react:'boltCancel'|'boltBlocked'|'blinkPrevented'|'empPull' }
 // requires = { orbs:{quas,wex,exort} effective-level mins, items:[ids], scepter, shard }
 // scenario = { dummyBehavior:'stationary'|'wander'|'evasive', stunBolt, dummyEscape:'none'|'blink_on_first_hit'|'blink_after_seconds', blinkAfter }
@@ -20,7 +22,9 @@
   const cast = (ability, o) => Object.assign({ type: 'cast', ability, mustHitDummy: false, targetVisibility: 'any' }, o || {});
   const hit = (ability, o) => cast(ability, Object.assign({ mustHitDummy: true }, o || {}));
   const item = (ability, o) => Object.assign({ type: 'item', ability, mustHitDummy: false, targetVisibility: 'any' }, o || {});
-  const ihit = (ability, o) => item(ability, Object.assign({ mustHitDummy: true }, o || {}));
+  const ihit = (ability, o) => item(ability, Object.assign({ mustHitDummy: true, itemOnDummy: true }, o || {}));
+  const pos = (minDist, maxDist, o) => Object.assign({ type: 'position', ability: null, minDist, maxDist, mustHitDummy: false, targetVisibility: 'any' }, o || {});
+  const move = (dist, dir, o) => Object.assign({ type: 'move', ability: null, dist, dir, mustHitDummy: false, targetVisibility: 'any' }, o || {});
   const attack = (count, o) => Object.assign({ type: 'attack', ability: 'attack', count, mustHitDummy: false, targetVisibility: 'any' }, o || {});
   const react = (r, o) => Object.assign({ type: 'react', react: r, mustHitDummy: false, targetVisibility: 'any' }, o || {});
   const SPELL_ONLY = a => a.filter(s => ORBS[s]);
@@ -81,6 +85,31 @@
         'O alvo está fora da visão. Use a última posição conhecida (ping) e lance o Sun Strike às cegas.'),
       9, [hit('sunstrike', { targetVisibility: 'hidden' })]),
 
+    C('i_coldsnap_sunstrike', 'intermediate', L('Cold Snap → Sun Strike', 'Cold Snap → Sun Strike'),
+      L('Stun then setup: Cold Snap holds it while the 1.7 s Sun Strike charges, and every tick re-freezes.',
+        'Stun e preparação: o Cold Snap segura o alvo enquanto o Sun Strike de 1,7 s carrega, e cada dano congela de novo.'),
+      12, [hit('coldsnap'), hit('sunstrike', { within: 3, wait: 0.2 })]),
+    C('i_icewall_meteor', 'intermediate', L('Ice Wall → Chaos Meteor', 'Ice Wall → Chaos Meteor'),
+      L('Slow it with the wall, then drop the Chaos Meteor ahead of it: slowed targets cannot dodge the 1.3 s fall.',
+        'Deixe-o lento com a parede e lance o Chaos Meteor: alvos lentos não escapam da queda de 1,3 s.'),
+      13, [hit('icewall'), hit('chaosmeteor', { within: 4, wait: 0.4 })], { scenario: { dummyBehavior: 'wander' } }),
+    C('i_forge_alacrity_burst', 'intermediate', L('Forge + Alacrity burst', 'Burst com Forge + Alacrity'),
+      L('Spirits out, Alacrity on yourself, then auto-attack 5 times: all damage lands in a few seconds.',
+        'Espíritos, Alacrity em você e 5 ataques: todo o dano cai em poucos segundos.'),
+      14, [cast('forgespirit'), cast('alacrity', { within: 3 }), attack(5, { within: 8 })]),
+    C('i_ghost_approach', 'intermediate', L('Ghost Walk → close in → Cold Snap', 'Ghost Walk → aproximar → Cold Snap'),
+      L('Ghost Walk, walk toward the dummy about 300 units, then Cold Snap it before the invisibility ends.',
+        'Ghost Walk, ande uns 300 em direção ao alvo e use Cold Snap antes de a invisibilidade acabar.'),
+      14, [cast('ghostwalk'), move(300, 'toward', { within: 6 }), hit('coldsnap', { within: 6 })]),
+    C('i_icewall_position', 'intermediate', L('Ice Wall: set up the distance', 'Ice Wall: ajuste a distância'),
+      L('The wall only covers the dummy from 150 to 260 units away: step into range, then Ice Wall and EMP.',
+        'A parede só cobre o alvo entre 150 e 260 de distância: entre no alcance, use Ice Wall e depois EMP.'),
+      14, [pos(150, 260), hit('icewall', { within: 6 }), hit('emp', { within: 5, wait: 0.5 })]),
+    C('i_sunstrike_chain', 'intermediate', L('Sun Strike → Cold Snap on landing', 'Sun Strike → Cold Snap ao cair'),
+      L('Sun Strike has a 1.7 s delay: cast it first, then Cold Snap about a second later so the freeze holds the target in the beam.',
+        'O Sun Strike demora 1,7 s: lance primeiro e use o Cold Snap cerca de 1 s depois para o congelamento segurar o alvo no raio.'),
+      12, [hit('sunstrike'), hit('coldsnap', { within: 3, wait: 0.9 })]),
+
     // ---------------------------------------------------------------- Advanced
     C('a_tornado_meteor_blast', 'advanced', L('Tornado → Chaos Meteor → Deafening Blast', 'Tornado → Chaos Meteor → Deafening Blast'),
       L('Meteor lands 1.3 s after cast: time it for when the dummy comes down, then finish with Deafening Blast.',
@@ -90,6 +119,23 @@
       L('Lift it, then land Sun Strike and Chaos Meteor so both hit the moment it touches down.',
         'Erga o alvo e faça o Sun Strike e o Chaos Meteor acertarem no instante em que ele toca o chão.'),
       18, [hit('tornado'), hit('sunstrike', { within: 3, wait: 1.3 }), hit('chaosmeteor', { within: 3, wait: 0.3 })]),
+
+    C('a_meteor_blast', 'advanced', L('Chaos Meteor → Deafening Blast', 'Chaos Meteor → Deafening Blast'),
+      L('Fire the Blast right after the Meteor lands: the knockback pushes the target out of the burn so keep it short.',
+        'Dispare o Blast logo depois de o Meteor cair: o empurrão tira o alvo da queimadura, então seja rápido.'),
+      14, [hit('chaosmeteor'), hit('deafeningblast', { within: 4, wait: 1.4 })]),
+    C('a_coldsnap_sun_meteor', 'advanced', L('Cold Snap → Sun Strike + Chaos Meteor', 'Cold Snap → Sun Strike + Chaos Meteor'),
+      L('Stun chain: Cold Snap, then Sun Strike, then Meteor timed to land with it. Mana heavy, so plan the order.',
+        'Cadeia de stun: Cold Snap, Sun Strike e Meteor calculado para cair junto. Gasta muita mana, planeje a ordem.'),
+      18, [hit('coldsnap'), hit('sunstrike', { within: 3, wait: 0.2 }), hit('chaosmeteor', { within: 3, wait: 0.5 })]),
+    C('a_tornado_emp_meteor_blast', 'advanced', L('Tornado → EMP → Meteor → Blast', 'Tornado → EMP → Meteor → Blast'),
+      L('The full lock-down: lift it, EMP under it, then Meteor and Blast the moment it lands.',
+        'O combo completo: erga o alvo, EMP embaixo, e Meteor e Blast no instante em que ele cai.'),
+      22, [hit('tornado'), hit('emp', { within: 3, wait: 0.3 }), hit('chaosmeteor', { within: 4, wait: 1.1 }), hit('deafeningblast', { within: 4, wait: 1.5 })]),
+    C('a_icewall_emp_meteor', 'advanced', L('Ice Wall → EMP → Meteor', 'Ice Wall → EMP → Meteor'),
+      L('Slow, drain, burn: the wall keeps it inside the EMP while the Meteor lands.',
+        'Lentidão, dreno e queima: a parede mantém o alvo no EMP enquanto o Meteor cai.'),
+      20, [hit('icewall'), hit('emp', { within: 5, wait: 0.5 }), hit('chaosmeteor', { within: 4, wait: 0.8 })], { scenario: { dummyBehavior: 'wander' } }),
 
     // ---------------------------------------------------------------- Items / Aghanim
     C('t_atos_sunstrike', 'items', L('Rod of Atos → Sun Strike', 'Rod of Atos → Sun Strike'),
@@ -134,6 +180,25 @@
       L('With the shard, EMP drags enemies to its center. Cast it off to one side of the dummy and watch it get pulled.',
         'Com o Shard, o EMP puxa os inimigos para o centro. Lance ao lado do alvo e veja ele ser puxado.'),
       10, [hit('emp'), react('empPull')], { requires: { shard: true } }),
+
+    // ---------------------------------------------------------------- Items: Orchid / Gleipnir / Atos / Blink
+    C('t_orchid_burst', 'items', L('Orchid → Cold Snap + Forge + Alacrity', 'Orchid → Cold Snap + Forge + Alacrity'),
+      L('Silence it with Orchid: damage it takes is stored and bursts when the silence ends. Pour in Cold Snap, spirits and Alacrity attacks.',
+        'Silencie com o Orchid: o dano recebido é guardado e explode quando o silêncio acaba. Despeje Cold Snap, espíritos e ataques com Alacrity.'),
+      18, [ihit('orchid'), hit('coldsnap', { within: 3, wait: 0.2 }), cast('forgespirit', { within: 4 }), cast('alacrity', { within: 3 })]),
+    C('t_gleipnir_burst', 'items', L('Gleipnir → Sun Strike + Meteor + Blast', 'Gleipnir → Sun Strike + Meteor + Blast'),
+      L('Eternal Chains roots the target for a few seconds: line up Sun Strike, Meteor and Blast while it cannot move.',
+        'As Eternal Chains prendem o alvo por alguns segundos: alinhe Sun Strike, Meteor e Blast enquanto ele não anda.'),
+      20, [ihit('gleipnir'), hit('sunstrike', { within: 3, wait: 0.2 }), hit('chaosmeteor', { within: 3, wait: 0.4 }), hit('deafeningblast', { within: 4, wait: 1.3 })],
+      { scenario: { dummyBehavior: 'wander' } }),
+    C('t_atos_meteor_blast', 'items', L('Rod of Atos → Meteor → Blast', 'Rod of Atos → Meteor → Blast'),
+      L('Root first, then Chaos Meteor and Deafening Blast: a rooted target cannot walk out of the line.',
+        'Prenda primeiro, depois Chaos Meteor e Deafening Blast: um alvo preso não sai da linha.'),
+      16, [ihit('atos'), hit('chaosmeteor', { within: 2, wait: 0.3 }), hit('deafeningblast', { within: 4, wait: 1.3 })], { scenario: { dummyBehavior: 'wander' } }),
+    C('t_blink_meteor_blast', 'items', L('Blink → Meteor → Blast', 'Blink → Meteor → Blast'),
+      L('Blink in from out of range, then Chaos Meteor and Deafening Blast before it reacts.',
+        'Dê Blink de fora do alcance, depois Chaos Meteor e Deafening Blast antes de ele reagir.'),
+      16, [item('blink'), hit('chaosmeteor', { within: 4 }), hit('deafeningblast', { within: 4, wait: 1.3 })]),
   ];
 
   COMBOS.TIER_BASE = { basic: 100, intermediate: 250, advanced: 500, items: 400 };

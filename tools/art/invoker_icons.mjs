@@ -7,10 +7,10 @@ export const orbs = {
 };
 
 // portrait: 2x nearest upscale of the 16x16 head/collar crop of idle_s_0 (x5..20, y0..15).
-export function portrait(frame) {
+export function portrait(frame, oy = 0) {
   const out = [];
   for (let y = 0; y < 16; y++) {
-    const r = frame[y].slice(5, 21).split('').map(c => c + c).join('');
+    const r = frame[y + oy].slice(5, 21).split('').map(c => c + c).join('');
     out.push(r, r);
   }
   return out;

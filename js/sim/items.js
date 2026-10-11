@@ -1,4 +1,4 @@
-// Items: refresher, atos, vyse, shiva, meteorhammer, bkb, blink, boots/treads/travels. Pure. See CONTRACT.md + DECISIONS.md "Items".
+// Items: refresher, atos, vyse, shiva, meteorhammer, bkb, orchid, gleipnir, blink, boots/travels. Pure. See CONTRACT.md + DECISIONS.md "Items".
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -7,8 +7,8 @@
   const iv = (id, key, lvl) => IT.Values.item(DOTA(id), key, lvl);
   const UNITS = { hero: 1, dummy: 1, spirit: 1 };
   const ATOS_SPEED = 1900;          // not in KV AbilityValues (ProjectileSpeed is not baked): Dota value
-  const BOOTS = ['travels', 'treads', 'boots'];   // priority; only one counts
-  const ids = ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'blink', 'boots', 'treads', 'travels'];
+  const BOOTS = ['travels', 'boots'];   // priority; only one counts
+  const ids = ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir', 'blink', 'boots', 'travels'];
 
   const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
   const slotOf = (c, id) => c.items && c.items.find(s => s && s.id === id);
@@ -165,6 +165,79 @@
     },
   });
 
+  // ---- Orchid Malevolence: silence; damage taken while silenced is stored, then bursts as magic damage when it ends.
+  // Silence data {orchid:true, taken}. A thinker watches the status object; gone (expired/dispelled) = burst unless the target died.
+  function orchidHook(w) {
+    if (w._orchidHook) return;
+    w._orchidHook = true;
+    w.on('damage', p => {
+      if (!(p.dealt > 0)) return;
+      const t = w.get(p.target), s = t && S.find(t, 'silence');
+      if (s && s.data && s.data.orchid) s.data.taken += p.dealt;
+    });
+  }
+  item('orchid', {
+    target: 'unit',
+    cast(w, c, o) {
+      const t = w.get(o.target); if (!t) return;
+      orchidHook(w);
+      const dur = iv('orchid', 'silence_duration'), pct = iv('orchid', 'silence_damage_percent') / 100;
+      const old = S.find(t, 'silence'), keep = old && old.data && old.data.orchid;
+      const s = S.add(w, t, 'silence', dur, { src: c.id, ability: 'orchid', data: keep ? undefined : { orchid: true, taken: 0 } });
+      if (!s) { w.emit('miss', { src: c.id, ability: 'orchid', x: t.x, y: t.y }); w.emit('fx', { name: 'orchidBlocked', x: t.x, y: t.y }); return; }
+      w.emit('hit', { src: c.id, target: t.id, ability: 'orchid' });
+      w.emit('fx', { name: 'orchidHit', x: t.x, y: t.y, unit: t.id, dur });
+      if (keep) return;
+      w.thinker({
+        x: t.x, y: t.y, team: c.team, ability: 'orchid',
+        upd(w2, e) {
+          const u = w2.get(t.id); if (!u || u.dead || u.hp <= 0) return true;
+          e.x = u.x; e.y = u.y;
+          if (S.find(u, 'silence') === s) return false;
+          const amount = s.data.taken * pct;
+          w2.emit('fx', { name: 'orchidBurst', x: u.x, y: u.y, unit: u.id, amount });
+          if (amount > 0) IT.Combat.damage(w2, { src: c.id, target: u, ability: 'orchid', type: 'magical', amount });
+          return true;
+        },
+      });
+    },
+  });
+
+  // ---- Gleipnir: point AoE, tracking projectile to each enemy in the radius -> root (+damage if the KV has any).
+  item('gleipnir', {
+    target: 'point',
+    cast(w, c, o) {
+      const id = 'gleipnir', r = iv(id, 'radius_tooltip') || iv(id, 'radius'), dur = iv(id, 'duration'), dmg = iv(id, 'damage');
+      const hit = enemies(w, c, u => dist(u, o) <= r + (u.radius || 0) && !S.has(u, 'lift'));
+      w.emit('fx', { name: 'gleipnirLaunch', x: o.x, y: o.y, r, unit: c.id, count: hit.length });
+      if (!hit.length) w.emit('miss', { src: c.id, ability: id, x: o.x, y: o.y });
+      for (const u of hit) {
+        const tid = u.id;
+        w.thinker({
+          kind: 'proj', team: c.team, fx: 'gleipnir', x: c.x, y: c.y, z: 0, radius: 8, src: c.id, target: tid, speed: ATOS_SPEED, ability: id,
+          upd(w2, p, dt) {
+            const t = w2.get(tid);
+            if (!t || t.dead || p.age > 5) { w2.emit('miss', { src: c.id, ability: id, x: p.x, y: p.y }); return true; }
+            const d = dist(p, t), st = p.speed * dt;
+            p.facing = Math.atan2(t.y - p.y, t.x - p.x);
+            if (d > st + t.radius * 0.5) { p.x += (t.x - p.x) / d * st; p.y += (t.y - p.y) / d * st; return false; }
+            p.x = t.x; p.y = t.y;
+            if (S.has(t, 'lift')) { w2.emit('miss', { src: c.id, ability: id, x: p.x, y: p.y }); return true; }
+            if (S.add(w2, t, 'root', dur, { src: c.id, ability: id })) {
+              if (dmg > 0) IT.Combat.damage(w2, { src: c.id, target: t, ability: id, type: 'magical', amount: dmg });
+              w2.emit('hit', { src: c.id, target: t.id, ability: id });
+              w2.emit('fx', { name: 'gleipnirHit', x: p.x, y: p.y, unit: t.id, dur });
+            } else {
+              w2.emit('miss', { src: c.id, ability: id, x: p.x, y: p.y });
+              w2.emit('fx', { name: 'gleipnirBlocked', x: p.x, y: p.y });
+            }
+            return true;
+          },
+        });
+      }
+    },
+  });
+
   // ---- Blink: beyond blink_range lands at blink_range_clamp; locked after enemy damage; not while rooted.
   item('blink', {
     target: 'point',
@@ -195,22 +268,21 @@
   for (const id of BOOTS) item(id, { target: 'none', range: () => 0, manaCost: () => 0, cooldown: () => 0 });
 
   function passiveStats(hero) {
-    const st = { ms: 0, as: 0, armor: 0 };
+    const st = { ms: 0, as: 0, armor: 0, dmg: 0, manaRegen: 0 };
     const has = id => !!slotOf(hero, id);
-    const ranged = !hero.base || hero.base.attackRange > 150;
     const boots = BOOTS.find(has);
     if (boots === 'boots') st.ms += iv('boots', 'bonus_movement_speed');
     else if (boots === 'travels') st.ms += iv('travels', 'bonus_movement_speed');
-    else if (boots === 'treads') { st.ms += iv('treads', ranged ? 'bonus_movement_speed_ranged' : 'bonus_movement_speed_melee'); st.as += iv('treads', 'bonus_attack_speed'); }
     if (has('shiva')) st.armor += iv('shiva', 'bonus_armor');
+    if (has('orchid')) { st.as += iv('orchid', 'bonus_attack_speed'); st.dmg += iv('orchid', 'bonus_damage'); st.manaRegen += iv('orchid', 'bonus_mana_regen'); }
     return st;
   }
 
   // Idempotent: (re)creates/updates the permanent status when the item set changed, removes it when empty.
   function applyPassives(w, hero) {
-    const st = passiveStats(hero), key = st.ms + '|' + st.as + '|' + st.armor;
+    const st = passiveStats(hero), key = [st.ms, st.as, st.armor, st.dmg, st.manaRegen].join('|');
     const cur = S.find(hero, 'itemStats');
-    if (key === '0|0|0') { if (cur) S.remove(w, hero, 'itemStats'); hero._itemKey = key; return; }
+    if (key === '0|0|0|0|0') { if (cur) S.remove(w, hero, 'itemStats'); hero._itemKey = key; return; }
     if (cur && hero._itemKey === key) return;
     S.add(w, hero, 'itemStats', Infinity, { src: hero.id, ability: 'items', data: { stats: st } });
     hero._itemKey = key;

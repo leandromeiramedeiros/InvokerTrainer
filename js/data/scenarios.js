@@ -1,7 +1,98 @@
-// Combo Practice / Ranked scenarios. Owner: S3.
+// Combo Practice / Ranked scenarios (data only). Owner: S3.
+// { id, tier 1..3 (ranked ramp), name, tip, goal, par (s, a clean run), hero, fog, dummies, obj, sol }
+//   hero    = { lvl, style 'qe'|'qw', items:[ids], scepter:orb, shard:spell }  (orbs/talents come from IT.RULES.autoLoadout)
+//   dummies = [{ dx, dy (from hero spawn), hp (start fraction; dies below 0.25), mot 'flee'|'chase'|'still'|undefined (= difficulty behavior), items, useBkb }]
+//   obj     = { type:'kill' } kill every dummy | { type:'escape', time } stay uncaught | { type:'rootAll' } all dummies rooted at once
+//   sol     = bot script for tests: { a: spell|item id, at: 'd0'|'d1'|'self'|'lead'|'mid', w: seconds to wait first }
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  // STUB (S3 fills): scenario = { id, combo, loadout, dummies:[...], objective, par, timer }
-  IT.SCENARIOS = [];
+  const L = (en, pt) => ({ en, pt });
+  const S = (id, tier, name, tip, goal, par, hero, dummies, obj, sol, extra) => Object.assign({ id, tier, name, tip, goal, par, hero, dummies, obj, sol }, extra || {});
+  const D = (dx, dy, o) => Object.assign({ dx, dy }, o || {});
+
+  IT.SCENARIOS = [
+    S('tornado_chain', 3, L('Tornado chain', 'Cadeia de Tornado'),
+      L('Tornado lifts it, EMP goes under it, then Meteor and Blast land the moment it drops. Kill it before it runs.',
+        'O Tornado ergue o alvo, o EMP vai embaixo e o Meteor e o Blast caem quando ele desce. Mate antes que fuja.'),
+      L('Tornado, EMP, Meteor, Blast: kill it', 'Tornado, EMP, Meteor, Blast: mate o alvo'), 16,
+      { lvl: 25 }, [D(550, 0, { hp: 0.62 })], { type: 'kill' },
+      [{ a: 'tornado', at: 'd0' }, { a: 'emp', at: 'd0', w: 0.5 }, { a: 'chaosmeteor', at: 'd0', w: 0.7 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }]),
+    S('burst_cold_forge', 2, L('Cold Snap burst', 'Burst de Cold Snap'),
+      L('Freeze it, drop Forge Spirits and Alacrity on yourself, then pour in attacks while it cannot move.',
+        'Congele, chame os Forge Spirits e use Alacrity em você, depois ataque enquanto ele não anda.'),
+      L('Cold Snap + Forge + Alacrity: kill it', 'Cold Snap + Forge + Alacrity: mate o alvo'), 14,
+      { lvl: 25 }, [D(450, 0, { hp: 0.8 })], { type: 'kill' },
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'alacrity', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }]),
+    S('sun_snipe', 2, L('Sun Strike snipe', 'Snipe de Sun Strike'),
+      L('The dummy is nearly dead and running away. Sun Strike takes 1.7 s to land, so aim where it will be.',
+        'O alvo está quase morto e foge. O Sun Strike leva 1,7 s para cair, então mire onde ele vai estar.'),
+      L('Finish the fleeing dummy', 'Acabe com o alvo em fuga'), 8,
+      { lvl: 25 }, [D(500, -150, { hp: 0.38, mot: 'flee' })], { type: 'kill' },
+      [{ a: 'sunstrike', at: 'lead', w: 1.2 }]),
+    S('blink_fog', 3, L('Blink from the fog', 'Blink saindo da névoa'),
+      L('It stands far away in the fog. Blink in, then Chaos Meteor and Deafening Blast before it reacts.',
+        'Ele está longe, na névoa. Dê Blink, depois Chaos Meteor e Deafening Blast antes de ele reagir.'),
+      L('Blink, Meteor, Blast: kill it', 'Blink, Meteor, Blast: mate o alvo'), 12,
+      { lvl: 25, items: ['blink'] }, [D(1000, 150, { hp: 0.47 })], { type: 'kill' },
+      [{ a: 'blink', at: 'mid' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }],
+      { fog: true }),
+    S('atos_vyse_lock', 3, L('Atos / Hex lockdown', 'Lockdown com Atos / Hex'),
+      L('Root it with Rod of Atos or Hex it with the Scythe, then Sun Strike and Chaos Meteor before it breaks free.',
+        'Prenda com o Rod of Atos ou transforme com a Scythe, depois Sun Strike e Chaos Meteor antes que se solte.'),
+      L('Atos or Hex, then Sun Strike + Meteor', 'Atos ou Hex, depois Sun Strike + Meteor'), 14,
+      { lvl: 25, items: ['atos', 'vyse'] }, [D(550, 0, { hp: 0.5 })], { type: 'kill' },
+      [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.2 }, { a: 'chaosmeteor', at: 'd0', w: 0.3 }]),
+    S('tornado_sun', 2, L('Tornado + Sun Strike', 'Tornado + Sun Strike'),
+      L('Cast Sun Strike right after Tornado so the beam lands exactly when the dummy drops.',
+        'Lance o Sun Strike logo após o Tornado para o raio cair exatamente quando o alvo descer.'),
+      L('Tornado, then Sun Strike on landing', 'Tornado, depois Sun Strike no pouso'), 10,
+      { lvl: 25 }, [D(500, 0, { hp: 0.47 })], { type: 'kill' },
+      [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1.2 }]),
+    S('refresher_double', 3, L('Refresher double', 'Refresher duplo'),
+      L('Meteor and Blast, Refresher, then do it again. Plan your mana: the second round decides the kill.',
+        'Meteor e Blast, Refresher, e de novo. Planeje a mana: a segunda rodada decide a morte.'),
+      L('Two rounds of Meteor + Blast', 'Duas rodadas de Meteor + Blast'), 20,
+      { lvl: 30, items: ['refresher'] }, [D(500, 0, { hp: 0.58, mot: 'still' })], { type: 'kill' },
+      [{ a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 1.4 }, { a: 'refresher', at: 'self', w: 0.3 },
+        { a: 'chaosmeteor', at: 'd0', w: 0.3 }, { a: 'deafeningblast', at: 'd0', w: 1.4 }]),
+    S('icewall_emp_pull', 2, L('Ice Wall + EMP pull', 'Ice Wall + EMP com puxada'),
+      L('Slow it with the wall, then EMP beside it: the shard drags it to the center while its mana burns.',
+        'Deixe-o lento com a parede e use EMP ao lado: a shard o puxa ao centro enquanto a mana queima.'),
+      L('Ice Wall + EMP with the shard', 'Ice Wall + EMP com a shard'), 12,
+      { lvl: 25, shard: 'emp' }, [D(450, 0, { hp: 0.6 })], { type: 'kill' },
+      [{ a: 'icewall', at: 'd0' }, { a: 'emp', at: 'd0', w: 0.3 }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }]),
+    S('ghost_escape', 1, L('Ghost Walk escape', 'Fuga com Ghost Walk'),
+      L('A chaser is closing in. Ghost Walk makes you invisible and slows it: break contact and survive.',
+        'Um perseguidor se aproxima. O Ghost Walk te deixa invisível e o deixa lento: quebre o contato e sobreviva.'),
+      L('Survive without being caught', 'Sobreviva sem ser pego'), 10,
+      { lvl: 25 }, [D(-450, 0, { mot: 'chase' })], { type: 'escape', time: 9 },
+      [{ a: 'ghostwalk', at: 'self' }]),
+    S('cataclysm_finish', 3, L('Cataclysm finish', 'Final com Cataclysm'),
+      L('With the Scepter on Exort, Sun Strike becomes Cataclysm: it strikes every visible enemy nearby. Finish the low-HP group.',
+        'Com o Scepter em Exort, o Sun Strike vira Cataclysm: atinge todos os inimigos visíveis. Acabe com o grupo ferido.'),
+      L('Cataclysm: kill them all', 'Cataclysm: mate todos'), 8,
+      { lvl: 25, scepter: 'exort' }, [D(450, -100, { hp: 0.42 }), D(550, 120, { hp: 0.42 })], { type: 'kill' },
+      [{ a: 'sunstrike', at: 'self' }]),
+    S('orchid_burst', 2, L('Orchid burst', 'Burst com Orchid'),
+      L('Orchid silences it and stores all damage for a burst. Cold Snap, Forge and Alacrity attacks all feed the pop.',
+        'O Orchid silencia e guarda todo o dano para uma explosão. Cold Snap, Forge e ataques com Alacrity alimentam o estouro.'),
+      L('Orchid then burst: kill it', 'Orchid e burst: mate o alvo'), 16,
+      { lvl: 25, items: ['orchid'] }, [D(450, 0, { hp: 0.65 })], { type: 'kill' },
+      [{ a: 'orchid', at: 'd0' }, { a: 'coldsnap', at: 'd0', w: 0.2 }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'alacrity', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }]),
+    S('gleipnir_burst', 3, L('Gleipnir burst', 'Burst com Gleipnir'),
+      L('Eternal Chains roots it. While it stands still, line up Sun Strike, Chaos Meteor and Deafening Blast.',
+        'As Eternal Chains prendem o alvo. Enquanto ele está parado, alinhe Sun Strike, Chaos Meteor e Deafening Blast.'),
+      L('Gleipnir, Sun Strike, Meteor, Blast', 'Gleipnir, Sun Strike, Meteor, Blast'), 15,
+      { lvl: 25, items: ['gleipnir'] }, [D(550, 0, { hp: 0.61 })], { type: 'kill' },
+      [{ a: 'gleipnir', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.2 }, { a: 'chaosmeteor', at: 'd0', w: 0.3 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }]),
+    S('gleipnir_cluster', 1, L('Gleipnir on the group', 'Gleipnir no grupo'),
+      L('Aim Eternal Chains at the middle of the group so every dummy is rooted at the same time.',
+        'Mire as Eternal Chains no meio do grupo para prender todos ao mesmo tempo.'),
+      L('Root every dummy at once', 'Prenda todos de uma vez'), 6,
+      { lvl: 25, items: ['gleipnir'] }, [D(600, -130, { mot: 'still' }), D(650, 40, { mot: 'still' }), D(560, 150, { mot: 'still' })], { type: 'rootAll' },
+      [{ a: 'gleipnir', at: 'mid' }]),
+  ];
+
+  IT.SCENARIOS.get = id => IT.SCENARIOS.find(s => s.id === id) || null;
 })(typeof window !== 'undefined' ? window : globalThis);

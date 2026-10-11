@@ -1,1 +1,61 @@
-/* menus styles. Owner: H4. Loaded after v2.css. */
+/* menus styles. Owner: H4. Loaded after v2.css (overrides there). */
+
+/* ---- button tones: .grn = Dota "PLAY" green, .slt = slate secondary */
+.btn.grn{
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.07) 0 .35em,rgba(255,255,255,0) .35em .9em),linear-gradient(#4f9a48,#2a5a2b);
+  border:2px solid #b6f0a8;color:#fff;font-weight:bold;letter-spacing:.2em;
+  text-shadow:0 .12em 0 #14301a,0 0 .5em rgba(0,0,0,.55);
+  box-shadow:inset 0 0 0 2px rgba(190,255,180,.28),inset 0 .12em 0 rgba(255,255,255,.35),0 3px 0 #000;
+}
+.btn.grn:hover{border-color:#e4ffe0;color:#fff;filter:brightness(1.12);
+  box-shadow:inset 0 0 0 2px rgba(190,255,180,.4),inset 0 .12em 0 rgba(255,255,255,.4),0 3px 0 #000,0 0 1em #7dff6a99}
+.btn.slt{
+  background:linear-gradient(#5f6b75,#3c464e);border:1px solid #aab6bf;color:#fff;letter-spacing:.12em;
+  text-shadow:0 1px 0 #000;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 3px 0 #000;
+}
+.btn.slt:hover{background:linear-gradient(#7a8892,#4f5b64);border-color:#e3eaef;color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 3px 0 #000,0 0 .6em #cfd8df55}
+.btn.slt.dim{color:#c6ced4}
+.btn.grn:active,.btn.slt:active{transform:translateY(2px);box-shadow:0 1px 0 #000}
+
+/* ---- title */
+.title{position:relative}
+.title .menu{width:22em;min-width:0;max-width:90vw;gap:.6em}
+.title .btn.ranked{font-size:1.6em;padding:.55em 1em;width:100%}
+.rankbox{display:flex;align-items:center;justify-content:center;gap:.7em;margin:.1em 0 .3em;padding:.4em .8em;
+  background:#0b0618;border:2px solid var(--line);box-shadow:0 0 0 2px #000,inset 0 0 1em #000;text-align:left}
+.rmed canvas{display:block;width:3.4em;height:3.4em;image-rendering:pixelated}
+.rtxt{display:flex;flex-direction:column;gap:.1em}
+.rtxt b{color:var(--gold);font-size:1.1em;letter-spacing:.1em;text-transform:uppercase}
+.rtxt span{color:var(--dim);font-size:.8em;font-weight:normal}
+.fsbtn{position:absolute;top:.6em;right:.6em;width:2.6em;height:2.6em;padding:.4em;display:flex;align-items:center;justify-content:center;
+  background:#150d27;border:2px solid var(--line);box-shadow:0 2px 0 #000;color:var(--ink)}
+.fsbtn:hover{border-color:var(--gold);color:var(--gold)}
+.fsbtn svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square}
+
+/* ---- pause */
+.pause .menu{min-width:17em;gap:.5em}
+
+/* ---- practice difficulty picker (S3 markup: .scr.diff > buttons; .btn[data-diff=<id>] with .dd description) */
+.scr.diff{display:flex;flex-direction:column;align-items:center;gap:.6em;max-width:36em;margin:0 auto}
+.scr.diff .btn{width:100%;display:flex;flex-direction:column;align-items:center;gap:.25em;padding:.6em 1em;
+  font-size:1.25em;letter-spacing:.14em;color:var(--t,#fff);text-shadow:0 2px 0 rgba(0,0,0,.6)}
+.scr.diff .btn:not([data-diff]){background:linear-gradient(#5f6b75,#3c464e);border:1px solid #aab6bf;color:#fff;
+  text-shadow:0 1px 0 #000;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 3px 0 #000}
+.scr.diff .btn:not([data-diff]):hover{background:linear-gradient(#7a8892,#4f5b64);border-color:#e3eaef;color:#fff}
+.scr.diff .btn[data-diff]{background:linear-gradient(var(--c1),var(--c2));border:2px solid var(--c3);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 3px 0 #000}
+.scr.diff .btn[data-diff]:hover{filter:brightness(1.15);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 0 #000,0 0 1em var(--c1)}
+.scr.diff .btn[data-diff]:active{transform:translateY(2px);box-shadow:0 1px 0 #000}
+.scr.diff .dd{font-size:.6em;font-weight:normal;letter-spacing:.02em;text-transform:none;color:var(--t,#fff);opacity:.9}
+/* colour ramp: green -> yellow -> orange -> red -> purple/black */
+.scr.diff [data-diff=ianzinho]{--c1:#5fc766;--c2:#22702f;--c3:#c4f7c8;--t:#fff}
+.scr.diff [data-diff=easy]{--c1:#f4e04a;--c2:#a58b10;--c3:#fff6a6;--t:#1a1400;text-shadow:none}
+.scr.diff [data-diff=normal]{--c1:#f3923a;--c2:#a24a0d;--c3:#ffd0a0;--t:#fff}
+.scr.diff [data-diff=hard]{--c1:#e5413f;--c2:#7a1116;--c3:#ffb3b0;--t:#fff}
+.scr.diff [data-diff=bambam]{--c1:#7d33c2;--c2:#100818;--c3:#c894ff;--t:#f4e9ff}
+
+@media (max-width:600px){
+  .title .menu{width:min(22em,90vw)}
+  .fsbtn{top:.3em;right:.3em}
+}

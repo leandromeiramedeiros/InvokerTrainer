@@ -33,7 +33,7 @@
   }
 
   function sheetOf(e) {
-    if (e.kind === 'hero') return 'invoker';
+    if (e.kind === 'hero') return IT.Art.heroSheet ? IT.Art.heroSheet() : 'invoker';
     if (e.kind === 'spirit') return 'forge';
     return IT.Art.sheets[e.skin] ? e.skin : 'pedro';
   }
@@ -78,6 +78,9 @@
       return out;
     }
     out.sheep = false;
+    // render-driven cast pose (shows even with cast point 0); not over stun/lift
+    const forced = e.kind === 'hero' && S.castUntil > R.time && !lifted && anim !== 'stunned';
+    if (forced) anim = 'cast';
     let n = count(sheet, anim, dir);
     while (!n && FALLBACK[anim]) { anim = FALLBACK[anim]; n = count(sheet, anim, dir); }
     if (!n) { anim = 'idle'; n = count(sheet, 'idle', dir); }
@@ -88,7 +91,7 @@
       case 'idle': idx = Math.floor(et * 3) % n; break;
       case 'walk': idx = Math.floor(et * 8 * IT.U.clamp((e.ms || 300) / 300, 0.6, 1.8)) % n; break;
       case 'stunned': idx = Math.floor(et * 5) % n; break;
-      case 'cast': idx = Math.min(n - 1, Math.floor((R.time - S.t0) * 6)); break;
+      case 'cast': idx = forced ? Math.min(n - 1, Math.floor((R.time - S.castStart) * 14)) : Math.min(n - 1, Math.floor((R.time - S.t0) * 6)); break;
       case 'attack': idx = Math.min(n - 1, Math.floor((R.time - S.t0) * 12)); break;
       default: idx = Math.min(n - 1, Math.floor((R.time - S.t0) * 6));
     }
@@ -161,6 +164,8 @@
     } else {
       cx.drawImage(img, dx, dy);
     }
+    const al = alacOf(R, e, S);
+    if (al) alacTint(R, img, dx, dy, S, al);
     if (frozen) {
       cx.globalAlpha = 0.6; cx.drawImage(PX.tinted(img, '#8fe6ff'), dx, dy); cx.globalAlpha = 1;
       cx.fillStyle = '#e8fbff';
@@ -178,7 +183,52 @@
     if (has(e, 'hex')) { cx.globalAlpha = 0.22; cx.drawImage(PX.tinted(img, '#5cff6c'), dx, dy); cx.globalAlpha = 1; }
     if (root) vines(R, sxp, syp, rr, false, has(e, 'atosRoot'));
     if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, true);
-    S.sx = sxp; S.sy = sy; S.top = img.height - sp.ay;
+    S.sx = sxp; S.sy = sy; S.top = sp.ay;
+    if (al) alacSigil(R, S, sxp, sy - (e.kind === 'hero' ? S.top + 14 : e.kind === 'dummy' ? 42 : S.top + 10), al);
+  }
+
+  // ---- Alacrity: tint-pulse at cast, purple shimmer, rotating sigil crest above the head ----
+  function alacOf(R, e, S) {
+    let st = null;
+    for (let i = 0; i < e.statuses.length; i++) if (e.statuses[i].type === 'alacrity') { st = e.statuses[i]; break; }
+    if (!st) { S.alU = 0; return null; }
+    if (!S.alU || st.until - S.alU > 0.5 || R.time - S.alSeen > 0.3) S.alT0 = R.time;
+    S.alU = st.until; S.alSeen = R.time;
+    const age = R.time - S.alT0, rem = st.until - R.simT;
+    return { age, a: Math.min(1, age / 0.3, Math.max(0, rem / 0.5)) };
+  }
+  function alacTint(R, img, dx, dy, S, al) {
+    const cx = R.cx, t = R.time;
+    if (al.age < 0.45) { cx.globalAlpha = 0.85 * (1 - al.age / 0.45); cx.drawImage(PX.tinted(img, '#d8a0ff'), dx, dy); }
+    cx.globalAlpha = (0.1 + 0.08 * Math.sin(t * 5)) * al.a; cx.drawImage(PX.tinted(img, '#b070ff'), dx, dy);
+    const h = img.height, by = Math.floor((t * 22) % (h + 10)) - 5, y0 = Math.max(0, by), y1 = Math.min(h, by + 2);
+    if (y1 > y0) { cx.globalAlpha = 0.55 * al.a; cx.drawImage(PX.tinted(img, '#f0d0ff'), 0, y0, img.width, y1 - y0, dx, dy + y0, img.width, y1 - y0); }
+    cx.globalAlpha = 1;
+  }
+  function alacSigil(R, S, x, y, al) {
+    const cx = R.cx, t = R.time, a = al.a, B = PX.BAYER4, cX = R.camX, cY = R.camY;
+    const put = (px, py, c) => { px = Math.round(px); py = Math.round(py); if (a < 1 && B[((py + cY) & 3) << 2 | ((px + cX) & 3)] > a) return; cx.fillStyle = c; cx.fillRect(px, py, 1, 1); };
+    const r1 = t * 1.6, r2 = -t * 2.4;
+    for (let i = 0; i < 24; i++) {     // outer ring
+      const th = r1 + i / 24 * 6.2832, sn = Math.sin(th);
+      put(x + Math.cos(th) * 10, y + sn * 4, (i & 1) ? (sn > 0 ? '#c890ff' : '#7a3ad8') : (sn > 0 ? '#b070ff' : '#4a2090'));
+    }
+    for (let i = 0; i < 12; i++) {     // inner ring (orange)
+      const th = r2 + i / 12 * 6.2832, sn = Math.sin(th);
+      put(x + Math.cos(th) * 6, y + sn * 2.4, (i & 1) ? (sn > 0 ? '#ffc860' : '#c06010') : (sn > 0 ? '#ff9a30' : '#8a3a08'));
+    }
+    for (let k = 0; k < 4; k++) {      // rune spikes
+      const th = r1 + k * 1.5708, c = Math.cos(th), sn = Math.sin(th);
+      put(x + c * 12, y + sn * 4.8, '#e6c8ff'); put(x + c * 13, y + sn * 5.2, '#7a3ad8');
+    }
+    const pl = Math.sin(t * 6) > 0;
+    put(x, y, '#fff'); put(x - 1, y, pl ? '#ffc860' : '#ff9a30'); put(x + 1, y, pl ? '#ffc860' : '#ff9a30'); put(x, y - 1, pl ? '#ff9a30' : '#b070ff'); put(x, y + 1, pl ? '#ff9a30' : '#b070ff');
+    for (let j = 0; j < 3; j++) {      // orbiting sparks with fading trails
+      const base = t * 3.2 + j * 2.0944;
+      for (let k = 0; k < 4; k++) { const th = base - k * 0.22; put(x + Math.cos(th) * 8, y + Math.sin(th) * 3.2 - 1, PX.RAMPS.gold[k === 0 ? 0 : k + 1]); }
+    }
+    R.glow(x, y, 15, '#b070ff', 0.5 * a);
+    R.light(x, y, 30, [200, 120, 255], 0.5 * a);
   }
 
   function vines(R, x, y, r, back, atos) {
@@ -255,5 +305,11 @@
     for (const id of state.keys()) if (!w.byId.has(id)) state.delete(id);
   }
 
-  IT.UnitDraw = { draw, hud, lights, isUnit, visible, has, state, cleanup, bar };
+  // hero cast/item event -> brief cast pose (orb presses and Invoke never emit 'cast')
+  function castFlash(R, p) {
+    const e = R.w.get(p.unit); if (!e || e.kind !== 'hero') return;
+    const S = st(R, e); S.castStart = R.time; S.castUntil = R.time + 0.22; S.name = '';
+  }
+
+  IT.UnitDraw = { draw, hud, lights, isUnit, visible, has, state, cleanup, bar, castFlash };
 })(typeof window !== 'undefined' ? window : globalThis);

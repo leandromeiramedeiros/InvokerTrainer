@@ -15,7 +15,7 @@ const argv = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : n
 const CHECK = args.includes('--check');
 
 const ITEMS = ['item_refresher', 'item_rod_of_atos', 'item_sheepstick', 'item_shivas_guard', 'item_meteor_hammer',
-  'item_black_king_bar', 'item_blink', 'item_ultimate_scepter', 'item_aghanims_shard', 'item_power_treads',
+  'item_black_king_bar', 'item_blink', 'item_ultimate_scepter', 'item_aghanims_shard', 'item_orchid', 'item_gungir',
   'item_travel_boots', 'item_travel_boots_2', 'item_boots'];
 const HERO_KEYS = ['AttackCapabilities', 'AttackDamageMin', 'AttackDamageMax', 'AttackDamageType', 'AttackRate',
   'BaseAttackSpeed', 'AttackAnimationPoint', 'AttackAcquisitionRange', 'AttackRange', 'ProjectileSpeed',

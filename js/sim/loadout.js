@@ -3,7 +3,7 @@
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  const BOOTS = ['boots', 'treads', 'travels'];
+  const BOOTS = ['boots', 'travels'];
   const MAX_ITEMS = 6;
   const SHARD_SPELLS = ['ghostwalk', 'emp', 'sunstrike'];   // Aghanim's Shard: pick ONE upgraded spell
 

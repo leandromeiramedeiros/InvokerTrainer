@@ -15,9 +15,80 @@
     const { h } = IT.UI;
     const ic = h('span', { class: 'ic' });
     const key = h('span', { class: 'hk' }), lvl = h('span', { class: 'lv' }), cdn = h('span', { class: 'cdn' }), cd = h('span', { class: 'cd' }), mana = h('span', { class: 'mn' }), ch = h('span', { class: 'ch' });
-    const el = h('div', { class: 'hbtn ' + cls, onmousedown: ev => { ev.preventDefault(); ev.stopPropagation(); if (ev.button === 0) onclick(ev); } }, ic, mana, cd, cdn, key, lvl, ch);
+    const el = h('div', { class: 'hbtn ' + cls, onmousedown: ev => { ev.preventDefault(); ev.stopPropagation(); if (ev.button === 0 && onclick) onclick(ev); } }, ic, mana, cd, cdn, key, lvl, ch);
     return { el, ic, key, lvl, cdn, cd, mana, ch, id: null };
   }
+  // hero item slot drag: press -> move >5px = drag (swap on release), else click = cast on release
+  function itemDown(i, ev) {
+    if (ev.button !== 0 || !H.c) return;
+    H.drag = { i, x: ev.clientX, y: ev.clientY, go: false, queued: ev.shiftKey, over: null };
+  }
+  function slotAt(ev) {
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const s = el && el.closest ? el.closest('.hitems [data-slot]') : null;
+    return s ? +s.getAttribute('data-slot') : null;
+  }
+  function itemMove(ev) {
+    const d = H.drag; if (!d || !H.c) return;
+    if (!d.go) {
+      if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 5) return;
+      const it = H.c.hero.items[d.i]; if (!it) return;   // empty slot: stays a click
+      d.go = true;
+      H.refs.items[d.i].el.classList.add('dragsrc');
+      d.ghost = IT.UI.h('div', { class: 'hdrag' }, IT.UI.icon(it.id));
+      H.el.appendChild(d.ghost);
+    }
+    const r = H.el.getBoundingClientRect();
+    d.ghost.style.left = (ev.clientX - r.left) + 'px'; d.ghost.style.top = (ev.clientY - r.top) + 'px';
+    const j = slotAt(ev);
+    if (j !== d.over) {
+      if (d.over != null) H.refs.items[d.over].el.classList.remove('drop');
+      d.over = j;
+      if (j != null && j !== d.i) H.refs.items[j].el.classList.add('drop');
+    }
+  }
+  function itemUp(ev) {
+    const d = H.drag; if (!d || ev.button !== 0) return;
+    H.drag = null;
+    const c = H.c; if (!c) return;
+    if (!d.go) { IT.Input.doAction('item' + (d.i + 1), { hud: true, queued: d.queued }); return; }
+    if (d.ghost) d.ghost.remove();
+    if (H.refs.items) H.refs.items.forEach(b => b.el.classList.remove('drop', 'dragsrc'));
+    const j = slotAt(ev);
+    if (j != null && j !== d.i) IT.Items.swap(c.w, c.hero, d.i, j);
+  }
+
+  // bottom bar for a selected non-hero unit (Dota-style): portrait, name, bars, armor/MR/speed, 6 items
+  function unitBar(R) {
+    const { h } = IT.UI, t = IT.t;
+    R.upor = h('div', { class: 'hpor' });
+    R.uname = h('div', { class: 'uname' });
+    R.uhp = h('div', { class: 'bar hp' }, R.uhpf = h('i'), R.uhpt = h('span'));
+    R.ump = h('div', { class: 'bar mp' }, R.umpf = h('i'), R.umpt = h('span'));
+    R.ua = h('b'); R.um = h('b'); R.us = h('b');
+    R.ustats = h('div', { class: 'ustats' }, h('span', {}, t('hud.armor') + ' ', R.ua), h('span', {}, t('hud.mres') + ' ', R.um), h('span', {}, t('hud.ms') + ' ', R.us));
+    R.uitems = [0, 1, 2, 3, 4, 5].map(() => { const ic = h('span', { class: 'ic' }); return { el: h('div', { class: 'hbtn item' }, ic), ic }; });
+    return h('div', { class: 'hudp hbar hunit', style: { display: 'none' } },
+      R.upor,
+      h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats),
+      h('div', { class: 'hitems' }, R.uitems.map(b => b.el)));
+  }
+  // top-centre ranked run panel (hidden unless IT.Ranked.hud(w) returns an object)
+  function rankedPanel(R) {
+    const { h } = IT.UI, t = IT.t;
+    R.rkNum = h('div', { class: 'rknum' });
+    R.rkHint = h('div', { class: 'rkhint', text: t('hud.rkCheck') });
+    R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
+    R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
+    R.rkRow = h('div', { class: 'rkrow' },
+      h('div', { class: 'rkt' }, h('span', { text: t('hud.rkTime') }), R.rkTv),
+      h('div', { class: 'rkt' }, h('span', { text: t('hud.rkRun') }), R.rkRv),
+      R.rkSc = h('div', { class: 'rkt' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed));
+    R.rkTip = h('div', { class: 'rktip' });   // difficulty hints: scenario tip + spell recipe
+    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkHint, h('div', { class: 'rkscen' }, R.rkName, R.rkObj), R.rkRow, R.rkTip);
+  }
+  const fmtS = s => { s = Math.max(0, s || 0); const v = Math.floor(s * 10) / 10, m = Math.floor(v / 60); return m + ':' + (v - m * 60).toFixed(1).padStart(4, '0'); };
+  const fmtM = s => { const v = Math.max(0, Math.floor(s || 0)), m = Math.floor(v / 60); return m + ':' + String(v - m * 60).padStart(2, '0'); };
   function setIcon(b, id) {
     if (b.id === id) return;
     b.id = id; b.ic.textContent = '';
@@ -48,23 +119,27 @@
     const R = H.refs = {};
 
     // --- bottom bar
-    R.por = h('div', { class: 'hpor' }, portrait('invoker'), R.lvl = h('span', { class: 'plv', text: ctx.hero.ctx.heroLevel }));
+    R.por = h('div', { class: 'hpor' }, portrait(IT.Art.heroSheet()), R.lvl = h('span', { class: 'plv', text: ctx.hero.ctx.heroLevel }));
     R.hp = h('div', { class: 'bar hp' }, R.hpf = h('i'), R.hpt = h('span'));
     R.mp = h('div', { class: 'bar mp' }, R.mpf = h('i'), R.mpt = h('span'));
     R.orbs = h('div', { class: 'horbs' }, [0, 1, 2].map(() => h('span', { class: 'os' })));
     R.q = btnEl('q', () => In.doAction('orbQ', { hud: true })); R.w = btnEl('w', () => In.doAction('orbW', { hud: true })); R.e = btnEl('e', () => In.doAction('orbE', { hud: true }));
     R.r = btnEl('r', () => In.doAction('invoke', { hud: true }));
     R.s1 = btnEl('slot', ev => In.doAction('slot1', { hud: true, queued: ev.shiftKey })); R.s2 = btnEl('slot', ev => In.doAction('slot2', { hud: true, queued: ev.shiftKey }));
-    R.items = [0, 1, 2, 3, 4, 5].map(i => btnEl('item', ev => In.doAction('item' + (i + 1), { hud: true, queued: ev.shiftKey })));
+    R.items = [0, 1, 2, 3, 4, 5].map(i => { const b = btnEl('item', null); b.el.setAttribute('data-slot', i); b.el.addEventListener('mousedown', ev => itemDown(i, ev)); return b; });
     setIcon(R.q, 'quas'); setIcon(R.w, 'wex'); setIcon(R.e, 'exort'); setIcon(R.r, 'invoke');
     R.bar = h('div', { class: 'hudp hbar' },
       R.por,
       h('div', { class: 'hmid' },
         h('div', { class: 'bars' }, R.hp, R.mp),
-        h('div', { class: 'abrow' }, R.orbs, R.q.el, R.w.el, R.e.el, R.r.el, h('i', { class: 'sep' }), R.s1.el, R.s2.el)),
+        h('div', { class: 'abrow' }, R.q.el, R.w.el, R.e.el, R.r.el, h('i', { class: 'sep' }), R.s1.el, R.s2.el)),
       h('div', { class: 'hitems' }, R.items.map(b => b.el)));
-    R.buffs = h('div', { class: 'hudp hbuffs' });
+    R.ubar = unitBar(R);
+    R.buffs = h('div', { class: 'hbuffs' });
+    R.stat = h('div', { class: 'hstat' }, R.orbs, R.buffs);   // orbs + status icons float above the hero bar
     R.aim = h('div', { class: 'aimhint', text: t('hud.aimHint') });
+    R.rk = rankedPanel(R);
+    R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
 
     // --- sandbox panel
     if (ctx.mode === 'sandbox') {
@@ -82,8 +157,11 @@
     }
     R.cheat = h('div', { class: 'hudp cheat', style: { display: 'none' } });
     R.live = h('div', { class: 'hudp live', style: { display: 'none' } });
-    root.appendChild(R.bar); root.appendChild(R.buffs); root.appendChild(R.aim); root.appendChild(R.cheat); root.appendChild(R.live);
-    if (IT.ComboBar) IT.ComboBar.bind(ctx, root);
+    root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim); root.appendChild(R.cheat); root.appendChild(R.live);
+    if (IT.ComboBar) IT.ComboBar.bind(ctx, R.top);
+    const wm = ev => itemMove(ev), wu = ev => itemUp(ev);
+    window.addEventListener('mousemove', wm); window.addEventListener('mouseup', wu);
+    H.off.push(() => { window.removeEventListener('mousemove', wm); window.removeEventListener('mouseup', wu); H.drag = null; });
 
     H.off.push(ctx.w.on('damage', p => {
       const w = ctx.w, s = p.src != null ? w.get(p.src) : null, tg = w.get(p.target);
@@ -174,10 +252,70 @@
   };
 
   // ---------------------------------------------------------------- per-frame
+  // selected non-hero unit panel (red HP for enemies, green for allies)
+  H.updUnit = function (U, R, ca, w) {
+    const { h, icon } = IT.UI, t = IT.t;
+    if (ca.uid !== U.id) {
+      ca.uid = U.id;
+      const sheet = U.kind === 'hero' ? IT.Art.heroSheet() : U.kind === 'spirit' ? 'forge' : (IT.Art.sheets[U.skin] ? U.skin : null);
+      R.upor.textContent = ''; R.upor.appendChild(sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' }));
+      R.upor.classList.toggle('foe', U.team !== 0); R.uhp.classList.toggle('foe', U.team !== 0);
+      R.uname.textContent = U.name || t('hud.unit');
+      for (const k of ['uhp', 'ump', 'ua', 'um', 'us']) delete ca[k];
+    }
+    const hk = Math.max(0, Math.round(U.hp)) + '/' + Math.round(U.maxHp);
+    if (ca.uhp !== hk) { ca.uhp = hk; R.uhpt.textContent = hk; R.uhpf.style.width = (U.maxHp ? Math.max(0, U.hp / U.maxHp) * 100 : 0) + '%'; }
+    const mmp = Math.round(U.maxMana || 0), mk = Math.max(0, Math.round(U.mana || 0)) + '/' + mmp;
+    R.ump.style.display = mmp > 0 ? '' : 'none';
+    if (ca.ump !== mk) { ca.ump = mk; R.umpt.textContent = mk; R.umpf.style.width = (U.maxMana ? Math.max(0, U.mana / U.maxMana) * 100 : 0) + '%'; }
+    setText(R.ua, String(Math.round((U.armor || 0) * 10) / 10), ca, 'ua');
+    setText(R.um, Math.round((U.magicRes || 0) * 100) + '%', ca, 'um');
+    setText(R.us, String(Math.round(U.ms || 0)), ca, 'us');
+    R.uitems.forEach((b, i) => {
+      const it = U.items && U.items[i], id = it ? (typeof it === 'string' ? it : it.id) : null;
+      if (ca['ui' + i] === id) return;
+      ca['ui' + i] = id; b.ic.textContent = ''; if (id && hasIcon(id)) b.ic.appendChild(icon(id));
+      b.el.classList.toggle('empty', !id);
+    });
+  };
+
+  // ranked run panel: countdown / timers / score + medal. Hidden when IT.Ranked.hud(w) is null.
+  H.updRanked = function (R, ca) {
+    const rk = IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(H.c.w) : null;
+    if (!rk) { if (ca.rk !== 0) { ca.rk = 0; R.rk.style.display = 'none'; R.top.classList.remove('rk'); } return; }
+    if (ca.rk !== 1) { ca.rk = 1; R.rk.style.display = ''; R.top.classList.add('rk'); }
+    const txt = v => v == null ? '' : typeof v === 'object' ? (v[IT.lang] || v.en || '') : String(v);
+    if (ca.rkPh !== rk.phase) {   // medal from the persistent rating; refreshed on phase change
+      ca.rkPh = rk.phase;
+      if (IT.Medals && IT.Ranks && IT.Ranked.profile) {
+        const r = IT.Ranks.fromRating(IT.Ranked.profile().rating);
+        R.rkMed.textContent = ''; R.rkMed.appendChild(IT.Medals.canvas(r.tier, r.stars, 24));
+      }
+    }
+    const cd = rk.phase === 'countdown';
+    R.rkNum.style.display = R.rkHint.style.display = cd ? '' : 'none';
+    R.rkRow.style.display = cd ? 'none' : '';
+    if (cd) setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
+    setText(R.rkTv, fmtS(rk.timeLeft), ca, 'rkt'); R.rkTv.classList.toggle('low', rk.timeLeft != null && rk.timeLeft < 5);
+    setText(R.rkRv, fmtM(rk.runLeft), ca, 'rkr');
+    setText(R.rkSv, String(Math.round(rk.score || 0)), ca, 'rks');
+    setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
+    R.rkSc.style.display = rk.score == null ? 'none' : '';
+    const tk = rk.hints && IT.Settings.get().hints ? rk.id + '|' + IT.lang : '';
+    if (ca.rkTip !== tk) {
+      ca.rkTip = tk; R.rkTip.textContent = ''; R.rkTip.style.display = tk ? '' : 'none';
+      if (tk) {
+        const { h, icon } = IT.UI;
+        R.rkTip.append(h('span', { class: 'rktx', text: txt(rk.tip) }),
+          ...(rk.spells || []).map(s => h('span', { class: 'rksp' }, icon(s), h('em', { text: IT.GAME.SPELL_ORBS[s] || '' }))));
+      }
+    }
+  };
+
   H.update = function (dt) {
     const c = H.c; if (!c) return;
     const { w, hero } = c, R = H.refs, ca = H.cache, S = IT.Settings, t = IT.t;
-    if (H.lastLang !== IT.lang) { H.lastLang = IT.lang; const d0 = H.dps, t0 = H.total; H.bind(c); H.dps = d0; H.total = t0; return; }
+    if (H.lastLang !== IT.lang || H.lastSkin !== IT.Art.heroSheet()) { H.lastLang = IT.lang; H.lastSkin = IT.Art.heroSheet(); const d0 = H.dps, t0 = H.total; H.bind(c); H.dps = d0; H.total = t0; return; }
     // bars
     const hp = Math.max(0, Math.round(hero.hp)), mhp = Math.round(hero.maxHp), mp = Math.round(hero.mana), mmp = Math.round(hero.maxMana);
     const hk = hp + '/' + mhp; if (ca.hp !== hk) { ca.hp = hk; R.hpt.textContent = hk; R.hpf.style.width = (hero.maxHp ? hero.hp / hero.maxHp * 100 : 0) + '%'; }
@@ -236,13 +374,24 @@
       R.items.forEach((b, i) => b.el.classList.toggle('armed', !!armed && hero.items[i] && hero.items[i].id === armed));
       R.aim.style.display = armed ? '' : 'none';
     }
-    // buffs
-    const sts = hero.statuses.filter(s => s.type !== 'channel' && s.type !== 'itemStats' && isFinite(s.until));
-    const sig = sts.map(s => s.type).join(',');
+    // selected unit (IT.Input.selected) replaces the hero bar; hero bar returns when null
+    const sel = IT.Input.selected != null ? w.get(IT.Input.selected) : null, U = sel && sel !== hero && !sel.dead ? sel : null;
+    const um = U ? U.id : null;
+    if (ca.umode !== um) {
+      ca.umode = um; ca.uid = null;
+      R.bar.style.display = U ? 'none' : ''; R.ubar.style.display = U ? '' : 'none'; R.orbs.style.display = U ? 'none' : '';
+    }
+    if (U) H.updUnit(U, R, ca, w);
+    // ranked panel
+    H.updRanked(R, ca);
+    // buffs (hero's, or the selected unit's)
+    const bu = U || hero;
+    const sts = (bu.statuses || []).filter(s => s.type !== 'channel' && s.type !== 'itemStats' && isFinite(s.until));
+    const sig = bu.id + ':' + sts.map(s => s.type).join(',');
     if (ca.buffs !== sig) {
       ca.buffs = sig; R.buffs.textContent = ''; R.bchips = [];
       for (const s of sts) {
-        const src = s.src != null ? w.get(s.src) : null, foe = src && src.team !== hero.team;
+        const src = s.src != null ? w.get(s.src) : null, foe = src && src.team !== bu.team;
         const nm = IT.hasT('status.' + s.type) ? t('status.' + s.type) : s.type;
         const chip = IT.UI.h('div', { class: 'buff ' + (foe ? 'bad' : 'good'), 'data-tip': nm },
           s.ability && hasIcon(s.ability) ? IT.UI.icon(s.ability) : (s.type && hasIcon(s.type) ? IT.UI.icon(s.type) : IT.UI.h('b', { class: 'ab', text: nm.slice(0, 3).toUpperCase() })),

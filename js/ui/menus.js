@@ -137,19 +137,44 @@
     return h('div', { class: 'panel ' + (cls || '') }, title ? h('h2', { class: 'ph', text: title }) : null, body);
   }
 
-  // ---- title
+  // ---- title (mode-first). RANKED on top, then practice / sandbox / stats / settings.
+  const FS_SVG = '<svg viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+  // player's medal + rank name + rating under RANKED; nothing if ranked data or medal art is missing
+  function rankBox() {
+    let p = null;
+    try { p = IT.Ranked && IT.Ranked.profile ? IT.Ranked.profile() : null; } catch (e) { p = null; }
+    if (!p || !IT.Medals || !IT.Ranks) return null;
+    const r = IT.Ranks.fromRating(p.rating);
+    let cv = null;
+    try { cv = IT.Medals.canvas(r.tier, r.stars, 48); } catch (e) { cv = null; }
+    return h('div', { class: 'rankbox' },
+      cv ? h('div', { class: 'rmed' }, cv) : null,
+      h('div', { class: 'rtxt' },
+        h('b', { text: r.name + (r.stars ? ' ' + r.stars : '') }),
+        h('span', { text: IT.t('title.rating', { n: Math.round(Number(p.rating) || 0) }) })));
+  }
   function title() {
     const A = IT.App;
+    const fsOk = !!(IT.Input && IT.Input.toggleFullscreen);
+    const fs = fsOk ? h('button', {
+      class: 'fsbtn', type: 'button', 'aria-label': IT.t('title.fullscreen'), 'data-tip': IT.t('title.fullscreen'),
+      onclick: () => IT.Input.toggleFullscreen(),
+    }) : null;
+    if (fs) fs.innerHTML = FS_SVG;
     return h('div', { class: 'scr title' },
+      fs,
       h('div', { class: 'logo' },
         h('div', { class: 'logo-a', text: IT.t('app.title') }),
         h('div', { class: 'logo-b', text: IT.t('app.sub') })),
       h('div', { class: 'orbs-deco' }, icon('quas'), icon('wex'), icon('exort')),
       h('div', { class: 'tag', text: IT.t('app.tag') }),
-      h('div', { class: 'menu' },
-        btn('ui.play', () => A.go('loadout'), 'big gold'),
-        btn('ui.stats', () => A.go('stats'), 'big'),
-        btn('ui.settings', () => A.go('settings'), 'big')),
+      h('div', { class: 'menu tmenu' },
+        h('button', { class: 'btn grn ranked', type: 'button', 'data-snd': 'start', onclick: () => A.go('ranked'), text: IT.t('title.ranked') }),
+        rankBox(),
+        btn('title.practice', () => A.go('practice'), 'slt'),
+        btn('title.sandbox', () => A.go('sandbox'), 'slt'),
+        btn('ui.stats', () => A.go('stats'), 'slt'),
+        btn('ui.settings', () => A.go('settings'), 'slt')),
       h('div', { class: 'lang-row' }, langToggle()),
       h('div', { class: 'foot', text: IT.t('title.hint') }));
   }
@@ -161,13 +186,25 @@
       h('div', { class: 'panel narrow' },
         h('h2', { class: 'ph', text: IT.t('ui.paused') }),
         h('div', { class: 'menu' },
-          btn('ui.resume', () => A.resume(), 'big gold'),
-          btn('ui.restart', () => A.restart()),
-          btn('ui.loadout', () => A.go('loadout')),
-          btn('pause.settings', () => A.pauseSettings()),
-          btn('ui.endRun', () => A.endRun()),
-          btn('ui.quit', () => A.go('title'), 'dim'))));
+          btn('ui.resume', () => A.resume(), 'grn'),
+          btn('ui.restart', () => A.restart(), 'slt'),
+          btn('ui.loadout', () => A.go('loadout'), 'slt'),
+          btn('pause.settings', () => A.pauseSettings(), 'slt'),
+          btn('ui.endRun', () => A.endRun(), 'slt'),
+          btn('ui.quit', () => A.go('title'), 'slt dim'))));
   }
+
+  // ---- global ESC outside play: one level up (IT.App.back). In play, IT.Input routes ESC to hooks.pause.
+  // Listens on window bubble so document handlers run first and their preventDefault() is respected.
+  G.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape' || ev.defaultPrevented || ev.repeat) return;
+    const t = ev.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+    const A = IT.App;
+    if (!A || A.state === 'play') return;
+    ev.preventDefault();
+    A.back();
+  });
 
   IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, title, pause };
 })(typeof window !== 'undefined' ? window : globalThis);

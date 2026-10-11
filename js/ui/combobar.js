@@ -10,6 +10,13 @@
     const t = IT.t;
     if (s.type === 'attack') return t('step.attackN', { n: s.count || 1 });
     if (s.type === 'react') return t('react.' + s.react);
+    if (s.type === 'position') {
+      if (s.minDist != null && s.maxDist != null) return t('step.posBand', { a: s.minDist, b: s.maxDist });
+      if (s.maxDist != null) return t('step.posIn', { d: s.maxDist });
+      if (s.minDist != null) return t('step.posOut', { d: s.minDist });
+      return t('step.pos');
+    }
+    if (s.type === 'move') return t(s.dir === 'away' ? 'step.moveAway' : s.dir === 'toward' ? 'step.moveToward' : 'step.move');
     return t(IT.GAME.ITEM_DOTA[s.ability] ? 'item.' + s.ability : 'spell.' + s.ability) + (s.selfCast ? ' (' + t('step.self') + ')' : '');
   }
 
@@ -58,7 +65,7 @@
           const rec = s.type === 'cast' ? IT.GAME.SPELL_ORBS[s.ability] : null;
           const vis = s.targetVisibility && s.targetVisibility !== 'any' ? h('em', { class: 'vis ' + s.targetVisibility, text: t(s.targetVisibility === 'hidden' ? 'ui.hidden' : 'ui.visible') }) : null;
           const chip = h('div', { class: 'cstep' },
-            s.type === 'attack' || s.type === 'react' ? h('b', { class: 'ab', text: s.type === 'attack' ? 'ATK' : '!' }) : icon(s.ability),
+            s.type === 'attack' || s.type === 'react' || !s.ability ? h('b', { class: 'ab', text: s.type === 'attack' ? 'ATK' : s.type === 'react' ? '!' : s.type === 'move' ? 'MOV' : 'POS' }) : icon(s.ability),
             h('span', { class: 'sl', text: stepLabel(s) }),
             rec && IT.Settings.get().hints ? h('span', { class: 'rec', text: rec }) : null, vis);
           R.steps.appendChild(chip); CB.chips.push(chip);
