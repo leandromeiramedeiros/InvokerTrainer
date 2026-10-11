@@ -307,7 +307,7 @@
       let r = Math.min(80, Math.max(26, (e.r || e.radius || 60) / R.P * 1.1)), inten = 0.55;
       if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; inten = 0.25 + 0.5 * clamp(1 - rem, 0, 1); }
       else if (key === 'bolt') { r = 30; inten = 0.8; }
-      else if (key === 'attack') { r = 30; inten = 0.75; c[0] = 255; c[1] = 150; c[2] = 55; R.light(sx, sy - 9, r, c, inten); continue; }
+      else if (key === 'attack') { const g = orbPal(w.byId.get(e.src)).rgb; r = 30; inten = 0.75; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
       else if (key === 'chaosmeteor') { r = 80; inten = 0.9; }
       else if (key === 'meteorhammer') { c[0] = 40; c[1] = 190; c[2] = 255; inten = 0.7; }
       else if (key === 'gleipnir') { r = 34; inten = 0.8; c[0] = 255; c[1] = 200; c[2] = 70; }
@@ -498,9 +498,29 @@
     }
   }
 
-  // basic attack projectile: solid pixel fireball (hero: faint arcane edge, spirit: pure molten)
+  // hero attack orb colour = mix of the orbs held right now (none -> white). ramp: [rim, dark, base, light, core], rgb = light colour
+  const ORB_RGB = { Q: [60, 192, 255], W: [210, 77, 255], E: [255, 160, 44] }, ORB_CACHE = {};
+  const FIRE = { ramp: ['#3a1408', '#c8480c', '#ff8a1c', '#ffc040', '#fff2b0'], glow: '#ff9a30', rgb: [255, 150, 55], tail: null };
+  const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  const mixc = (c, d, k) => c.map((v, i) => v + (d[i] - v) * k);
+  function orbPal(u) {
+    if (!u || u.kind !== 'hero' || !u.inv) return FIRE;
+    const key = (u.inv.orbs || []).join('');
+    let p = ORB_CACHE[key];
+    if (!p) {
+      const os = (u.inv.orbs || []).filter(o => ORB_RGB[o]);
+      let b = [222, 222, 236];
+      if (os.length) { b = [0, 0, 0]; for (const o of os) for (let i = 0; i < 3; i++) b[i] += ORB_RGB[o][i] / os.length; }
+      const ramp = [hex(mixc(b, [10, 6, 20], 0.8)), hex(mixc(b, [0, 0, 0], 0.35)), hex(b), hex(mixc(b, [255, 255, 255], 0.45)), hex(mixc(b, [255, 255, 255], 0.82))];
+      p = ORB_CACHE[key] = { ramp, glow: ramp[3], rgb: mixc(b, [255, 255, 255], 0.3).map(Math.round), tail: [ramp[1], ramp[2], ramp[2], ramp[3], ramp[3], ramp[4]] };
+    }
+    return p;
+  }
+
+  // basic attack projectile: solid pixel orb (hero: colour of its current orbs, spirit: molten fire)
   function drawFireball(R, e, x, by, gy) {
     const cx = R.cx, t = R.time, src = R.w.byId.get(e.src), arc = src && src.kind === 'hero', tg = R.w.byId.get(e.target);
+    const P = orbPal(src), C = P.ramp;
     let dx = 1, dy = 0;
     if (tg) { dx = tg.x - e.x; dy = tg.y - e.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
     shadow(R, x, gy, 3);
@@ -509,25 +529,20 @@
       const j = PX.hash2(fr + k * 7, e.id, 3);
       if (j < 0.18 * k) continue;
       const tx = Math.round(x - dx * (k * 1.7 + 1.5) + (PX.hash2(fr, k, 5) - 0.5) * 2), ty = Math.round(by - dy * (k * 1.7 + 1.5) * 0.8 + (PX.hash2(fr, k, 9) - 0.5) * 2 - k * 0.3);
-      cx.fillStyle = PX.RAMPS.fire[Math.min(5, 1 + (k + 1) / 2 | 0)];
+      cx.fillStyle = (P.tail || PX.RAMPS.fire)[Math.min(5, 1 + (k + 1) / 2 | 0)];
       cx.fillRect(tx, ty, k < 3 ? 2 : 1, k < 3 ? 2 : 1);
     }
-    ddisc(R, x, by, 3.6, '#3a1408', 1);
-    ddisc(R, x, by, 3, spiritOrHero(arc, '#c8480c'), 1);
-    ddisc(R, x, by, 2.3, '#ff8a1c', 1);
-    ddisc(R, x, by, 1.5, '#ffc040', 1);
-    ddisc(R, x, by, 0.9, '#fff2b0', 1);
+    ddisc(R, x, by, 3.6, C[0], 1);
+    ddisc(R, x, by, 3, C[1], 1);
+    ddisc(R, x, by, 2.3, C[2], 1);
+    ddisc(R, x, by, 1.5, C[3], 1);
+    ddisc(R, x, by, 0.9, C[4], 1);
     cx.fillStyle = '#fff'; cx.fillRect(Math.round(x), Math.round(by), 1, 1);
-    if (arc) {      // arcane tint at the core edge
-      cx.fillStyle = '#d8a8ff';
-      cx.fillRect(Math.round(x - dx * 2), Math.round(by - dy * 2), 1, 1); cx.fillRect(Math.round(x + dy * 2), Math.round(by - dx * 2), 1, 1);
-    }
-    cx.fillStyle = '#7a2208';        // lick pixels on the rim
+    cx.fillStyle = arc ? C[1] : '#7a2208';        // lick pixels on the rim
     const f2 = (t * 18 + e.id) | 0;
     cx.fillRect(Math.round(x + Math.cos(f2) * 3), Math.round(by + Math.sin(f2) * 3), 1, 1);
-    R.glow(x, by, 12, '#ff9a30', 0.7);
+    R.glow(x, by, 12, P.glow, 0.7);
   }
-  const spiritOrHero = (arc, c) => arc ? '#c04a10' : c;
 
   // ---------- air layer ----------
   function air(R) {
@@ -751,5 +766,5 @@
     }
   }
 
-  IT.FX = { init, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx };
+  IT.FX = { init, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -269,17 +269,16 @@
     }
   }
 
-  // ---- attack wind-up: a fire orb gathers at the hand, sparks converge, pops on release. Cancelled wind-up: just vanishes.
-  const WC = ['#3a1408', '#c8480c', '#ff8a1c', '#ffc040', '#fff2b0'];
+  // ---- attack wind-up: an orb (colour of the held orbs; spirits: fire) gathers at the hand, sparks converge, pops on release. Cancelled: just vanishes.
   function windGlow(R, e, S, x, sy) {
-    const wd = e._wind, t = R.time, fx = IT.FX, cx = R.cx;
+    const wd = e._wind, t = R.time, fx = IT.FX, cx = R.cx, OP = fx.orbPal(e), WC = OP.ramp;
     const ox = x + Math.round(Math.cos(e.facing) * 4), oy = sy - 10;
     if (!wd) {
       S.wdObj = null; S.wdP = 0;
       const k = (t - (S.relT || -9)) / 0.14;
       if (k >= 0 && k < 1) {      // release pop (the projectile spawns this tick)
         fx.ddisc(R, ox, oy, 1 + 4 * (1 - k), WC[3], 1 - k * 0.6); fx.ddisc(R, ox, oy, 2.5 * (1 - k), WC[4], 1);
-        R.glow(ox, oy, 14, '#ff9a30', 0.7 * (1 - k)); S.wdP = 1 - k;
+        R.glow(ox, oy, 14, OP.glow, 0.7 * (1 - k)); S.wdP = 1 - k;
       }
       return;
     }
@@ -298,7 +297,7 @@
       cx.fillStyle = k & 1 ? WC[3] : WC[2];
       cx.fillRect(Math.round(ox + Math.cos(a) * d), Math.round(oy + Math.sin(a) * d * 0.7), 1, 1);
     }
-    R.glow(ox, oy, 6 + 9 * p, '#ff9a30', 0.2 + 0.55 * p);
+    R.glow(ox, oy, 6 + 9 * p, OP.glow, 0.2 + 0.55 * p);
     S.wdP = p;
   }
   // sim 'attack' = launch: arm the release pop

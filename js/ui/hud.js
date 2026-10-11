@@ -73,67 +73,133 @@
       h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats),
       h('div', { class: 'hitems' }, R.uitems.map(b => b.el)));
   }
-  // ---------------------------------------------------------------- Aghanim's hood emblem (Scepter = top gem, Shard = lower gems)
-  const HW = 24, HH = 25;
-  const HOOD_ORN = [   // left half (12 cols) of the winged ornament, from row 9. b outline, a body, c highlight
-    '..b.........', '..bab....bbb', '.bacab..baab', '.bacabbbaaab', '..bbaaaaaacc', '....bbaaaacc', '......bbaacc', '........bacc', '..........bc',
-  ];
-  const HOOD_PAL = { b: '#151d27', a: '#34475a', c: '#6a88a2' };
-  const GEM_PAL = {   // e edge, m body, h core highlight, glow halo
-    quas: { e: '#1672d6', m: '#3cc0ff', h: '#e0f8ff', glow: '#2fb4ff' },
-    wex: { e: '#8a28d8', m: '#d24dff', h: '#ffe8ff', glow: '#c040ff' },
-    exort: { e: '#d4560e', m: '#ffa02c', h: '#fff2c0', glow: '#ff8a1a' },
+  // ---------------------------------------------------------------- Aghanim's hood emblem (Dota layout)
+  // three orb sockets (Wex top, Quas left, Exort right) on a steel frame, Scepter = teardrop gem, Shard = gem trio below.
+  // Unowned: dark gems, muted orbs. Owned: the gem lights in the orb colour of the scepter orb / shard spell and that socket brightens.
+  const HW = 34, HH = 38;
+  const HOOD_ORB = { wex: [17, 5.5], quas: [5.5, 14.5], exort: [28.5, 14.5] }, HOOD_OR = 5.2;
+  const GEM_PAL = {   // e edge, m body, h highlight, glow halo, orb socket ramp [dark, mid, light]
+    quas: { e: '#0e4c9a', m: '#2fa8ff', h: '#d8f6ff', glow: '#2fb4ff', orb: [[8, 40, 84], [42, 150, 230], [190, 240, 255]] },
+    wex: { e: '#6a1aa8', m: '#cf48ff', h: '#ffe0ff', glow: '#c040ff', orb: [[56, 14, 84], [186, 70, 236], [255, 214, 255]] },
+    exort: { e: '#a8400a', m: '#ff9a28', h: '#fff0b8', glow: '#ff8a1a', orb: [[84, 30, 6], [226, 132, 32], [255, 230, 150]] },
   };
   const SHARD_ORB = { ghostwalk: 'quas', emp: 'wex', sunstrike: 'exort' };
-  const gemRows = rows => { const px = []; for (const [y, x0, x1] of rows) for (let x = x0; x <= x1; x++) px.push([x, y]); return px; };
-  const HOOD_SCEPTER = gemRows([[0, 11, 12], [1, 10, 13], [2, 9, 14], [3, 8, 15], [4, 8, 15], [5, 8, 15], [6, 8, 15], [7, 9, 14], [8, 9, 14], [9, 10, 13]]);
-  const HOOD_SHARD = gemRows([[19, 11, 12], [20, 10, 13], [21, 10, 13], [22, 10, 13], [23, 11, 12], [24, 11, 12],
-    [20, 6, 6], [21, 5, 7], [22, 5, 7], [23, 6, 6], [20, 17, 17], [21, 16, 18], [22, 16, 18], [23, 17, 17]]);
-  function paintGem(cx, px, pal) {   // pal null = unlit (dark)
-    const set = new Set(px.map(p => p[0] + ',' + p[1]));
-    let maxY = 0; for (const p of px) maxY = Math.max(maxY, p[1]);
-    for (const [x, y] of px) {
-      const edge = !(set.has((x - 1) + ',' + y) && set.has((x + 1) + ',' + y) && set.has(x + ',' + (y - 1)) && set.has(x + ',' + (y + 1)));
-      let c;
-      if (!pal) c = edge ? '#0b0711' : (x < 12 && y % 2 === 0 ? '#2a2140' : '#1c1530');
-      else if (edge) c = pal.e;
-      else if ((x === 11 || x === 12) && y < maxY - 1) c = pal.h;
-      else c = pal.m;
-      cx.fillStyle = c; cx.fillRect(x, y, 1, 1);
+  const STEEL = ['#0c1016', '#252e38', '#4a5866', '#7d8fa0'];
+  const hhash = (x, y, s) => { let n = (x * 374761393 + y * 668265263 + s * 2147483647) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  const rgb = c => 'rgb(' + c.map(v => Math.max(0, Math.min(255, v | 0))).join(',') + ')';
+  const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  // teardrop (scepter): pointed top, round bottom. returns pixel list [x, y, edge, hl]
+  const HOOD_DROP = (() => {
+    const px = [], inside = (x, y) => { const cy = 19.5, r = 4.6; if (y >= cy) return Math.hypot(x - 17, y - cy) <= r; const k = (y - 10.5) / (cy - 10.5); return k >= 0 && Math.abs(x - 17) <= r * Math.pow(k, 0.6); };
+    for (let y = 10; y < 26; y++) for (let x = 10; x < 24; x++) {
+      if (!inside(x + .5, y + .5)) continue;
+      const edge = !(inside(x - .5, y + .5) && inside(x + 1.5, y + .5) && inside(x + .5, y - .5) && inside(x + .5, y + 1.5));
+      px.push([x, y, edge, !edge && (x === 16 || (x === 15 && y > 17 && y < 21)) && y > 13 && y < 22]);
     }
+    return px;
+  })();
+  // shard trio: shield in the middle, two round side gems
+  const HOOD_SHARD = (() => {
+    const px = [], add = (inside, x0, x1, y0, y1, hx) => {
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        if (!inside(x + .5, y + .5)) continue;
+        const edge = !(inside(x - .5, y + .5) && inside(x + 1.5, y + .5) && inside(x + .5, y - .5) && inside(x + .5, y + 1.5));
+        px.push([x, y, edge, !edge && hx(x, y)]);
+      }
+    };
+    add((x, y) => y >= 30 && y <= 37 && Math.abs(x - 17) <= (y < 34 ? 3.2 : 3.2 - (y - 34) * 0.95), 13, 21, 29, 37, (x, y) => x === 16 && y < 34);
+    for (const gx of [10.5, 23.5]) add((x, y) => Math.hypot(x - gx, y - 31.5) <= 2.6, gx - 3 | 0, gx + 3 | 0, 28, 35, (x, y) => x === (gx | 0) - 1 && y === 30);
+    return px;
+  })();
+  function paintGem(cx, px, pal) {   // pal null = unlit (dark)
+    for (const [x, y, edge, hl] of px) {
+      cx.fillStyle = !pal ? (edge ? '#07060c' : (x < 17 ? '#2a2236' : '#1a1524')) : edge ? pal.e : hl ? pal.h : pal.m;
+      cx.fillRect(x, y, 1, 1);
+    }
+    if (!pal && px === HOOD_DROP) { cx.fillStyle = '#3a3248'; cx.fillRect(15, 15, 1, 3); }   // dark gem sheen
+  }
+  function paintOrb(cx, name, lit) {   // swirly orb in a steel socket ring
+    const [ox, oy] = HOOD_ORB[name], O = GEM_PAL[name].orb, seed = name.length * 7;
+    for (let y = Math.floor(oy - HOOD_OR - 1); y <= oy + HOOD_OR + 1; y++) for (let x = Math.floor(ox - HOOD_OR - 1); x <= ox + HOOD_OR + 1; x++) {
+      const d = Math.hypot(x + .5 - ox, y + .5 - oy);
+      if (d > HOOD_OR + 1) continue;
+      if (d > HOOD_OR) { cx.fillStyle = d > HOOD_OR + .55 ? STEEL[0] : (y < oy ? STEEL[3] : STEEL[2]); cx.fillRect(x, y, 1, 1); continue; }
+      const a = Math.atan2(y + .5 - oy, x + .5 - ox), sw = Math.sin(a * 2 + d * 1.3) * 0.5 + 0.5;   // swirl
+      let k = (1 - d / HOOD_OR) * 0.75 + sw * 0.25 + (hhash(x, y, seed) - 0.5) * 0.25 - ((x - ox) + (y - oy)) * 0.025;
+      let c = k < 0.45 ? lerp3(O[0], O[1], k / 0.45) : lerp3(O[1], O[2], Math.min(1, (k - 0.45) / 0.55));
+      if (!lit) c = lerp3(c, [26, 30, 38], 0.5);
+      cx.fillStyle = rgb(c); cx.fillRect(x, y, 1, 1);
+    }
+  }
+  function hoodFrame(cx) {
+    const P = (x, y, c) => { cx.fillStyle = c; cx.fillRect(x, y, 1, 1); };
+    // top bracket: bar under the Wex orb reaching the side orbs, slanted ends
+    for (let x = 7; x <= 26; x++) { P(x, 9, STEEL[3]); P(x, 10, STEEL[2]); P(x, 11, STEEL[1]); }
+    for (let i = 0; i < 3; i++) { P(6 - i, 10 + i, STEEL[2]); P(27 + i, 10 + i, STEEL[2]); }
+    // V brace from the bar down to the gem
+    for (let i = 0; i < 6; i++) { P(9 + i, 12 + i, STEEL[2]); P(10 + i, 12 + i, STEEL[1]); P(24 - i, 12 + i, STEEL[2]); P(23 - i, 12 + i, STEEL[1]); }
+    // filigree under the teardrop: stem + curled wings
+    for (let y = 24; y <= 29; y++) { P(16, y, STEEL[3]); P(17, y, STEEL[2]); }
+    const wing = [[15, 25], [14, 25], [13, 24], [12, 24], [11, 23], [10, 23], [10, 22], [11, 21], [13, 26], [12, 27], [11, 27], [10, 26], [14, 27], [15, 28], [9, 24], [8, 23]];
+    for (const [x, y] of wing) { P(x, y, STEEL[2]); P(33 - x, y, STEEL[2]); }
+    for (const [x, y] of [[13, 24], [11, 23], [12, 27]]) { P(x, y - 1, STEEL[3]); P(33 - x, y - 1, STEEL[3]); }
+    P(16, 23, STEEL[3]); P(17, 23, STEEL[3]);
   }
   function hoodCanvas(cls) { const c = document.createElement('canvas'); c.width = HW; c.height = HH; c.className = 'hh ' + cls; return c; }
   function hoodEl() {
     const { h } = IT.UI;
     const base = hoodCanvas('base'), cx = base.getContext('2d');
-    HOOD_ORN.forEach((row, i) => {
-      for (let x = 0; x < 12; x++) {
-        const ch = row[x]; if (ch === '.') continue;
-        cx.fillStyle = HOOD_PAL[ch]; cx.fillRect(x, 9 + i, 1, 1); cx.fillRect(HW - 1 - x, 9 + i, 1, 1);
-      }
-    });
-    cx.fillStyle = HOOD_PAL.b; cx.fillRect(11, 18, 2, 1);
-    paintGem(cx, HOOD_SCEPTER, null); paintGem(cx, HOOD_SHARD, null);
-    const sc = hoodCanvas('scepter'), sh = hoodCanvas('shard');
-    const el = h('div', { class: 'hhood' }, base, sc, sh);
-    el._sc = sc; el._sh = sh;
+    hoodFrame(cx);
+    for (const n of ['quas', 'wex', 'exort']) paintOrb(cx, n, false);
+    paintGem(cx, HOOD_DROP, null); paintGem(cx, HOOD_SHARD, null);
+    const sc = hoodCanvas('scepter'), sh = hoodCanvas('shard'), pt = hoodCanvas('sand');
+    const el = h('div', { class: 'hhood' }, base, sc, sh, pt);
+    el._sc = sc; el._sh = sh; el._pt = pt; el._parts = []; el._em = [];
     return el;
   }
   // Scepter / Shard glow in the colour of their orb / shard spell; dark outline when not owned (loadout from w.loadout)
-  H.updHood = function (R, ca, lo) {
+  H.updHood = function (R, ca, lo, dt) {
+    const el = R.hood;
     const so = lo.scepter ? (lo.scepterOrb || (typeof lo.scepter === 'string' ? lo.scepter : 'wex')) : null;
     const ss = lo.shard ? (lo.shardSpell || (typeof lo.shard === 'string' ? lo.shard : null)) : null;
     const key = (so || '-') + '|' + (lo.shard ? (ss || '?') : '-');
-    if (ca.hood === key) return;
-    ca.hood = key;
-    const el = R.hood, sc = el._sc, sh = el._sh;
-    sc.getContext('2d').clearRect(0, 0, HW, HH); sh.getContext('2d').clearRect(0, 0, HW, HH);
-    const sp = so && GEM_PAL[so], hp = lo.shard && GEM_PAL[SHARD_ORB[ss] || 'wex'];
-    if (sp) { paintGem(sc.getContext('2d'), HOOD_SCEPTER, sp); sc.style.setProperty('--hc', sp.glow); }
-    if (hp) { paintGem(sh.getContext('2d'), HOOD_SHARD, hp); sh.style.setProperty('--hc', hp.glow); }
-    sc.style.display = sp ? '' : 'none'; sh.style.display = hp ? '' : 'none';
-    el.classList.toggle('lit', !!(sp || hp));
+    if (ca.hood !== key) {
+      ca.hood = key;
+      const sc = el._sc, sh = el._sh, scx = sc.getContext('2d'), shx = sh.getContext('2d');
+      scx.clearRect(0, 0, HW, HH); shx.clearRect(0, 0, HW, HH);
+      const sn = GEM_PAL[so] ? so : null, hn = lo.shard ? (SHARD_ORB[ss] || 'wex') : null;
+      const sp = sn && GEM_PAL[sn], hp = hn && GEM_PAL[hn];
+      if (sp) { paintGem(scx, HOOD_DROP, sp); paintOrb(scx, sn, true); sc.style.setProperty('--hc', sp.glow); }
+      if (hp) { paintGem(shx, HOOD_SHARD, hp); if (hn !== sn) paintOrb(shx, hn, true); sh.style.setProperty('--hc', hp.glow); }
+      sc.style.display = sp ? '' : 'none'; sh.style.display = hp ? '' : 'none';
+      el.classList.toggle('lit', !!(sp || hp));
+      // sand emitters: grains trickle off the lit gems
+      el._em = [];
+      if (sp) el._em.push({ x0: 14, x1: 20, y: 24, pal: sp, rate: 2.2 });
+      if (hp) el._em.push({ x0: 9, x1: 25, y: 35, pal: hp, rate: 3.4 });
+    }
+    hoodSand(el, dt || 0);
   };
+  // subtle falling sand: a few glowing grains per second, drift + gravity, fade out; integer pixels on the hood's own canvas
+  function hoodSand(el, dt) {
+    const ps = el._parts;
+    if (!el._em.length && !ps.length) return;
+    dt = Math.min(dt, 0.1);
+    for (const e of el._em) {
+      e.acc = (e.acc || 0) + dt * e.rate;
+      while (e.acc >= 1 && ps.length < 18) {
+        e.acc -= 1;
+        ps.push({ x: e.x0 + Math.random() * (e.x1 - e.x0), y: e.y + Math.random() * 2, vx: (Math.random() - 0.5) * 3, vy: -2 - Math.random() * 3, life: 0, max: 1.1 + Math.random() * 0.9, c: Math.random() < 0.4 ? e.pal.h : e.pal.m });
+      }
+      if (e.acc > 1) e.acc = 1;
+    }
+    for (const p of ps) { p.life += dt; p.vy += 9 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    for (let i = ps.length - 1; i >= 0; i--) if (ps[i].life >= ps[i].max || ps[i].y >= HH) ps.splice(i, 1);
+    const cx = el._pt.getContext('2d');
+    cx.clearRect(0, 0, HW, HH);
+    for (const p of ps) { cx.globalAlpha = Math.min(1, 3 * (1 - p.life / p.max)) * 0.85; cx.fillStyle = p.c; cx.fillRect(p.x | 0, p.y | 0, 1, 1); }
+    cx.globalAlpha = 1;
+  }
 
   // top-centre ranked run panel (hidden unless IT.Ranked.hud(w) returns an object):
   // countdown digit, flair scenario name, one objective line, combo icons (+ order), compact timer / score
@@ -482,7 +548,13 @@
     if (U) H.updUnit(U, R, ca, w);
     // ranked panel
     H.updRanked(R, ca);
-    H.updHood(R, ca, w.loadout || {});
+    H.updHood(R, ca, w.loadout || {}, dt);
+    // orbs (a status) sit centred over the ability row; other statuses take slots to their right
+    const lk = innerWidth + 'x' + innerHeight + ':' + (U ? 1 : 0);
+    if (ca.statPos !== lk && R.bar.offsetParent) {
+      const ab = R.q.el.parentNode.getBoundingClientRect(), rt = R.stat.parentNode.getBoundingClientRect(), ow = R.orbs.getBoundingClientRect().width;
+      if (ab.width && ow) { ca.statPos = lk; R.stat.style.left = Math.round(ab.left + ab.width / 2 - ow / 2 - rt.left) + 'px'; }
+    }
     // buffs (hero's, or the selected unit's)
     const bu = U || hero;
     const sts = (bu.statuses || []).filter(s => s.type !== 'channel' && s.type !== 'itemStats' && isFinite(s.until));

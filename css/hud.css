@@ -11,7 +11,7 @@
 .hbtn.item.empty{opacity:.55}
 
 /* orbs float above the hero (centred over the portrait), status icons to their right */
-.hstat{position:absolute;left:calc(30% + 1.1em);bottom:18em;display:flex;align-items:flex-end;gap:.8em;pointer-events:none}
+.hstat{position:absolute;left:calc(30% + 14.5em);bottom:18em;display:flex;align-items:flex-end;gap:.8em;pointer-events:none}
 .hstat .horbs{width:12.4em;justify-content:center;gap:.5em;margin:0;flex:none}
 .hstat .os{width:3.2em;height:3.2em}
 .hstat .hbuffs{position:static}
@@ -25,7 +25,8 @@
 
 /* Scepter / Shard hood emblem under the orbs: dark outline when empty, gems glow in their orb colour when lit */
 .horbcol{display:flex;flex-direction:column;align-items:center;gap:.3em;flex:none}
-.hhood{position:relative;width:6.2em;height:6.45em;flex:none;opacity:.85;align-self:flex-end;margin:0 .5em .3em}
+.hbar .hmid{width:auto}
+.hhood{position:relative;width:12.9em;height:14.4em;flex:none;align-self:center;margin:0 .2em}
 .hhood .hh{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
 .hhood .hh.scepter,.hhood .hh.shard{filter:drop-shadow(0 0 .35em var(--hc,#fff)) drop-shadow(0 0 .8em var(--hc,#fff))}
 .hhood.lit{opacity:1}
