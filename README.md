@@ -21,8 +21,10 @@ Values come from `SteamDatabase/GameTracking-Dota2` (`npc_dota_hero_invoker.txt`
 | R | Invoke (re-invoking a held spell just swaps slots) |
 | D F | Cast invoked spell 1 / 2 (quick-cast at the cursor) |
 | Z X C V B N | Items |
-| Right click | Move / attack (Shift queues orders) |
-| S / H | Stop / Hold |
+| Right click | Move / attack (Shift queues orders; optional hold-to-repeat) |
+| A | Attack-move / attack ground |
+| S / H | Stop (cancels wind-up) / Hold (no attacks) |
+| D D (Sun Strike, scepter) | Cataclysm |
 | Space, L | Center camera, lock camera |
 | Tab, F1, Esc | Live stats, cheat sheet, pause |
 

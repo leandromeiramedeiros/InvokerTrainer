@@ -4,7 +4,7 @@ import { G, stamp, mirror, arm, glow, glint, spark, disc, W, H } from './invoker
 const chk = (name, rows, w) => { rows.forEach((r, i) => { if (r.length !== w) throw new Error(`${name} row ${i} len ${r.length} != ${w}: ${r}`); }); return rows; };
 
 // collar fan from per-column top y and bottom y (inclusive); returns rows (lit left side)
-function fan(w, h, top, bot, tips = []) {
+function fan(w, h, top, bot, tips = [], band = 99) {
   const g = new G(w, h);
   const le = y => { for (let x = 0; x < w; x++) if (top[x] !== undefined && top[x] <= y && bot[x] >= y) return x; return 99; };
   for (let x = 0; x < w; x++) {
@@ -12,13 +12,14 @@ function fan(w, h, top, bot, tips = []) {
     for (let y = top[x]; y <= bot[x]; y++) {
       const e = le(y);
       let c;
-      if (y === top[x]) c = tips.includes(x) ? 'Y' : 'y';
+      if (x >= band) c = y === top[x] ? 'y' : y === bot[x] ? 'N' : (y === top[x] + 1 ? 'U' : 'u'); // back view: gold rim, sage band, thin magenta edge
+      else if (y === top[x]) c = tips.includes(x) ? 'Y' : 'y';
       else if (x === e) c = (y % 2) ? 'y' : 'G';
-      else if (x === e + 1) c = 'N';
-      else if (y === top[x] + 1) c = 'N';
-      else if (x <= 5) c = 'm';
-      else if (x <= 7) c = 'M';
-      else c = 'Q';
+      else if (x === e + 1) c = 'y';
+      else if (y === top[x] + 1) c = 'y';
+      else if (x === w - 1 || (y === bot[x] && x >= 5)) c = 'N'; // thin magenta lining along the neck / inner edge
+      else if (x <= 3) c = 'y';
+      else c = x <= 7 ? 'G' : 'G';
       g.set(x, y, c);
     }
   }
@@ -48,11 +49,11 @@ const HEAD_S = chk('HEAD_S', [
 
 const WING_S = chk('WING_S', [
   '.....yN......', // y10
-  '.....yNm.....', // y11
-  '....yNmm.....', // y12
-  '....yNmmM....', // y13
-  '...yNmmMMM...', // y14
-  '...yNmmMMMM..', // y15
+  '.....yNG.....', // y11
+  '....yNGG.....', // y12
+  '....yNGGG....', // y13
+  '...yNGGGGG...', // y14
+  '...yNGGGGGG..', // y15
 ], 13);
 
 const TORSO_S = chk('TORSO_S', [
@@ -154,7 +155,7 @@ export function sStamps(g, anim, i) {
 // ================= NORTH (back) =================
 const FAN_N = fan(13, 15,
   [, 1, 2, 4, 3, 6, 8, 9, 10, 10, 10, 10, 10],
-  [, 8, 10, 12, 13, 14, 14, 14, 14, 14, 14, 14, 14], [1, 4]);
+  [, 8, 10, 12, 13, 14, 14, 14, 14, 14, 14, 14, 14], [1, 4], 8);
 
 const HAIR_N = chk('HAIR_N', [
   '......jH', // y1

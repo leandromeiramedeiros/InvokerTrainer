@@ -65,11 +65,12 @@
     },
   });
 
-  function freeze(w, t, s) {
+  function freeze(w, t, s, proc) {
     const d = s.data;
     d.next = w.t + d.freezeCd;
     IT.Status.add(w, t, 'frozen', d.freezeDur, { src: s.src, ability: 'coldsnap' });
-    w.emit('fx', { name: 'coldsnapFreeze', x: t.x, y: t.y, unit: t.id });
+    w.emit('fx', { name: 'coldsnapFreeze', x: t.x, y: t.y, unit: t.id, proc: !!proc });
+    if (proc) w.emit('fx', { name: 'coldsnapProc', x: t.x, y: t.y, unit: t.id });
     if (IT.Combat) { d.inFreeze = true; IT.Combat.damage(w, { src: s.src, target: t, ability: 'coldsnap', type: 'magical', amount: d.dmg }); d.inFreeze = false; }
   }
 
@@ -80,7 +81,7 @@
       const t = w.get(p.target); if (!t) return;
       const s = IT.Status.find(t, 'coldsnap');
       if (!s || s.data.inFreeze || w.t < s.data.next || p.raw < s.data.trigger) return;
-      freeze(w, t, s);
+      freeze(w, t, s, true);
     });
   }
 
@@ -120,6 +121,8 @@
       const d = D.sunstrike;
       const delay = val(c, d, 'delay'), r = val(c, d, 'area_of_effect'), amount = val(c, d, 'damage');
       const count = val(c, d, 'cataclysm_count');
+      const tu = o.target != null ? w.get(o.target) : null;
+      if (!(typeof o.x === 'number' && isFinite(o.x)) || !(typeof o.y === 'number' && isFinite(o.y))) { o = Object.assign({}, o, { x: tu ? tu.x : c.x, y: tu ? tu.y : c.y }); }
       const self = o.target === c.id || (o.x != null && Math.hypot(o.x - c.x, o.y - c.y) <= 100);
       if (count > 0 && self) {
         const lo = val(c, d, 'cataclysm_min_range'), hi = val(c, d, 'cataclysm_max_range');
@@ -157,13 +160,14 @@
         data: { stats: { msPct: val(c, d, 'self_slow'), hpRegen: val(c, d, 'health_regen'), manaRegen: val(c, d, 'mana_regen') } },
       });
       const offs = [];
-      const brk = () => { IT.Status.remove(w, c, 'ghost'); w.emit('fx', { name: 'ghostBreak', x: c.x, y: c.y, unit: c.id }); };
+      let gt = null;
+      const brk = () => { if (!IT.Status.has(c, 'ghost')) return; if (gt) gt.broken = true; IT.Status.remove(w, c, 'ghost'); w.emit('fx', { name: 'ghostBreak', x: c.x, y: c.y, unit: c.id }); };
       offs.push(w.on('attack', p => { if (p.src === c.id) brk(); }), w.on('cast', p => { if (p.unit === c.id) brk(); }));
       w.emit('fx', { name: 'ghostWalk', x: c.x, y: c.y, r, unit: c.id });
-      w.thinker({
+      gt = w.thinker({
         x: c.x, y: c.y, r, color: '#9cf', team: c.team, ability: 'ghostwalk', next: 0, nextDmg: 0,
         upd(w, e) {
-          if (c.dead || !IT.Status.has(c, 'ghost')) { offs.forEach(f => f()); return true; }
+          if (c.dead || !IT.Status.has(c, 'ghost')) { offs.forEach(f => f()); w.emit('fx', { name: 'ghostWalkEnd', x: c.x, y: c.y, unit: c.id, broken: !!e.broken }); return true; }
           e.x = c.x; e.y = c.y;
           if (w.t >= e.next - 1e-9) {
             e.next = w.t + 0.5;
@@ -203,7 +207,7 @@
             now.add(u.id);
             tr.touch(u);
             if (tick || !e.inside.has(u.id)) slow(w, u, pct, linger, c.id, 'icewall');
-            if (tick) dmg(w, c, u, 'icewall', 'magical', dps * iv);
+            if (tick) { dmg(w, c, u, 'icewall', 'magical', dps * iv); w.emit('fx', { name: 'iceWallTick', x: u.x, y: u.y, unit: u.id }); }
           }
           e.inside = now;
           if (e.age >= dur - 1e-9) { tr.done(cx, cy); w.emit('fx', { name: 'iceWallEnd', x: cx, y: cy }); return true; }
@@ -383,6 +387,7 @@
       if (!s || w.t < s.data.next - 1e-9) continue;
       s.data.next = w.t + s.data.iv;
       if (IT.Combat) IT.Combat.damage(w, { src: s.src, target: e, ability: 'chaosmeteor', type: 'magical', amount: s.data.dps * s.data.iv });
+      w.emit('fx', { name: 'meteorBurn', x: e.x, y: e.y, unit: e.id });
     }
   });
 
@@ -401,13 +406,13 @@
       for (let i = 0; i < n; i++) {
         const off = (i - (n - 1) / 2) * METEOR_SPACING * r;
         const x0 = o.x - sn * off, y0 = o.y + cs * off;
-        w.emit('fx', { name: 'meteorFall', x: x0, y: y0, r, delay: land, dir });
+        w.emit('fx', { name: 'meteorFall', x: x0, y: y0, r, delay: land, dir, ability: 'chaosmeteor' });
         w.thinker({
           x: x0, y: y0, r, dir, color: '#f62', team: c.team, ability: 'chaosmeteor', vision: vis, next: 0, landed: false,
           danger: { x: x0, y: y0, r, at: w.t + land },
           upd(w, e) {
             if (e.age < land - 1e-9) return false;
-            if (!e.landed) { e.landed = true; e.next = w.t; w.emit('fx', { name: 'meteorLand', x: x0, y: y0, r }); }
+            if (!e.landed) { e.landed = true; e.next = w.t; w.emit('fx', { name: 'meteorLand', x: x0, y: y0, r }); w.emit('fx', { name: 'meteorRoll', x: x0, y: y0, r, dir, dur: roll }); }
             const run = Math.min(dist, speed * (e.age - land));
             e.x = x0 + cs * run; e.y = y0 + sn * run;
             if (e.age - land > roll + 1e-9) {   // rolled out
@@ -419,6 +424,7 @@
               for (const u of foesNear(w, c, e.x, e.y, r)) {
                 tr.touch(u);
                 dmg(w, c, u, 'chaosmeteor', 'magical', main);
+                w.emit('fx', { name: 'meteorHit', x: u.x, y: u.y, unit: u.id });
                 if (stun > 0 && !IT.Status.has(u, 'stun')) IT.Status.add(w, u, 'stun', stun, { src: c.id, ability: 'chaosmeteor' });
                 if (bdps > 0) {
                   const b = IT.Status.find(u, 'burn');

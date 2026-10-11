@@ -18,6 +18,7 @@
     const s = Math.max(0.5, Math.min(innerWidth / VW, innerHeight / VH));   // fractional: fill the window, keep 16:9
     const sw = Math.max(2, Math.floor(VW * s / 2) * 2), sh = Math.max(2, Math.round(sw * VH / VW / 2) * 2);   // even px (no half-pixel blur from the centering transform)
     stage.style.width = sw + 'px'; stage.style.height = sh + 'px'; stage.style.setProperty('--u', (sw / VW).toFixed(4) + 'px');
+    if (IT.GL) { const d = Math.max(1, G.devicePixelRatio || 1); IT.GL.setSize(Math.round(sw * d), Math.round(sh * d)); }   // GL compositor output = stage device pixels (capped in gl.js)
     const gs = Math.max(11, Math.min(26, Math.min(innerWidth / 1280, innerHeight / 720) * 14));
     document.documentElement.style.setProperty('--g', gs.toFixed(2) + 'px');
   }
@@ -52,6 +53,7 @@
     g.nDummies = n;
     if (IT.StatsCollector) IT.StatsCollector.create(w);
     IT.Sfx && IT.Sfx.attach(w);
+    IT.DummyChat && IT.DummyChat.attach(w, g);
     g.R = IT.Render.create(w, cv, glowCv, g.cam);
     g.R.showDebug = !!(IT.dev && IT.dev.debug);
     w.on('fail', p => {
@@ -101,6 +103,7 @@
     IT.Input.unbind(); IT.HUD.unbind();
     if (g.w._stats) g.w._stats.destroy();
     IT.Sfx && IT.Sfx.detach();
+    IT.DummyChat && IT.DummyChat.detach();
     aimG.clearRect(0, 0, VW, VH);
     stage.classList.remove('on');
     UI.clearToasts();
@@ -226,12 +229,35 @@
   let last = performance.now(), acc = 0, dbgT = 0;
   function debugText() {
     const R = g.R, hero = g.hero, inv = hero.inv, S2 = R.stats;
-    return `render ${S2.ms.toFixed(2)}ms avg ${S2.avg.toFixed(2)} max ${S2.max.toFixed(1)}  lights ${S2.lights} parts ${S2.parts} items ${S2.items} sand ${S2.sand || 0}  lock ${g.cam.lock ? 'on' : 'off'}\n` +
+    return `render ${S2.ms.toFixed(2)}ms avg ${S2.avg.toFixed(2)} max ${S2.max.toFixed(1)} [${S2.gl}] light ${S2.tLight.toFixed(2)} sand ${S2.tSand.toFixed(2)} fx ${S2.tFx.toFixed(2)} comp ${S2.tComp.toFixed(2)}  hz ${(1000 / PACE.ms).toFixed(0)}  lights ${S2.lights} parts ${S2.parts} items ${S2.items} sand ${S2.sand || 0}  lock ${g.cam.lock ? 'on' : 'off'}\n` +
       `orbs ${inv.orbs.join('')}  slots ${inv.slots.map(s => s || '-').join(' | ')}  invokeCd ${inv.invokeCd.toFixed(1)}\n` +
       `hp ${Math.round(hero.hp)}/${Math.round(hero.maxHp)}  mana ${Math.round(hero.mana)}/${Math.round(hero.maxMana)}  t ${g.w.t.toFixed(1)}`;
   }
+  // frame pacing: estimate the display refresh from rAF deltas (lower quartile of the last 16: robust to stalls),
+  // render every k-th rAF with k = max(1, round(refresh / fpsCap)); sim time keeps accumulating real dt
+  const PACE = { ring: new Float64Array(16), tmp: new Float64Array(16), n: 0, i: 0, ms: 16.67, skip: 0, pend: 0 };
+  function pace(raw) {
+    if (!(raw > 2 && raw < 80)) return;
+    PACE.ring[PACE.i] = raw; PACE.i = (PACE.i + 1) & 15; if (PACE.n < 16) PACE.n++;
+    if (PACE.n < 8 || (PACE.i & 3)) return;
+    const t = PACE.tmp, n = PACE.n;
+    for (let a = 0; a < n; a++) { const v = PACE.ring[a]; let b = a - 1; while (b >= 0 && t[b] > v) { t[b + 1] = t[b]; b--; } t[b + 1] = v; }
+    PACE.ms = t[n >> 2];
+  }
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    requestAnimationFrame(frame);
+    const raw = now - last; last = now;
+    pace(raw); PACE.pend += raw;
+    if (g) {
+      const idle = g.w.paused && (g.menu || g.ended || settingsOver);
+      if (idle || document.hidden) { if (PACE.pend < 100) return; }                // menu / hidden: ~10 fps
+      else {
+        const cap = S.get().fpsCap, k = cap > 0 ? Math.max(1, Math.round(1000 / PACE.ms / cap)) : 1;
+        if (++PACE.skip < k) return;
+      }
+    }
+    PACE.skip = 0;
+    const dt = Math.min(0.1, PACE.pend / 1000); PACE.pend = 0;
     if (g && !(IT.dev && IT.dev.paused)) {
       const w = g.w;
       if (!w.paused) {
@@ -250,7 +276,6 @@
       dbgT += dt;
       if (g && dbgT > 0.25) { dbgT = 0; dbg.textContent = g.R.showDebug ? debugText() : ''; g.R.stats.max *= 0.5; }
     }
-    requestAnimationFrame(frame);
   }
   // step the sim n ticks then draw once (rAF is throttled in hidden panes)
   function devRender(n) {

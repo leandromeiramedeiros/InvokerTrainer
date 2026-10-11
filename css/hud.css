@@ -23,25 +23,43 @@
 .hdrag{position:absolute;z-index:9;width:5.6em;height:5.6em;margin:-2.8em 0 0 -2.8em;pointer-events:none;background:#0b0618;border:.2em solid var(--gold);box-shadow:0 0 1em var(--gold)}
 .hdrag canvas{width:100%;height:100%;display:block}
 
-/* top-centre stack: ranked panel above the combo bar */
+/* Scepter / Shard hood emblem under the orbs: dark outline when empty, gems glow in their orb colour when lit */
+.horbcol{display:flex;flex-direction:column;align-items:center;gap:.3em;flex:none}
+.hhood{position:relative;width:6.2em;height:6.45em;flex:none;opacity:.85;align-self:flex-end;margin:0 .5em .3em}
+.hhood .hh{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+.hhood .hh.scepter,.hhood .hh.shard{filter:drop-shadow(0 0 .35em var(--hc,#fff)) drop-shadow(0 0 .8em var(--hc,#fff))}
+.hhood.lit{opacity:1}
+
+/* top-centre stack: ranked panel above the combo bar. Big type scales with --g */
 .htop{position:absolute;left:17.5%;top:.8em;width:62%;display:flex;flex-direction:column;gap:.5em;pointer-events:none}
 .htop .combobar{position:relative;left:auto;top:auto;width:auto}
 .htop.rk .combobar .tm{display:none}
-.rkp{display:flex;flex-direction:column;align-items:center;gap:.3em;padding:.5em .8em;background:#150d27e6;border:.25em solid var(--mag);box-shadow:0 0 0 .15em #000;text-align:center}
-.rknum{color:var(--gold);font-size:6em;line-height:1;text-shadow:0 .08em 0 #000,0 0 .6em #ffd23f88}
-.rkhint{color:var(--dim);font-size:max(1em,10px)}
-.rkscen{display:flex;flex-direction:column;align-items:center;gap:.1em}
-.rkname{color:var(--mag);font-size:max(1.2em,11px);text-transform:uppercase}
-.rkobj{color:var(--ink);font-size:max(.95em,10px);font-weight:normal}
-.rkrow{display:flex;justify-content:center;align-items:center;gap:2.4em}
-.rkt{display:flex;flex-direction:column;align-items:center;gap:.1em;color:var(--dim);font-size:max(.85em,9px)}
-.rkt b{color:var(--gold);font-size:1.5em}
+.rkp{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.35);padding:calc(var(--g)*.5) calc(var(--g)*1) calc(var(--g)*.6);background:#150d27e6;border:.25em solid var(--mag);box-shadow:0 0 0 .15em #000;text-align:center}
+.rknum{color:var(--gold);font-size:calc(var(--g)*6);line-height:1;text-shadow:0 .06em 0 #000,0 0 .5em #ffd23f88}
+.rkscen{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.15)}
+.rkname{color:var(--mag);font-size:max(calc(var(--g)*1.9),16px);line-height:1.1;text-transform:uppercase;letter-spacing:.04em;text-shadow:0 .08em 0 #000}
+.rkobj{color:var(--ink);font-size:max(calc(var(--g)*1.15),12px);font-weight:normal;line-height:1.2}
+.rkcombo{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:calc(var(--g)*.4)}
+.rkcombo .rka{position:relative;width:calc(var(--g)*3.6);height:calc(var(--g)*3.6);background:#0b0618;border:.2em solid var(--line);box-shadow:0 0 0 .12em #000;display:flex;align-items:center;justify-content:center}
+.rkcombo .rka canvas{width:100%;height:100%;image-rendering:pixelated}
+.rkcombo .rka.item{border-color:var(--gold)}
+.rkcombo .rka.badge{background:#1d1236;border-color:#6a88a2;color:var(--ink);font-size:max(calc(var(--g)*.95),10px)}
+.rkcombo .rka.badge.attack{border-color:var(--bad)}
+.rkcombo .rka.badge.pos{border-color:var(--good)}
+.rkcombo .rkrec{position:absolute;left:0;right:0;bottom:-.1em;text-align:center;font-style:normal;color:#ffd36a;font-size:max(calc(var(--g)*.8),9px);letter-spacing:.08em;text-shadow:0 .1em 0 #000,0 0 .3em #000}
+.rkcombo .rkar{display:block;width:0;height:0;border-style:solid;border-width:calc(var(--g)*.5) 0 calc(var(--g)*.5) calc(var(--g)*.7);border-color:transparent transparent transparent var(--gold);opacity:.8}
+.rkrow{display:flex;justify-content:center;align-items:center;gap:calc(var(--g)*2.4)}
+.rkt{display:flex;align-items:baseline;gap:calc(var(--g)*.5);color:var(--dim);font-size:max(calc(var(--g)*.85),9px)}
+.rkt b{color:var(--gold);font-size:max(calc(var(--g)*1.6),14px)}
+.rkt.tm b{font-size:max(calc(var(--g)*2),16px)}
 .rkt b.low{color:var(--bad)}
-.rkmed{display:flex}
-.rkmed canvas{width:3em;height:3em;image-rendering:pixelated}
+.rkmed{display:flex;align-self:center}
+.rkmed canvas{width:calc(var(--g)*1.8);height:calc(var(--g)*1.8);image-rendering:pixelated}
 
-/* ranked/practice hint row (difficulty with hints) */
-.rkp .rktip { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .3em .6em; margin-top: .3em; font-size: .8em; color: #cfd8e0; }
-.rkp .rksp { display: inline-flex; align-items: center; gap: .2em; }
-.rkp .rksp canvas, .rkp .rksp img { width: 1.4em; height: 1.4em; image-rendering: pixelated; }
-.rkp .rksp em { font-style: normal; color: #ffd36a; letter-spacing: .05em; }
+/* dummy taunt bubbles (js/ui/dummychat.js) */
+.dchat-root{position:absolute;inset:0;pointer-events:none;z-index:6}
+.dchat{position:absolute;transform:translate(-50%,-100%);max-width:18em;padding:.45em .8em;background:#150d27;border:.2em solid var(--mag);box-shadow:0 0 0 .12em #000,0 .3em 0 #0008;color:var(--ink);font-size:max(calc(var(--g)*1.1),13px);font-weight:normal;line-height:1.25;text-align:center;opacity:1;transition:opacity .45s}
+.dchat.out{opacity:0}
+.dchat::after{content:"";position:absolute;left:50%;bottom:-.65em;margin-left:-.4em;border-style:solid;border-width:.5em .4em 0;border-color:var(--mag) transparent transparent}
+.dchat.dc-praise{border-color:var(--good)}.dchat.dc-praise::after{border-top-color:var(--good)}
+.dchat.dc-hurt,.dchat.dc-comboFail{border-color:var(--bad)}.dchat.dc-hurt::after,.dchat.dc-comboFail::after{border-top-color:var(--bad)}

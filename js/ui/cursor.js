@@ -1,5 +1,6 @@
 // Dota-style pixel-art cursors (baked on canvas -> data URL -> CSS cursor), virtual cursor for pointer lock,
-// and the fullscreen button. IT.Cursor.set('default'|'attack'|'aim'). Owner: S1.
+// and the fullscreen button. IT.Cursor.set('default'|'attack'|'amove'|'aim'). Owner: S1.
+// attack = red arrow (enemy under cursor); amove = red four-way cross (attack-move armed); aim = purple cross (spell targeting).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -11,6 +12,7 @@
   const PAL = {   // outline, highlight (top/left edge), body, shade (bottom/right edge)
     default: ['#14141c', '#f6f8fc', '#c3c9d6', '#7a8294'],
     attack: ['#2a0606', '#ffb4aa', '#ff4a3c', '#9c1616'],
+    amove: ['#2a0606', '#ffb4aa', '#ff4a3c', '#9c1616'],
     aim: ['#1c0838', '#ecd2ff', '#b36bff', '#6a2cb8'],
   };
   // 9x14 arrow with a tail (silver gauntlet-style pointer)
@@ -44,6 +46,7 @@
   const C = {
     default: bake('default', ARROW, 0, 0),
     attack: bake('attack', ARROW, 0, 0),
+    amove: bake('amove', reticle(), 6, 6),
     aim: bake('aim', reticle(), 6, 6),
   };
   Cur.url = k => C[k].url;
@@ -55,6 +58,7 @@
   st.textContent =
     `html,html *{cursor:${rule('default')} !important}` +
     `html.cur-attack,html.cur-attack *{cursor:${rule('attack')} !important}` +
+    `html.cur-amove,html.cur-amove *{cursor:${rule('amove')} !important}` +
     `html.cur-aim,html.cur-aim *{cursor:${rule('aim')} !important}` +
     `html input[type=text],html textarea{cursor:text !important}` +
     `html.cur-lock,html.cur-lock *{cursor:none !important}` +
@@ -71,7 +75,7 @@
     if (kind === Cur.kind) return;
     Cur.kind = kind;
     const cl = doc.documentElement.classList;
-    cl.toggle('cur-attack', kind === 'attack'); cl.toggle('cur-aim', kind === 'aim');
+    cl.toggle('cur-attack', kind === 'attack'); cl.toggle('cur-amove', kind === 'amove'); cl.toggle('cur-aim', kind === 'aim');
     if (vc) vc.src = C[kind].url;
     if (vc && vc.style.display !== 'none' && vpos) Cur.virtual(vpos.x, vpos.y);
   };
@@ -112,5 +116,5 @@
   }
 
   Cur.set('default');
-  doc.documentElement.classList.remove('cur-attack', 'cur-aim');
+  doc.documentElement.classList.remove('cur-attack', 'cur-amove', 'cur-aim');
 })(typeof window !== 'undefined' ? window : globalThis);

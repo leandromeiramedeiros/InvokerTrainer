@@ -73,19 +73,118 @@
       h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats),
       h('div', { class: 'hitems' }, R.uitems.map(b => b.el)));
   }
-  // top-centre ranked run panel (hidden unless IT.Ranked.hud(w) returns an object)
+  // ---------------------------------------------------------------- Aghanim's hood emblem (Scepter = top gem, Shard = lower gems)
+  const HW = 24, HH = 25;
+  const HOOD_ORN = [   // left half (12 cols) of the winged ornament, from row 9. b outline, a body, c highlight
+    '..b.........', '..bab....bbb', '.bacab..baab', '.bacabbbaaab', '..bbaaaaaacc', '....bbaaaacc', '......bbaacc', '........bacc', '..........bc',
+  ];
+  const HOOD_PAL = { b: '#151d27', a: '#34475a', c: '#6a88a2' };
+  const GEM_PAL = {   // e edge, m body, h core highlight, glow halo
+    quas: { e: '#1672d6', m: '#3cc0ff', h: '#e0f8ff', glow: '#2fb4ff' },
+    wex: { e: '#8a28d8', m: '#d24dff', h: '#ffe8ff', glow: '#c040ff' },
+    exort: { e: '#d4560e', m: '#ffa02c', h: '#fff2c0', glow: '#ff8a1a' },
+  };
+  const SHARD_ORB = { ghostwalk: 'quas', emp: 'wex', sunstrike: 'exort' };
+  const gemRows = rows => { const px = []; for (const [y, x0, x1] of rows) for (let x = x0; x <= x1; x++) px.push([x, y]); return px; };
+  const HOOD_SCEPTER = gemRows([[0, 11, 12], [1, 10, 13], [2, 9, 14], [3, 8, 15], [4, 8, 15], [5, 8, 15], [6, 8, 15], [7, 9, 14], [8, 9, 14], [9, 10, 13]]);
+  const HOOD_SHARD = gemRows([[19, 11, 12], [20, 10, 13], [21, 10, 13], [22, 10, 13], [23, 11, 12], [24, 11, 12],
+    [20, 6, 6], [21, 5, 7], [22, 5, 7], [23, 6, 6], [20, 17, 17], [21, 16, 18], [22, 16, 18], [23, 17, 17]]);
+  function paintGem(cx, px, pal) {   // pal null = unlit (dark)
+    const set = new Set(px.map(p => p[0] + ',' + p[1]));
+    let maxY = 0; for (const p of px) maxY = Math.max(maxY, p[1]);
+    for (const [x, y] of px) {
+      const edge = !(set.has((x - 1) + ',' + y) && set.has((x + 1) + ',' + y) && set.has(x + ',' + (y - 1)) && set.has(x + ',' + (y + 1)));
+      let c;
+      if (!pal) c = edge ? '#0b0711' : (x < 12 && y % 2 === 0 ? '#2a2140' : '#1c1530');
+      else if (edge) c = pal.e;
+      else if ((x === 11 || x === 12) && y < maxY - 1) c = pal.h;
+      else c = pal.m;
+      cx.fillStyle = c; cx.fillRect(x, y, 1, 1);
+    }
+  }
+  function hoodCanvas(cls) { const c = document.createElement('canvas'); c.width = HW; c.height = HH; c.className = 'hh ' + cls; return c; }
+  function hoodEl() {
+    const { h } = IT.UI;
+    const base = hoodCanvas('base'), cx = base.getContext('2d');
+    HOOD_ORN.forEach((row, i) => {
+      for (let x = 0; x < 12; x++) {
+        const ch = row[x]; if (ch === '.') continue;
+        cx.fillStyle = HOOD_PAL[ch]; cx.fillRect(x, 9 + i, 1, 1); cx.fillRect(HW - 1 - x, 9 + i, 1, 1);
+      }
+    });
+    cx.fillStyle = HOOD_PAL.b; cx.fillRect(11, 18, 2, 1);
+    paintGem(cx, HOOD_SCEPTER, null); paintGem(cx, HOOD_SHARD, null);
+    const sc = hoodCanvas('scepter'), sh = hoodCanvas('shard');
+    const el = h('div', { class: 'hhood' }, base, sc, sh);
+    el._sc = sc; el._sh = sh;
+    return el;
+  }
+  // Scepter / Shard glow in the colour of their orb / shard spell; dark outline when not owned (loadout from w.loadout)
+  H.updHood = function (R, ca, lo) {
+    const so = lo.scepter ? (lo.scepterOrb || (typeof lo.scepter === 'string' ? lo.scepter : 'wex')) : null;
+    const ss = lo.shard ? (lo.shardSpell || (typeof lo.shard === 'string' ? lo.shard : null)) : null;
+    const key = (so || '-') + '|' + (lo.shard ? (ss || '?') : '-');
+    if (ca.hood === key) return;
+    ca.hood = key;
+    const el = R.hood, sc = el._sc, sh = el._sh;
+    sc.getContext('2d').clearRect(0, 0, HW, HH); sh.getContext('2d').clearRect(0, 0, HW, HH);
+    const sp = so && GEM_PAL[so], hp = lo.shard && GEM_PAL[SHARD_ORB[ss] || 'wex'];
+    if (sp) { paintGem(sc.getContext('2d'), HOOD_SCEPTER, sp); sc.style.setProperty('--hc', sp.glow); }
+    if (hp) { paintGem(sh.getContext('2d'), HOOD_SHARD, hp); sh.style.setProperty('--hc', hp.glow); }
+    sc.style.display = sp ? '' : 'none'; sh.style.display = hp ? '' : 'none';
+    el.classList.toggle('lit', !!(sp || hp));
+  };
+
+  // top-centre ranked run panel (hidden unless IT.Ranked.hud(w) returns an object):
+  // countdown digit, flair scenario name, one objective line, combo icons (+ order), compact timer / score
   function rankedPanel(R) {
     const { h } = IT.UI, t = IT.t;
     R.rkNum = h('div', { class: 'rknum' });
-    R.rkHint = h('div', { class: 'rkhint', text: t('hud.rkCheck') });
     R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
+    R.rkCombo = h('div', { class: 'rkcombo' });
     R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
-    R.rkRow = h('div', { class: 'rkrow' },
-      h('div', { class: 'rkt' }, h('span', { text: t('hud.rkTime') }), R.rkTv),
-      h('div', { class: 'rkt' }, h('span', { text: t('hud.rkRun') }), R.rkRv),
-      R.rkSc = h('div', { class: 'rkt' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed));
-    R.rkTip = h('div', { class: 'rktip' });   // difficulty hints: scenario tip + spell recipe
-    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkHint, h('div', { class: 'rkscen' }, R.rkName, R.rkObj), R.rkRow, R.rkTip);
+    R.rkTm = h('div', { class: 'rkt tm' }, h('span', { text: t('hud.rkTime') }), R.rkTv);
+    R.rkRn = h('div', { class: 'rkt' }, h('span', { text: t('hud.rkRun') }), R.rkRv);
+    R.rkSc = h('div', { class: 'rkt sc' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed);
+    R.rkRow = h('div', { class: 'rkrow' }, R.rkTm, R.rkSc, R.rkRn);
+    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, h('div', { class: 'rkscen' }, R.rkName, R.rkObj), R.rkCombo, R.rkRow);
+  }
+  // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id }]
+  function rkActions(rk) {
+    const w = H.c.w, GM = IT.GAME, out = [];
+    const def = w.combo && w.combo.def;
+    if (def) {
+      for (const s of def.steps) {
+        if (s.ability) out.push({ k: GM.SPELL_ORBS[s.ability] ? 'spell' : 'item', id: s.ability });
+        else if (s.type === 'attack') out.push({ k: 'attack' });
+        else if (s.type === 'move') out.push({ k: 'move' });
+        else if (s.type === 'position') out.push({ k: 'pos' });
+      }
+      return out;
+    }
+    const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null;
+    for (const s of (sc && sc.sol) || []) {
+      if (s.a === 'attack') out.push({ k: 'attack' });
+      else if (s.a === 'move') out.push({ k: 'move' });
+      else if (s.a) out.push({ k: GM.SPELL_ORBS[s.a] ? 'spell' : 'item', id: s.a });
+    }
+    return out;
+  }
+  function rkBuildCombo(R, rk, ord, hints) {
+    const { h, icon } = IT.UI, t = IT.t;
+    R.rkCombo.textContent = '';
+    let acts = rkActions(rk);
+    if (!ord) { const seen = new Set(); acts = acts.filter(a => (a.k === 'spell' || a.k === 'item') && !seen.has(a.id) && seen.add(a.id)); }
+    acts.forEach((a, i) => {
+      if (ord && i) R.rkCombo.appendChild(h('i', { class: 'rkar' }));
+      let box;
+      if (a.k === 'spell' || a.k === 'item') {
+        box = h('div', { class: 'rka ' + a.k }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }));
+        if (hints && a.k === 'spell') box.appendChild(h('em', { class: 'rkrec', text: IT.GAME.SPELL_ORBS[a.id] || '' }));
+      } else box = h('div', { class: 'rka badge ' + a.k }, h('b', { text: t(a.k === 'attack' ? 'hud.rkAtk' : a.k === 'move' ? 'hud.rkMov' : 'hud.rkPos') }));
+      R.rkCombo.appendChild(box);
+    });
+    R.rkCombo.style.display = acts.length ? '' : 'none';
   }
   const fmtS = s => { s = Math.max(0, s || 0); const v = Math.floor(s * 10) / 10, m = Math.floor(v / 60); return m + ':' + (v - m * 60).toFixed(1).padStart(4, '0'); };
   const fmtM = s => { const v = Math.max(0, Math.floor(s || 0)), m = Math.floor(v / 60); return m + ':' + String(v - m * 60).padStart(2, '0'); };
@@ -128,15 +227,18 @@
     R.s1 = btnEl('slot', ev => In.doAction('slot1', { hud: true, queued: ev.shiftKey })); R.s2 = btnEl('slot', ev => In.doAction('slot2', { hud: true, queued: ev.shiftKey }));
     R.items = [0, 1, 2, 3, 4, 5].map(i => { const b = btnEl('item', null); b.el.setAttribute('data-slot', i); b.el.addEventListener('mousedown', ev => itemDown(i, ev)); return b; });
     setIcon(R.q, 'quas'); setIcon(R.w, 'wex'); setIcon(R.e, 'exort'); setIcon(R.r, 'invoke');
+    R.hood = hoodEl();   // Scepter/Shard hood emblem: between abilities and items (Dota)
     R.bar = h('div', { class: 'hudp hbar' },
       R.por,
       h('div', { class: 'hmid' },
         h('div', { class: 'bars' }, R.hp, R.mp),
         h('div', { class: 'abrow' }, R.q.el, R.w.el, R.e.el, R.r.el, h('i', { class: 'sep' }), R.s1.el, R.s2.el)),
+      R.hood,
       h('div', { class: 'hitems' }, R.items.map(b => b.el)));
     R.ubar = unitBar(R);
     R.buffs = h('div', { class: 'hbuffs' });
-    R.stat = h('div', { class: 'hstat' }, R.orbs, R.buffs);   // orbs + status icons float above the hero bar
+    R.orbcol = h('div', { class: 'horbcol' }, R.orbs);
+    R.stat = h('div', { class: 'hstat' }, R.orbcol, R.buffs);   // orbs + status icons float above the hero bar
     R.aim = h('div', { class: 'aimhint', text: t('hud.aimHint') });
     R.rk = rankedPanel(R);
     R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
@@ -279,7 +381,7 @@
     });
   };
 
-  // ranked run panel: countdown / timers / score + medal. Hidden when IT.Ranked.hud(w) is null.
+  // ranked run panel: countdown / flair title / combo icons / timers / score + medal. Hidden when IT.Ranked.hud(w) is null.
   H.updRanked = function (R, ca) {
     const rk = IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(H.c.w) : null;
     if (!rk) { if (ca.rk !== 0) { ca.rk = 0; R.rk.style.display = 'none'; R.top.classList.remove('rk'); } return; }
@@ -292,24 +394,20 @@
         R.rkMed.textContent = ''; R.rkMed.appendChild(IT.Medals.canvas(r.tier, r.stars, 24));
       }
     }
-    const cd = rk.phase === 'countdown';
-    R.rkNum.style.display = R.rkHint.style.display = cd ? '' : 'none';
+    const cd = rk.phase === 'countdown', S = IT.Settings.get();
+    R.rkNum.style.display = cd ? '' : 'none';
     R.rkRow.style.display = cd ? 'none' : '';
     if (cd) setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
     setText(R.rkTv, fmtS(rk.timeLeft), ca, 'rkt'); R.rkTv.classList.toggle('low', rk.timeLeft != null && rk.timeLeft < 5);
     setText(R.rkRv, fmtM(rk.runLeft), ca, 'rkr');
     setText(R.rkSv, String(Math.round(rk.score || 0)), ca, 'rks');
+    R.rkTm.style.display = rk.timeLeft == null ? 'none' : '';
+    R.rkRn.style.display = rk.runLeft == null ? 'none' : '';
+    R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
     setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
-    R.rkSc.style.display = rk.score == null ? 'none' : '';
-    const tk = rk.hints && IT.Settings.get().hints ? rk.id + '|' + IT.lang : '';
-    if (ca.rkTip !== tk) {
-      ca.rkTip = tk; R.rkTip.textContent = ''; R.rkTip.style.display = tk ? '' : 'none';
-      if (tk) {
-        const { h, icon } = IT.UI;
-        R.rkTip.append(h('span', { class: 'rktx', text: txt(rk.tip) }),
-          ...(rk.spells || []).map(s => h('span', { class: 'rksp' }, icon(s), h('em', { text: IT.GAME.SPELL_ORBS[s] || '' }))));
-      }
-    }
+    const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def;
+    const ck = rk.id + '|' + rk.n + '|' + (def ? def.id : '') + '|' + IT.lang + '|' + (ord ? 1 : 0) + (hints ? 1 : 0);
+    if (ca.rkCk !== ck) { ca.rkCk = ck; rkBuildCombo(R, rk, ord, hints); R.rkCombo.classList.toggle('ord', ord); }
   };
 
   H.update = function (dt) {
@@ -379,11 +477,12 @@
     const um = U ? U.id : null;
     if (ca.umode !== um) {
       ca.umode = um; ca.uid = null;
-      R.bar.style.display = U ? 'none' : ''; R.ubar.style.display = U ? '' : 'none'; R.orbs.style.display = U ? 'none' : '';
+      R.bar.style.display = U ? 'none' : ''; R.ubar.style.display = U ? '' : 'none'; R.orbcol.style.display = U ? 'none' : '';
     }
     if (U) H.updUnit(U, R, ca, w);
     // ranked panel
     H.updRanked(R, ca);
+    H.updHood(R, ca, w.loadout || {});
     // buffs (hero's, or the selected unit's)
     const bu = U || hero;
     const sts = (bu.statuses || []).filter(s => s.type !== 'channel' && s.type !== 'itemStats' && isFinite(s.until));
@@ -408,6 +507,7 @@
     }
     if (H.statsOn) { H.accT += dt; if (H.accT > 0.4) { H.accT = 0; H.buildLive(); } }
     if (IT.ComboBar) IT.ComboBar.update(dt);
+    if (IT.DummyChat && IT.DummyChat.update) IT.DummyChat.update(dt);
   };
   H.resetMeter = function () { H.dps = []; H.total = 0; };
 

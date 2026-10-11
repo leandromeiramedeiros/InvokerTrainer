@@ -35,6 +35,7 @@
     green: ['#f0ffd0', '#b4f070', '#6ccc3c', '#3a8a24', '#1e5016', '#0e2a0c'],
     white: ['#ffffff', '#e8eeff', '#b8c4e0', '#8090b0', '#4a5470', '#2a3044'],
     red: ['#ffffff', '#ffb0a0', '#ff5a4a', '#c02818', '#701408', '#340a04'],
+    cyan: ['#ffffff', '#d8fbff', '#6cf0ff', '#20b8e8', '#1272b8', '#0a3a6e'],
     dirt: ['#d8c090', '#a88a58', '#7a6038', '#52402a', '#33281a', '#1c160e'],
   };
   for (const k in RAMPS) RAMPS[k + 'U'] = RAMPS[k].map(abgrHex);

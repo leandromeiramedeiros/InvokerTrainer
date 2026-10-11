@@ -91,6 +91,7 @@
             IT.Combat.damage(w2, { src: c.id, target: u, ability: 'shiva', type: 'magical', amount: dmg });
             S.add(w2, u, 'slow', sdur, { src: c.id, ability: 'shiva', data: { pct: slow } });
             w2.emit('hit', { src: c.id, target: u.id, ability: 'shiva' });
+            w2.emit('fx', { name: 'shivaHit', x: u.x, y: u.y, unit: u.id });
           }
           if (e.ring < R) return false;
           if (!any) w2.emit('miss', { src: c.id, ability: 'shiva', x: e.x, y: e.y });
@@ -119,7 +120,7 @@
       x: u.x, y: u.y, team: c.team, ability: id,
       upd(w2, e) {
         const t = w2.get(u.id); if (!t) return true;
-        while (n < total && e.age >= (n + 1) * step - 1e-9) { n++; IT.Combat.damage(w2, { src: c.id, target: t, ability: id, type: 'magical', amount: dmg }); }
+        while (n < total && e.age >= (n + 1) * step - 1e-9) { n++; IT.Combat.damage(w2, { src: c.id, target: t, ability: id, type: 'magical', amount: dmg }); w2.emit('fx', { name: 'hammerBurn', x: t.x, y: t.y, unit: t.id }); }
         return n >= total;
       },
     });
@@ -127,17 +128,17 @@
   item('meteorhammer', {
     target: 'point',
     channel() { return iv('meteorhammer', 'max_duration'); },
-    cast(w, c, o) { w.emit('fx', { name: 'meteorChannel', x: o.x, y: o.y, unit: c.id, dur: iv('meteorhammer', 'max_duration') }); },
+    cast(w, c, o) { w.emit('fx', { name: 'meteorChannel', ability: 'meteorhammer', x: o.x, y: o.y, unit: c.id, dur: iv('meteorhammer', 'max_duration') }); },
     channelEnd(w, c, o, interrupted) {
       if (interrupted) { w.emit('fx', { name: 'meteorCancel', x: o.x, y: o.y, unit: c.id }); return; }
       const id = 'meteorhammer', land = iv(id, 'land_time'), r = iv(id, 'impact_radius');
-      w.emit('fx', { name: 'meteorFall', x: o.x, y: o.y, r, delay: land });
+      w.emit('fx', { name: 'meteorFall', ability: 'meteorhammer', x: o.x, y: o.y, r, delay: land });
       w.thinker({
         x: o.x, y: o.y, r, team: c.team, ability: id, danger: { x: o.x, y: o.y, r, at: w.t + land },
         upd(w2, e) {
           if (e.age < land - 1e-9) return false;
           const hit = enemies(w2, c, u => dist(u, e) <= r + (u.radius || 0));
-          w2.emit('fx', { name: 'meteorImpact', x: e.x, y: e.y, r });
+          w2.emit('fx', { name: 'meteorImpact', ability: 'meteorhammer', x: e.x, y: e.y, r });
           if (!hit.length) w2.emit('miss', { src: c.id, ability: id, x: e.x, y: e.y });
           for (const u of hit) {
             IT.Combat.damage(w2, { src: c.id, target: u, ability: id, type: 'magical', amount: iv(id, 'impact_damage_units') });

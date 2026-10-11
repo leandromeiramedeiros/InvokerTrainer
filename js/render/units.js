@@ -141,8 +141,8 @@
     shadow(cx, sxp, syp, Math.round(rr * (e.kind === 'spirit' ? 1.0 : 1.25) * (1 - zs)), Math.max(1, Math.round(rr * 0.45)), 0.38 - zs * 0.3);
 
     const imm = has(e, 'magicImmune'), ghost = has(e, 'ghost'), frozen = has(e, 'frozen');
-    const root = has(e, 'root') || has(e, 'atosRoot');
-    if (root) vines(R, sxp, syp, rr, true, has(e, 'atosRoot'));
+    const root = has(e, 'root') || has(e, 'atosRoot'), rk = root ? rootKind(e) : 0;
+    if (root) vines(R, sxp, syp, rr, true, rk);
     if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, false);
     const dx = sxp - sp.ax, dy = sy - sp.ay;
     const bl = e.anim && e.anim.name === 'blink' && e.kind === 'dummy';
@@ -181,8 +181,9 @@
       }
     }
     if (has(e, 'hex')) { cx.globalAlpha = 0.22; cx.drawImage(PX.tinted(img, '#5cff6c'), dx, dy); cx.globalAlpha = 1; }
-    if (root) vines(R, sxp, syp, rr, false, has(e, 'atosRoot'));
+    if (root) vines(R, sxp, syp, rr, false, rk);
     if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, true);
+    windGlow(R, e, S, sxp, sy);
     S.sx = sxp; S.sy = sy; S.top = sp.ay;
     if (al) alacSigil(R, S, sxp, sy - (e.kind === 'hero' ? S.top + 14 : e.kind === 'dummy' ? 42 : S.top + 10), al);
   }
@@ -231,9 +232,34 @@
     R.light(x, y, 30, [200, 120, 255], 0.5 * a);
   }
 
-  function vines(R, x, y, r, back, atos) {
+  function rootKind(e) {
+    let k = 0;
+    for (let i = 0; i < e.statuses.length; i++) { const s = e.statuses[i]; if (s.type === 'atosRoot') return 2; if (s.type === 'root' && s.ability === 'gleipnir') k = 1; }
+    return k;
+  }
+  // chained root: two rings of alternating flat/edge-on links (feet, plus a waist band across the front)
+  function chains(R, x, y, r, back, kind) {
+    const cx = R.cx, t = R.time, rx = r + 4, ry = Math.max(2, Math.round(r * 0.55)), n = 16, gold = kind === 1;
+    const lo = gold ? '#8a5a10' : '#15101f', mid = gold ? '#ffd24a' : '#3a3060', hi = gold ? '#fff2b0' : '#a898ff';
+    for (let ring = 0; ring < 2; ring++) {
+      if (ring && back) continue;
+      const yy = y - ring * 9, rr2 = rx - ring * 1.5;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * 6.2832 + t * (ring ? -0.25 : 0.25), s = Math.sin(a);
+        if (ring ? s < 0 : (s < 0) !== back) continue;
+        const px = Math.round(x + Math.cos(a) * rr2), py = Math.round(yy + s * ry);
+        cx.fillStyle = mid;
+        if (i & 1) { cx.fillRect(px - 1, py - 1, 3, 2); cx.fillStyle = lo; cx.fillRect(px, py, 1, 1); cx.fillStyle = hi; cx.fillRect(px - 1, py - 1, 1, 1); }
+        else { cx.fillRect(px, py - 1, 1, 3); cx.fillStyle = lo; cx.fillRect(px + 1, py, 1, 1); cx.fillStyle = hi; cx.fillRect(px, py - 1, 1, 1); }
+        if ((((t * 7) | 0) + i * 5) % 23 === 0) { cx.fillStyle = '#fff'; cx.fillRect(px, py - 1, 1, 1); }
+      }
+    }
+    if (!back) R.glow(x, y - 4, 14, gold ? '#ffc840' : '#6a50d0', 0.25 + 0.1 * Math.sin(t * 5));
+  }
+  function vines(R, x, y, r, back, kind) {
+    if (kind) { chains(R, x, y, r, back, kind); return; }
     const cx = R.cx, rx = r + 4, ry = Math.max(2, Math.round(r * 0.55)), n = 18;
-    const c1 = atos ? '#b9a0ff' : '#3a8a24', c2 = atos ? '#ece0ff' : '#6ccc3c';
+    const c1 = '#3a8a24', c2 = '#6ccc3c';
     for (let i = 0; i < n; i++) {
       const a = i / n * 6.2832 + R.time * 0.3, s = Math.sin(a);
       if ((s < 0) !== back) continue;
@@ -242,6 +268,41 @@
       if (i % 3 === 0) { cx.fillStyle = c2; cx.fillRect(px, py - 1 - (i & 1), 1, 2); }
     }
   }
+
+  // ---- attack wind-up: a fire orb gathers at the hand, sparks converge, pops on release. Cancelled wind-up: just vanishes.
+  const WC = ['#3a1408', '#c8480c', '#ff8a1c', '#ffc040', '#fff2b0'];
+  function windGlow(R, e, S, x, sy) {
+    const wd = e._wind, t = R.time, fx = IT.FX, cx = R.cx;
+    const ox = x + Math.round(Math.cos(e.facing) * 4), oy = sy - 10;
+    if (!wd) {
+      S.wdObj = null; S.wdP = 0;
+      const k = (t - (S.relT || -9)) / 0.14;
+      if (k >= 0 && k < 1) {      // release pop (the projectile spawns this tick)
+        fx.ddisc(R, ox, oy, 1 + 4 * (1 - k), WC[3], 1 - k * 0.6); fx.ddisc(R, ox, oy, 2.5 * (1 - k), WC[4], 1);
+        R.glow(ox, oy, 14, '#ff9a30', 0.7 * (1 - k)); S.wdP = 1 - k;
+      }
+      return;
+    }
+    if (S.wdObj !== wd) {
+      S.wdObj = wd; let tot = wd.t;
+      try { if (e.attack && IT.Hero) tot = IT.Hero.attackPoint(e) || tot; } catch (err) { /* keep wd.t */ }
+      S.wdTot = Math.max(0.05, tot);
+    }
+    const p = IT.U.clamp(1 - (wd.t + (1 - R.alpha) * (R.w.dt || 1 / 30)) / S.wdTot, 0, 1), e2 = p * p * (3 - 2 * p);
+    const r = 0.9 + 2.7 * e2;
+    fx.ddisc(R, ox, oy, r + 0.8, WC[0], 1); fx.ddisc(R, ox, oy, r, WC[1], 1); fx.ddisc(R, ox, oy, r * 0.78, WC[2], 1);
+    if (p > 0.35) fx.ddisc(R, ox, oy, r * 0.5, WC[3], 1);
+    if (p > 0.7) fx.ddisc(R, ox, oy, r * 0.28, WC[4], 1);
+    for (let k = 0; k < 4; k++) {       // sparks spiral into the orb
+      const a = t * 9 + k * 1.5708, d = 3 + (1 - p) * 7;
+      cx.fillStyle = k & 1 ? WC[3] : WC[2];
+      cx.fillRect(Math.round(ox + Math.cos(a) * d), Math.round(oy + Math.sin(a) * d * 0.7), 1, 1);
+    }
+    R.glow(ox, oy, 6 + 9 * p, '#ff9a30', 0.2 + 0.55 * p);
+    S.wdP = p;
+  }
+  // sim 'attack' = launch: arm the release pop
+  function launched(R, p) { const S = state.get(p.src); if (S) S.relT = R.time; }
 
   // HUD pass (after lighting): bars, labels, stun stars
   function hud(R, e) {
@@ -280,6 +341,8 @@
   function lights(R, e) {
     R.interp(e);
     const sx = R.ix / R.P - R.camX, sy = R.iy / R.P - R.camY - R.iz / R.P;
+    const S0 = state.get(e.id);
+    if (S0 && S0.wdP > 0) R.light(sx + Math.cos(e.facing) * 4, sy - 10, 14 + 26 * S0.wdP, [255, 150, 60], 0.15 + 0.55 * S0.wdP);
     if (e.kind === 'hero') {
       const orbs = e.inv.orbs, o = PX.mixOrbs(orbs.join(''));
       const k = orbs.length ? 0.4 : 0, base = [255, 238, 214];
@@ -311,5 +374,5 @@
     const S = st(R, e); S.castStart = R.time; S.castUntil = R.time + 0.22; S.name = '';
   }
 
-  IT.UnitDraw = { draw, hud, lights, isUnit, visible, has, state, cleanup, bar, castFlash };
+  IT.UnitDraw = { draw, hud, lights, isUnit, visible, has, state, cleanup, bar, castFlash, launched };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -96,3 +96,13 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 - Hidden steps respawn the dummy outside vision only when `w.fog`; `w.combo.hint {x,y}` is the last known position (ping).
 - Delays: wait hints are tips only; after Tornado they count from the lift. Dummy respawns 900-1600 away, so bolt combos need the hero to approach.
 - Stats: `StatsCollector.create(w)` -> `{summary(), destroy()}`; `merge(lifetime|null, summary)` returns a new plain blob (caller persists). Spell accuracy = hits / (hits + misses).
+
+## v3 wave 2
+- Right click / middle / Mouse4-5 never reach browser UI (window-capture guards), even in menus.
+- Ready casts fire inside Orders.issue (mid-walk): move spam can't swallow Ghost Walk or facing point spells; a cast within 0.1 s of its cast point survives a new order.
+- Stop cancels the attack wind-up without spending cooldown and blocks auto-acquire 0.2 s; Hold never attacks. Ghost Walk never auto-acquires.
+- Cataclysm = Sun Strike double press (window min(doubleTapTimeout, 0.3 s)); first press is held, then fires as a normal strike.
+- WebGL2 compositor (js/render/gl.js) with 2D fallback; fpsCap (30/60/120/off) paces rendering, sim keeps real time. Idle render 3.6 -> 1.1 ms.
+- Scepter/Shard hood emblem sits between abilities and items (Dota layout); gems glow in the scepter orb / shard spell orb colour.
+- Default Invoker skin recoloured toward the sage/bronze reference (kept per user).
+- Dummy chat lines are original, rate-limited, toggleable.

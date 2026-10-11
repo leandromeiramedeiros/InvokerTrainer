@@ -16,25 +16,68 @@
     u.path.length = 0; u._pg = null;
   }
 
+  const STOP_ACQ_BLOCK = 0.2;   // idle auto-acquire is suppressed this long after Stop so the cancel is visible
+  const DEFER_POINT = 0.1;      // a cast this close to firing is not erased by a new (non-stop/hold) order; it finishes, the order follows
+  const KNOWN = { move: 1, attack: 1, cast: 1, stop: 1, hold: 1 };
+  const num = v => typeof v === 'number' && isFinite(v);
+
+  // Cancels an attack wind-up without consuming the attack cooldown.
+  function cancelWind(u) { if (u._wind) { u._wind = null; if (u.attack) u.attack.next = 0; } }
+
   function dropAll(w, u) {
     S().clearOrders(w, u);
     u._pg = null;
-    if (u._wind) { u._wind = null; if (u.attack) u.attack.next = 0; }
+    cancelWind(u);
     if (u.attack) u.attack.target = null;
   }
 
+  // Never silently rejects: every false return emits `fail` with a reason.
   function issue(w, u, order) {
-    if (!u || u.dead) return false;
+    if (!u) return false;
+    if (u.dead) { if (u.id != null) fail(w, u, 'dead'); return false; }
     const o = Object.assign({}, order); o.queued = !!order.queued;
-    if (!S().canAct(u)) { fail(w, u, 'disabled'); return false; }
-    if (o.type === 'cast' && !o.queued) {
-      const r = A().check(w, u, o.ability, o);
-      if (r) { fail(w, u, r, o.ability); return false; }
+    if (!KNOWN[o.type]) { fail(w, u, 'unknown'); return false; }
+    if (!S().canAct(u)) { fail(w, u, 'disabled', o.ability); return false; }
+    if (o.type === 'move' && !(num(o.x) && num(o.y))) { fail(w, u, 'badOrder'); return false; }
+    if (o.type === 'attack') {
+      if (o.target != null) { if (!w.get(o.target)) { fail(w, u, 'gone'); return false; } }
+      else if (!(num(o.x) && num(o.y))) { fail(w, u, 'badOrder'); return false; }
     }
-    if (!o.queued) dropAll(w, u);
+    if (o.type === 'cast') {
+      const def = A().get(o.ability);
+      if (!def) { fail(w, u, 'unknown', o.ability); return false; }
+      // point spell given a unit target (e.g. Sun Strike on the hero = Cataclysm): aim at that unit
+      if (def.target === 'point' && o.target != null && !(num(o.x) && num(o.y))) {
+        const te = w.get(o.target);
+        if (te) { o.x = te.x; o.y = te.y; }
+      }
+      if (def.target === 'point' && !(num(o.x) && num(o.y))) { fail(w, u, 'badOrder', o.ability); return false; }
+      if (!o.queued) {
+        const r = A().check(w, u, o.ability, o);
+        if (r) { fail(w, u, r, o.ability); return false; }
+      }
+    }
+    const head = u.orders[0] || null;
+    // re-issuing the same move must not reset movement
+    if (!o.queued && o.type === 'move' && u.orders.length === 1 && head.type === 'move' && Math.hypot(head.x - o.x, head.y - o.y) < 1e-6) {
+      w.emit('order', { unit: u.id, order: o });
+      return true;
+    }
+    let deferred = false;
+    if (!o.queued) {
+      const hd = head && head.type === 'cast' && head._ph === 'point' && head._t <= DEFER_POINT + 1e-9 ? A().get(head.ability) : null;
+      if (hd && !hd.channel && o.type !== 'stop' && o.type !== 'hold') { u.orders.length = 1; deferred = true; }
+      else dropAll(w, u);
+      if (o.type === 'stop') u._acqBlock = w.t + STOP_ACQ_BLOCK;
+    } else if (head && head.type === 'hold') {   // any new order ends Hold
+      w.emit('orderDone', { unit: u.id, order: head, ok: true });
+      u.orders.shift();
+    }
     w.emit('order', { unit: u.id, order: o });
     if (o.type === 'stop' && !o.queued) return true;
     u.orders.push(o);
+    // ready casts (no walking / turning needed) fire right now, even mid-walk: later move spam can't erase them
+    if (!o.queued && !deferred && o.type === 'cast' && u.orders[0] === o) step(w, u, o, 0);
     return true;
   }
 
@@ -68,13 +111,13 @@
     return best;
   }
 
-  // attack `t`: sets goal / wantAtk. hold: never walk.
-  function attackStep(w, u, t, hold) {
+  // attack `t`: sets goal / wantAtk.
+  function attackStep(w, u, t) {
     const at = u.attack, o = u.orders[0];
-    if (o) { o._px = t.x; o._py = t.y; }
+    if (o && o.type === 'attack' && o.target != null) { o._px = t.x; o._py = t.y; }   // attack-move keeps its destination as waypoint
     const rng = at.range + u.radius + t.radius, d = dist(u, t);
     if (d > rng + 1e-6) {
-      if (!hold) u._goal = { x: t.x, y: t.y, stop: Math.max(0, rng - 2), unit: t.id };
+      u._goal = { x: t.x, y: t.y, stop: Math.max(0, rng - 2), unit: t.id };
       return;
     }
     at.target = t.id;
@@ -87,16 +130,12 @@
 
   function step(w, u, o, dt) {
     switch (o.type) {
-      case 'stop': finish(w, u, o, true); return 'next';
-      case 'hold': {
-        if (u.attack) {
-          const reach = t => u.attack.range + u.radius + t.radius;
-          let t = u.attack.target != null ? w.get(u.attack.target) : null;
-          if (!t || validTarget(w, u, t) || dist(u, t) > reach(t)) t = acquire(w, u, reach({ radius: 40 }));
-          if (t && dist(u, t) <= reach(t)) attackStep(w, u, t, true);
-        }
+      case 'stop':   // instant interrupt only: cancel wind-up (no cooldown spent), briefly pause idle auto-acquire
+        cancelWind(u); if (u.attack) u.attack.target = null; u._acqBlock = w.t + STOP_ACQ_BLOCK;
+        finish(w, u, o, true); return 'next';
+      case 'hold':   // never attacks (no auto-acquire either) until any new order is issued
+        cancelWind(u); if (u.attack) u.attack.target = null;
         return 'wait';
-      }
       case 'move': {
         if (dist(u, o) <= 1) { finish(w, u, o, true); return 'next'; }
         u._goal = { x: o.x, y: o.y, stop: 0 };
@@ -109,11 +148,19 @@
           if (!t) { finish(w, u, o, true); return 'next'; }
           const r = validTarget(w, u, t);
           if (r) { finish(w, u, o, false, r); return 'next'; }
-          attackStep(w, u, t, false);
+          attackStep(w, u, t);
           return 'wait';
         }
-        const t = acquire(w, u, u.attack.acq || u.attack.range + 200);
-        if (t) { attackStep(w, u, t, false); return 'wait'; }
+        // attack-move: walk to the point; every tick look for an enemy (fogged ones count once visible), stick to it until it is lost
+        if (!num(o.x) || !num(o.y)) { finish(w, u, o, false, 'badOrder'); return 'next'; }
+        if (S().canAttack(u)) {
+          const acq = u.attack.acq || u.attack.range + 200;
+          let t = o._tgt != null ? w.get(o._tgt) : null;
+          if (t && (validTarget(w, u, t) || dist(u, t) > acq + 150)) t = null;
+          if (!t) t = acquire(w, u, acq);
+          o._tgt = t ? t.id : null;
+          if (t) { attackStep(w, u, t); return 'wait'; }
+        }
         if (dist(u, o) <= 1) { finish(w, u, o, true); return 'next'; }
         u._goal = { x: o.x, y: o.y, stop: 0 };
         return 'wait';
@@ -176,11 +223,13 @@
   function idleAcquire(w, u) {
     const at = u.attack;
     if (!at || w.opts.autoAttack === false || u.autoAttack === false || !S().canAttack(u)) return;
+    if (S().has(u, 'ghost')) { at.target = null; return; }          // invisible: never auto-break Ghost Walk
+    if (u._acqBlock != null && w.t < u._acqBlock - 1e-9) { at.target = null; return; }   // just pressed Stop
     let t = at.target != null ? w.get(at.target) : null;
     const acq = at.acq || at.range;
     if (!t || validTarget(w, u, t) || dist(u, t) > acq + 150) t = acquire(w, u, acq);
     if (!t) { at.target = null; return; }
-    attackStep(w, u, t, false);
+    attackStep(w, u, t);
   }
 
   IT.World.system('orders', 10, (w, dt) => {
@@ -282,6 +331,7 @@
         const t = w.get(u._wantAtk); if (!t) continue;
         u._wind = { target: t.id, t: IT.Hero.attackPoint(u) };
         a.next = IT.Hero.attackTime(u);
+        w.emit('attackStart', { src: u.id, target: t.id });
       }
     }
   });

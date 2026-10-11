@@ -26,19 +26,19 @@ const COLLAR_E = (() => {
   const g = new G(13, 15);
   const top = [3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], bot = [10, 11, 12, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14];
   for (let x = 0; x < 13; x++) for (let y = top[x]; y <= bot[x]; y++) {
-    let c = 'm';
+    let c = 'y';
     if (y === top[x]) c = (x === 2 || x === 3) ? 'Y' : 'y';
-    else if (y === top[x] + 1) c = 'N';
+    else if (y === top[x] + 1) c = 'y';
     else if (x === 0) c = (y & 1) ? 'y' : 'G';
-    else if (x === 1) c = 'N';
-    else if (x >= 8) c = 'Q';
-    else if (x >= 5) c = 'M';
+    else if (x === 12 || (y === bot[x] && x >= 5)) c = 'N'; // thin magenta inner lining
+    else if (x >= 8) c = 'G';
+    else if (x >= 4) c = 'G';
     g.set(x, y, c);
   }
   return g.rows();
 })();
 const WING_E = chk('WING_E', [
-  '..yN.', '..yNm', '.yNmM', '.yNmM',
+  '..yN.', '..yNG', '.yNGG', '.yNGG',
 ], 5);
 
 const TORSO_E = chk('TORSO_E', [

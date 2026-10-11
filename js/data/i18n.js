@@ -7,7 +7,7 @@
 
   // ---- generic
   D('app.title', 'INVOKER', 'INVOKER');
-  D('app.sub', 'TRAINER v2', 'TREINADOR v2');
+  D('app.sub', 'TRAINER v3', 'TREINADOR v3');
   D('app.tag', 'Quas, Wex, Exort. Learn the combos in a top-down arena.', 'Quas, Wex, Exort. Aprenda os combos em uma arena vista de cima.');
   D('ui.play', 'Play', 'Jogar');
   D('ui.stats', 'Stats', 'Estatísticas');
@@ -223,7 +223,7 @@
   D('end.prevented', 'Damage prevented', 'Dano evitado');
   D('end.cc', 'Dummy CC uptime', 'Tempo de CC no alvo');
   D('end.blind', 'Blind hits', 'Acertos às cegas');
-  D('end.bolts', 'Stun bolts', 'Stun bolts');
+  D('end.bolts', 'Stun bolts', 'Raios de atordoamento');
   D('end.boltsCountered', 'countered', 'contidos'); D('end.boltsBlocked', 'blocked (BKB)', 'bloqueados (BKB)'); D('end.boltsHit', 'hit you', 'te acertaram');
   D('end.blinks', 'Blinks', 'Blinks'); D('end.blinksPrev', 'prevented', 'impedidos');
   D('end.invoke', 'Invoke', 'Invocar'); D('end.invAvg', 'avg orb-to-invoke', 'média orbes até invocar'); D('end.invBest', 'best', 'melhor');

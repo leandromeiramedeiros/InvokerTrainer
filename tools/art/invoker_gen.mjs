@@ -10,6 +10,14 @@ import { orbs, portrait } from './invoker_icons.mjs';
 import { genSkins } from './invoker_skins_gen.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+// front view: centre panel x11..14, y16..23 -> red gem on top, gold buttons on the sage tabard, dark under-robe at the hem
+function tabard(g) {
+  const panel = (x, y) => x >= 11 && x <= 14 && 'lLDd'.includes(g.get(x, y));
+  const put = (x, y, c) => { if (panel(x, y)) g.set(x, y, c); };
+  put(12, 16, 'e'); put(13, 16, 'r');
+  for (const y of [18, 21]) { put(12, y, 'Y'); put(13, y, 'y'); }
+  for (let y = 22; y <= 23; y++) for (let x = 11; x <= 14; x++) if (panel(x, y)) g.set(x, y, x === 11 || x === 14 ? 'P' : 'q');
+}
 // ---------- poses ----------
 // every pose: { bob, headDy, ... } consumed by each direction's composer (see stamps file)
 const ANIMS = {
@@ -21,6 +29,7 @@ for (const dir of ['s', 'n', 'e']) {
   for (const [anim, n] of Object.entries(ANIMS)) for (let i = 0; i < n; i++) {
     const g = new G();
     comp(g, anim, i);
+    if (dir === 's') tabard(g);
     // global 1px outline for anything left unoutlined
     const out = g.a.map(r => r.slice());
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (g.a[y][x] === '.' && NB.some(([dx, dy]) => g.get(x + dx, y + dy) !== '.')) out[y][x] = 'K';

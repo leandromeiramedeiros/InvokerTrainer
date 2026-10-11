@@ -48,9 +48,11 @@
   CB.update = function () {
     const c = CB.c; if (!c) return;
     const st = c.w.combo, R = CB.refs, t = IT.t, { h, icon } = IT.UI;
-    if (!st) { R.empty.style.display = ''; return; }
+    const scn = !!(c.w.ranked && c.w.ranked.pr);   // scenario modes (ranked/practice/scenario sandbox): never the idle prompt
+    if (!st) { R.empty.style.display = scn ? 'none' : ''; CB.el.style.display = scn ? 'none' : ''; return; }
     const def = st.def;
     R.empty.style.display = def ? 'none' : '';
+    CB.el.style.display = scn && !def ? 'none' : '';
     R.name.style.display = R.tier.style.display = R.steps.style.display = def ? '' : 'none';
     // chips
     if (def) {

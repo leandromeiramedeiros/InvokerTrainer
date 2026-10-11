@@ -45,8 +45,8 @@
         }
       },
       get count() { return lights; },
-      compose(camX, camY, fog, fogOn) {
-        // fold fog into cells
+      // clamp + fold fog into the 120x68 grid (shared by the CPU compose and the GL compositor)
+      fold(camX, camY, fog, fogOn) {
         for (let cy = 0; cy < LH; cy++) for (let cxx = 0; cxx < LW; cxx++) {
           const i = cy * LW + cxx;
           let r = lr[i], g = lg[i], b = lb[i];
@@ -64,6 +64,16 @@
           }
           lr[i] = r; lg[i] = g; lb[i] = b;
         }
+      },
+      // RGBA8 export for the GL compositor: value / 1.25 (grid is clamped to 1.25 by fold)
+      pack(u8) {
+        const k = 255 / 1.25;
+        for (let i = 0, j = 0; i < LW * LH; i++, j += 4) {
+          u8[j] = lr[i] * k; u8[j + 1] = lg[i] * k; u8[j + 2] = lb[i] * k; u8[j + 3] = 255;   // pass a Uint8ClampedArray
+        }
+      },
+      compose(camX, camY, fog, fogOn) {
+        L.fold(camX, camY, fog, fogOn);
         const LV = LEVELS;
         for (let y = 0; y < VH; y++) {
           const g = (y + 0.5) / CELL - 0.5, j = Math.floor(g), j0 = Math.max(0, j) * LW, j1 = Math.min(LH - 1, j + 1) * LW, wy = Math.max(0, g - j), wy1 = 1 - wy;
@@ -91,5 +101,5 @@
     return L;
   }
 
-  IT.Light = { create, AMB };
+  IT.Light = { create, AMB, LW, LH, LEVELS, SCALE: 1.25 };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,7 +1,7 @@
 // WebAudio synth engine: mixer (master/music/sfx/ui buses driven by IT.Settings.audio), voice DSL (T oscillator, N noise), one-shots + loops.
 // Voices live in js/sfx.js / js/ui/uisound.js (SFX.define); music in js/music.js. No assets, no deps.
 const SFX = (() => {
-  let ctx = null, master = null, duck = null, noiseBuf = null, hooked = false, unfocused = false, vol = 0.5, active = 0;
+  let ctx = null, master = null, duck = null, noiseBuf = null, verbIn = null, hooked = false, unfocused = false, vol = 0.5, active = 0, liveLoops = 0;
   const bus = {};
   const G = typeof window !== 'undefined' ? window : globalThis;
   const settings = () => { try { return G.IT && G.IT.Settings && G.IT.Settings.get && G.IT.Settings.get(); } catch (e) { return null; } };
@@ -115,13 +115,27 @@ const SFX = (() => {
 
   const cleanup = (nodes, ms) => setTimeout(() => { for (const n of nodes) { try { if (n.stop) n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} } }, ms);
 
-  // Schedules one sound, then disconnects its nodes after it ends. o: {vol, pan, bus, dur(info for builders), prio}
+  // Shared short room reverb (built lazily on first use, so it costs nothing until a big sound asks for it). Output joins the sfx bus.
+  function getVerb(c) {
+    if (!verbIn) {
+      const len = Math.floor(c.sampleRate * 0.9), ir = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+      verbIn = c.createGain();
+      const cv = c.createConvolver(), out = c.createGain();
+      cv.buffer = ir; out.gain.value = 0.55;
+      verbIn.connect(cv); cv.connect(out); out.connect(bus.sfx);
+    }
+    return verbIn;
+  }
+
+  // Schedules one sound, then disconnects its nodes after it ends.
+  // o: {vol, pan, bus, dur(info for builders), prio(never dropped), low(first to be dropped under load), verb(0..1 reverb send)}
   function run(c, build, o) {
     o = o || {};
-    if (active > 56 && !o.prio) return;
+    if (!o.prio && active > (o.low ? 26 : 56)) return;
     const dest = bus[o.bus || 'sfx'] || bus.sfx;
     const b = { c, t0: c.currentTime + 0.01, out: dest, nodes: [], end: 0, opt: o, pv: 1 + rnd(-0.03, 0.03), gv: 1 + rnd(-0.08, 0.08) };
-    if (o.vol != null || o.pan) {
+    if (o.vol != null || o.pan || o.verb) {
       const vg = c.createGain();
       vg.gain.value = o.vol == null ? 1 : o.vol;
       b.nodes.push(vg);
@@ -132,6 +146,7 @@ const SFX = (() => {
         vg.connect(p); b.nodes.push(p); last = p;
       }
       last.connect(dest);
+      if (o.verb) { const vs = c.createGain(); vs.gain.value = o.verb; last.connect(vs); vs.connect(getVerb(c)); b.nodes.push(vs); }
       b.out = vg;
     }
     build(b);
@@ -163,11 +178,14 @@ const SFX = (() => {
     },
   };
 
-  // Looping layered bed: filtered noise + optional oscillators. Returns {stop(), set(o)}; auto-stops after maxSec.
-  // o: ft f f2 sweep(s) q g atk(s) wob(Hz amp-LFO) rel(s) vol pan bus maxSec osc:[{type f f2 g fm fmd lp}]
+  // Looping layered bed: filtered noise + optional oscillators. Returns {stop(), set({vol,pan}), alive()}; auto-stops after maxSec.
+  // o: ft f f2 sweep(s) q g atk(s) wob(Hz amp-LFO) rel(s) vol pan bus maxSec dyn(allow set() vol/pan) prio osc:[{type f f2 g fm fmd lp}]
+  // At most 14 loops run at once (extra ones are silently refused unless o.prio).
+  const NOOP = { stop() {}, set() {}, alive() { return false; } };
   function loop(o) {
     const c = getCtx();
-    if (!c) return { stop() {}, set() {} };
+    if (!c) return NOOP;
+    if (liveLoops >= 14 && !o.prio) return NOOP;
     resume(c);
     const t = c.currentTime, G0 = o.g || 0.3, nodes = [];
     const src = c.createBufferSource(); src.buffer = getNoise(c); src.loop = true;
@@ -178,7 +196,7 @@ const SFX = (() => {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(G0, t + (o.atk || 0.08));
     nodes.push(src, f, g);
     if (o.wob) { // amplitude wobble for a rolling feel
-      const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = o.wob; lg.gain.value = G0 * 0.5;
+      const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = o.wob; lg.gain.value = G0 * (o.wobd == null ? 0.5 : o.wobd);
       l.connect(lg); lg.connect(g.gain); l.start(); nodes.push(l, lg);
     }
     for (const p of o.osc || []) {
@@ -190,23 +208,34 @@ const SFX = (() => {
       if (p.lp) { const lf = c.createBiquadFilter(); lf.type = 'lowpass'; lf.frequency.value = p.lp; os.connect(lf); s = lf; nodes.push(lf); }
       s.connect(og); og.connect(g); os.start();
     }
-    let out = bus[o.bus || 'sfx'];
-    if (o.vol != null || o.pan) {
-      const vg = c.createGain(); vg.gain.value = o.vol == null ? 1 : o.vol; nodes.push(vg);
+    const out = bus[o.bus || 'sfx'];
+    let vg = null, pn = null;
+    if (o.vol != null || o.pan || o.dyn) {
+      vg = c.createGain(); vg.gain.value = o.vol == null ? 1 : o.vol; nodes.push(vg);
       g.connect(vg);
-      if (o.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = o.pan; vg.connect(p); p.connect(out); nodes.push(p); } else vg.connect(out);
+      if ((o.pan || o.dyn) && c.createStereoPanner) { pn = c.createStereoPanner(); pn.pan.value = o.pan || 0; vg.connect(pn); pn.connect(out); nodes.push(pn); } else vg.connect(out);
     } else g.connect(out);
     src.connect(f); f.connect(g);
     src.start(0, Math.random() * 1.5);
+    liveLoops++;
     let done = false, tm = null;
     const rel = o.rel || 0.15;
     const stop = () => {
       if (done) return; done = true; clearTimeout(tm);
       try { const n = c.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), n); g.gain.exponentialRampToValueAtTime(0.0001, n + rel); } catch (e) {}
       cleanup(nodes, rel * 1000 + 120);
+      setTimeout(() => { liveLoops--; }, rel * 1000 + 120);
+    };
+    const set = p => {
+      if (done || !p) return;
+      const n = c.currentTime;
+      try {
+        if (p.vol != null && vg) vg.gain.setTargetAtTime(Math.max(0, p.vol), n, 0.08);
+        if (p.pan != null && pn) pn.pan.setTargetAtTime(Math.max(-1, Math.min(1, p.pan)), n, 0.08);
+      } catch (e) {}
     };
     if (o.maxSec) tm = setTimeout(stop, o.maxSec * 1000);
-    return { stop };
+    return { stop, set, alive: () => !done };
   }
 
   const API = {
@@ -220,6 +249,7 @@ const SFX = (() => {
     mix, rnd, resume: () => resume(ctx),
     unlock() { const c = getCtx(); resume(c); return !!c; },
     loop,
+    loops() { return liveLoops; },
     playEx(name, o) {
       try {
         if (!this.enabled || !this.has(name)) return;

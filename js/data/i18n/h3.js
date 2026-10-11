@@ -5,6 +5,7 @@
   IT.i18nAdd({
     en: {
       'hud.rkCheck': 'Check your items, levels and surroundings',
+      'hud.rkAtk': 'ATK', 'hud.rkMov': 'MOVE', 'hud.rkPos': 'POS',
       'hud.rkTime': 'TIME LEFT',
       'hud.rkRun': 'RUN LEFT',
       'hud.unit': 'UNIT',
@@ -16,6 +17,7 @@
     },
     pt: {
       'hud.rkCheck': 'Confira seus itens, níveis e arredores',
+      'hud.rkAtk': 'ATK', 'hud.rkMov': 'MOVER', 'hud.rkPos': 'POS',
       'hud.rkTime': 'TEMPO RESTANTE',
       'hud.rkRun': 'RUN RESTANTE',
       'hud.unit': 'UNIDADE',

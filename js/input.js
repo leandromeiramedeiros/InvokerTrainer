@@ -9,6 +9,8 @@
   const EDGE_PX = 3;         // window-edge scroll band (CSS px)
   const PEND_MAX = 1.5;      // s: a pending cast older than this is replaced, not queued behind
   const DEFER_MAX = 2000;    // ms: deferred invoke runs anyway after this
+  const RMB_MS = 125;        // rmbRepeat: re-issue the right click this often while held
+  const CATA_MAX = 300;      // ms: max wait for the 2nd press that turns Sun Strike into Cataclysm
 
   const In = {
     enabled: false, ctx: null, armed: null, selected: null,   // selected: unit id shown in the HUD (null = hero)
@@ -18,7 +20,7 @@
     hooks: {},    // pause, statsHold(bool), cheat, refresh, spawn, resetDummies, debug
     sfx,
     now: () => (G.performance && G.performance.now ? G.performance.now() : Date.now()),
-    _q: [], _tap: {}, _ctap: 0,
+    _q: [], _tap: {}, _ctap: 0, _cat: null, _rmb: null, _done: null,
   };
 
   const S = () => IT.Settings.get();
@@ -97,7 +99,10 @@
     else {
       let t = pickTarget(d, p);
       if (!t && id === 'alacrity') t = hero;
-      if (!t) { fail('noTarget'); return; }
+      if (!t) {   // quick-cast key with nothing under the cursor: keep the press alive as armed targeting (click casts), never lose it
+        if (how === 'click') { fail('noTarget'); return; }
+        In.armed = { id, queued: !!queued }; sfx('click'); return;
+      }
       o.target = t.id;
     }
     if (how !== 'click') In.armed = null;
@@ -108,6 +113,7 @@
   function selfCast(id, queued) {
     const { w, hero } = In.ctx;
     if (id === 'alacrity') { In.armed = null; issueCast({ type: 'cast', ability: id, target: hero.id, queued: !!queued }); return true; }
+    if (id === 'sunstrike' && cataReady()) { In.armed = null; In._cat = null; issueCast(cataOrder(queued)); return true; }
     if (id === 'blink') {
       const m = w.map, ty = m && m.H ? m.H : hero.y;
       const dx = 0 - hero.x, dy = ty - hero.y, d = Math.hypot(dx, dy);
@@ -121,13 +127,48 @@
     return false;
   }
 
+  // ---------------------------------------------------------------- Cataclysm (scepter Sun Strike): double press = self-cast
+  function cataReady() {
+    const { w, hero } = In.ctx, d = IT.Abilities.get('sunstrike');
+    if (!d || !d.dota || !hero.inv || !hero.inv.slots.includes('sunstrike') || !IT.Values.has(d.dota, 'cataclysm_count')) return false;
+    if (!(IT.Values.get(d.dota, 'cataclysm_count', hero.ctx || w.ctx) > 0)) return false;
+    return !IT.Abilities.check(w, hero, 'sunstrike', null);   // cooldown / mana / silence -> not available -> no delay
+  }
+  const cataOrder = queued => { const { hero } = In.ctx; return { type: 'cast', ability: 'sunstrike', target: hero.id, x: hero.x, y: hero.y, queued: !!queued }; };
+  // fire the held first press as a normal Sun Strike at the point captured when it was pressed
+  function resolveCat() {
+    const c = In._cat; if (!c) return;
+    In._cat = null;
+    if (!In.ctx) return;
+    In._tap[c.action] = 0;
+    cast('sunstrike', 'key', c.queued, { p: c.p });
+  }
+  In.resolveCat = resolveCat;
+  // per-tick/per-frame upkeep that must not depend on the render rate: deferred keys, Cataclysm window, RMB auto-repeat
+  function tick() {
+    const c = In.ctx; if (!c || !In.enabled) return;
+    if (c.w.paused) { if (In._cat) resolveCat(); In._rmb = null; return; }
+    flush();
+    if (In._cat && In.now() - In._cat.t >= In._cat.win) resolveCat();
+    const r = In._rmb;
+    if (r) {
+      if (!S().rmbRepeat || !In.win.in) { In._rmb = null; return; }
+      const now = In.now();
+      if (now - r.t >= RMB_MS) {
+        r.t = now - r.t > 2 * RMB_MS ? now : r.t + RMB_MS;
+        if (In.mouse.in && !In.armed && In.rightClick) In.rightClick(false);
+      }
+    }
+  }
+  In.tick = tick;
+
   // ---------------------------------------------------------------- deferred sequence (orbs / invoke / casts keep their order)
   // An invoke that would evict a spell whose cast has not fired yet waits for that cast; later keys wait behind it.
   function evictsPending() {
     const { hero } = In.ctx, inv = hero.inv, sp = IT.Invoke.recipeOf(inv.orbs);
     if (!sp || inv.slots.includes(sp)) return false;
     const victim = inv.slots[1];
-    return !!victim && hero.orders.some(o => o.type === 'cast' && o.ability === victim && o._ph !== 'channel');
+    return !!victim && hero.orders.some(o => o !== In._done && o.type === 'cast' && o.ability === victim && o._ph !== 'channel');
   }
   function flush() {
     const c = In.ctx; if (!c || c.w.paused) return;
@@ -147,6 +188,26 @@
     const { w } = In.ctx;
     if (w.paused) return;
     In.selected = null;     // any player action returns the HUD to the hero
+    // Cataclysm: Sun Strike key with the scepter spell ready -> press 1 holds, press 2 = self-cast, window over = normal strike
+    const sun = !opts.hud && isAbilityAction(action) && abilityId(action) === 'sunstrike';
+    if (In._cat && !(sun && In._cat.id === 'sunstrike')) { if (action === 'stop' || action === 'hold') In._cat = null; else resolveCat(); }
+    if (sun && S().doubleTap && !opts.self) {
+      const normal = S().castMode === 'normal';
+      if (In._cat) {   // quick-cast second press
+        const q = opts.queued || In._cat.queued;
+        In._cat = null; In._tap[action] = 0; In.armed = null;
+        issueCast(cataOrder(q));
+        return;
+      }
+      if (normal && In.armed && In.armed.id === 'sunstrike' && cataReady()) {   // normal cast: armed, second press
+        const q = opts.queued || In.armed.queued;
+        In.armed = null; issueCast(cataOrder(q)); return;
+      }
+      if (!normal && !In._q.length && cataReady()) {
+        In._cat = { id: 'sunstrike', action, p: worldMouse(), queued: !!opts.queued, t: In.now(), win: Math.min(S().doubleTapTimeout, CATA_MAX / 1000) * 1000 };
+        return;
+      }
+    }
     if (isAbilityAction(action) && !opts.hud) {   // double-tap (same key twice within the timeout) = self-cast
       const now = In.now(), s = S(), prev = In._tap[action];
       if (s.doubleTap && prev && now - prev <= s.doubleTapTimeout * 1000) { opts.self = true; In._tap[action] = 0; } else In._tap[action] = now;
@@ -165,11 +226,10 @@
       case 'orbQ': case 'orbW': case 'orbE': IT.Invoke.orb(w, hero, action.slice(3)); return;
       case 'invoke': IT.Invoke.invoke(w, hero); return;
       case 'attack': In.armed = { id: 'attack', attack: true, queued: !!opts.queued }; sfx('click'); return;
-      case 'stop': In.cancel(true); In._q = In._q.filter(j => !isAbilityAction(j.action)); IT.Orders.issue(w, hero, { type: 'stop' }); return;
-      case 'hold': In.cancel(true); IT.Orders.issue(w, hero, { type: 'hold' }); return;
+      case 'stop': case 'hold': In.cancel(true); In._cat = null; In._q = In._q.filter(j => !isAbilityAction(j.action)); IT.Orders.issue(w, hero, { type: action }); return;
       case 'center': {
         const now = In.now(), s = S();
-        if (!s.doubleTap || (In._ctap && now - In._ctap <= s.doubleTapTimeout * 1000)) { cam.centerOn(hero.x, hero.y); cam.follow = true; In._ctap = 0; } else In._ctap = now;
+        if (!s.doubleTap || (In._ctap && now - In._ctap <= s.doubleTapTimeout * 1000)) { glide(cam, hero.x, hero.y); cam.follow = true; In._ctap = 0; } else In._ctap = now;
         return;
       }
       case 'camLock': cam.lock = !cam.lock; return;
@@ -195,6 +255,8 @@
   // Mouse side buttons as bindable keys. Settings key-capture calls this for mousedown events.
   In.mouseKeyName = ev => (ev && ev.button === 3 ? 'Mouse4' : ev && ev.button === 4 ? 'Mouse5' : null);
 
+  const glide = (cam, x, y) => (cam.glideTo || cam.centerOn).call(cam, x, y);
+
   // key name pressed -> action (H falls back to the recipe cheat sheet)
   function press(k, mods) {
     let a = IT.Settings.actionFor(k);
@@ -204,17 +266,18 @@
     return true;
   }
   function release(k) {
-    if (k && IT.Settings.actionFor(k) === 'center' && In.ctx) In.ctx.cam.follow = false;
+    if (k && IT.Settings.actionFor(k) === 'center' && In.ctx) { const c = In.ctx; if (c.cam.follow) glide(c.cam, c.hero.x, c.hero.y); c.cam.follow = false; }   // finish the glide to where the hero is
   }
 
   In.inspecting = () => !!(In.hooks.inspect && In.hooks.inspect());
   In.keyDown = function (ev) {
     if (!In.enabled || !In.ctx) return;
     const tg = ev.target, tag = tg && tg.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (tag === 'TEXTAREA' || tag === 'SELECT' || (tg && tg.isContentEditable) || (tag === 'INPUT' && !/^(checkbox|radio|range|button|submit)$/.test(tg.type || ''))) return;
     const w = In.ctx.w;
     if (ev.key === 'Escape') {
       ev.preventDefault();
+      resolveCat();
       if (ev.repeat) return;
       if (w.paused) { if (In.now() - (In._unlockAt || -1e9) > 250 && In.hooks.pause) In.hooks.pause(); return; }   // (ESC that just left pointer lock already paused)
       if (In.armed) In.cancel();
@@ -256,7 +319,7 @@
   // ---------------------------------------------------------------- binding
   In.bind = function (ctx) {
     In.unbind();
-    In.ctx = ctx; In.enabled = true; In.armed = null; In.keys.clear(); In._q = []; In._tap = {}; In._ctap = 0; In.selected = null;
+    In.ctx = ctx; In.enabled = true; In.armed = null; In.keys.clear(); In._q = []; In._tap = {}; In._ctap = 0; In.selected = null; In._cat = null; In._rmb = null; In._done = null;
     ctx.cam.follow = false;
     const cv = ctx.cv, doc = G.document;
     let mmDrag = false;
@@ -273,6 +336,7 @@
     };
     const synth = (el, type, p, button) => { try { el.dispatchEvent(new G.MouseEvent(type, { bubbles: true, cancelable: true, clientX: p.x, clientY: p.y, button: button || 0, view: G })); } catch (e) { /* ignore */ } };
     const onWinMove = ev => {   // track the cursor over HUD too (for edge scroll and aim)
+      if (In._rmb && ev.isTrusted !== false && ev.buttons !== undefined && !(ev.buttons & 2)) In._rmb = null;   // release happened where we could not see it
       if (In.locked && ev.isTrusted !== false) {
         In.vx = Math.max(0, Math.min(G.innerWidth - 1, In.vx + (ev.movementX || 0)));
         In.vy = Math.max(0, Math.min(G.innerHeight - 1, In.vy + (ev.movementY || 0)));
@@ -293,8 +357,8 @@
       if (mmDrag) miniMove();
     };
     const onLeave = () => { In.mouse.in = false; };
-    const onDocLeave = () => { if (!In.locked) In.win.in = false; };
-    const onUp = () => { mmDrag = false; };
+    const onDocLeave = () => { if (!In.locked) { In.win.in = false; In._rmb = null; } };
+    const onUp = ev => { mmDrag = false; if (!ev || ev.button === 2 || ev.button === undefined) In._rmb = null; };
     const onCtx = ev => ev.preventDefault();
     const onLockChange = () => {
       const was = In.locked;
@@ -332,8 +396,8 @@
         try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ }
       }
       setMouse(ev);
-      const { w, hero } = ctx;
       if (ev.button === 0) {
+        resolveCat();
         if (miniMove()) { mmDrag = true; return; }
         if (In.armed) {
           const a = In.armed;
@@ -346,12 +410,20 @@
         return;
       }
       if (ev.button !== 2) return;
+      resolveCat();
+      rightClick(ev.shiftKey);
+      if (S().rmbRepeat && !ev.shiftKey) In._rmb = { t: In.now() };
+    };
+    // right click at the current cursor (shared by real clicks and the auto-repeat): cancel targeting, else move / attack
+    function rightClick(shift) {
+      const { w, hero } = ctx;
       if (In.armed) { In.cancel(); return; }
       In.selected = null;
       const m = ctx.R.mmHit(In.mouse.x, In.mouse.y);
       const p = m || worldMouse(), t = m ? null : unitAt(p, 1);
-      IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: ev.shiftKey } : { type: 'move', x: p.x, y: p.y, queued: ev.shiftKey });
-    };
+      IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: !!shift } : { type: 'move', x: p.x, y: p.y, queued: !!shift });
+    }
+    In.rightClick = rightClick;
     // after a click-cast: disarm unless shift is held, or the cast did not go through (no target)
     function afterClick(a, shift) {
       if (shift) return;
@@ -376,9 +448,9 @@
       if (In.enabled) ev.preventDefault();
       release(k);
     };
-    const onBlur = () => { In.keys.clear(); mmDrag = false; In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
+    const onBlur = () => { In.keys.clear(); mmDrag = false; In._rmb = null; resolveCat(); In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
     const onKeyD = ev => In.keyDown(ev), onKeyU = ev => In.keyUp(ev);
-    const offOrder = ctx.w.on('orderDone', flush);
+    const offOrder = ctx.w.on('orderDone', p => { In._done = p.order; try { flush(); } finally { In._done = null; } });
 
     cv.addEventListener('mouseleave', onLeave);
     cv.addEventListener('contextmenu', onCtx);
@@ -405,7 +477,7 @@
     if (In._off) In._off();
     unlock();
     if (IT.Cursor) { IT.Cursor.virtual(null); IT.Cursor.set('default'); }
-    In._off = null; In.ctx = null; In.enabled = false; In.armed = null; In.selected = null; In.locked = false; In.keys.clear(); In._q = [];
+    In._off = null; In.ctx = null; In.enabled = false; In.armed = null; In.selected = null; In.locked = false; In.keys.clear(); In._q = []; In._cat = null; In._rmb = null;
   };
 
   // mouse as camera sees it: edge scroll triggers at the WINDOW edge (even over the letterbox / HUD), not the canvas edge
@@ -423,11 +495,11 @@
     const c = In.ctx;
     if (!c || !In.enabled) { cur('default'); if (In.locked) unlock(); return; }
     const w = c.w;
-    if (w.paused) { cur('default'); if (In.locked) unlock(); return; }
-    flush();
+    if (w.paused) { cur('default'); if (In.locked) unlock(); tick(); return; }
+    tick();
     if (In.selected != null && !w.get(In.selected)) In.selected = null;
     let kind = 'default';
-    if (In.armed) kind = In.armed.attack ? 'attack' : 'aim';
+    if (In.armed) kind = In.armed.attack ? 'amove' : 'aim';
     else if (In.mouse.in && unitAt(worldMouse(), 1)) kind = 'attack';
     cur(kind);
   }
@@ -467,6 +539,24 @@
     if (ar > 1) { g.beginPath(); g.ellipse(mx, my, ar, ar * 0.8, 0, 0, Math.PI * 2); g.fill(); g.stroke(); }
     if (d.target === 'point' && rng > 0 && isFinite(rng)) { g.globalAlpha = 0.35; g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(mx, my); g.stroke(); g.globalAlpha = 1; }
   };
+
+  // ---------------------------------------------------------------- never let the browser's own UI in: context menu, autoscroll, back/forward
+  function installGuards() {
+    if (In._guards || !G.addEventListener) return;
+    In._guards = true;
+    const stop = ev => { ev.preventDefault(); };
+    const aux = ev => { if (ev.button === 1 || ev.button === 3 || ev.button === 4) ev.preventDefault(); };
+    G.addEventListener('contextmenu', stop, true);        // everywhere, always (menus too)
+    G.addEventListener('mousedown', aux, true);           // middle-click autoscroll, Mouse4/5
+    G.addEventListener('mouseup', aux, true);
+    G.addEventListener('auxclick', stop, true);
+    G.addEventListener('dragstart', stop, true);
+  }
+  In.installGuards = installGuards;
+  installGuards();
+
+  // deferred keys / Cataclysm window / RMB repeat also run on the sim tick (before orders), so they never wait for a render frame
+  if (IT.World && IT.World.system) IT.World.system('input', 5, w => { if (In.ctx && In.ctx.w === w) tick(); });
 
   IT.Input = In;
 })(typeof window !== 'undefined' ? window : globalThis);

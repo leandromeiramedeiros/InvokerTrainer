@@ -2,14 +2,17 @@
 export const W = 26, H = 28;
 
 export const PAL = {
+  // Default skin = official Invoker: sage armoured robe/cape, gold trim + pauldrons, white-gold spikes, red gem, magenta collar lining, blond hair.
   K: '#1a0f26',
   t: '#f6cfa6', S: '#e2a67c', s: '#b77a5c', z: '#7c4a42', o: '#e0846c',
-  j: '#fff8d0', H: '#f6e096', h: '#cfae5c', i: '#8c6c3c',
-  N: '#f27ad6', m: '#c23ca8', M: '#7e1f7c', Q: '#42103f',
-  Y: '#fff3a0', y: '#f7c94a', G: '#c78e2a', g: '#7e531c',
-  R: '#fffaf0', w: '#f1e6d2', c: '#d2c0a8', T: '#9f8c7c',
-  l: '#cdbcf6', L: '#9a86dc', D: '#6a58b0', d: '#463a82',
-  U: '#a874ec', u: '#7c4ecb', v: '#5530a2', V: '#37206e', X: '#1f1148',
+  j: '#fff4c4', H: '#f2dc96', h: '#c9ab62', i: '#86683a',        // light warm blond hair (distinct from bronze collar)
+  N: '#ee74d0', m: '#bc44a2', M: '#822a80', Q: '#52205a',        // magenta collar lining
+  Y: '#fff2c8', y: '#e8a638', G: '#b5701f', g: '#6e4116',        // gold trim (Y = white-gold spike tips / highlights)
+  R: '#e0f0cc', w: '#bad6a4', c: '#92b480', T: '#6c9262',        // sage tabard / sleeves
+  l: '#e2f2cc', L: '#c0dcaa', D: '#9cc088', d: '#7ca470',        // sage tabard centre panel
+  U: '#a4cc90', u: '#7eaa6c', v: '#689a58', V: '#527c4a', X: '#3c6240', // sage cape
+  P: '#5a4a7c', q: '#3e3260',                                      // dark purple-black under-robe
+  e: '#ff5a50', r: '#b81c34',                                      // chest gem
   E: '#2a1840', I: '#5cd0f4', W: '#ffffff',
   B: '#8a5a34', b: '#c4924e', n: '#4a2c22',
   a: '#eaffff', p: '#f4e8ff',

@@ -8,8 +8,25 @@
 
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX, VW = GM.VIEW_W, VH = GM.VIEW_H;
-    const cx = cv.getContext('2d'), gx = glowCv.getContext('2d');
-    cx.imageSmoothingEnabled = false;
+    const gameCx = cv.getContext('2d'), gx = glowCv.getContext('2d');
+    gameCx.imageSmoothingEnabled = false;
+    // GL path: the lit scene is drawn to an offscreen canvas, the unlit HUD to #game (transparent overlay), GL composites underneath
+    let comp = null, sceneCx = null, useGL = false;
+    try {
+      const litCv = document.getElementById('lit');
+      if (litCv && IT.GL && IT.Light) comp = IT.GL.create(litCv, VW, VH, IT.Light.LW, IT.Light.LH);
+    } catch (e) { comp = null; }
+    if (comp) {
+      const sc = document.createElement('canvas'); sc.width = VW; sc.height = VH;
+      sceneCx = sc.getContext('2d', { alpha: false }); sceneCx.imageSmoothingEnabled = false;
+      comp.scene = sc;
+    }
+    const setGL = on => {
+      if (on === useGL) return;
+      useGL = on; document.body.classList.toggle('gl', on);
+      if (!on) gameCx.clearRect(0, 0, VW, VH);
+    };
+    let cx = gameCx;
     const ter = IT.Terrain.build(w.map);
     const fog = IT.Fog.create(w.map);
     const light = IT.Light.create(VW, VH);
@@ -33,9 +50,9 @@
     for (let y = 0; y < MM_H; y++) { const c = (y + 0.5) * w.map.h / MM_H - 0.5; mmIy0[y] = Math.max(0, Math.min(w.map.h - 1, Math.floor(c))); mmIy1[y] = Math.min(w.map.h - 1, mmIy0[y] + 1); }
 
     const R = {
-      cx, gx, w, P, VW, VH, camX: 0, camY: 0, time: 0, simT: 0, alpha: 1, fog, ter, lightmap: light,
+      cx: gameCx, gx, w, P, VW, VH, camX: 0, camY: 0, time: 0, simT: 0, alpha: 1, fog, ter, lightmap: light,
       ix: 0, iy: 0, iz: 0, shakeAmp: 0, shakeEnd: 0, shakeT: 0,
-      stats: { ms: 0, avg: 0, max: 0, lights: 0, parts: 0, items: 0, sand: 0, frames: 0 },
+      stats: { ms: 0, avg: 0, max: 0, lights: 0, parts: 0, items: 0, sand: 0, frames: 0, tLight: 0, tSand: 0, tFx: 0, tComp: 0, gl: '2d' },
       showDebug: false,
       snapshot() {
         for (const e of w.ents) {
@@ -75,6 +92,7 @@
     IT.FX.init(R);
     IT.Sand.init(R);
     w.on('cast', p => { if (p.kind !== 'item') IT.UnitDraw.castFlash(R, p); });   // spells only; items have no pose
+    w.on('attack', p => IT.UnitDraw.launched(R, p));                                // wind-up release pop
 
     const items = [];
     function push(y, fn, a) { items.push({ y, fn, a }); }
@@ -139,18 +157,27 @@
         sx = Math.round((Math.random() - 0.5) * 2 * a); sy = Math.round((Math.random() - 0.5) * 2 * a);
       }
       R.camX = Math.max(0, Math.min(ter.W - VW, cam.px + sx)); R.camY = Math.max(0, Math.min(ter.H - VH, cam.py + sy));
-      const fogOn = w.fog !== false;
+      const fogOn = w.fog !== false, S = R.stats;
+      // GL needs a live context; a lost/failed one drops back to the 2D multiply path + CSS glow
+      setGL(!!(comp && comp.ok));
+      R.cx = cx = useGL ? sceneCx : gameCx;
       fog.update(w, R.fogSnap ? 1 : dtReal, R.camX, R.camY, VW, VH);
       IT.Particles.update(dtReal);
+      const tf0 = performance.now();
       IT.FX.update(R, dtReal);
+      const tf1 = performance.now();
       IT.Sand.update(R, dtReal);
+      let tSand = performance.now() - tf1, tFx = tf1 - tf0;
       gx.globalCompositeOperation = 'source-over'; gx.clearRect(0, 0, VW, VH); gx.globalCompositeOperation = 'lighter';
       light.begin();
 
       IT.Terrain.draw(R, ter);
+      let tm = performance.now();
       IT.Sand.drawGround(R);
+      tSand += performance.now() - tm; tm = performance.now();
       IT.Particles.draw(R, 0);
       IT.FX.ground(R);
+      tFx += performance.now() - tm;
 
       // y-sorted pass: units, trees, tall fx
       items.length = 0;
@@ -160,7 +187,9 @@
         push(R.iy / P - R.camY, drawUnit, e);
       }
       drawTreesInto(R.camX, R.camY);
+      tm = performance.now();
       IT.FX.sorted(R, push);
+      tFx += performance.now() - tm;
       items.sort((a, b) => a.y - b.y);
       for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); }
       R.stats.items = items.length;
@@ -175,27 +204,57 @@
         if (behind) { cx.globalAlpha = 0.4; IT.UnitDraw.draw(R, h); cx.globalAlpha = 1; }
       }
 
+      tm = performance.now();
       IT.FX.air(R);
+      const ta = performance.now();
       IT.Sand.drawAir(R);
+      const tb = performance.now();
       IT.Particles.draw(R, 1);
+      tFx += ta - tm; tSand += tb - ta;
 
       // lighting
+      const tl0 = performance.now();
       for (const e of w.ents) if (!e.dead && IT.UnitDraw.isUnit(e) && IT.UnitDraw.visible(R, e)) IT.UnitDraw.lights(R, e);
+      tm = performance.now();
       IT.FX.lights(R);
+      const tl1 = performance.now();
       IT.Sand.lights(R);
-      light.compose(R.camX, R.camY, fog, fogOn);
-      cx.globalCompositeOperation = 'multiply';
-      cx.drawImage(light.canvas, 0, 0);
-      cx.globalCompositeOperation = 'source-over';
+      const tl2 = performance.now();
+      tFx += tl1 - tm; tSand += tl2 - tl1;
+      let tLight, tComp;
+      if (useGL) {
+        light.fold(R.camX, R.camY, fog, fogOn);
+        tLight = performance.now() - tl0 - (tl2 - tl1) - (tl1 - tm);
+        const tc = performance.now();
+        const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'));
+        tComp = performance.now() - tc;
+        gameCx.clearRect(0, 0, VW, VH);        // overlay: unlit HUD only
+        if (!ok) {                              // present() failed mid-frame: redo this frame's lighting on the 2D path next frame
+          setGL(false);
+        }
+      } else {
+        light.compose(R.camX, R.camY, fog, fogOn);
+        const tc = performance.now();
+        tLight = tc - tl0 - (tl2 - tl1) - (tl1 - tm);
+        cx.globalCompositeOperation = 'multiply';
+        cx.drawImage(light.canvas, 0, 0);
+        cx.globalCompositeOperation = 'source-over';
+        tComp = performance.now() - tc;
+      }
 
       // HUD layer
+      if (useGL) R.cx = cx = gameCx;
+      const th0 = performance.now();
       for (const e of w.ents) if (!e.dead && IT.UnitDraw.isUnit(e) && IT.UnitDraw.visible(R, e)) IT.UnitDraw.hud(R, e);
       IT.FX.hud(R);
       minimap();
+      tFx += performance.now() - th0;
       IT.UnitDraw.cleanup(w);
       gx.globalAlpha = 1;
 
-      const ms = performance.now() - t0, S = R.stats;
+      const ms = performance.now() - t0;
+      S.tLight = S.tLight * 0.9 + tLight * 0.1; S.tSand = S.tSand * 0.9 + tSand * 0.1; S.tFx = S.tFx * 0.9 + tFx * 0.1; S.tComp = S.tComp * 0.9 + tComp * 0.1;
+      S.gl = useGL ? comp.kind : '2d';
       S.ms = ms; S.avg = S.avg ? S.avg * 0.95 + ms * 0.05 : ms; if (ms > S.max) S.max = ms; S.frames++;
       S.lights = light.count; S.parts = IT.Particles.live; S.sand = IT.Sand.count;
     };

@@ -16,6 +16,12 @@
   const lit = (R, x, y) => { const f = R.fog; return !f || R.w.fog === false || f.levelAt(x, y) > 1.5; };
   const clamp = IT.U.clamp;
 
+  // Meteor Hammer channel circles: { x, y, r, t0, until, fall (render time of meteorFall), dly, end (fade-out start) }
+  const chans = [];
+  const hammerR = () => { try { const v = IT.Values.item(IT.GAME.ITEM_DOTA.meteorhammer, 'impact_radius'); if (v > 0) return v; } catch (err) { /* fall through */ } return 400; };
+  function findChan(x, y) { for (let i = chans.length - 1; i >= 0; i--) if (Math.hypot(chans[i].x - x, chans[i].y - y) < 30 && chans[i].end == null) return chans[i]; return null; }
+  function endChan(x, y) { const c = findChan(x, y); if (c) c.end = R_.time; }
+
   // ring with ordered-dither alpha (a 0..1)
   function dring(R, x, y, r, color, a, dots) {
     if (a <= 0.02 || r < 0.5) return;
@@ -69,8 +75,20 @@
 
   function onFx(p) {
     const name = p.name, x = p.x, y = p.y;
+    if (name === 'meteorChannel') {     // sand.js reads p.r / p.dur too
+      p.r = p.r || hammerR();
+      chans.push({ x, y, r: p.r, t0: R_.time, until: R_.time + (p.dur || 2.5) + 0.2, fall: null, dly: 1, end: null });
+      if (chans.length > 4) chans.shift();
+    }
     if (IT.Sand && IT.Sand.event) IT.Sand.event(p);
     switch (name) {
+      case 'meteorFall': {
+        let c = findChan(x, y);
+        if (!c) { c = { x, y, r: p.r || hammerR(), t0: R_.time - 0.3, until: 0, fall: null, dly: 1, end: null }; chans.push(c); }
+        c.fall = R_.time; c.dly = Math.max(0.1, p.delay || 1.3); c.until = R_.time + c.dly + 0.4;
+        break;
+      }
+      case 'meteorCancel': endChan(x, y); break;
       case 'sunstrikeBeam': break;
       case 'sunstrikeHit': {
         const r = p.r || 175;
@@ -103,7 +121,19 @@
       case 'boltDodged': burst(x, y, 'white', 8, { spread: 10, speed: 30, up: 40 }); break;
       case 'dodge': burst(x, y, 'dirt', 14, { spread: 20, speed: 40, up: 40, rest: 2.5 }); break;
       case 'spiritExpire': burst(x, y, 'fire', 24, { spread: 20, speed: 40, up: 60 }); break;
-      case 'meteorLand': case 'meteorImpact': {
+      case 'meteorImpact': {      // Meteor Hammer: cyan
+        const r = p.r || 400;
+        endChan(x, y);
+        addFx({ k: 'wave', x, y, r0: r * 0.15, r1: r * 1.1, dur: 0.45, color: '#6cf0ff' });
+        addFx({ k: 'wave', x, y, r0: r * 0.08, r1: r * 0.7, dur: 0.3, color: '#ffffff' });
+        addFx({ k: 'flash', x, y, r, dur: 0.35, color: '#20b8e8' });
+        burst(x, y, 'cyan', 70, { spread: r * 0.6, speed: 75, up: 110, life: 0.9, rest: 5 });
+        burst(x, y, 'white', 20, { spread: r * 0.3, speed: 55, up: 90, life: 0.6, rest: 3 });
+        burst(x, y, 'dirt', 26, { spread: r * 0.55, speed: 60, up: 90, rest: 3 });
+        R_.shake(2.2, 0.25);
+        break;
+      }
+      case 'meteorLand': {
         const r = p.r || 175;
         addFx({ k: 'wave', x, y, r0: r * 0.2, r1: r * 1.1, dur: 0.4, color: '#ffb050' });
         addFx({ k: 'flash', x, y, r, dur: 0.3, color: '#ff8a30' });
@@ -121,9 +151,58 @@
       }
       case 'deafeningHit': burst(x, y, 'ice', 12, { spread: 10, speed: 50, up: 60 }); break;
       case 'tornadoLift': case 'tornadoLand': burst(x, y, 'white', 12, { spread: 25, speed: 40, up: 50, rest: 2 }); break;
-      case 'refresh': addFx({ k: 'wave', x, y, r0: 10, r1: 80, dur: 0.5, color: '#fff2a0' }); burst(x, y, 'gold', 30, { spread: 20, up: 100 }); break;
-      case 'atosHit': case 'hexHit': case 'meltingStrike': burst(x, y, name === 'hexHit' ? 'green' : name === 'atosHit' ? 'ice' : 'fire', 20, { spread: 14, speed: 40, up: 60 }); break;
-      case 'bkb': addFx({ k: 'wave', x, y, r0: 10, r1: 90, dur: 0.5, color: '#ffd24a' }); burst(x, y, 'gold', 30, { spread: 20, up: 80 }); break;
+      case 'refresh':        // green swirl
+        addFx({ k: 'swirl', x, y, dur: 0.9, color: '#6aff8a' });
+        addFx({ k: 'wave', x, y, r0: 10, r1: 80, dur: 0.5, color: '#9dffb0' });
+        burst(x, y, 'green', 30, { spread: 20, up: 110 });
+        break;
+      case 'atosLaunch': burst(x, y, 'purple', 8, { spread: 6, speed: 25, up: 40 }); break;
+      case 'atosHit':        // dark chain snaps shut
+        addFx({ k: 'chainring', x, y, dur: 0.7, dark: true, unit: p.unit });
+        addFx({ k: 'wave', x, y, r0: 8, r1: 60, dur: 0.35, color: '#6a5aa8' });
+        burst(x, y, 'purple', 18, { spread: 12, speed: 40, up: 60 });
+        break;
+      case 'hexHit':         // green poof
+        addFx({ k: 'wave', x, y, r0: 6, r1: 70, dur: 0.4, color: '#6aff7a' });
+        addFx({ k: 'flash', x, y, r: 60, dur: 0.25, color: '#5cff6c' });
+        burst(x, y, 'green', 34, { spread: 14, speed: 50, up: 70 });
+        burst(x, y, 'white', 14, { spread: 12, speed: 35, up: 45, rest: 2 });
+        break;
+      case 'meltingStrike': burst(x, y, 'fire', 20, { spread: 14, speed: 40, up: 60 }); break;
+      case 'gleipnirLaunch': {
+        const r = p.r || 300;
+        addFx({ k: 'wave', x, y, r0: r * 0.3, r1: r, dur: 0.4, color: '#ffd24a' });
+        burst(x, y, 'gold', 14, { spread: r * 0.5, speed: 30, up: 50 });
+        break;
+      }
+      case 'gleipnirHit':    // golden chains lash the target
+        addFx({ k: 'chainring', x, y, dur: 0.8, dark: false, unit: p.unit });
+        addFx({ k: 'wave', x, y, r0: 8, r1: 60, dur: 0.35, color: '#ffd24a' });
+        burst(x, y, 'gold', 22, { spread: 10, speed: 45, up: 60 });
+        break;
+      case 'orchidHit':      // soul burn
+        addFx({ k: 'wave', x, y, r0: 6, r1: 50, dur: 0.4, color: '#c070ff' });
+        burst(x, y, 'purple', 26, { spread: 8, speed: 25, up: 90, life: 1 });
+        break;
+      case 'orchidBurst':
+        addFx({ k: 'flash', x, y, r: 90, dur: 0.3, color: '#b050ff' });
+        addFx({ k: 'wave', x, y, r0: 8, r1: 110, dur: 0.45, color: '#e0a0ff' });
+        burst(x, y, 'purple', 60, { spread: 18, speed: 70, up: 110 });
+        R_.shake(1, 0.15);
+        break;
+      case 'shivaBlast': {
+        const r = p.r || 900;
+        addFx({ k: 'flash', x, y, r, dur: 0.35, color: '#bff4ff' });
+        addFx({ k: 'wave', x, y, r0: 10, r1: r, dur: Math.min(1.2, r / (p.speed || 600)), color: '#6cd0ff' });
+        burst(x, y, 'ice', 50, { spread: Math.min(r * 0.25, 140), speed: 70, up: 80 });
+        break;
+      }
+      case 'bkb':
+        addFx({ k: 'wave', x, y, r0: 10, r1: 90, dur: 0.5, color: '#ffd24a' });
+        addFx({ k: 'wave', x, y, r0: 4, r1: 50, dur: 0.3, color: '#fff2a0' });
+        addFx({ k: 'flash', x, y, r: 90, dur: 0.5, color: '#ffd24a' });
+        burst(x, y, 'gold', 40, { spread: 20, up: 90 });
+        break;
       case 'atosDodged': case 'hexBlocked': case 'atosBlocked': burst(x, y, 'white', 8, { spread: 10, speed: 30, up: 40 }); break;
       case 'cataclysm': addFx({ k: 'wave', x, y, r0: 20, r1: 300, dur: 0.6, color: '#ffd070' }); break;
       case 'blinkStart': case 'blinkEnd': break;
@@ -164,10 +243,15 @@
   function onBlink(p) {
     if (IT.Sand && IT.Sand.blink) IT.Sand.blink(p);
     addFx({ k: 'wave', x: p.fromX, y: p.fromY, r0: 90, r1: 10, dur: 0.3, color: '#b070ff' });
-    burst(p.fromX, p.fromY, 'purple', 50, { spread: 30, speed: 40, up: 110, life: 0.7 });
+    addFx({ k: 'wave', x: p.fromX, y: p.fromY, r0: 60, r1: 6, dur: 0.25, color: '#6cb8ff' });
+    addFx({ k: 'flash', x: p.fromX, y: p.fromY, r: 90, dur: 0.25, color: '#7a9aff' });
+    burst(p.fromX, p.fromY, 'purple', 36, { spread: 30, speed: 40, up: 110, life: 0.7 });
+    burst(p.fromX, p.fromY, 'cyan', 18, { spread: 24, speed: 40, up: 100, life: 0.7 });
     addFx({ k: 'wave', x: p.x, y: p.y, r0: 10, r1: 100, dur: 0.35, color: '#e0c0ff' });
-    addFx({ k: 'flash', x: p.x, y: p.y, r: 100, dur: 0.25, color: '#b070ff' });
-    burst(p.x, p.y, 'purple', 50, { spread: 20, speed: 60, up: 90, life: 0.7 });
+    addFx({ k: 'wave', x: p.x, y: p.y, r0: 6, r1: 70, dur: 0.3, color: '#6cb8ff' });
+    addFx({ k: 'flash', x: p.x, y: p.y, r: 100, dur: 0.25, color: '#9a8aff' });
+    burst(p.x, p.y, 'purple', 36, { spread: 20, speed: 60, up: 90, life: 0.7 });
+    burst(p.x, p.y, 'cyan', 18, { spread: 20, speed: 60, up: 90, life: 0.7 });
     tele.delete(p.unit);
   }
 
@@ -182,6 +266,7 @@
   function update(R, dt) {
     const w = R.w, t = R.time;
     fxs = fxs.filter(f => t - f.t0 < f.dur);
+    for (let i = chans.length - 1; i >= 0; i--) { const c = chans[i]; if (t > c.until || (c.end != null && t - c.end > 0.35)) chans.splice(i, 1); }
     for (let i = texts.length - 1; i >= 0; i--) if (t - texts[i].t0 > 1.0) texts.splice(i, 1);
     for (const [id, tl] of tele) if (t - tl.t0 > tl.dur + 0.1) tele.delete(id);
     // trails
@@ -191,12 +276,12 @@
       let rate = 0, ramp = 'white', o = {};
       switch (key) {
         case 'bolt': rate = 50; ramp = 'purple'; o = { speed: 10, up: 20, life: 0.4, rest: 1.2, z: 20 }; break;
-        case 'atos': rate = 40; ramp = 'ice'; o = { speed: 10, up: 25, life: 0.4, rest: 1.2, z: 20 }; break;
+        case 'atos': rate = 26; ramp = 'purple'; o = { speed: 8, up: 18, life: 0.35, rest: 1.2, z: 20 }; break;
+        case 'gleipnir': rate = 34; ramp = 'gold'; o = { speed: 10, up: 22, life: 0.4, rest: 1.2, z: 20 }; break;
         case 'tornado': rate = 30; ramp = 'white'; o = { speed: 50, up: 60, spread: 70, life: 0.6, rest: 1.5 }; break;
         case 'chaosmeteor': if (e.landed) { rate = 90; ramp = 'fire'; o = { speed: 30, up: 80, spread: 60, life: 0.9, rest: 5 }; } break;
         case 'deafeningblast': rate = 40; ramp = 'ice'; o = { speed: 20, up: 40, spread: 90, life: 0.5, rest: 2 }; break;
         case 'emp': rate = 14; ramp = 'purple'; o = { speed: 20, up: 70, spread: (e.r || 100) * 0.6, life: 0.7, rest: 1.5 }; break;
-        case 'meteorhammer': rate = 40; ramp = 'fire'; o = { speed: 20, up: 20, life: 0.5, rest: 2 }; break;
         case 'sunstrike': rate = 10; ramp = 'gold'; o = { speed: 10, up: 60, spread: (e.r || 100) * 0.9, life: 0.8, rest: 1.5 }; break;
         case 'icewall': rate = 5; ramp = 'ice'; o = { speed: 10, up: 20, spread: 80, life: 0.8, rest: 2 }; break;
         default: break;
@@ -224,6 +309,9 @@
       else if (key === 'bolt') { r = 30; inten = 0.8; }
       else if (key === 'attack') { r = 30; inten = 0.75; c[0] = 255; c[1] = 150; c[2] = 55; R.light(sx, sy - 9, r, c, inten); continue; }
       else if (key === 'chaosmeteor') { r = 80; inten = 0.9; }
+      else if (key === 'meteorhammer') { c[0] = 40; c[1] = 190; c[2] = 255; inten = 0.7; }
+      else if (key === 'gleipnir') { r = 34; inten = 0.8; c[0] = 255; c[1] = 200; c[2] = 70; }
+      else if (key === 'atos') { r = 30; inten = 0.55; c[0] = 130; c[1] = 90; c[2] = 230; }
       R.light(sx, sy - 6, r, c, inten);
       R.glow(sx, sy - 6, Math.min(r * 0.4, 18), rgbHex(c), 0.4);
     }
@@ -235,6 +323,12 @@
         R.glow(sx, sy, r * 0.55, f.k === 'pillar' ? '#ffb050' : (f.color || '#fff'), 0.9 * (1 - age));
       } else if (f.k === 'shards') R.light(sx, sy, 50, [120, 220, 255], 0.9 * (1 - age));
       else if (f.k === 'wave') R.light(sx, sy, 50, PX.rgb(f.color), 0.5 * (1 - age));
+      else if (f.k === 'swirl') R.light(sx, sy - 10, 45, [90, 255, 130], 0.7 * (1 - age));
+      else if (f.k === 'chainring') R.light(sx, sy - 8, 30, f.dark ? [120, 90, 220] : [255, 200, 70], 0.7 * (1 - age));
+    }
+    for (const c of chans) {
+      const age = R.time - c.t0, fade = c.end != null ? 1 - clamp((R.time - c.end) / 0.3, 0, 1) : 1;
+      R.light(pxs(R, c.x), pys(R, c.y), Math.min(120, c.r / R.P * 1.25), [40, 190, 255], (0.5 + 0.15 * Math.sin(R.time * 5) + (c.fall != null ? 0.25 : 0)) * fade * clamp(age / 0.25, 0, 1));
     }
   }
 
@@ -255,6 +349,24 @@
         cx.fillStyle = col; cx.fillRect(Math.round(qx) - 1, Math.round(qy), 3, 1); cx.fillRect(Math.round(qx), Math.round(qy) - 1, 1, 3);
         px = qx; py = qy;
       }
+    }
+    // meteor hammer channel circles: translucent wash + double rim + counter-rotating runes
+    for (const c of chans) {
+      const x = pxs(R, c.x), y = pys(R, c.y), r = c.r / R.P;
+      if (x + r < 0 || y + r < 0 || x - r > R.VW || y - r > R.VH) continue;
+      const age = t - c.t0, grow = clamp(age / 0.25, 0, 1), fade = c.end != null ? 1 - clamp((t - c.end) / 0.3, 0, 1) : 1;
+      const fall = c.fall != null, pul = 0.5 + 0.5 * Math.sin(t * (fall ? 12 : 5)), rg = r * (1 - (1 - grow) * (1 - grow));
+      cx.fillStyle = '#1272b8'; cx.globalAlpha = (0.1 + 0.08 * pul + (fall ? 0.08 : 0)) * fade;
+      const ri = Math.ceil(rg), xi = Math.round(x), yi = Math.round(y);
+      for (let dy = -ri; dy <= ri; dy++) { const hw = Math.floor(Math.sqrt(Math.max(0, rg * rg - dy * dy))); cx.fillRect(xi - hw, yi + dy, hw * 2 + 1, 1); }
+      cx.globalAlpha = fade;
+      PX.ring(cx, x, y, rg * 0.66, '#6cf0ff', t * 0.3, 3);
+      PX.ring(cx, x, y, rg * 0.33, '#20b8e8', -t * 0.45, 3);
+      cx.globalAlpha = 1;
+      dring(R, x, y, rg, '#d8fbff', 0.9 * fade);
+      dring(R, x, y, rg - 1, '#20b8e8', (0.55 + 0.35 * pul) * fade);
+      dring(R, x, y, rg - 3, '#1272b8', 0.4 * fade);
+      if (fall) dring(R, x, y, Math.max(1, rg * clamp((t - c.fall) / c.dly, 0, 1)), '#ffffff', 0.7 * fade);
     }
     // thinkers
     for (const e of w.ents) {
@@ -294,7 +406,7 @@
           if (!e.landed) PX.ring(cx, x, y, Math.max(rr, 8), '#ff8a1c', t * 0.2, 3);
           break;
         }
-        case 'bolt': case 'atos': case 'tornado': case 'deafeningblast': case 'icewall': case 'meteorhammer': case 'stunbolt': break;
+        case 'bolt': case 'atos': case 'gleipnir': case 'tornado': case 'deafeningblast': case 'icewall': case 'meteorhammer': case 'stunbolt': break;
         default: {
           if (rr > 2) PX.ring(cx, x, y, rr, e.color && e.color[0] === '#' ? e.color : '#ffd24a', t * 0.1, 3);
         }
@@ -445,16 +557,8 @@
           R.glow(x, by, 12, '#a060ff', 0.6);
           break;
         }
-        case 'atos': {
-          shadow(R, x, y, 3);
-          const by = y - 10 - zp;
-          ddisc(R, x, by, 3, '#3a2a8a', 1); ddisc(R, x, by, 2, '#8a80ff', 1);
-          cx.fillStyle = '#e8e4ff'; cx.fillRect(x - 1, by - 1, 2, 2);
-          const a = t * 12;
-          cx.fillStyle = '#b8b0ff'; cx.fillRect(Math.round(x + Math.cos(a) * 5), Math.round(by + Math.sin(a) * 2), 1, 1);
-          R.glow(x, by, 10, '#8a80ff', 0.5);
-          break;
-        }
+        case 'atos': drawChainProj(R, e, x, y - 10 - zp, y, false); break;
+        case 'gleipnir': drawChainProj(R, e, x, y - 10 - zp, y, true); break;
         case 'emp': {
           const by = y - 4;
           const rem = e.danger ? Math.max(0, e.danger.at - R.simT) : 1;
@@ -472,7 +576,6 @@
         case 'attack': drawFireball(R, e, x, y - 9 - zp, y); break;
         case 'chaosmeteor': drawMeteor(R, e, x, y); break;
         case 'deafeningblast': drawBlast(R, e, x, y); break;
-        case 'meteorhammer': drawHammer(R, e, x, y); break;
         default: break;
       }
     }
@@ -492,6 +595,29 @@
         }
         const rb = f.r / R.P * (0.25 + age * 0.45);
         ddisc(R, x, y, rb, '#ff7a1c', 0.8 * (1 - age)); ddisc(R, x, y, rb * 0.6, '#ffd060', 0.9 * (1 - age)); if (age < 0.25) ddisc(R, x, y, rb * 0.3, '#ffffff', 1);
+      } else if (f.k === 'swirl') {      // Refresher: three green helix strands rising
+        const ramp = PX.RAMPS.green, grow = Math.min(1, age * 3), fadeA = 1 - age * age;
+        for (let s = 0; s < 3; s++) for (let j = 0; j < 16; j++) {
+          const u = j / 16, a = s * TAU / 3 + age * 10 - u * 5, sn = Math.sin(a);
+          const px = Math.round(x + Math.cos(a) * 11 * (1 - u * 0.7) * (1 - age * 0.4)), py = Math.round(y - 2 - u * 34 * (0.3 + 0.7 * grow) + sn * 3);
+          if (PX.bayer(px + R.camX, py + R.camY) > fadeA) continue;
+          cx.fillStyle = ramp[Math.min(5, 1 + ((u * 3) | 0) + (sn > 0 ? 0 : 1))];
+          cx.fillRect(px, py, (j & 1) ? 1 : 2, 1);
+        }
+        R.glow(x, y - 14, 18, '#5cff7a', 0.5 * (1 - age));
+      } else if (f.k === 'chainring') {    // gold (Gleipnir) / dark (Atos) links snap shut around the target
+        const u = f.unit != null ? w.byId.get(f.unit) : null;
+        let cxp = x, cyp = y;
+        if (u && !u.dead) { R.interp(u); cxp = Math.round(pxs(R, R.ix)); cyp = Math.round(pys(R, R.iy)); }
+        const k = Math.min(1, age / 0.35), rad = 18 - 11 * k * k, a1 = age < 0.35 ? 1 : 1 - (age - 0.35) / 0.65;
+        const lo = f.dark ? '#15101f' : '#8a5a10', mid = f.dark ? '#3a3060' : '#ffd24a', hi = f.dark ? '#a898ff' : '#fff2b0';
+        for (let i = 0; i < 12; i++) {
+          const ang = i / 12 * TAU + age * 3, px = Math.round(cxp + Math.cos(ang) * rad), py = Math.round(cyp - 8 + Math.sin(ang) * rad * 0.5);
+          if (a1 < 1 && PX.bayer(px + R.camX, py + R.camY) > a1) continue;
+          cx.fillStyle = mid;
+          if (i & 1) { cx.fillRect(px - 1, py - 1, 3, 2); cx.fillStyle = hi; cx.fillRect(px - 1, py - 1, 1, 1); } else { cx.fillRect(px, py - 1, 1, 3); cx.fillStyle = lo; cx.fillRect(px + 1, py, 1, 1); }
+        }
+        if (age > 0.3 && age < 0.45) ddisc(R, cxp, cyp - 8, 6, f.dark ? '#a898ff' : '#fff2b0', 0.5);
       } else if (f.k === 'shards') {
         const ramp = PX.RAMPS.ice;
         for (let k = 0; k < 9; k++) {
@@ -555,14 +681,30 @@
     }
   }
 
-  function drawHammer(R, e, x, y) {
-    const cx = R.cx, rem = e.danger ? Math.max(0, e.danger.at - R.simT) : 0;
-    const hgt = rem * 120, hy = y - hgt, t = R.time;
-    dring(R, x, y, (e.r || 100) / R.P, '#ff8a1c', 0.5);
-    cx.fillStyle = '#2a2a34'; cx.fillRect(x - 3, hy - 6, 7, 5); cx.fillStyle = '#8a8a9a'; cx.fillRect(x - 3, hy - 6, 7, 2);
-    cx.fillStyle = '#6a3a1c'; cx.fillRect(x, hy - 1, 1, 7);
-    for (let k = 1; k < 5; k++) { cx.fillStyle = k > 2 ? '#a02a08' : '#ff8a1c'; cx.fillRect(x - 1 + ((k + (t * 20 | 0)) & 1), hy - 6 - k * 3, 2, 2); }
-    R.glow(x, hy - 4, 16, '#ff8a2a', 0.6);
+  // Gleipnir (gold) / Atos (dark violet): a chain of links trails back toward the caster behind a hooked head.
+  function drawChainProj(R, e, x, by, gy, gold) {
+    const cx = R.cx, t = R.time, src = R.w.byId.get(e.src);
+    shadow(R, x, gy, 3);
+    const lo = gold ? '#8a5a10' : '#15101f', mid = gold ? '#ffd24a' : '#3a3060', hi = gold ? '#fff2b0' : '#a898ff';
+    let sx = x - 1, sy = by;
+    if (src) { R.interp(src); sx = pxs(R, R.ix); sy = pys(R, R.iy) - 10; }
+    let dx = sx - x, dy = sy - by; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    const n = (Math.min(l, 46) / 2.6) | 0;
+    for (let i = 1; i <= n; i++) {
+      const d = 2 + i * 2.6, sag = Math.sin(i * 0.9 + t * 14) * 0.7 * (i / n);
+      const px = Math.round(x + dx * d - dy * sag), py = Math.round(by + dy * d + dx * sag);
+      if (i > n - 4 && PX.bayer(px + R.camX, py + R.camY) > (n - i + 1) / 5) continue;
+      cx.fillStyle = mid;
+      if (i & 1) { cx.fillRect(px - 1, py - 1, 3, 2); cx.fillStyle = lo; cx.fillRect(px, py, 1, 1); cx.fillStyle = hi; cx.fillRect(px - 1, py - 1, 1, 1); }
+      else { cx.fillRect(px, py - 1, 1, 3); cx.fillStyle = lo; cx.fillRect(px + 1, py, 1, 1); cx.fillStyle = hi; cx.fillRect(px, py - 1, 1, 1); }
+    }
+    if (gold) { ddisc(R, x, by, 3.4, lo, 1); ddisc(R, x, by, 2.6, mid, 1); ddisc(R, x, by, 1.5, hi, 1); }
+    else { ddisc(R, x, by, 3.6, '#6a50d0', 1); ddisc(R, x, by, 2.8, lo, 1); ddisc(R, x, by, 1.6, mid, 1); }
+    cx.fillStyle = '#fff'; cx.fillRect(x, by, 1, 1);
+    const a = t * 12; cx.fillStyle = hi;
+    cx.fillRect(Math.round(x + Math.cos(a) * 5), Math.round(by + Math.sin(a) * 2.5), 1, 1);
+    if (gold) cx.fillRect(Math.round(x - Math.cos(a) * 5), Math.round(by - Math.sin(a) * 2.5), 1, 1);
+    R.glow(x, by, gold ? 14 : 11, gold ? '#ffc840' : '#6a50d0', gold ? 0.65 : 0.5);
   }
 
   // ---------- HUD pass (after lighting) ----------

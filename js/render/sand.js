@@ -12,17 +12,19 @@
   const GW = 1024, GH = 512, GM = GW - 1, HM = GH - 1, N = GW * GH, NM = N - 1, CWn = 32, CHn = 16;
   const mat = new Uint8Array(N), hgt = new Uint8Array(N), tmp = new Uint8Array(N), age = new Uint8Array(N), sd = new Uint8Array(N), stamp = new Uint8Array(N);
   const cnt = new Int32Array(CWn * CHn);
-  const E = 0, MAGMA = 1, STONE = 2, ASH = 3, EMBER = 4, DUSTP = 5, DUSTW = 6, DUSTG = 7, FROST = 8, MELT = 9, DUSTC = 10;
+  const E = 0, MAGMA = 1, STONE = 2, ASH = 3, EMBER = 4, DUSTP = 5, DUSTW = 6, DUSTG = 7, FROST = 8, MELT = 9, DUSTC = 10, GLASS = 11;
   const DX = [1, -1, 0, 0, 1, -1, 1, -1], DY = [0, 0, 1, -1, 1, -1, -1, 1];
   const CAPC = 26000;
 
   // seconds of life -> per-tick age-step probability (60 Hz)
   const life = s => 255 / (s * 60);
   const AGEP = new Float32Array(16);
-  AGEP[STONE] = life(13); AGEP[ASH] = life(9); AGEP[DUSTP] = life(7); AGEP[DUSTW] = life(6); AGEP[DUSTG] = life(7); AGEP[DUSTC] = life(6); AGEP[FROST] = life(5.5); AGEP[MELT] = life(1.6);
+  AGEP[STONE] = life(2.4); AGEP[ASH] = life(2.8); AGEP[GLASS] = life(4.2); AGEP[DUSTP] = life(7); AGEP[DUSTW] = life(6); AGEP[DUSTG] = life(7); AGEP[DUSTC] = life(6); AGEP[FROST] = life(5.5); AGEP[MELT] = life(1.6);
   const FLOWTO = new Uint8Array(16);   // magma may displace these
-  for (const m of [E, MAGMA, ASH, EMBER, DUSTP, DUSTW, DUSTG, DUSTC, FROST, MELT]) FLOWTO[m] = 1;
-  const isDust = m => m === DUSTP || m === DUSTW || m === DUSTG || m === DUSTC;
+  for (const m of [E, MAGMA, ASH, EMBER, DUSTP, DUSTW, DUSTG, DUSTC, FROST, MELT, GLASS]) FLOWTO[m] = 1;
+  const isDust = m => m === DUSTP || m === DUSTW || m === DUSTG || m === DUSTC || m === GLASS;
+  // what a tornado / blast can lift off the ground, and the dust it becomes (magma and live embers stay)
+  const LIFTMAP = new Uint8Array(16); LIFTMAP[STONE] = DUSTW; LIFTMAP[ASH] = DUSTW; LIFTMAP[DUSTP] = DUSTP; LIFTMAP[DUSTW] = DUSTW; LIFTMAP[DUSTG] = DUSTG; LIFTMAP[DUSTC] = DUSTC; LIFTMAP[GLASS] = GLASS; LIFTMAP[FROST] = DUSTC;
 
   let rs = 2463534242;
   function rnd() { rs ^= rs << 13; rs ^= rs >>> 17; rs ^= rs << 5; return (rs >>> 0) / 4294967296; }
@@ -31,7 +33,7 @@
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
   let VW = 480, VH = 270, P = 6, camX = 0, camY = 0, OX = 0, OY = 0, hasCam = false;
-  let tk = 0, sf = 1, agm = 1, tickAcc = 0, total = 0, clock = 0;
+  let tk = 0, sf = 1, agm = 1, tickAcc = 0, total = 0, clock = 0, tkp = 0;
   let R_ = null;
 
   const nb = (i, d) => ((((i >> 10) + DY[d]) & HM) << 10) | (((i & GM) + DX[d]) & GM);
@@ -104,8 +106,8 @@
     switch (m) {
       case MAGMA: {
         let t = tmp[i];
-        if (rnd() < (h > 12 ? 0.09 : h > 5 ? 0.14 : 0.24) * agm) tmp[i] = --t;
-        if (t <= 92) { mat[i] = STONE; tmp[i] = 64; age[i] = 0; return 1; }
+        if (rnd() < (h > 12 ? 0.2 : h > 5 ? 0.32 : 0.55) * agm) { t -= 2; tmp[i] = t; }
+        if (t <= 92) { mat[i] = STONE; tmp[i] = 44; age[i] = 90; return 1; }
         liquid(i, MAGMA, h, (t - 92) * 0.0048, FLOWTO);
         if (t > 130) {   // surface fire, bubbles, embers
           const q = rnd();
@@ -177,7 +179,20 @@
       }
       cnt[c] += k; tot += cnt[c];
     }
-    total = tot; agm = tot > CAPC ? 2.5 : 1;
+    total = tot; agm = (tot > CAPC ? 2.5 : 1) * (tot > 9000 ? 2 : 1);
+  }
+
+  // lift a bit of sand off the ground at world px (x,y): returns the dust material it becomes, or 0
+  function cellAt(wx, wy) {
+    wx |= 0; wy |= 0; const rx = wx - OX, ry = wy - OY;
+    if (rx < 0 || rx >= GW || ry < 0 || ry >= GH) return -1;
+    return ((wy & HM) << 10) | (wx & GM);
+  }
+  function lift(wx, wy) {
+    const i = cellAt(wx, wy); if (i < 0) return 0;
+    const m = LIFTMAP[mat[i]]; if (!m) return 0;
+    const h = hgt[i]; if (h <= 3) kill(i); else hgt[i] = h - 3;
+    return m;
   }
 
   // ---------------------------------------------------------------- flyers
@@ -188,9 +203,17 @@
   const page = new Float32Array(FC), plife = new Float32Array(FC);
   const pk = new Uint8Array(FC), pm = new Uint8Array(FC), pc = new Uint8Array(FC), pg = new Uint8Array(FC);
   let fhead = 0, flive = 0;
-  const K_FIRE = 1, K_SMOKE = 2, K_EMBER = 3, K_SPARK = 4, K_DROP = 5, K_GRAIN = 6, K_SHARD = 7, K_MIST = 8, K_MOTE = 9, K_ARC = 10, K_VORT = 11;
+  const K_FIRE = 1, K_SMOKE = 2, K_EMBER = 3, K_SPARK = 4, K_DROP = 5, K_GRAIN = 6, K_SHARD = 7, K_MIST = 8, K_MOTE = 9, K_ARC = 10, K_VORT = 11, K_ROCK = 12, K_PULL = 13;
   // palette ids (m for sparks/motes/embers)
-  const PAL_FIRE = 0, PAL_PURPLE = 1, PAL_ICE = 2, PAL_GOLD = 3, PAL_WHITE = 4, PAL_GREEN = 5;
+  const PAL_FIRE = 0, PAL_PURPLE = 1, PAL_ICE = 2, PAL_GOLD = 3, PAL_WHITE = 4, PAL_GREEN = 5, PAL_CYAN = 6, PAL_RED = 7;
+  // element-flavoured vividness: Exort orange/red/gold, Wex violet/cyan, Quas icy blue/white
+  function vv(p) {
+    const q = rnd();
+    if (p === PAL_FIRE) return q < 0.2 ? PAL_GOLD : q < 0.36 ? PAL_RED : PAL_FIRE;
+    if (p === PAL_PURPLE) return q < 0.3 ? PAL_CYAN : PAL_PURPLE;
+    if (p === PAL_ICE) return q < 0.3 ? PAL_WHITE : PAL_ICE;
+    return p;
+  }
 
   // x,y in world px (float), z px, v px/s, life s. m: material / palette, g: kind-specific param
   function fly(k, x, y, z, vx, vy, vz, lf, m, g) {
@@ -204,10 +227,12 @@
 
   function flyEnd(i, k) {
     if (k === K_FIRE) { if (rnd() < 0.3) fly(K_SMOKE, px[i], py[i], pz[i], pvx[i] * 0.3, pvy[i] * 0.3, rr(8, 22), rr(0.8, 1.6), 0, 0); }
-    else if (k === K_VORT) {
-      const th = pc[i] / 256 * TAU + pvy[i] * page[i], rho = pvx[i] + 0.3 * pz[i], om = pvy[i];
-      fly(K_GRAIN, px[i], py[i], pz[i], -Math.sin(th) * om * rho * 0.9, Math.cos(th) * om * rho * 0.6, rr(0, 30), 3, pm[i], 3);
+    else if (k === K_VORT) {   // flung out of the spiral: tangent + outward
+      const th = pc[i] / 256 * TAU + pvy[i] * page[i], rho = pvx[i] * (pg[i] ? 0.2 : 1) + 0.3 * pz[i], om = pvy[i], ro = rr(18, 46);
+      fly(K_GRAIN, px[i], py[i], pz[i], -Math.sin(th) * om * rho * 0.9 + Math.cos(th) * ro, Math.cos(th) * om * rho * 0.6 + Math.sin(th) * ro * 0.7, rr(0, 30), 3, pm[i], 3);
     }
+    else if (k === K_PULL) { if (rnd() < 0.5) fly(K_SPARK, px[i], py[i], pz[i], rr(-30, 30), rr(-20, 20), rr(20, 60), rr(0.2, 0.5), vv(PAL_PURPLE), 0); }
+    else if (k === K_ROCK) rockLand(pox[i], poy[i], pm[i], pg[i]);
     fkill(i);
   }
 
@@ -252,6 +277,7 @@
               if (rnd() < 0.08) fly(K_SPARK, px[i], py[i], 0, rr(-30, 30), rr(-20, 20), rr(30, 70), rr(0.3, 0.7), PAL_FIRE, 0);
             } else if (k === K_GRAIN) {
               const m = pm[i];
+              if (pvz[i] < -60 && rnd() < 0.3) fly(K_GRAIN, px[i], py[i], 0.5, pvx[i] * 0.5 + rr(-10, 10), pvy[i] * 0.5 + rr(-8, 8), -pvz[i] * 0.34, 3, m, 2);   // impact scatter
               dep(px[i], py[i], m, pg[i] || 3, m === ASH ? 120 + (pc[i] >> 1) : 0, 0);
             } else dep(px[i], py[i], FROST, 5, 4 + (pc[i] & 3), 0);
             fkill(i);
@@ -267,8 +293,21 @@
           px[i] += pvx[i] * dt; py[i] += pvy[i] * dt; pz[i] += pvz[i] * dt; if (pz[i] < 0) pz[i] = 0;
           break;
         case K_VORT: {
-          const th = pc[i] / 256 * TAU + pvy[i] * a, z = pz[i] + pvz[i] * dt, rho = pvx[i] + 0.3 * z;
+          const th = pc[i] / 256 * TAU + pvy[i] * a, z = pz[i] + pvz[i] * dt, rho = pvx[i] * (pg[i] ? 1 - 0.8 * a / plife[i] : 1) + 0.3 * z;
           pz[i] = z; px[i] = pox[i] + Math.cos(th) * rho; py[i] = poy[i] + Math.sin(th) * rho * 0.7;
+          break;
+        }
+        case K_ROCK: {   // falling fragment: accelerating dive from up-right, cyan flame trail
+          const s = a / plife[i], e = s * s;
+          pz[i] = pvz[i] * (1 - e); px[i] = pox[i] + pvx[i] * (1 - e); py[i] = poy[i] + pvy[i] * (1 - e);
+          for (let n = rate(1000 + (i & 63), 150, dt); n-- > 0;) fly(K_FIRE, px[i] + rr(-1.5, 1.5), py[i], pz[i] + rr(-1, 4), rr(-6, 6) - pvx[i] * 0.3, rr(-3, 3), rr(5, 30), rr(0.25, 0.5), pm[i], 0);
+          if (rnd() < 14 * dt) fly(K_EMBER, px[i], py[i], pz[i], rr(-10, 10), rr(-6, 6), rr(0, 20), rr(0.5, 1.1), pm[i], 0);
+          break;
+        }
+        case K_PULL: {   // drawn inward along a twisting path
+          const s = a / plife[i], e = s * s, an = e * 2.4, c = Math.cos(an), sn = Math.sin(an), dx = (pvx[i] - pox[i]) * (1 - e), dy = (pvy[i] - poy[i]) * (1 - e);
+          px[i] = pox[i] + dx * c - dy * sn * 0.8; py[i] = poy[i] + dx * sn * 0.8 + dy * c;
+          pz[i] = 2 + 12 * Math.sin(s * Math.PI);
           break;
         }
         default: break;   // K_ARC static
@@ -291,10 +330,11 @@
     dustW: shadeSet([[128, 144, 176], [184, 196, 224], [232, 238, 255], [74, 84, 112]]),
     dustG: shadeSet([[216, 154, 28], [255, 210, 74], [255, 242, 160], [138, 90, 18]]),
     dustC: shadeSet([[76, 182, 236], [143, 230, 255], [212, 246, 255], [42, 120, 184]]),
+    glass: shadeSet([[255, 214, 90], [255, 238, 150], [255, 176, 40], [214, 126, 22]]),
     frost: shadeSet([[76, 182, 236], [143, 230, 255], [212, 246, 255], [190, 240, 255]]),
     melt: shadeSet([[42, 120, 184], [76, 182, 236], [143, 230, 255], [28, 80, 140]]),
   };
-  const DUSTSET = { [DUSTP]: SH.dustP, [DUSTW]: SH.dustW, [DUSTG]: SH.dustG, [DUSTC]: SH.dustC };
+  const DUSTSET = { [DUSTP]: SH.dustP, [DUSTW]: SH.dustW, [DUSTG]: SH.dustG, [DUSTC]: SH.dustC, [GLASS]: SH.glass };
   const MAG = new Uint32Array(256), MAGC = [];
   {
     const st = [[90, [58, 10, 4]], [125, [130, 24, 6]], [160, [200, 60, 10]], [195, [240, 96, 16]], [225, [255, 138, 28]], [245, [255, 186, 56]], [255, [255, 226, 120]]];
@@ -306,7 +346,7 @@
     }
   }
   const RAMP = n => PX.RAMPS[n + 'U'];
-  const PALS = [RAMP('fire'), RAMP('purple'), RAMP('ice'), RAMP('gold'), RAMP('white'), RAMP('green')];
+  const PALS = [RAMP('fire'), RAMP('purple'), RAMP('ice'), RAMP('gold'), RAMP('white'), RAMP('green'), RAMP('cyan'), RAMP('red')];
   const SMOKEC = [A(34, 30, 40), A(50, 44, 58), A(70, 62, 80)];
   const MISTC = [[A(184, 196, 224), A(232, 238, 255), A(143, 230, 255)], [A(143, 230, 255), A(212, 246, 255), A(255, 255, 255)]];
   const WHITE = A(255, 255, 255);
@@ -319,7 +359,18 @@
   const LWn = 120, LHn = 68;
   const er = new Float32Array(LWn * LHn), eg = new Float32Array(LWn * LHn), eb = new Float32Array(LWn * LHn);
   let gLayer = null, aLayer = null, glowCv = null, glowC = null, glowImg = null, glowU = null, emAny = false;
-  const mk = (w, h) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d'), img = c.createImageData(w, h); return { cv, c, img, u: new Uint32Array(img.data.buffer) }; };
+  // layer = offscreen canvas + ImageData. uLo/uHi: rows of the pixel buffer that may be non-zero; cLo/cHi: rows of the canvas that may be non-zero.
+  // Only the dirty rows are cleared / uploaded / blitted each frame.
+  const mk = (w, h) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d'), img = c.createImageData(w, h); return { cv, c, img, u: new Uint32Array(img.data.buffer), uLo: h, uHi: -1, cLo: h, cHi: -1 }; };
+  function layerReset(L) { L.u.fill(0); L.c.clearRect(0, 0, L.cv.width, L.cv.height); L.uLo = L.cLo = L.cv.height; L.uHi = L.cHi = -1; }
+  function layerClear(L) { if (L.uHi >= L.uLo) L.u.fill(0, L.uLo * VW, (L.uHi + 1) * VW); }
+  function layerBlit(L, R, lo, hi) {
+    if (lo < 0) lo = 0; if (hi > VH - 1) hi = VH - 1;
+    const a = Math.min(lo, L.cLo), b = Math.max(hi, L.cHi);
+    L.c.putImageData(L.img, 0, 0, 0, a, VW, b - a + 1);
+    L.cLo = lo; L.cHi = hi; L.uLo = lo; L.uHi = hi;
+    R.cx.drawImage(L.cv, 0, lo, VW, hi - lo + 1, 0, lo, VW, hi - lo + 1);
+  }
   function glowAdd(sx, sy, col, w) {
     const k = (sy >> 2) * LWn + (sx >> 2), f = w / 255;
     er[k] += (col & 255) * f; eg[k] += ((col >> 8) & 255) * f; eb[k] += ((col >> 16) & 255) * f; emAny = true;
@@ -329,8 +380,8 @@
   let gHad = false;
   function drawGround(R) {
     if (!total && !gHad) return;
-    const u = gLayer.u; u.fill(0);
-    let any = false;
+    const u = gLayer.u; layerClear(gLayer);
+    let any = false, lo = VH, hi = -1;
     for (let cy = 0; cy < CHn; cy++) for (let cx = 0; cx < CWn; cx++) {
       const c = cy * CWn + cx;
       if (!cnt[c]) continue;
@@ -374,7 +425,7 @@
             case EMBER: {
               const t = tmp[i];
               if (((s + (tk >> 2)) & 7) === 0) continue;
-              const pal = PALS[age[i] < 6 ? age[i] : 0], idx = t > 200 ? 0 : t > 130 ? 1 : t > 80 ? 2 : t > 40 ? 3 : 4;
+              const pal = PALS[age[i] < 8 ? age[i] : 0], idx = t > 200 ? 0 : t > 130 ? 1 : t > 80 ? 2 : t > 40 ? 3 : 4;
               col = pal[idx];
               glowAdd(sx, sy, col, t / 255 * 0.5);
               break;
@@ -388,7 +439,8 @@
             case MELT: col = SH.melt[(s & 3) * 9 + sl]; break;
             default: {
               col = DUSTSET[m][(s & 3) * 9 + sl];
-              if ((((s * 11) + (tk >> 3)) & 31) === 0) { col = WHITE; glowAdd(sx, sy, col, 0.35); }
+              if ((((s * 11) + (tk >> 3)) & (m === GLASS ? 7 : 31)) === 0) { col = WHITE; glowAdd(sx, sy, col, 0.4); }
+              else if ((s & 3) === 0) glowAdd(sx, sy, col, m === GLASS ? 0.3 : 0.07);
             }
           }
           if (m !== MAGMA && m !== EMBER) {
@@ -396,20 +448,20 @@
             if (a > 170 && B4[((wy & 3) << 2) | (wx & 3)] < (a - 170) / 85) continue;
           }
           u[sy * VW + sx] = col; any = true;
+          if (sy < lo) lo = sy; if (sy > hi) hi = sy;
         }
       }
     }
     gHad = any;
-    if (!any) return;
-    gLayer.c.putImageData(gLayer.img, 0, 0);
-    R.cx.drawImage(gLayer.cv, 0, 0);
+    if (!any) { gLayer.uLo = VH; gLayer.uHi = -1; return; }
+    layerBlit(gLayer, R, lo, hi);
   }
 
   let aHad = false;
   function drawAir(R) {
     if (!flive && !aHad) return;
-    const u = aLayer.u; u.fill(0);
-    let any = false;
+    const u = aLayer.u; layerClear(aLayer);
+    let any = false, lo = VH, hi = -1;
     for (let i = 0; i < FC; i++) {
       const k = pk[i]; if (!k) continue;
       const a = page[i]; if (a < 0) continue;
@@ -419,7 +471,7 @@
       let col = 0, w = 0;
       switch (k) {
         case K_FIRE: {
-          const pal = PALS[PAL_FIRE], idx = Math.min(5, (t * 5.4 + (c & 1) * 0.6 + (rnd() < 0.12 ? 1 : 0)) | 0);
+          const pal = PALS[pm[i]], idx = Math.min(5, (t * 5.4 + (c & 1) * 0.6 + (rnd() < 0.12 ? 1 : 0)) | 0);
           col = pal[idx]; w = (1 - t) * 0.5;
           u[o] = col;
           if ((c & 3) === 0 && t < 0.5 && x + 1 < VW) u[o + 1] = col;
@@ -448,7 +500,17 @@
           if (pg[i] > 11 && x + 1 < VW) u[o + 1] = col;
           break;
         }
-        case K_GRAIN: col = pm[i] === ASH ? SH.ash[(c & 3) * 9 + 6] : DUSTSET[pm[i]][(c & 3) * 9 + 4]; if (pm[i] === ASH) w = 0.12, col = PALS[PAL_FIRE][2 + (c & 1)]; break;
+        case K_GRAIN: col = pm[i] === ASH ? SH.ash[(c & 3) * 9 + 6] : DUSTSET[pm[i]][(c & 3) * 9 + 4]; if (pm[i] === ASH) w = 0.12, col = PALS[PAL_FIRE][2 + (c & 1)]; else if (pm[i] === GLASS) w = 0.2; break;
+        case K_ROCK: {
+          const sz = pg[i], cy = PALS[pm[i]];
+          col = SH.stone[(c & 3) * 9 + 5]; w = 0.8; u[o] = col;
+          if (x + 1 < VW) u[o + 1] = SH.stone[(c & 3) * 9 + 7];
+          if (sz > 1 && yy + 1 < VH) { u[o + VW] = cy[3]; if (x + 1 < VW) u[o + VW + 1] = SH.stone[(c & 3) * 9 + 3]; }
+          if (yy > 0) u[o - VW] = cy[2];
+          if (x > 0) u[o - 1] = cy[1];
+          break;
+        }
+        case K_PULL: col = DUSTSET[pm[i]][(c & 3) * 9 + 5]; w = 0.1; if (t > 0.7) col = WHITE; break;
         case K_SHARD: col = PALS[PAL_ICE][c & 1]; w = 0.35; u[o] = col; if (yy + 1 < VH) u[o + VW] = PALS[PAL_ICE][2]; break;
         case K_MIST: {
           if (B4[(((yy + camY) & 3) << 2) | ((x + camX) & 3)] > Math.sin(t * Math.PI) * 0.5) continue;
@@ -478,16 +540,16 @@
         default: break;
       }
       u[o] = col; any = true;
+      if (yy < lo) lo = yy; if (yy > hi) hi = yy;
       if (w > 0.01) glowAdd(x, yy, col, w);
     }
     aHad = any;
-    if (!any) return;
-    aLayer.c.putImageData(aLayer.img, 0, 0);
-    R.cx.drawImage(aLayer.cv, 0, 0);
+    if (!any) { aLayer.uLo = VH; aLayer.uHi = -1; return; }
+    layerBlit(aLayer, R, lo - 8, hi + 8);
   }
 
   // feed emissive accumulation into lightmap + bloom canvas. Fog-gated for the bloom (light.compose handles fog for the lightmap).
-  const LK = 0.085, GK = 0.1;
+  const LK = 0.105, GK = 0.12;
   function lights(R) {
     if (!emAny) return;
     const lb = R.lightmap.buf, fog = R.fog, fogOn = R.w.fog !== false;
@@ -542,22 +604,23 @@
   // ---------------------------------------------------------------- spawning helpers (world units in, px out)
   const wp = v => v / P;
   function lit(x, y) { const f = R_.fog; return !f || R_.w.fog === false || f.levelAt(x, y) > 1.4; }
-  function disc(x, y, r) { const a = rnd() * TAU, d = r * Math.sqrt(rnd()); return [x + Math.cos(a) * d, y + Math.sin(a) * d * 0.85]; }
+  const DSC = [0, 0];   // scratch result: copy before the next disc() call
+  function disc(x, y, r) { const a = rnd() * TAU, d = r * Math.sqrt(rnd()); DSC[0] = x + Math.cos(a) * d; DSC[1] = y + Math.sin(a) * d * 0.85; return DSC; }
 
   function flames(x, y, n, rad, up, lf, jet) {
     for (let k = 0; k < n; k++) { const p = disc(x, y, rad); fly(K_FIRE, p[0], p[1], rr(0, 4), rr(-6, 6), rr(-3, 3), rr(up * 0.5, up), rr(lf * 0.6, lf), 0, jet ? 1 : 0); }
   }
   function embers(x, y, n, rad, spd, up, pal, z) {
-    for (let k = 0; k < n; k++) { const p = disc(x, y, rad), a = rnd() * TAU, s = rr(0.2, 1) * spd; fly(K_EMBER, p[0], p[1], z || 0, Math.cos(a) * s, Math.sin(a) * s * 0.7, rr(up * 0.4, up), rr(1.2, 3), pal || 0, 0); }
+    for (let k = 0; k < n; k++) { const p = disc(x, y, rad), a = rnd() * TAU, s = rr(0.2, 1) * spd; fly(K_EMBER, p[0], p[1], z || 0, Math.cos(a) * s, Math.sin(a) * s * 0.7, rr(up * 0.4, up), rr(1.2, 3), vv(pal || 0), 0); }
   }
   function sparks(x, y, n, spd, up, pal, z) {
-    for (let k = 0; k < n; k++) { const a = rnd() * TAU, s = rr(0.2, 1) * spd; fly(K_SPARK, x, y, z || 0, Math.cos(a) * s, Math.sin(a) * s * 0.7, rr(up * 0.4, up), rr(0.4, 1), pal, 0); }
+    for (let k = 0; k < n; k++) { const a = rnd() * TAU, s = rr(0.2, 1) * spd; fly(K_SPARK, x, y, z || 0, Math.cos(a) * s, Math.sin(a) * s * 0.7, rr(up * 0.4, up), rr(0.4, 1), vv(pal), 0); }
   }
   function smoke(x, y, n, rad, up) {
     for (let k = 0; k < n; k++) { const p = disc(x, y, rad); fly(K_SMOKE, p[0], p[1], rr(0, 8), rr(-8, 8), rr(-4, 4), rr(up * 0.5, up), rr(1, 2.2), 0, 0); }
   }
   function motes(x, y, n, rad, up, pal, z, lf) {
-    for (let k = 0; k < n; k++) { const p = disc(x, y, rad); fly(K_MOTE, p[0], p[1], (z || 0) + rr(0, 10), rr(-10, 10), rr(-6, 6), rr(up * 0.4, up), rr(0.6, 1) * (lf || 1.2), pal, 0); }
+    for (let k = 0; k < n; k++) { const p = disc(x, y, rad); fly(K_MOTE, p[0], p[1], (z || 0) + rr(0, 10), rr(-10, 10), rr(-6, 6), rr(up * 0.4, up), rr(0.6, 1) * (lf || 1.2), vv(pal), 0); }
   }
   function mist(x, y, n, rad, kind, z, up) {
     for (let k = 0; k < n; k++) { const p = disc(x, y, rad); fly(K_MIST, p[0], p[1], rr(0, 4) + (z || 0), rr(-8, 8), rr(-5, 5), rr(up == null ? 4 : up * 0.3, up == null ? 14 : up), rr(1.2, 2.6), kind || 0, 0); }
@@ -611,11 +674,37 @@
     const i = fly(K_ARC, x, y, 0, 0, 0, 0, 0.3, pal, 1); page[i] = -delay;
   }
 
+  // ---- Meteor Hammer: cyan-flamed rock fragments + channel circle emitters
+  function rockLand(x, y, pal, sz) {
+    sparks(x, y, 16, 100, 130, pal, 1); sparks(x, y, 5, 70, 90, PAL_WHITE, 1);
+    motes(x, y, 6, 4, 40, pal, 0, 0.9);
+    grains(x, y, 14, 3, 70, DUSTC, 2, 2, 50);
+    for (let k = 0; k < 7; k++) fly(K_FIRE, x + rr(-3, 3), y + rr(-2, 2), rr(0, 3), rr(-8, 8), rr(-5, 5), rr(30, 90), rr(0.25, 0.55), pal, 0);
+    for (let k = 0; k < 3; k++) dep(x + rr(-3, 3), y + rr(-2, 2), EMBER, 1, 70 + ri(60), pal);
+    if (sz > 1) smoke(x, y, 3, 3, 30);
+  }
+  function rocks(x, y, r, delay) {
+    const n = 8 + ri(3);
+    for (let k = 0; k < n; k++) {
+      const a = rnd() * TAU, d = r * 0.92 * Math.sqrt(rnd()), tx = x + Math.cos(a) * d, ty = y + Math.sin(a) * d * 0.85;
+      const T = Math.min(rr(0.42, 0.62), delay * 0.85), land = delay * rr(0.6, 1), i = fly(K_ROCK, tx, ty, 0, rr(26, 52), rr(-12, -3), 150, T, PAL_CYAN, 1 + ri(2));
+      pox[i] = tx; poy[i] = ty; page[i] = -Math.max(0, land - T);
+    }
+  }
+  const chans = [];   // active hammer channels { wx, wy, x, y, r, until }
+
   // ---------------------------------------------------------------- events from fx.js
   const timers = [];   // { t, fn }
   const later = (d, fn) => timers.push({ t: clock + d, fn });
   const walls = [];
 
+  function extendChan(p, d) { let hit = false; for (const c of chans) if (Math.hypot(c.wx - p.x, c.wy - p.y) < 30) { c.until = clock + d; hit = true; } if (!hit) chans.push({ wx: p.x, wy: p.y, x: wp(p.x), y: wp(p.y), r: wp(p.r || 400), until: clock + d }); }
+  function swirl(x, y, pal, rad, h, steps, dur) {
+    for (let k = 0; k < steps; k++) later(k * dur / steps, () => {
+      for (let s = 0; s < 3; s++) { const a = k * 0.55 + s * 2.094, d = rad * (1 - 0.5 * k / steps); fly(K_MOTE, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.6, k * h / steps, -Math.sin(a) * 16, Math.cos(a) * 10, rr(25, 50), rr(0.5, 0.9), vv(pal), 0); }
+    });
+  }
+  function dropChan(p) { for (let k = chans.length - 1; k >= 0; k--) if (Math.hypot(chans[k].wx - p.x, chans[k].wy - p.y) < 30) chans.splice(k, 1); }
   function event(p) {
     if (!R_ || p.x == null || !lit(p.x, p.y)) return;
     const x = wp(p.x), y = wp(p.y);
@@ -626,6 +715,10 @@
         embers(x, y, 170, r * 0.5, 55, 190, PAL_FIRE, 0);
         sparks(x, y, 60, 90, 170, PAL_FIRE, 2);
         smoke(x, y, 50, r * 0.6, 60);
+        // gold glass cinders (rest on the ground, glint), then scorched ash
+        for (let k = 0; k < 70; k++) { const q = disc(x, y, r * 0.95); dep(q[0], q[1], GLASS, 2 + ri(3), 0, 0); }
+        grains(x, y, 46, r * 0.5, 120, GLASS, 3, 4, 60);
+        sparks(x, y, 36, 110, 160, PAL_GOLD, 2);
         // scorched pile with glowing embers: rim pushed outward
         for (let dy = -r - 3; dy <= r + 3; dy++) for (let dx = -r - 3; dx <= r + 3; dx++) {
           const d = Math.hypot(dx, dy) / r;
@@ -639,7 +732,20 @@
         later(0.28, () => { flames(x, y, 70, r * 0.4, 160, 0.8, true); embers(x, y, 50, r * 0.6, 30, 120, PAL_GOLD); });
         break;
       }
-      case 'meteorLand': case 'meteorImpact': {
+      case 'meteorFall': if (p.ability === 'meteorhammer') rocks(x, y, wp(p.r || 400), p.delay || 1.2); extendChan(p, (p.delay || 1.2) + 0.1); break;
+      case 'meteorCancel': dropChan(p); motes(x, y, 24, wp(p.r || 400) * 0.5, 30, PAL_CYAN, 0, 0.8); break;
+      case 'meteorChannel': chans.push({ wx: p.x, wy: p.y, x, y, r: wp(p.r || 400), until: clock + (p.dur || 2.5) + 0.2 }); if (chans.length > 4) chans.shift(); break;
+      case 'meteorImpact': {   // hammer: cyan burst
+        const r = wp(p.r || 400); dropChan(p);
+        sparks(x, y, 90, 130, 170, PAL_CYAN, 2); sparks(x, y, 30, 90, 130, PAL_WHITE, 2);
+        motes(x, y, 40, r * 0.7, 80, PAL_CYAN, 0, 1.2);
+        grains(x, y, 120, r * 0.7, 90, DUSTC, 3, 3, 70);
+        for (let k = 0; k < 40; k++) { const q = disc(x, y, r * 0.7); fly(K_FIRE, q[0], q[1], rr(0, 4), rr(-6, 6), rr(-4, 4), rr(40, 120), rr(0.3, 0.7), PAL_CYAN, 0); }
+        for (let k = 0; k < 14; k++) { const q = disc(x, y, r * 0.8); dep(q[0], q[1], EMBER, 1, 90 + ri(100), PAL_CYAN); }
+        smoke(x, y, 16, r * 0.5, 40);
+        break;
+      }
+      case 'meteorLand': {
         const r = wp(p.r || 175);
         lavaBurst(x, y, Math.round(r * 11), r * 0.95, 12);
         flames(x, y, 110, r * 0.6, 180, 0.9, true);
@@ -661,9 +767,14 @@
           bolt(x, y, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, rr(0, 0.05), 0.2, PAL_PURPLE, 0);
         }
         for (let k = 0; k < 12; k++) {
-          const p2 = disc(x, y, r * 0.8);
-          strike(p2[0], p2[1], rr(0.02, 0.45), k & 1 ? PAL_WHITE : PAL_PURPLE, 150);
-          later(0.05, () => { sparks(p2[0], p2[1], 8, 90, 90, PAL_PURPLE); if (rnd() < 0.5) dep(p2[0], p2[1], EMBER, 1, 150, 1); });
+          const q2 = disc(x, y, r * 0.8), p2x = q2[0], p2y = q2[1];
+          strike(p2x, p2y, rr(0.02, 0.45), k & 1 ? PAL_WHITE : PAL_PURPLE, 150);
+          later(0.05, () => { sparks(p2x, p2y, 8, 90, 90, PAL_PURPLE); if (rnd() < 0.5) dep(p2x, p2y, EMBER, 1, 150, 1); });
+        }
+        for (let i = 0; i < FC; i++) if (pk[i] === K_PULL) {   // whatever was being drawn in pops outward
+          const a = rnd() * TAU, s = rr(40, 140);
+          pk[i] = K_GRAIN; page[i] = 0; plife[i] = 3; pg[i] = 3; pz[i] = rr(2, 8);
+          pvx[i] = Math.cos(a) * s; pvy[i] = Math.sin(a) * s * 0.7; pvz[i] = rr(40, 120);
         }
         sparks(x, y, 130, r * 1.2, 120, PAL_PURPLE, 3);
         sparks(x, y, 50, r * 0.9, 100, PAL_WHITE, 3);
@@ -717,14 +828,26 @@
         break;
       }
       case 'respawn': motes(x, y, 50, 8, 80, PAL_PURPLE, 0, 1.4); sparks(x, y, 14, 60, 90, PAL_PURPLE, 4); break;
-      case 'refresh': motes(x, y, 50, 10, 100, PAL_GOLD, 0, 1.4); sparks(x, y, 16, 70, 110, PAL_GOLD, 4); break;
+      case 'refresh': swirl(x, y, PAL_GREEN, 12, 40, 14, 0.7); motes(x, y, 30, 8, 110, PAL_GREEN, 0, 1.3); sparks(x, y, 14, 60, 100, PAL_GREEN, 4); break;
       case 'bkb': motes(x, y, 40, 12, 70, PAL_GOLD, 0, 1.3); sparks(x, y, 14, 70, 90, PAL_GOLD, 6); break;
       case 'boltHit': sparks(x, y, 28, 90, 110, PAL_PURPLE, 4); for (let k = 0; k < 4; k++) { const a = rnd() * TAU; bolt(x, y - 4, x + Math.cos(a) * 14, y - 4 + Math.sin(a) * 9, 0, 0.08, PAL_PURPLE, 1); } break;
       case 'boltBlocked': sparks(x, y, 22, 80, 90, PAL_GOLD, 4); break;
       case 'boltDodged': sparks(x, y, 6, 40, 50, PAL_WHITE, 4); break;
       case 'dodge': grains(x, y, 12, 3, 40, DUSTW, 2, 0, 30); break;
-      case 'atosHit': sparks(x, y, 14, 60, 80, PAL_ICE, 6); motes(x, y, 10, 6, 30, PAL_PURPLE, 4); break;
-      case 'hexHit': motes(x, y, 24, 8, 50, PAL_GREEN, 4, 1.2); break;
+      case 'atosHit': sparks(x, y, 18, 60, 80, PAL_PURPLE, 6); motes(x, y, 16, 6, 40, PAL_PURPLE, 4); grains(x, y, 14, 4, 50, DUSTP, 3, 3, 30); break;
+      case 'hexHit': motes(x, y, 40, 10, 70, PAL_GREEN, 2, 1); sparks(x, y, 18, 70, 80, PAL_GREEN, 6); smoke(x, y, 10, 6, 40); break;
+      case 'gleipnirLaunch': {
+        const r = wp(p.r || 300);
+        for (let k = 0; k < 36; k++) { const a = k / 36 * TAU; fly(K_SPARK, x + Math.cos(a) * r, y + Math.sin(a) * r, 0, 0, 0, rr(30, 70), rr(0.3, 0.7), PAL_GOLD, 0); }
+        motes(x, y, 14, r * 0.5, 40, PAL_GOLD, 0, 1);
+        break;
+      }
+      case 'gleipnirHit': sparks(x, y, 26, 80, 100, PAL_GOLD, 6); motes(x, y, 16, 6, 60, PAL_GOLD, 0, 1); grains(x, y, 20, 5, 60, DUSTG, 3, 4, 40); break;
+      case 'orchidHit': motes(x, y, 26, 6, 90, PAL_PURPLE, 0, 1.3); sparks(x, y, 14, 50, 90, PAL_PURPLE, 6); break;
+      case 'orchidBurst':
+        sparks(x, y, 44, 110, 130, PAL_PURPLE, 6); motes(x, y, 40, 10, 100, PAL_PURPLE, 0, 1.2); grains(x, y, 24, 6, 70, DUSTP, 3, 4, 50);
+        for (let k = 0; k < 5; k++) { const a = rnd() * TAU; bolt(x, y - 6, x + Math.cos(a) * 18, y - 6 + Math.sin(a) * 11, 0, 0.1, PAL_PURPLE, 1); }
+        break;
       case 'meltingStrike': lavaBurst(x, y, 10, 6, 6); sparks(x, y, 10, 60, 90, PAL_FIRE, 4); break;
       case 'forgeSpirit': {
         const n = p.count || 1;
@@ -735,7 +858,12 @@
       case 'spiritExpire': lavaBurst(x, y, 24, 7, 8); flames(x, y, 26, 4, 90, 0.7); smoke(x, y, 12, 4, 30); break;
       case 'ghostWalk': mist(x, y, 70, wp(p.r || 300) * 0.35, 0, 0, 14); motes(x, y, 20, 10, 40, PAL_WHITE, 4); break;
       case 'ghostBreak': mist(x, y, 50, 10, 0, 6, 22); motes(x, y, 20, 8, 50, PAL_WHITE, 6); break;
-      case 'shivaBlast': mist(x, y, 40, 6, 1, 0, 18); grains(x, y, 60, 6, 60, DUSTC, 3, 8, 30); break;
+      case 'shivaBlast': {
+        mist(x, y, 40, 6, 1, 0, 18); grains(x, y, 60, 6, 60, DUSTC, 3, 8, 30);
+        const r = wp(p.r || 900), T = Math.min(1.2, (p.r || 900) / (p.speed || 600));   // expanding frost ring tracks the sim wave
+        for (let k = 1; k <= 8; k++) later(T * k / 8, () => { const rad = r * k / 8, n = Math.min(40, 8 + (rad | 0)); for (let j = 0; j < n; j++) { const a = j / n * TAU + rnd() * 0.2; fly(K_SPARK, x + Math.cos(a) * rad, y + Math.sin(a) * rad, 0, 0, 0, rr(20, 55), rr(0.3, 0.6), PAL_ICE, 0); } });
+        break;
+      }
       default: break;
     }
   }
@@ -745,6 +873,7 @@
       if (!lit(q[0], q[1])) continue;
       const x = wp(q[0]), y = wp(q[1]);
       motes(x, y, 40, 8, 90, PAL_PURPLE, 0, 1.2); sparks(x, y, 20, 90, 110, PAL_PURPLE, 6);
+      motes(x, y, 20, 8, 90, PAL_CYAN, 0, 1.2); sparks(x, y, 12, 90, 110, PAL_CYAN, 6);
       for (let k = 0; k < 3; k++) { const a = rnd() * TAU; bolt(x, y - 8, x + Math.cos(a) * 16, y - 8 + Math.sin(a) * 10, 0, 0.1, PAL_PURPLE, 1); }
     }
   }
@@ -785,11 +914,8 @@
             for (let n = rate(id + 1, 25, dt); n-- > 0;) fly(K_FIRE, x, y, 9 + rr(-1, 1), rr(-5, 5), rr(-3, 3), rr(0, 15), rr(0.12, 0.3), 0, 0);
             break;
           case 'meteorhammer': {
-            const rem = e.danger ? Math.max(0, e.danger.at - R.simT) : 0, hh = rem * 120;
-            if (hh > 1) {
-              for (let n = rate(id, 110, dt); n-- > 0;) fly(K_FIRE, x + rr(-3, 3), y, hh + rr(0, 8), rr(-6, 6), 0, rr(5, 40), rr(0.3, 0.6), 0, 0);
-              for (let n = rate(id + 1, 20, dt); n-- > 0;) fly(K_EMBER, x, y, hh, rr(-10, 10), rr(-5, 5), rr(0, 20), rr(1, 2), 0, 0);
-            }
+            const rem = e.danger ? Math.max(0, e.danger.at - R.simT) : 0, r = wp(e.r || 400);
+            if (rem > 0) for (let n = rate(id, 30, dt); n-- > 0;) { const q = disc(x, y, r); fly(K_MOTE, q[0], q[1], rr(0, 4), 0, 0, rr(10, 40), rr(0.5, 1), PAL_CYAN, 0); }
             break;
           }
           case 'sunstrike': {
@@ -809,6 +935,12 @@
               fly(K_MOTE, x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, rr(0, 6), -Math.cos(a) * d / T, -Math.sin(a) * d * 0.8 / T, rr(0, 12), T, PAL_PURPLE, 0);
             }
             for (let n = rate(id + 2, 12, dt); n-- > 0;) sparks(x, y, 1, 60, 110, PAL_PURPLE, 4);
+            for (let n = rate(id + 3, 50 + 150 * f, dt); n-- > 0;) {   // sand + mana dust converge on the centre; empBlast pops them back out
+              const a = rnd() * TAU, d = r * rr(0.2, 0.95), sx = x + Math.cos(a) * d, sy = y + Math.sin(a) * d * 0.8;
+              let m = lift(sx, sy); if (!m) { if (rnd() > 0.3) continue; m = DUSTP; }
+              const i = fly(K_PULL, sx, sy, 0, sx, sy, 0, rr(0.55, 0.95), m, 0);
+              pox[i] = x; poy[i] = y - 3;
+            }
             break;
           }
           case 'tornado': {
@@ -817,7 +949,14 @@
               const i = fly(K_VORT, 0, 0, rr(0, 4), rr(2, r), rr(-9, -4) * (rnd() < 0.15 ? -1 : 1), rr(34, 56), rr(0.5, 0.85), rnd() < 0.7 ? DUSTW : DUSTP, 0);
               pox[i] = x; poy[i] = y; px[i] = x; py[i] = y;
             }
-            for (let n = rate(id + 1, 20, dt); n-- > 0;) { const p = disc(x, y, r * 1.5); fly(K_GRAIN, p[0], p[1], 0, rr(-10, 10), rr(-8, 8), rr(10, 40), 3, DUSTW, 2); }
+            for (let n = rate(id + 1, 40, dt); n-- > 0;) { const p = disc(x, y, r * 3.2); fly(K_GRAIN, p[0], p[1], 0, rr(-10, 10), rr(-8, 8), rr(10, 40), 3, DUSTW, 2); }
+            // suction: ground sand around the funnel is drawn in, spirals up and is flung out
+            for (let n = rate(id + 3, 150, dt); n-- > 0;) {
+              const a = rnd() * TAU, d = rr(r * 1.2, r * 4.2), m = lift(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7);
+              if (!m) continue;
+              const i = fly(K_VORT, x, y, rr(0, 3), d, rr(-9, -5), rr(34, 56), rr(0.6, 1), m, 1);
+              pox[i] = x; poy[i] = y; pc[i] = ((a / TAU * 256) | 0) & 255;
+            }
             break;
           }
           case 'icewall': {
@@ -838,6 +977,10 @@
                 const a = a0 + rr(-half, half), rad = Math.max(2, front - rr(0, 7)), gx = x + Math.cos(a) * rad, gy = y + Math.sin(a) * rad * 0.9;
                 const m = [DUSTG, DUSTP, DUSTC][ri(3)];
                 fly(K_GRAIN, gx, gy, rr(2, 8), Math.cos(a) * 25 + rr(-14, 14), Math.sin(a) * 18 + rr(-10, 10), rr(15, 80), 3, m, 3);
+              }
+              for (let n = rate(id + 3, 300, dt); n-- > 0;) {   // the cone shoves existing sand along with it
+                const a = a0 + rr(-half, half), rad = Math.max(2, front - rr(0, 16)), gx = x + Math.cos(a) * rad, gy = y + Math.sin(a) * rad * 0.9, m = lift(gx, gy);
+                if (m) fly(K_GRAIN, gx, gy, rr(1, 4), Math.cos(a) * rr(45, 100), Math.sin(a) * rr(30, 75), rr(25, 75), 3, m, 3);
               }
               for (let n = rate(id + 1, 110, dt); n-- > 0;) {
                 const a = a0 + rr(-half, half), rad = Math.max(2, front - rr(0, 5));
@@ -877,9 +1020,10 @@
         }
         if (!e.statuses.length || (e.team === 1 && !lit(e.x, e.y))) continue;
         let s;
-        if (S_(e, 'burn')) {
-          for (let n = rate(id + 3, 28, dt); n-- > 0;) fly(K_FIRE, x + rr(-4, 4), y + rr(-1, 1), rr(2, 22), rr(-3, 3), 0, rr(15, 45), rr(0.3, 0.6), 0, 0);
-          for (let n = rate(id + 4, 7, dt); n-- > 0;) fly(K_EMBER, x + rr(-4, 4), y, rr(8, 26), rr(-14, 14), rr(-8, 8), rr(10, 40), rr(0.8, 1.6), PAL_FIRE, 0);
+        if ((s = S_(e, 'burn'))) {
+          const bp = s.ability === 'meteorhammer' ? PAL_CYAN : PAL_FIRE, br = bp === PAL_CYAN ? 14 : 28;
+          for (let n = rate(id + 3, br, dt); n-- > 0;) fly(K_FIRE, x + rr(-4, 4), y + rr(-1, 1), rr(2, 22), rr(-3, 3), 0, rr(15, 45), rr(0.3, 0.6), bp, 0);
+          for (let n = rate(id + 4, 7, dt); n-- > 0;) fly(K_EMBER, x + rr(-4, 4), y, rr(8, 26), rr(-14, 14), rr(-8, 8), rr(10, 40), rr(0.8, 1.6), bp, 0);
         }
         if ((s = S_(e, 'alacrity'))) {
           for (let n = rate(id + 5, 16, dt); n-- > 0;) {
@@ -889,6 +1033,12 @@
         }
         if (S_(e, 'slow') || S_(e, 'frozen')) for (let n = rate(id + 6, 7, dt); n-- > 0;) fly(K_MOTE, x + rr(-5, 5), y, rr(2, 24), rr(-4, 4), 0, rr(-6, 10), rr(0.5, 1), PAL_ICE, 0);
         if (S_(e, 'ghost')) for (let n = rate(id + 7, 20, dt); n-- > 0;) fly(K_MIST, x + rr(-6, 6), y + rr(-2, 2), rr(0, 22), rr(-5, 5), 0, rr(2, 10), rr(1, 2), 0, 0);
+        if ((s = S_(e, 'silence')) && s.ability === 'orchid') {    // soul burn: violet flames + wisps
+          for (let n = rate(500000 + id, 16, dt); n-- > 0;) fly(K_FIRE, x + rr(-4, 4), y + rr(-1, 1), rr(4, 24), rr(-3, 3), 0, rr(20, 50), rr(0.4, 0.8), PAL_PURPLE, 0);
+          for (let n = rate(500001 + id, 6, dt); n-- > 0;) fly(K_MOTE, x + rr(-5, 5), y, rr(8, 26), rr(-8, 8), rr(-5, 5), rr(15, 45), rr(0.8, 1.4), PAL_PURPLE, 0);
+        }
+        if ((s = S_(e, 'root')) && s.ability === 'gleipnir') for (let n = rate(500002 + id, 10, dt); n-- > 0;) { const a = rnd() * TAU; fly(K_SPARK, x + Math.cos(a) * 8, y + Math.sin(a) * 4, rr(0, 18), 0, 0, rr(10, 30), rr(0.3, 0.6), PAL_GOLD, 0); }
+        if (S_(e, 'atosRoot')) for (let n = rate(500003 + id, 8, dt); n-- > 0;) { const a = rnd() * TAU; fly(K_MOTE, x + Math.cos(a) * 8, y + Math.sin(a) * 4, rr(0, 14), 0, 0, rr(6, 20), rr(0.5, 0.9), PAL_PURPLE, 0); }
         if (S_(e, 'magicImmune')) for (let n = rate(id + 6, 8, dt); n-- > 0;) { const a = rnd() * TAU; fly(K_MOTE, x + Math.cos(a) * 9, y + Math.sin(a) * 5, rr(0, 24), 0, 0, rr(6, 30), rr(0.5, 1), PAL_GOLD, 0); }
       }
     }
@@ -901,10 +1051,20 @@
     dt = Math.min(0.05, dt); clock += dt;
     for (let i = timers.length - 1; i >= 0; i--) if (clock >= timers[i].t) { const f = timers[i].fn; timers.splice(i, 1); f(); }
     thinkers(R, dt);
+    for (let k = chans.length - 1; k >= 0; k--) {
+      const c = chans[k];
+      if (clock > c.until) { chans.splice(k, 1); continue; }
+      if (!lit(c.wx, c.wy)) continue;
+      const id = 90000 + k * 8;
+      for (let n = rate(id, 70, dt); n-- > 0;) { const a = rnd() * TAU; fly(K_MOTE, c.x + Math.cos(a) * c.r, c.y + Math.sin(a) * c.r, rr(0, 3), 0, 0, rr(14, 46), rr(0.5, 1), PAL_CYAN, 0); }
+      for (let n = rate(id + 1, 14, dt); n-- > 0;) { const a = rnd() * TAU; fly(K_SPARK, c.x + Math.cos(a) * c.r, c.y + Math.sin(a) * c.r, 0, 0, 0, rr(30, 70), rr(0.3, 0.7), PAL_CYAN, 0); }
+      for (let n = rate(id + 2, 18, dt); n-- > 0;) { const q = disc(c.x, c.y, c.r * 0.8); fly(K_MOTE, q[0], q[1], rr(0, 3), 0, 0, rr(6, 26), rr(0.5, 1.1), PAL_CYAN, 0); }
+    }
     flyUpdate(dt);
     tickAcc += dt;
     let n = 0;
-    while (tickAcc >= 1 / 60 && n < 3) { tick(); tickAcc -= 1 / 60; n++; }
+    const heavy = total > 9000;   // thin the CA out under heavy load (ageing is doubled in tick() to compensate)
+    while (tickAcc >= 1 / 60 && n < 3) { if (!heavy || (tkp++ & 1) === 0) tick(); tickAcc -= 1 / 60; n++; }
     if (tickAcc > 0.05) tickAcc = 0;
   }
 
@@ -914,7 +1074,7 @@
       gLayer = mk(VW, VH); aLayer = mk(VW, VH);
       const g = mk(LWn, LHn); glowCv = g.cv; glowC = g.c; glowImg = g.img; glowU = g.u;
     }
-    clearAll(); stamp.fill(0); fhead = 0; flive = 0; pk.fill(0); timers.length = 0; accm.clear(); walls.length = 0; hasCam = false; total = 0; gHad = aHad = false;
+    layerReset(gLayer); layerReset(aLayer); chans.length = 0; clearAll(); stamp.fill(0); fhead = 0; flive = 0; pk.fill(0); timers.length = 0; accm.clear(); walls.length = 0; hasCam = false; total = 0; gHad = aHad = false;
   }
 
   IT.Sand = {

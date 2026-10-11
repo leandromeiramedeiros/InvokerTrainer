@@ -20,6 +20,10 @@
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
       pointerLock: false,          // confine the mouse to the game while playing
       heroSkin: 'default',         // 'default'|'kid'|'dark' -> IT.Art.heroSheet()
+      rmbRepeat: false,            // hold right mouse = repeated move/attack clicks (~8/s)
+      comboOrder: false,           // scenario panel shows the full ordered action list (spells + items + moves)
+      dummyChat: true,             // dummies taunt on fumbles / slow play
+      fpsCap: 60,                  // 0 = display rate; otherwise render cap (paced to a divisor of the display rate)
       audio: { master: 0.8, music: 0.5, sfx: 0.8, ui: 0.6, musicOn: true, muteUnfocused: true },
       keys: {
         common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'Space', camLock: 'L', cheat: 'F1', refresh: 'Backspace', spawn: 'P', resetDummies: 'O' },
@@ -47,6 +51,7 @@
     if (base.heroSkin !== 'kid' && base.heroSkin !== 'dark') base.heroSkin = 'default';
     base.camSpeed = Math.max(0.5, Math.min(2, Number(base.camSpeed) || 1));
     base.doubleTapTimeout = Math.max(0.2, Math.min(1, Number(base.doubleTapTimeout) || 0.6));
+    if (base.fpsCap !== 0 && base.fpsCap !== 30 && base.fpsCap !== 60 && base.fpsCap !== 120) base.fpsCap = 60;
     return base;
   }
 
@@ -216,6 +221,8 @@
       ]],
       iface: ['set.nav.iface', () => [
         grid(kRow('common', 'cheat')),
+        sh(t('set.h.options')),
+        list(chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat'))),
         sh(t('set.h.sandbox')),
         grid(kRow('common', 'refresh'), kRow('common', 'spawn'), kRow('common', 'resetDummies')),
         sh(t('set.h.fixed')),
@@ -225,7 +232,8 @@
         sh(t('set.h.unitOrders')),
         list(
           row(t('set.autoAttack'), rg('autoAttack', draft.autoAttack ? 'always' : 'never', [['never', t('set.never')], ['always', t('set.always')]], v => { draft.autoAttack = v === 'always'; })),
-          chk(draft, 'doubleTap', t('set.doubleTap'))),
+          chk(draft, 'doubleTap', t('set.doubleTap')),
+          chk(draft, 'rmbRepeat', t('set.rmbRepeat'))),
         sh(t('set.h.options')),
         list(chk(draft, 'hints', t('set.hints'))),
       ]],
@@ -247,7 +255,8 @@
           sh(t('set.h.display')),
           list(chk(draft, 'bloom', t('set.bloom'), () => G.document.body.classList.toggle('nobloom', !draft.bloom)),
             row(t('set.fullscreen'), fs),
-            chk(draft, 'pointerLock', t('set.pointerLock'))),
+            chk(draft, 'pointerLock', t('set.pointerLock')),
+            row(t('set.fpsCap'), rg('fpsCap', draft.fpsCap, [[30, '30'], [60, '60'], [120, '120'], [0, t('set.fpsDisplay')]], v => { draft.fpsCap = v; }))),
           sh(t('set.heroSkin')),
           h('div', { class: 'skin-pick' }, ['default', 'kid', 'dark'].map(k => {
             const cv = IT.Art.canvas(IT.Art.HERO_SKINS[k], 'portrait');
