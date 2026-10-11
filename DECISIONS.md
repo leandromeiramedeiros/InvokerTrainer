@@ -32,3 +32,26 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 
 ### Loadout validation extension
 `scepter: true` requires `scepterOrb` ('quas'|'wex'|'exort'); `scepter` may also be the orb name.
+
+## Map / nav / vision
+- Map: 180x100 tiles of 48 units, generated deterministically in `js/data/map.js` (seeded mulberry32, value noise forest, central elliptical clearing ~2300x1600 units with groves and lone trees for cover, 8 lanes + 5 side corridors carved with dirt centre lines, sinuous river north (y~17) with fords where lanes cross, rock border and outcrops). `IT.MAPDEF.rows` are ASCII (`.` grass `T` tree `#` rock `~` water `,` dirt). 10 dummy spawns snapped to 5x5-clear open ground.
+- Nav: A* 8-dir, no corner cutting, +0.4 cost on tiles next to blockers, string-pull with `lineWalkable(radius)`. `slide` uses circle-vs-tile collision with 0.5-tile substeps (safe for knockback).
+- Vision: shadowcasting per source at VISION_HZ; team-1 `visible` = tile lit or within 150 units of a source; ghost = invisible to team-1 `canSee`. `los` is a DDA grid traversal excluding endpoint tiles.
+
+## Combat / dummy (js/sim/combat.js, js/sim/units.js)
+
+- Spirit stats: armor = `spirit_armor` (not +2 base armor), damage min=max=`spirit_damage`, HP/range/duration from the `invoker_forge_spirit` values via the owner's ctx; MS/BAT/point/proj speed from `npc_dota_invoker_forged_spirit`. Melting Strike armor shred and spirit count are the spell worker's job.
+- Dummies never die: refill hp+mana when hp < 25% (`refill` event). Hero at hp <= 0 refills (`heroDown`).
+- Lifted units take no damage unless `flags.allowLifted`; magical vs `magicImmune` = 0 unless `flags.pierce`. `manaBurn` is also blocked by BKB.
+- Knockback/drag share the `knockback` status moved by system order 25 through `IT.Nav.slide(map, e, nx, ny)`; stunned-like for AI (cancels bolt, no behavior).
+- Dodging only for `evasive` dummies: reaction measured from the danger thinker's `age`; gives up if the exit point can't be reached before `danger.at`. Danger thinkers: `{danger:{x,y,r,at}}`.
+- Bolt: 2 s retry delay after a cancel, cooldown starts on launch. Dodged only by `lift`. BKB check happens on projectile arrival.
+- Blink: one per combo; pending until the dummy can blink (not stun/frozen/lift/root/atosRoot/hex). Silence does not block. Landing: cover spot in [minRange, range], prefer no LOS to hero, then farthest from hero, ties by array index; else straight away from hero. Dummy's `ai.home` moves to the landing spot.
+- Evasive without `map.cover` falls back to wander. Respawn: 60 random samples at 900-1600 from the hero; outsideVision uses `Vision.visibleAt` (needs `w.vis`) else hero vision + LOS.
+- Note: `w.emit` overwrites `payload.type`, so `status`/`statusEnd`/`damage` events whose payload has a `type` field lose it (status type, damage type). Not fixed here (world.js is not mine).
+
+## Hero stats / orders (sim)
+- Attributes: base + gain x (level-1) + orb bonus. KV orb keys `strength_bonus`/`agility_bonus`/`intelligence_bonus` (value 1) are applied PER EFFECTIVE ORB LEVEL (quas->STR, wex->AGI, exort->INT); assumption.
+- HP = 120 + 22 STR, regen = 0.25 + 0.1 STR; mana = 75 + 12 INT, regen = 0.05 INT; armor = -1 + AGI/6; AS = 100 + AGI (clamped 20..700); magic res = 25% + 0.1%/INT; damage = KV + INT.
+- Per-tick `stats` system (order 15) recomputes ms/armor/magicRes/regen/attack.* from `e.base` for hero/dummy/spirit (base snapshotted from the entity on first tick if missing). Orb passives per orb instance in `inv.orbs`; `status.data.stats = {as,dmg,ms,msPct,armor,magicRes,hpRegen,manaRegen}`. ms = (base+flat)(1+pct)(1-slow), clamped 100..550 (skipped when base ms is 0); hex fixes ms at 140.
+- Orders: turn rate = MovementTurnRate/0.03 rad/s; move/cast/attack need facing within 0.2 rad. Auto-attack: attack range + both hull radii. Attack cadence = BAT/(AS/100), windup = point/(AS/100); cancelling a windup refunds the attack timer. Orders issued while stunned are rejected ('disabled').

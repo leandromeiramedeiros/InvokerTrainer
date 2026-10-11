@@ -24,7 +24,7 @@
     if (s) { s.until = Math.max(s.until, until); if (opts.data) s.data = opts.data; s.src = opts.src; s.ability = opts.ability; }
     else { s = { type, until, src: opts.src, ability: opts.ability, data: opts.data || {} }; e.statuses.push(s); }
     if (CLEARS_ORDERS[type]) clearOrders(w, e);
-    w.emit('status', { target: e.id, type, dur, src: opts.src, ability: opts.ability });
+    w.emit('status', { target: e.id, status: type, dur, src: opts.src, ability: opts.ability });
     return s;
   }
 
@@ -32,7 +32,7 @@
     const i = e.statuses.findIndex(s => s.type === type);
     if (i < 0) return;
     e.statuses.splice(i, 1);
-    w.emit('statusEnd', { target: e.id, type });
+    w.emit('statusEnd', { target: e.id, status: type });
   }
 
   function clearOrders(w, e) {
@@ -59,7 +59,7 @@
       if (e.dead || !e.statuses.length) continue;
       for (let i = e.statuses.length - 1; i >= 0; i--) {
         const s = e.statuses[i];
-        if (s.until <= w.t + 1e-9) { e.statuses.splice(i, 1); w.emit('statusEnd', { target: e.id, type: s.type }); }
+        if (s.until <= w.t + 1e-9) { e.statuses.splice(i, 1); w.emit('statusEnd', { target: e.id, status: s.type }); }
       }
     }
   });

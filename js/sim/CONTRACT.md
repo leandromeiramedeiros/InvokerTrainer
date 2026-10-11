@@ -97,8 +97,8 @@ Casting flow: validate (skip invalid queued orders with 'orderDone' ok:false) â†
 | `cast` | `{ unit, ability, kind, x, y, target }` |
 | `hit` | `{ src, target, ability }` (a spell/attack/item effect touched an enemy) |
 | `miss` | `{ src, ability, x, y }` (resolved without touching any enemy) |
-| `damage` | `{ src, target, ability, type, raw, dealt, prevented }` |
-| `status` / `statusEnd` | `{ target, type, dur, src, ability }` |
+| `damage` | `{ src, target, ability, dmgType, raw, dealt, prevented }` |
+| `status` / `statusEnd` | `{ target, status, dur, src, ability }` |
 | `attack` / `attackHit` | `{ src, target }` |
 | `spawn` / `despawn` | `{ ent }` |
 | `blink` | `{ unit, fromX, fromY, x, y }` |
