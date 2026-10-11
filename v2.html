@@ -4,14 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Invoker Trainer v2 (dev)</title>
-<style>
-html,body{margin:0;height:100%;background:#07070c;overflow:hidden}
-#game{position:absolute;inset:0;margin:auto;image-rendering:pixelated;cursor:crosshair}
-#dbg{position:absolute;left:6px;top:6px;color:#9fe;font:11px monospace;white-space:pre;pointer-events:none;text-shadow:0 1px #000}
-</style>
+<link rel="stylesheet" href="css/v2.css">
 </head>
 <body>
-<canvas id="game" width="480" height="270"></canvas>
+<div id="stage"><canvas id="game" width="480" height="270"></canvas><canvas id="glow" width="480" height="270"></canvas></div>
 <div id="dbg"></div>
 <script src="js/data/dota.js"></script>
 <script src="js/data/rules.js"></script>
@@ -31,9 +27,20 @@ html,body{margin:0;height:100%;background:#07070c;overflow:hidden}
 <script src="js/sim/orders.js"></script>
 <script src="js/sim/units.js"></script>
 <script src="js/sim/spells.js"></script>
+<script src="js/sim/items.js"></script>
 <script src="js/art/art.js"></script>
 <script src="js/art/icons.js"></script>
-<script src="js/render/debug.js"></script>
+<script src="js/art/invoker.js"></script>
+<script src="js/art/dummies.js"></script>
+<script src="js/render/pixel.js"></script>
+<script src="js/render/camera.js"></script>
+<script src="js/render/terrain.js"></script>
+<script src="js/render/fog.js"></script>
+<script src="js/render/light.js"></script>
+<script src="js/render/particles.js"></script>
+<script src="js/render/units.js"></script>
+<script src="js/render/fx.js"></script>
+<script src="js/render/render.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
