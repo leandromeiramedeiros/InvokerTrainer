@@ -76,7 +76,7 @@
       kind: 'spirit', team: 0, owner: owner.id, x, y, radius: u.HullRadius || 16, vision: u.VisionDaytimeRange || 1200, visible: true,
       hp, maxHp: hp, mana: g('spirit_mana'), maxMana: g('spirit_mana'), hpRegen: u.StatusHealthRegen, manaRegen: u.StatusManaRegen,
       armor, magicRes: u.MagicalResistance || 0, ms: u.MovementSpeed, turnRate: 10,
-      base: { ms: u.MovementSpeed, armor, magicRes: u.MagicalResistance || 0, hpRegen: u.StatusHealthRegen, manaRegen: u.StatusManaRegen, as: 100, dmgMin: dmg, dmgMax: dmg, bat: u.AttackRate, attackRange: range },
+      base: { ms: u.MovementSpeed, armor, magicRes: u.MagicalResistance || 0, hpRegen: u.StatusHealthRegen, manaRegen: u.StatusManaRegen, as: 100, dmgMin: dmg, dmgMax: dmg, bat: u.AttackRate, attackRange: range, point: u.AttackAnimationPoint, projSpeed: u.ProjectileSpeed },
       attack: { min: dmg, max: dmg, bat: u.AttackRate, point: u.AttackAnimationPoint, range, projSpeed: u.ProjectileSpeed, next: 0, target: null },
       name: 'Forged Spirit', expires: w.t + g('spirit_duration'),
       ai: { behavior: 'spirit', nextThink: 0 },

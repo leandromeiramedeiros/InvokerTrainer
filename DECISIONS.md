@@ -55,3 +55,28 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 - HP = 120 + 22 STR, regen = 0.25 + 0.1 STR; mana = 75 + 12 INT, regen = 0.05 INT; armor = -1 + AGI/6; AS = 100 + AGI (clamped 20..700); magic res = 25% + 0.1%/INT; damage = KV + INT.
 - Per-tick `stats` system (order 15) recomputes ms/armor/magicRes/regen/attack.* from `e.base` for hero/dummy/spirit (base snapshotted from the entity on first tick if missing). Orb passives per orb instance in `inv.orbs`; `status.data.stats = {as,dmg,ms,msPct,armor,magicRes,hpRegen,manaRegen}`. ms = (base+flat)(1+pct)(1-slow), clamped 100..550 (skipped when base ms is 0); hex fixes ms at 140.
 - Orders: turn rate = MovementTurnRate/0.03 rad/s; move/cast/attack need facing within 0.2 rad. Auto-attack: attack range + both hull radii. Attack cadence = BAT/(AS/100), windup = point/(AS/100); cancelling a windup refunds the attack timer. Orders issued while stunned are rejected ('disabled').
+
+## Items (js/sim/items.js)
+- All numbers via `IT.Values.item(ITEM_DOTA[id], key, lvl)`; each def overrides range/castPoint(0)/manaCost/cooldown (spell-style defaults don't read items). Blink range is `Infinity` (never walks; cast clamps). `caster.cd[id]` is the cooldown source of truth; `items[i].cd` is mirrored by invoke.js each tick (refresher also zeroes it).
+- `IT.Abilities.check` is wrapped in items.js to honour an optional `def.canUse(w, caster, order) -> reasonKey|null` (blink: `rooted`, `blinkDamaged`). Suggest moving it into abilities.js.
+- Refresher resets all `hero.cd` except itself, `inv.invokeCd`, item cds. BKB `charges` are NOT reset.
+- Atos: tracking projectile, speed 1900 (item ProjectileSpeed, not baked). Miss if target lifted on arrival, or removed; BKB-blocked = `miss` + fx `atosBlocked`.
+- Vyse: instant `hex`; BKB blocks (miss). Hex ms 140 applies to every unit via the stats system.
+- Shiva: active ring thinker (`ring` grows at `blast_speed` to `blast_radius`; each enemy hit once: magical `blast_damage` + `slow` pct 0.4 for `blast_debuff_duration`). Aura = `passive` hook refreshing a 0.2 s `shivaAura` status (data.stats.as = -40) on enemies within `aura_radius`; hook driven by system `itemsPassive` (order 55). Armor `bonus_armor` is in the `itemStats` status.
+- Passive stats (boots ms, treads ms+AS, shiva armor) are one permanent status `itemStats` (data.stats), refreshed idempotently by system `itemsInit` (order 5) when the item set changes. Only one boots counts (priority travels > treads > boots). Treads: ranged ms value (45); the +10 stat (INT mode) is skipped, as are other items' bonus stats (int/hp/regen/damage).
+- Meteor Hammer: `channel` = `max_duration`; `channelEnd(interrupted=false)` spawns the meteor thinker (danger at `land_time`); interrupted (stun/hex/non-queued order) => fx `meteorCancel`, nothing lands. Impact: magical `impact_damage_units`, stun, then `burn` status + `burn_slow` slow (KV key, applied) + dps ticks every `burn_interval` for `burn_duration`. BKB blocks the burn debuff.
+- BKB: use n (`items[i].charges`) uses `duration[min(n,2)]` (9/8/7), then charges++. Basic dispel removes slow, atosRoot, root, silence (not stun/hex/frozen/lift/knockback).
+- Blink: distance > `blink_range` lands at `blink_range_clamp` (960); landing via `IT.Nav.nearestWalkable`; locked `blink_damage_cooldown` (3 s) after the hero takes `dealt > 0` damage from an enemy-team source (`hero._blinkLock`); not while root/atosRoot.
+- Events: `hit`/`miss` with `ability:<item id>`; `blink` for blink. fx: refresh, atosLaunch, atosHit, atosDodged, atosBlocked, hexHit, hexBlocked, shivaBlast, meteorChannel, meteorFall, meteorImpact, meteorCancel, bkb, blinkStart, blinkEnd.
+
+## Spells (js/sim/spells.js)
+- All numbers from `IT.Values` with caster ctx. Non-KV constants: `KNOCK_SPEED` 150 (Deafening knockback), `METEOR_SPACING` 1.5 (meteor roll tick spacing), `SPIRIT_RING` 90 (spirit spawn ring), `LIFT_HEIGHT` 120 (tornado lift z).
+- Forge Spirit count = quas extra + exort extra (KV `extra_spirit_count_*`).
+- Tornado scepter `twister_damage` read as damage per second (tick = dps * twister_tick_rate).
+- Ice Wall `wall_width` used as the wall radius; the wall does not block pathing. Skipped: scepter root, Ghost Walk shard debuff.
+- Ghost Walk, Alacrity, Forge Spirit emit no hit/miss. All other spells emit `hit` once per enemy per cast (blind = !visible for team 0) and `miss` once if no enemy was touched.
+- Lifted units are skipped by AoE selection (counts as a miss) and take no damage.
+- Deafening Blast disarm = knockback + `disarm_duration`; knockback cancels dummy bolts.
+- Chaos Meteor direction = caster to target point.
+- Alacrity self-cast: UI must pass `target = hero.id` (`Abilities.check` returns 'noTarget' otherwise; orders.js not changed). Direct `cast(w,c,{})` defaults to caster.
+- Workaround in spells.js for units.js:79 (`spawnSpirit` base lacks point/projSpeed).

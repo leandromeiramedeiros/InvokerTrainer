@@ -43,7 +43,7 @@
       if (!t) return 'noTarget';
       if (!d.filter(w, caster, t)) return t.team !== caster.team && w.fog && caster.team === 0 && !t.visible ? 'targetHidden' : 'targetInvalid';
     }
-    return null;
+    return d.canUse ? d.canUse(w, caster, order) || null : null;   // optional per-def veto
   }
 
   // Pay mana, start cooldown. Called by orders right before def.cast.

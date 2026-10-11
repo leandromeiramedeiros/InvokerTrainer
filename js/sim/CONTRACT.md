@@ -72,7 +72,8 @@ IT.Abilities.def(id, {
   channel?(w, caster) -> seconds,
   cast(w, caster, order),             // fires at end of cast point; spawn thinkers/projectiles here
   channelTick?(w, caster, dt, order), channelEnd?(w, caster, order, interrupted),
-  passive?(w, caster, dt)             // items like boots
+  passive?(w, caster, dt),            // items like boots
+  canUse?(w, caster, order) -> null | reasonKey   // extra veto (e.g. blink after damage)
 })
 IT.Abilities.get(id); IT.Abilities.check(w, caster, id, target) -> null | reasonKey   // 'notInvoked','cooldown','mana','silenced','noTarget','targetHidden','targetInvalid'
 ```
