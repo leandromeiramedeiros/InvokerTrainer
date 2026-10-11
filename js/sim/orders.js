@@ -295,6 +295,10 @@
       else if (o && o.type === 'cast' && (o._ph === 'point' || o._ph === 'channel')) n = 'cast';
       else if (u._wind) n = 'attack';
       else if (u._moved) n = 'walk';
+      if (n !== 'stunned' && u.ai) {   // dummy AI telegraphs (stun bolt cast, blink tell)
+        if (u.ai.blink && u.ai.blink.tellEnd > w.t) n = 'blink';
+        else if (u.ai.bolt && u.ai.bolt.active) n = 'cast';
+      }
       if (u.anim.name !== n) u.anim = { name: n, t: 0 }; else u.anim.t += dt;
     }
   });
