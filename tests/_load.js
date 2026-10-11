@@ -1,0 +1,12 @@
+'use strict';
+// Loads classic browser scripts (IIFE on `window||globalThis`) into one vm context and returns its IT namespace.
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const ROOT = path.join(__dirname, '..');
+
+module.exports = function load(files) {
+  const ctx = vm.createContext({ console, Math, JSON, Date, Map, Set, Array, Object, Number, String, Boolean, Error, Symbol, Promise, Float32Array, Float64Array, Int8Array, Int16Array, Int32Array, Uint8Array, Uint16Array, Uint32Array, Uint8ClampedArray, Infinity, NaN, isFinite, isNaN, parseInt, parseFloat });
+  for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+  return ctx.IT;
+};
