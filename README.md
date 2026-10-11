@@ -1,16 +1,18 @@
 # Invoker Trainer
 
-Simulador de feitiços do Invoker (Dota 2) no navegador. Pixel art, bloom e areia com física (estilo Noita).
+**Play: https://leandromeiramedeiros.github.io/InvokerTrainer/**
 
-## Mecânica
-- 3 orbes: **Q** Quas, **W** Wex, **E** Exort. Fila de 3 (a mais antiga sai).
-- **R** invoca: a ordem dos orbes não importa.
-- 2 slots de feitiço. Reinvocar um feitiço já em slot só troca de lugar, sem cooldown de invocação (padrão 1s, configurável).
-- Cada feitiço tem cooldown próprio; na Arena também custa mana.
-- Mira com o mouse, o feitiço sai no cursor.
+Browser simulator of Dota 2 Invoker spellcasting. Pixel art, bloom, Noita-style falling sand.
 
-## Receitas
-| Orbes | Feitiço | Tecla |
+## Mechanics
+- 3 orbs: **Q** Quas, **W** Wex, **E** Exort. Queue of 3 (oldest drops).
+- **R** invokes; orb order doesn't matter.
+- 2 spell slots. Re-invoking a held spell just swaps slots, no invoke cooldown (default 1s, configurable).
+- Each spell has its own cooldown; Arena also costs mana.
+- Aim with the mouse; spells cast at the cursor.
+
+## Recipes
+| Orbs | Spell | Key |
 |---|---|---|
 | QQQ | Cold Snap | Y |
 | QQW | Ghost Walk | V |
@@ -23,18 +25,18 @@ Simulador de feitiços do Invoker (Dota 2) no navegador. Pixel art, bloom e arei
 | EEW | Chaos Meteor | D |
 | QWE | Deafening Blast | B |
 
-Esquema alternativo (Configurações): **D** = slot 1, **F** = slot 2. Todas as teclas são remapeáveis.
+Alternate scheme (Settings): **D** = slot 1, **F** = slot 2. All keys rebindable.
 
-## Modos
-- **Livre**: sem pontuação.
-- **Drill**: 60s, feitiços aleatórios, bônus por sequência.
-- **Combo**: 5 combos cronometrados.
-- **Arena**: ondas de inimigos, vida, mana e cooldowns.
+## Modes
+- **Free Play**: no scoring.
+- **Drill**: 60s, random spells, streak bonus.
+- **Combo Run**: 5 timed combos.
+- **Arena**: enemy waves, HP, mana, cooldowns.
 
-## Areia
-Areia colorida, pedra, água, gelo, lava, fogo, fumaça, vapor e faísca. Os feitiços alteram o terreno: Sun Strike gera lava, Cold Snap congela água, Tornado levanta partículas, Deafening Blast empurra, Chaos Meteor deixa rastro de fogo.
+## Sand
+Colorful sand, stone, water, ice, lava, fire, smoke, steam, spark. Spells reshape terrain: Sun Strike makes lava, Cold Snap freezes water, Tornado lifts particles, Deafening Blast shoves them, Chaos Meteor leaves a fire trail.
 
-## Rodar
-Abrir `index.html` ou servir a pasta. Sem build.
+## Run locally
+Open `index.html` or serve the folder. No build.
 
-Projeto de fã, não oficial. Dota 2 e Invoker são marcas da Valve.
+Unofficial fan project. Dota 2 and Invoker are trademarks of Valve.
