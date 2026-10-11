@@ -1,0 +1,32 @@
+// node tools/art/preview.mjs <sheet> <regex> [scale=10] [outname]  -> tools/out/prev_<outname>.png (matching frames in a row-wrapped grid)
+import fs from 'node:fs'; import path from 'node:path'; import vm from 'node:vm'; import zlib from 'node:zlib'; import { fileURLToPath } from 'node:url';
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ctx = vm.createContext({ console, Math });
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/art.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/invoker.js'), 'utf8'), ctx);
+const [name, re, sc = '10', out = 'x'] = process.argv.slice(2);
+const S = ctx.IT.Art.sheets[name]; const s = +sc; const rx = new RegExp(re);
+const keys = Object.keys(S.frames).filter(k => rx.test(k));
+const hex = h => { h = h.replace('#', ''); if (h.length === 6) h += 'ff'; return [0, 2, 4, 6].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const fw = Math.max(...keys.map(k => S.frames[k][0].length)), fh = Math.max(...keys.map(k => S.frames[k].length));
+const cols = Math.min(keys.length, Math.max(1, Math.floor(1500 / ((fw + 2) * s))));
+const rowsN = Math.ceil(keys.length / cols);
+const W = cols * (fw + 2) * s, H = rowsN * (fh + 2) * s;
+const img = new Uint8Array(W * H * 4);
+const bg = hex('#2a3324'), bg2 = hex('#344029');
+for (let i = 0; i < W * H; i++) img.set(((i * 2654435761 >>> 0) % 100) < 8 ? bg2 : bg, i * 4);
+for (let i = 0; i < W * H; i++) img[i * 4 + 3] = 255;
+keys.forEach((k, n) => {
+  const ox = (n % cols) * (fw + 2) * s + s, oy = Math.floor(n / cols) * (fh + 2) * s + s;
+  S.frames[k].forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '.') return; const c = hex(S.pal[ch]); for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) { const i = ((oy + y * s + dy) * W + ox + x * s + dx) * 4; img[i] = c[0]; img[i + 1] = c[1]; img[i + 2] = c[2]; } }));
+});
+const crcT = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
+const crc = b => { let c = -1; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };
+const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+const raw = Buffer.alloc((W * 4 + 1) * H);
+for (let y = 0; y < H; y++) Buffer.from(img.buffer, y * W * 4, W * 4).copy(raw, y * (W * 4 + 1) + 1);
+const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 6;
+fs.mkdirSync(path.join(ROOT, 'tools/out'), { recursive: true });
+const o = path.join(ROOT, 'tools/out', 'prev_' + out + '.png');
+fs.writeFileSync(o, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
+console.log(o, W + 'x' + H, keys.length);
