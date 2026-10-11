@@ -5,7 +5,7 @@
   const KEY = 'it2.settings';
   const SPELLS = ['coldsnap', 'ghostwalk', 'icewall', 'emp', 'tornado', 'alacrity', 'sunstrike', 'forgespirit', 'chaosmeteor', 'deafeningblast'];
   const LEG = ['Y', 'V', 'G', 'C', 'X', 'Z', 'T', 'F', 'D', 'B'];
-  const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'stop', 'hold', 'center', 'camLock', 'cheat', 'refresh', 'spawn', 'resetDummies'];
+  const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'refresh', 'spawn', 'resetDummies'];
   const RESERVED = ['Escape', 'Tab'];
 
   function defaults() {
@@ -16,8 +16,12 @@
     return {
       castMode: 'quick', scheme: 'slots', autoAttack: true, camLock: false, edgeScroll: true,
       bloom: true, sound: true, hints: true, lang: 'en',
+      camSpeed: 1,                 // 0.5..2 multiplier on camera scroll speed
+      doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
+      pointerLock: false,          // confine the mouse to the game while playing
+      audio: { master: 0.8, music: 0.5, sfx: 0.8, ui: 0.6, musicOn: true, muteUnfocused: true },
       keys: {
-        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', stop: 'S', hold: 'H', center: 'Space', camLock: 'L', cheat: 'F1', refresh: 'Backspace', spawn: 'P', resetDummies: 'O' },
+        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'Space', camLock: 'L', cheat: 'F1', refresh: 'Backspace', spawn: 'P', resetDummies: 'O' },
         slots, legacy,
       },
     };
@@ -32,11 +36,15 @@
         for (const g in base.keys) {
           if (src.keys && src.keys[g]) for (const a in base.keys[g]) if (typeof src.keys[g][a] === 'string' && src.keys[g][a]) base.keys[g][a] = src.keys[g][a];
         }
+      } else if (k === 'audio') {
+        if (src.audio && typeof src.audio === 'object') for (const a in base.audio) if (typeof src.audio[a] === typeof base.audio[a]) base.audio[a] = src.audio[a];
       } else if (typeof base[k] === typeof src[k]) base[k] = src[k];
     }
     if (base.castMode !== 'quick' && base.castMode !== 'normal') base.castMode = 'quick';
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
     if (!IT.I18N[base.lang]) base.lang = 'en';
+    base.camSpeed = Math.max(0.5, Math.min(2, Number(base.camSpeed) || 1));
+    base.doubleTapTimeout = Math.max(0.2, Math.min(1, Number(base.doubleTapTimeout) || 0.6));
     return base;
   }
 

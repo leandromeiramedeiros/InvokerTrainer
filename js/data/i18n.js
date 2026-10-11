@@ -273,6 +273,12 @@
   for (const k in spells) D('act.' + k, spells[k]);
 
   IT.I18N = { en, pt };
+  // per-agent string packs: IT.i18nAdd({ en: {k: v}, pt: {k: v} }); pt falls back to en
+  IT.i18nAdd = function (pack) {
+    const e = (pack && pack.en) || {}, p = (pack && pack.pt) || {};
+    for (const k in e) D(k, e[k], p[k]);
+    for (const k in p) if (!(k in e)) pt[k] = p[k];
+  };
   IT.lang = 'en';
   IT.langs = ['en', 'pt'];
   const listeners = [];

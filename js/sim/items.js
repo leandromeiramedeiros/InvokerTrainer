@@ -237,5 +237,13 @@
     }
   });
 
-  IT.Items = { applyPassives, ids };
+  // swap two inventory slots (drag & drop). Hotkeys follow the slot, cooldowns follow the item.
+  function swap(w, hero, i, j) {
+    if (!hero || !hero.items || i === j || i < 0 || j < 0 || i >= hero.items.length || j >= hero.items.length) return false;
+    const a = hero.items[i]; hero.items[i] = hero.items[j]; hero.items[j] = a;
+    w.emit('itemSwap', { unit: hero.id, from: i, to: j });
+    return true;
+  }
+
+  IT.Items = { applyPassives, ids, swap };
 })(typeof window !== 'undefined' ? window : globalThis);

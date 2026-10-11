@@ -116,6 +116,7 @@
     },
     pauseSettings() { settingsOver = true; IT.UI.settingsOpen(); UI.push(IT.UI.settingsPanel, true); },
     settingsBack() { if (settingsOver) { settingsOver = false; UI.pop(); } else App.go('title'); },
+    back() { if (state === 'play') { if (hooks.pause) hooks.pause(); return; } if (state !== 'title') App.go('title'); },   // ESC: one level up (S3 refines)
     get state() { return state; },
   };
 

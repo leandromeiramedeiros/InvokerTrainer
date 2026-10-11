@@ -78,6 +78,7 @@
       scepter: !!l.scepter,
       scepterOrb: l.scepterOrb || null,
       shard: !!l.shard,
+      shardSpell: l.shardSpell || null,   // 'ghostwalk'|'emp'|'sunstrike': the ONE spell the shard upgrades
     };
     ctx.talentSet = new Set(ctx.talents);
     ctx.eff = {};

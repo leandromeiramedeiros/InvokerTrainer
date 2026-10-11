@@ -6,7 +6,8 @@
   const sfx = n => { if (typeof G.SFX !== 'undefined' && G.SFX.enabled && G.SFX.play) { try { G.SFX.play(n); } catch (e) { /* ignore */ } } };
 
   const In = {
-    enabled: false, ctx: null, armed: null, keys: new Set(), mouse: { x: 0, y: 0, in: false },
+    enabled: false, ctx: null, armed: null, selected: null,   // selected: unit id shown in the HUD (null = hero)
+    keys: new Set(), mouse: { x: 0, y: 0, in: false },
     hooks: {},    // pause, statsHold(bool), cheat, refresh, spawn, resetDummies, debug
     sfx,
   };
