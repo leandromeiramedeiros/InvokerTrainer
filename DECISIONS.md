@@ -80,3 +80,13 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 - Chaos Meteor direction = caster to target point.
 - Alacrity self-cast: UI must pass `target = hero.id` (`Abilities.check` returns 'noTarget' otherwise; orders.js not changed). Direct `cast(w,c,{})` defaults to caster.
 - Workaround in spells.js for units.js:79 (`spawnSpirit` base lacks point/projSpeed).
+
+## Combos / stats
+- Data `js/data/combos.js` (`IT.COMBOS`, 29 combos: 10 basic, 7 intermediate, 2 advanced, 10 items) must load after `game.js` (reads `SPELL_ORBS`). Engine `js/sim/combo.js` (`IT.Combo`, system `combo`@90, state `w.combo`), collector `js/sim/stats.js` (`IT.StatsCollector`, system `statsCollector`@90; `stats` is taken by hero.js).
+- Steps match from events: cast/item = `cast` by hero (+visibility / selfCast checks); `mustHitDummy` stays open until `hit` on dummy (done) or `miss`/6 s (fail). attack = `attackHit` from hero or its spirits (`count`). react = `bolt` cancel('disabled')/blocked, dummy blink blocked by a disable (polled), EMP pull >= 150 units. `within` = max s since the previous step. A wrong cast only counts as `extra` (no longer perfect); a miss fails.
+- Fail: streak 0, `comboFail {reason: miss|timeout|within|boltHit|blinked}`, same combo auto-restarts after 1 s (dummy respawn + full refresh). Done: everything refreshed, next prompt after 0.8 s (practice/timed).
+- Score = round((tier base + speed bonus) x min(2, 1+0.1 streak) x (1.25 if perfect)); speed bonus = 0.5 base x clamp((2 par - t)/par); perfect = no wrong casts, no misses, first attempt.
+- Modes: `Combo.mode(w,'sandbox'|'practice'|'timed',opts)`; prompts weighted toward unmastered/failed combos using `w.rng`. `opts`: `tiers`, `ids`, `grantMissing`, `seconds`. `Combo.start(w,id,opts)` plays one combo (sandbox). `grantMissing` temporarily adds missing items / scepter / shard (revoked on next start/mode/end).
+- Hidden steps respawn the dummy outside vision only when `w.fog`; `w.combo.hint {x,y}` is the last known position (ping).
+- Delays: wait hints are tips only; after Tornado they count from the lift. Dummy respawns 900-1600 away, so bolt combos need the hero to approach.
+- Stats: `StatsCollector.create(w)` -> `{summary(), destroy()}`; `merge(lifetime|null, summary)` returns a new plain blob (caller persists). Spell accuracy = hits / (hits + misses).
