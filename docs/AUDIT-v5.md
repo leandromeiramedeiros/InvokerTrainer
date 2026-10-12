@@ -31,3 +31,12 @@ Findings (sources):
 
 Implemented (trainer model, js/data/rules.js): ONE pool. points(L) = min(L,18) [base] + #{6,12,18 <= L} [Invoke bonus] + #{10,15,20,25,27,28,29,30 <= L} [talent points]. 29 at lvl 30 = 3 orbs x 7 + 8 talents x 1 point. Sinks absorb it exactly (0 left); every level 1..30 is spendable by the default build. Orb gate 2n-1 until hero lvl 13 and talent tier gates (10/15/20/25, second talent of a tier from 27+) unchanged. A level-30 loadout without a talent list still defaults to all 8 (an explicit list is respected). Talent points arriving before level 18 can be spent on orbs (single pool), so 7/7/7 is reachable at lvl 17.
 No hero level-up moment exists in the sim (hero level is fixed by the loadout), so the `levelUp` SFX stays unwired.
+
+## Final Fable audit (2026-10-12, after B-G) -> fix batches
+GOOD: KV-derived combo windows + feedback, 39 scenarios on real maps, enemy AI reactions/items/dodge, i18n parity, SFX wiring.
+| # | Batch | Covers | Status |
+|---|---|---|---|
+| H1 | Fidelity/bugs: auto-attack kill steal (BAD-1), death fails at hard+ (BAD-4), hero BKB 50% magic res (BAD-6), i_bolt_cancel reachability (BAD-9) | high/med | todo |
+| H2 | Scenarios: enemy vision 1800/800 + awareness as delay (BAD-5), hold/escape scenarios + jit on lvl 1-4 (BAD-7), splash burst overlap | med/low | todo |
+| H3 | Cleanup + staples: dummy AI -> spawnEnemy, drop practice constants (BAD-8); Blink->full->Refresher, SS-first staple | low | todo |
+Not taken: BAD-2 (Invoke CD table is user-specified plan G1, PLAN-min.md:57). BAD-3 (orb cap 8 / 33 points): user rule is 0 points left at 30 with talents costing 1; kept 7x3+8=29.
