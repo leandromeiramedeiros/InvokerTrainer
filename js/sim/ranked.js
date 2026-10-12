@@ -6,7 +6,7 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const KEY = 'it2.rank';
-  const RUN_SECONDS = 300, COUNTDOWN = 5, PRACTICE_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40;
+  const RUN_SECONDS = 300, TURNS = 8, COUNTDOWN = 10, PRACTICE_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lang = () => IT.lang || 'en';
   const loc = o => (o && typeof o === 'object' ? o[lang()] || o.en : o);
@@ -124,7 +124,7 @@
     const rng = IT.U.mulberry32(opts.seed == null ? (Math.random() * 1e9) | 0 : opts.seed);
     const run = {
       mode, ranked, fixed, rating, rng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
-      runLeft: ranked ? (opts.runSeconds || RUN_SECONDS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
+      runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
       pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
       countdown: ranked ? COUNTDOWN : fixed && mode === 'sandbox' ? 0 : PRACTICE_COUNTDOWN,
@@ -238,12 +238,17 @@
     function nextScenario() {
       const w = run.w;
       run.n++;
+      if (run.turns != null && run.n >= run.turns) { finish('turns'); return; }   // ranked: fixed number of scenarios
       run.next();
       enter(w);
       if (run.onSwap) run.onSwap(run);
     }
 
     run.redo = () => { if (run.w && !run.ended) { enter(run.w); if (run.onSwap) run.onSwap(run); } };   // replay the current scenario
+
+    function go() { const w = run.w; run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', {}); }
+    // skip the pre-scenario countdown (any action key / Start button); false if not counting down
+    run.skip = () => { if (run.ended || !run.w || run.phase !== 'countdown') return false; go(); return true; };
 
     // advance by dt seconds. Frozen phases come from main.js (real dt), play comes from the sim system (w.dt)
     run.tick = dt => {
@@ -253,7 +258,7 @@
         run.runLeft -= dt;
         if (run.runLeft <= 0) { run.runLeft = 0; finish('time'); return; }
       }
-      if (run.phase === 'countdown') { run.cd -= dt; if (run.cd <= 0) { run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', {}); } }
+      if (run.phase === 'countdown') { run.cd -= dt; if (run.cd <= 0) go(); }
       else if (run.phase === 'result') { run.hold -= dt; if (run.hold <= 0) nextScenario(); }
       else if (run.phase === 'play') { script(w); check(w); }
     };
@@ -272,18 +277,18 @@
       phase: r.phase === 'idle' ? 'countdown' : r.phase,
       countdown: r.phase === 'countdown' ? Math.max(1, Math.ceil(r.cd - 1e-9)) : 0,
       timeLeft: r.mode === 'sandbox' ? null : Math.max(0, pr.limit - el),
-      runLeft: r.runLeft,
+      runLeft: r.runLeft, turn: r.turns != null ? Math.min(r.turns, r.n + 1) : null, turns: r.turns,
       score: r.ranked ? r.score : null,
       scenario: loc(pr.sc.name), objective: loc(pr.sc.goal),
       // extras
       mode: r.mode, id: pr.sc.id, n: r.n, solved: r.solved, failed: r.failed, streak: r.streak, bestStreak: r.bestStreak,
-      diff: pr.df.id, hints: !!pr.df.hints, tip: loc(pr.sc.tip), spells: sol.filter(s => IT.GAME.SPELL_ORBS[s.a]).map(s => s.a),
+      diff: pr.df.id, diffDesc: loc(pr.df.desc), hints: !!pr.df.hints, tip: loc(pr.sc.tip), spells: sol.filter(s => IT.GAME.SPELL_ORBS[s.a]).map(s => s.a),
       result: r.result,
     };
   }
 
   IT.Ranked = {
-    RUN_SECONDS, COUNTDOWN, PRACTICE_COUNTDOWN, RESULT_HOLD,
+    RUN_SECONDS, TURNS, COUNTDOWN, PRACTICE_COUNTDOWN, RESULT_HOLD,
     streakMult, scenarioScore, expected, ratingDelta, baseDiff, rampDiff, rankKey,
     profile, record, reset, load, prepare, apply, create, hud,
   };

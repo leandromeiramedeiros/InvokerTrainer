@@ -207,13 +207,16 @@
     const { h } = IT.UI, t = IT.t;
     R.rkNum = h('div', { class: 'rknum' });
     R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
+    R.rkBadge = h('span', { class: 'rkdiff' }); R.rkTip = h('span', { class: 'rktip' });
+    R.rkGo = h('button', { class: 'btn grn rkgo', type: 'button', text: t('hud.rkStart'), onmousedown: ev => { ev.stopPropagation(); }, onclick: ev => { ev.stopPropagation(); const In = IT.Input; if (In && In.hooks && In.hooks.skip) In.hooks.skip(); } });
     R.rkCombo = h('div', { class: 'rkcombo' });
     R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
     R.rkTm = h('div', { class: 'rkt tm' }, h('span', { text: t('hud.rkTime') }), R.rkTv);
-    R.rkRn = h('div', { class: 'rkt' }, h('span', { text: t('hud.rkRun') }), R.rkRv);
+    R.rkRl = h('span', { text: t('hud.rkRun') });
+    R.rkRn = h('div', { class: 'rkt' }, R.rkRl, R.rkRv);
     R.rkSc = h('div', { class: 'rkt sc' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed);
     R.rkRow = h('div', { class: 'rkrow' }, R.rkTm, R.rkSc, R.rkRn);
-    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, h('div', { class: 'rkscen' }, R.rkName, R.rkObj), R.rkCombo, R.rkRow);
+    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkGo, h('div', { class: 'rkscen' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkObj, R.rkTip), R.rkCombo, R.rkRow);
   }
   // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id }]
   function rkActions(rk) {
@@ -465,10 +468,15 @@
     R.rkRow.style.display = cd ? 'none' : '';
     if (cd) setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
     setText(R.rkTv, fmtS(rk.timeLeft), ca, 'rkt'); R.rkTv.classList.toggle('low', rk.timeLeft != null && rk.timeLeft < 5);
-    setText(R.rkRv, fmtM(rk.runLeft), ca, 'rkr');
+    setText(R.rkRv, rk.turns != null ? rk.turn + '/' + rk.turns : fmtM(rk.runLeft), ca, 'rkr');
+    setText(R.rkRl, IT.t(rk.turns != null ? 'hud.rkTurn' : 'hud.rkRun'), ca, 'rkrl');
+    R.rkGo.style.display = cd ? '' : 'none'; R.rkTip.style.display = cd ? '' : 'none';
+    setText(R.rkTip, cd ? txt(rk.tip) : '', ca, 'rktip');
+    R.rkBadge.className = 'rkdiff d-' + rk.diff; R.rkBadge.title = rk.diffDesc || '';
+    setText(R.rkBadge, IT.hasT('dtier.' + rk.diff) ? IT.t('dtier.' + rk.diff) : rk.diff, ca, 'rkdf');
     setText(R.rkSv, String(Math.round(rk.score || 0)), ca, 'rks');
     R.rkTm.style.display = rk.timeLeft == null ? 'none' : '';
-    R.rkRn.style.display = rk.runLeft == null ? 'none' : '';
+    R.rkRn.style.display = rk.runLeft == null && rk.turns == null ? 'none' : '';
     R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
     setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
     const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def;

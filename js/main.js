@@ -207,6 +207,7 @@
       if (g.menu) App.resume();
       else { g.menu = true; g.w.paused = true; IT.Input.cancel(true); IT.HUD.statsShow(false); UI.push(UI.pause, true); }
     },
+    skip() { return !!(g && g.run && !g.menu && !g.ended && g.run.skip()); },   // action key / Start button ends the pre-scenario countdown
     inspect() { return !!(g && g.run && g.run.frozen() && !g.menu && !g.ended && !settingsOver); },   // ranked countdown/result: camera + inspect only
     statsHold(on) { if (g && !g.menu && !g.ended) IT.HUD.statsShow(on); else if (!on && g) IT.HUD.statsShow(false); },
     cheat() { IT.HUD.cheatToggle(); },
@@ -286,7 +287,7 @@
       if (!w.paused) {
         acc += dt;
         while (acc >= w.dt && !w.paused) { g.R.snapshot(); w.step(); acc -= w.dt; }
-        if (g.run && g.run.runLeft != null && g.run.runLeft < 30 && IT.Music) IT.Music.intensity(1 - g.run.runLeft / 30);
+        if (g.run && g.run.turns != null && g.run.turns - g.run.n <= 1 && IT.Music) IT.Music.intensity(1);
         if (!g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
       } else if (g.run && !g.menu && !g.ended) {   // countdown / result: sim frozen, camera + inspect stay live
         acc = 0;

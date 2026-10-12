@@ -82,22 +82,22 @@ test('persistence: profile, record, rank up/down, floor at 0, history cap', () =
   R.reset();
 });
 
-test('run: 5 s countdown freezes the world, then play; solving moves on to the next scenario', () => {
+test('run: 10 s countdown freezes the world, then play; solving moves on to the next scenario', () => {
   R.reset();
   const m = mk(), { run, w } = m;
   assert.equal(run.phase, 'countdown'); assert.equal(w.paused, true);
   let hud = R.hud(w);
-  assert.equal(hud.phase, 'countdown'); assert.equal(hud.countdown, 5); assert.equal(hud.score, 0);
+  assert.equal(hud.phase, 'countdown'); assert.equal(hud.countdown, 10); assert.equal(hud.score, 0);
   const t0 = w.t; w.step(); assert.equal(w.t, t0);
   for (let i = 0; i < 31; i++) run.tick(1 / 30);
-  assert.equal(R.hud(w).countdown, 4);
-  assert.ok(run.runLeft < R.RUN_SECONDS);   // the run clock already counts the countdown
+  assert.equal(R.hud(w).countdown, 9);
+  assert.equal(run.runLeft, null);   // ranked is turn-based (8 scenarios), no run clock
   thaw(run);
   assert.equal(run.phase, 'play'); assert.equal(w.paused, false);
   for (let i = 0; i < 20; i++) w.step();
   hud = R.hud(w);
   assert.equal(hud.phase, 'play'); assert.ok(hud.timeLeft > 0 && hud.timeLeft < run.pr.limit);
-  assert.ok(hud.scenario && hud.objective && typeof hud.runLeft === 'number');
+  assert.ok(hud.scenario && hud.objective && hud.turn === 1 && hud.turns === 8 && hud.diffDesc);
   const id0 = run.pr.sc.id;
   killAll(m);
   if (run.pr.sc.obj.type !== 'kill') { /* objective type differs: the rest of this test needs a kill scenario */ }
@@ -132,7 +132,7 @@ test('run: a failed scenario (time) breaks the streak and scores nothing', () =>
   }
 });
 
-test('run: the 5 minute clock ends the run, emits modeEnd, records the rating once', () => {
+test('run: the optional runSeconds clock ends the run, emits modeEnd, records the rating once', () => {
   R.reset();
   const m = mk({ runSeconds: 70 }), { run, w } = m;
   for (let i = 0; i < 3000 && !run.ended; i++) { if (run.frozen()) run.tick(1 / 30); else w.step(); }

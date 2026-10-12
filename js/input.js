@@ -271,7 +271,7 @@
     if (!In.ctx) return;
     opts = Object.assign({}, opts);
     const { w } = In.ctx;
-    if (w.paused) return;
+    if (w.paused) { if (In.hooks.skip && In.inspecting()) In.hooks.skip(); return; }   // frozen ranked countdown: an action (key / HUD button) skips it
     In.selected = null;     // any player action returns the HUD to the hero
     // Cataclysm: Sun Strike key with the scepter spell ready -> press 1 holds, press 2 = self-cast, window over = normal strike
     const sun = !opts.hud && isAbilityAction(action) && abilityId(action) === 'sunstrike';
@@ -390,7 +390,7 @@
     if (ev.repeat) { if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
     const k = IT.Settings.keyName(ev);
     if (!k) return;
-    if (insp) { const a = IT.Settings.actionFor(k); if (a === 'center' || a === 'camLock') press(k, {}); if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
+    if (insp) { const a = IT.Settings.actionFor(k); if (a === 'center' || a === 'camLock') press(k, {}); else if (a && (isSeq(a) || /^(attack|stop|hold)$/.test(a)) && In.hooks.skip) In.hooks.skip(); if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
     if (!press(k, { shift: ev.shiftKey, alt: ev.altKey })) { if (/^Arrow/.test(ev.key)) ev.preventDefault(); return; }
     ev.preventDefault();
   };

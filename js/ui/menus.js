@@ -171,7 +171,6 @@
       h('div', { class: 'menu tmenu' },
         h('button', { class: 'btn grn ranked', type: 'button', 'data-snd': 'start', onclick: () => A.go('ranked'), text: IT.t('title.ranked') }),
         rankBox(),
-        btn('title.practice', () => A.go('practice'), 'slt'),
         btn('title.sandbox', () => A.go('sandbox'), 'slt'),
         btn('ui.stats', () => A.go('stats'), 'slt'),
         btn('ui.settings', () => A.go('settings'), 'slt')),

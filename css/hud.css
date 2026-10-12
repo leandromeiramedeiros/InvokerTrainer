@@ -64,3 +64,9 @@
 .dchat::after{content:"";position:absolute;left:50%;bottom:-.65em;margin-left:-.4em;border-style:solid;border-width:.5em .4em 0;border-color:var(--mag) transparent transparent}
 .dchat.dc-praise{border-color:var(--good)}.dchat.dc-praise::after{border-top-color:var(--good)}
 .dchat.dc-hurt,.dchat.dc-comboFail{border-color:var(--bad)}.dchat.dc-hurt::after,.dchat.dc-comboFail::after{border-top-color:var(--bad)}
+
+.rknm{display:flex;align-items:center;justify-content:center;gap:calc(var(--g)*.6)}
+.rkdiff{pointer-events:auto;cursor:help;padding:.1em .5em;border:.15em solid var(--dim);background:#1d1236;color:var(--ink);font-size:max(calc(var(--g)*.85),9px);letter-spacing:.08em;text-transform:uppercase}
+.rkdiff.d-ian,.rkdiff.d-easy{border-color:var(--good)}.rkdiff.d-common{border-color:var(--gold)}.rkdiff.d-hard,.rkdiff.d-bambam{border-color:var(--bad)}
+.rktip{color:var(--dim);font-size:max(calc(var(--g)*.95),10px);font-style:italic}
+.rkgo{pointer-events:auto;font-size:max(calc(var(--g)*1.1),11px)}
