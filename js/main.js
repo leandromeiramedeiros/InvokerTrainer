@@ -9,7 +9,6 @@
   const UI = IT.UI, S = IT.Settings;
 
   let g = null, lastOpts = null, settingsOver = false, state = 'title';
-  const THEME = { ranked: 'ranked', infinite: 'ranked', sandbox: 'sandbox' };
   const music = n => { try { IT.Music && IT.Music.play(n); } catch (e) { /* audio is optional */ } };
   const isScn = o => o.mode === 'ranked' || o.mode === 'infinite' || (o.mode === 'sandbox' && !!o.scenario);
 
@@ -111,7 +110,7 @@
     if (IT.Combo) IT.Combo.mode(w, 'sandbox', { loadout: lo, grantMissing: !scn && !!opts.grant });
 
     stage.classList.add('on'); state = 'play'; settingsOver = false;
-    music(THEME[opts.mode] || 'sandbox');
+    music(run ? 'countdown' : 'sandbox');   // then Music.sync(w) follows the run phase
     IT.Input.hooks = hooks;
     IT.Input.bind(ctx);
     IT.HUD.bind(ctx);
@@ -156,7 +155,7 @@
     const st = commitStats(modeInfo) || (IT.StatsCollector ? IT.StatsCollector.blank() : null);
     g.w.paused = true; IT.Input.enabled = false; g.menu = false;
     aimG.clearRect(0, 0, aimCv.width, aimCv.height);
-    if (IT.Music) { IT.Music.intensity(0); music('menu'); }
+    if (IT.Music) { IT.Music.intensity(0); music(modeInfo && (modeInfo.mode === 'ranked' || modeInfo.mode === 'infinite') ? 'splash' : 'menu'); }
     state = 'end';
     const info = { stats: st, mode: modeInfo, prevBest: g.prevBest || null };
     UI.clear();
@@ -320,6 +319,7 @@
         g.run.tick(dt);
         if (g && !g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
       }
+      if (g && !g.ended && IT.Music) { try { IT.Music.sync(w); } catch (e) { /* audio is optional */ } }   // situation track: countdown / play / escape / lowtime / result
       g.R.render(w.paused ? 1 : acc / w.dt, dt);
       IT.Input.drawAim(aimG);
       if (g) IT.HUD.update(dt);

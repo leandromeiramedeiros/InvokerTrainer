@@ -59,3 +59,15 @@
   .tbig{flex-direction:column}
   .fsbtn{top:.3em;right:.3em}
 }
+
+/* ---- v6 WP9 ornaments: border shorthands above reset border-image, so re-apply it (art from js/art/ornaments.js; no layout change) */
+.btn.grn,.btn.red,.btn.tbtn{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+.btn.red{border-image-source:var(--orn-thin-red)}
+.btn.tbtn.scn{border-image-source:var(--orn-thin)}
+.btn.tbtn.scn:hover{border-image-source:var(--orn-thin-gold)}
+.btn.slt{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.btn.slt:hover{border-image-source:var(--orn-mini-gold)}
+.rankbox{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+.fsbtn{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.fsbtn:hover{border-image-source:var(--orn-mini-gold)}
+/* big buttons: a little more breathing room is not needed, the 8-px bracket fits inside the 2px border + padding */

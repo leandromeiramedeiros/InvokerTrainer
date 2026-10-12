@@ -97,21 +97,6 @@ body.gl #glow{display:none}
 .stk{color:var(--mag)}
 .tm{font-size:1.5em}
 
-/* sandbox side panel */
-.hside{position:absolute;right:1%;top:12em;width:22%;max-height:58%;display:flex;flex-direction:column;gap:.6em;padding:.8em;background:#150d27e6;border:.25em solid var(--line);font-size:calc(var(--u)*3.3333)}
-.maplin{flex:none;font-size:max(1em,10px);color:var(--gold);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dpsrow{display:flex;align-items:baseline;gap:.5em;font-size:max(1em,10px);color:var(--dim)}
-.dpsrow .sp{margin-left:auto}
-.dpsrow b{color:var(--gold);font-size:1.4em}
-.srow2{display:flex;flex-wrap:wrap;gap:.4em}
-.mini{padding:.2em .6em;background:#0b0618;border:.2em solid var(--line);font-size:max(.85em,9px);color:var(--ink)}
-.mini:hover{border-color:var(--gold)}
-.ch2{color:var(--mag);font-size:max(.9em,9px);text-transform:uppercase}
-.clist{overflow-y:auto;display:flex;flex-direction:column;gap:.25em;padding-right:.3em;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.ctier{color:var(--dim);font-size:max(.8em,8px);margin-top:.4em;text-transform:uppercase}
-.citem{text-align:left;padding:.25em .6em;background:#0b0618;border:.15em solid var(--line);font-size:max(.9em,9px)}
-.citem:hover{border-color:var(--gold);color:var(--gold)}
-.citem.lock{opacity:.45}
 
 .cheat,.live{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:44em;padding:1.2em 1.6em;background:#150d27f2;border:.3em solid var(--mag);font-size:calc(var(--u)*3.3333);max-height:90%;overflow:auto}
 .live{min-width:50em}
@@ -248,3 +233,31 @@ h3{margin:0 0 .5em;color:var(--mag);font-size:.9em;text-transform:uppercase;lett
 .cfb:empty{display:none}
 .cfb.bad{color:var(--bad)}
 .cfb.warn{color:var(--gold)}
+
+/* ================= v6 WP9 ornaments =================
+   Pixel-art frames / ribbons / gem caps come from js/art/ornaments.js as data URLs in --orn-*; every rule degrades to the plain border when they are missing.
+   --fs = one art pixel in CSS px (integer: 2 at 1280 wide, 3 at 1920); #hud overrides it from the stage scale. Frames sit on the existing border box, so layout does not change. */
+:root{--fs:2px;--orn-tex:linear-gradient(#0000,#0000)}
+@supports (width:round(down,5px,1px)){:root{--fs:round(down,calc(var(--g)/7),1px)}}
+/* big riveted bronze frame: corner gems, studs, violet hairline */
+.panel,.cheat,.live{border-image:var(--orn-frame) 12/calc(12*var(--fs)) round;image-rendering:pixelated;background-image:var(--orn-tex);background-size:calc(4*var(--fs)) calc(4*var(--fs))}
+/* nested boxes: thinner bracket frame */
+.sec,.combobar{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated;background-image:var(--orn-tex);background-size:calc(4*var(--fs)) calc(4*var(--fs))}
+/* buttons: small bronze bracket; hover turns it gold */
+.btn{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.btn.gold,.btn:hover{border-image-source:var(--orn-mini-gold)}
+.btn.danger{border-image-source:var(--orn-mini-red)}
+.btn.dis,.btn:disabled{border-image-source:var(--orn-mini)}
+/* ribbon behind titles: the title keeps its box (plus side padding); the swallow-tailed banner is drawn behind and outside it at an exact 16-row height */
+.ph,.logo-b,.lo-head h1,.sp-head,.set-title{position:relative;isolation:isolate;padding-left:1.4em;padding-right:1.4em;text-align:center}
+.ph{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
+.ph::before,.logo-b::before,.lo-head h1::before,.sp-head::before,.set-title::before{content:"";position:absolute;z-index:-1;pointer-events:none;left:calc(-14*var(--fs));right:calc(-14*var(--fs));top:50%;height:calc(16*var(--fs));margin-top:calc(-7*var(--fs));
+  border:0 solid transparent;border-width:0 calc(14*var(--fs));border-image:var(--orn-rib-plum) 0 14 0 14 fill/0 calc(14*var(--fs)) round stretch;image-rendering:pixelated}
+/* main menu: gem rail behind the orb icons, diamond rules either side of the logo */
+.orbs-deco{position:relative;isolation:isolate}
+.orbs-deco::before,.logo-a::before,.logo-a::after{content:"";position:absolute;z-index:-1;pointer-events:none;height:calc(7*var(--fs));margin-top:calc(-3.5*var(--fs));top:50%;
+  border:0 solid transparent;border-width:0 calc(9*var(--fs));border-image:var(--orn-rule) 0 9 0 9 fill/0 calc(9*var(--fs)) round stretch;image-rendering:pixelated}
+.orbs-deco::before{left:-9em;right:-9em}
+.logo-a{position:relative;isolation:isolate}
+.logo-a::before,.logo-a::after{width:calc(52*var(--fs));border-image-source:var(--orn-rule-gold)}
+.logo-a::before{right:100%;margin-right:.35em}.logo-a::after{left:100%;margin-left:.35em}

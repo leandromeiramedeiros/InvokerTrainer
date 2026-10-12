@@ -116,3 +116,21 @@
 .dchat.dc-praise{border-color:var(--good)}.dchat.dc-praise::after{border-top-color:var(--good)}
 .dchat.dc-hurt,.dchat.dc-comboFail{border-color:var(--bad)}.dchat.dc-hurt::after,.dchat.dc-comboFail::after{border-top-color:var(--bad)}
 
+
+/* ---- v6 WP9 ornaments: HUD frame scale follows the stage scale (art px = 0.75 stage px, integer); data URLs from js/art/ornaments.js */
+#hud{--fs:2px}
+@supports (width:round(down,5px,1px)){#hud{--fs:round(down,calc(var(--u)*.75),1px)}}
+.hbar{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;border-image-outset:calc(2*var(--fs));image-rendering:pixelated}
+.rkp{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+.rkp.good,.rkp.win{border-image-source:var(--orn-thin-gold)}
+.recs{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.toast{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.toast.good{border-image-source:var(--orn-mini-gold)}.toast.bad{border-image-source:var(--orn-mini-red)}
+.dchat{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.dchat.dc-praise{border-image-source:var(--orn-mini-grn)}.dchat.dc-hurt,.dchat.dc-comboFail{border-image-source:var(--orn-mini-red)}
+/* gem-studded bronze clasps on both ends of the HP / mana bars (right one is the mirrored image) */
+.bar::before,.bar::after{content:"";position:absolute;z-index:3;pointer-events:none;top:50%;width:calc(9*var(--fs));height:calc(15*var(--fs));margin-top:calc(-7.5*var(--fs));
+  background:var(--orn-cap-hp) center/100% 100% no-repeat;image-rendering:pixelated}
+.bar::before{left:calc(-6*var(--fs))}.bar::after{right:calc(-6*var(--fs));transform:scaleX(-1)}
+.bar.mp::before,.bar.mp::after{background-image:var(--orn-cap-mp)}
+.bar.foe::before,.bar.foe::after{background-image:var(--orn-cap-foe)}

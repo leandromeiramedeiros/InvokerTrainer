@@ -95,3 +95,12 @@
 .settings .skin-c.on{border-color:#ffd166;color:#fff;background:#26313b}
 .settings .skin-im canvas{width:96px;height:96px;image-rendering:pixelated;display:block}
 .settings .skin-n{font-size:.85em}
+
+/* ---- v6 WP9 ornaments */
+.settings .set-panel{position:relative}
+.settings .set-panel::after{content:"";position:absolute;inset:-1px;z-index:5;pointer-events:none;border:calc(8*var(--fs)) solid transparent;border-image:var(--orn-thin) 8 round;image-rendering:pixelated}
+.settings .set-title{margin-left:calc(14*var(--fs))}
+.settings .btn{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.settings .btn:hover,.settings .btn.gold{border-image-source:var(--orn-mini-gold)}
+.settings .set-strip{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+.settings .set-ni.on{border-left-color:var(--gold,#f2c444)}

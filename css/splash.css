@@ -137,3 +137,12 @@
 @media (max-width:900px){.st-relics{grid-template-columns:repeat(2,minmax(0,1fr))}.splash .sp-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.rl-toast,.rl-bloom,.rl-bar em,.rl-panel{animation-duration:.01s!important;animation-delay:0s!important}}
 .st-relics .rl-tier{display:none}
+
+/* ---- v6 WP9 ornaments */
+.splash .sp-tile,.splash .sp-dmg{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+.rl-panel{border-image:var(--orn-frame) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
+.rl-card{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.rl-card.adv{border-image-source:var(--orn-mini-gold)}
+.rl-toast{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+.btn.relicbtn{border-image-source:var(--orn-mini-gold)}
+.splash .sp-head{margin-left:calc(14*var(--fs));margin-right:calc(14*var(--fs))}

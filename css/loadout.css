@@ -140,3 +140,12 @@
 .fp .iopt{padding:.2em .35em;gap:.35em;font-size:.7em;line-height:1.1}
 .fp .iopt .ico{flex:none;width:1.9em;height:1.9em}
 .fp .iopt[draggable=true]{cursor:grab}
+
+/* ---- v6 WP9 ornaments (borders reset border-image, re-apply) */
+.lo-head h1{margin-left:calc(14*var(--fs));margin-right:calc(14*var(--fs))}
+.sc-ranked{border-image:var(--orn-frame-gold) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
+.scard,.tabb,.fp-foot .btn.go{image-rendering:pixelated}
+.scard{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round}
+.scard:hover{border-image-source:var(--orn-mini-gold)}
+.sc-go,.fp-foot .btn.go{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round}
+.islot,.iopt{image-rendering:pixelated}

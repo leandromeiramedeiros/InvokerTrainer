@@ -25,18 +25,31 @@
     return t(IT.GAME.ITEM_DOTA[s.ability] ? 'item.' + s.ability : 'spell.' + s.ability) + (s.selfCast ? ' (' + t('step.self') + ')' : '');
   }
 
+  // icon (or short text tag) of one combo step; shared with the sandbox combo list
+  CB.stepIcon = function (s) {
+    const { h, icon } = IT.UI;
+    if (s.type === 'attack' || s.type === 'react' || !s.ability) return h('b', { class: 'ab', text: s.type === 'attack' ? 'ATK' : s.type === 'react' ? '!' : s.type === 'move' ? 'MOV' : 'POS' });
+    return icon(s.ability);
+  };
+  const fmtS = x => (Math.round(x * 10) / 10).toFixed(1);
+  // timing window of step i (seconds after the previous step landed): { wait, lo, hi } or null when the step has no timed window
+  function winOf(def, i) {
+    try { const T = IT.Combo.timing(hctx()), w = IT.Combo.windowOf(def, i, T); return w && isFinite(w.wait) ? w : null; } catch (e) { return null; }
+  }
+  const winText = w => '+' + fmtS(w.wait) + 's (' + fmtS(Math.max(0, w.lo)) + ' - ' + fmtS(w.hi) + ')';
+
   CB.bind = function (ctx, root) {
     CB.unbind();
     const { h } = IT.UI;
     CB.c = ctx; CB.key = '';
     const R = CB.refs = {};
     R.name = h('b', { class: 'cname' }); R.tier = h('span', { class: 'ctr' }); R.retry = h('span', { class: 'cretry' });
-    R.steps = h('div', { class: 'csteps' }); R.tip = h('div', { class: 'ctip' });
+    R.steps = h('div', { class: 'csteps' }); R.tip = h('div', { class: 'ctip' }); R.win = h('div', { class: 'cwin' });
     R.score = h('b', { class: 'sc' }); R.streak = h('span', { class: 'stk' });
     R.fb = h('div', { class: 'cfb' });
     R.empty = h('div', { class: 'cempty', text: IT.t('hud.noneYet') });
     CB.el = h('div', { class: 'hudp combobar' },
-      h('div', { class: 'cl' }, R.name, R.tier, R.retry, R.steps, R.tip, R.fb, R.empty),
+      h('div', { class: 'cl' }, h('div', { class: 'cbh' }, R.name, R.tier, R.retry), R.steps, R.win, R.tip, R.fb, R.empty),
       h('div', { class: 'cr' }, h('div', { class: 'scr1' }, h('span', { text: IT.t('hud.score') }), R.score), R.streak));
     root.appendChild(CB.el);
     const w = ctx.w, t = IT.t, on = (n, f) => CB.off.push(w.on(n, f));
@@ -67,29 +80,38 @@
         CB.key = key;
         R.name.textContent = nm(def.name);
         R.tier.textContent = t('tier.' + def.tier);
-        R.tip.textContent = IT.Settings.get().hints ? IT.Combo.tipText(def, hctx(), IT.lang) : '';
+        const tipTx = IT.Settings.get().hints ? IT.Combo.tipText(def, hctx(), IT.lang) : '';
+        R.tip.textContent = tipTx; R.tip.setAttribute('data-tip', tipTx);
         R.steps.textContent = ''; CB.chips = [];
         def.steps.forEach((s, i) => {
           const rec = s.type === 'cast' ? IT.GAME.SPELL_ORBS[s.ability] : null;
           const vis = s.targetVisibility && s.targetVisibility !== 'any' ? h('em', { class: 'vis ' + s.targetVisibility, text: t(s.targetVisibility === 'hidden' ? 'ui.hidden' : 'ui.visible') }) : null;
-          const chip = h('div', { class: 'cstep' },
-            s.type === 'attack' || s.type === 'react' || !s.ability ? h('b', { class: 'ab', text: s.type === 'attack' ? 'ATK' : s.type === 'react' ? '!' : s.type === 'move' ? 'MOV' : 'POS' }) : icon(s.ability),
+          const wn = winOf(def, i);
+          const chip = h('div', { class: 'cstep', 'data-tip': stepLabel(s) + (wn ? '\n' + t('cb.win') + ' ' + winText(wn) : '') },
+            h('i', { class: 'sn', text: String(i + 1) }),
+            CB.stepIcon(s),
             h('span', { class: 'sl', text: stepLabel(s) }),
             rec && IT.Settings.get().hints ? h('span', { class: 'rec', text: rec }) : null, vis);
           R.steps.appendChild(chip); CB.chips.push(chip);
         });
       }
+      let cur = -1;
+      st.steps.forEach((s, i) => { if (cur < 0 && (s.status === 'active' || s.status === 'pending')) cur = i; });
+      const wn = cur >= 0 ? winOf(def, cur) : null;
+      const wtx = cur >= 0 ? t('cb.next') + ' ' + stepLabel(def.steps[cur]) + (wn ? '  ' + t('cb.win') + ' ' + winText(wn) : '') : '';
+      if (R.win.textContent !== wtx) R.win.textContent = wtx;
       st.steps.forEach((s, i) => {
         const chip = CB.chips[i]; if (!chip) return;
         const cls = 'cstep ' + (s.status || 'todo') + (s.status === 'active' || s.status === 'pending' ? ' now' : '');
         if (chip.className !== cls) chip.className = cls;
         const n = def.steps[i].count > 1 && s.n != null ? ' ' + s.n + '/' + def.steps[i].count : '';
         const lab = chip.querySelector('.sl'); const txt = stepLabel(def.steps[i]) + n; if (lab.textContent !== txt) lab.textContent = txt;
+        const tp = (txt + (n ? '' : '')); if (chip.getAttribute('data-tip') !== tp && !winOf(def, i)) chip.setAttribute('data-tip', tp);
       });
       const rt = st.retries ? t('hud.retry', { n: st.retries }) : '';
       if (R.retry.textContent !== rt) R.retry.textContent = rt;
       R.el = null;
-    } else if (CB.key) { CB.key = ''; R.tip.textContent = ''; }
+    } else if (CB.key) { CB.key = ''; R.tip.textContent = ''; R.tip.removeAttribute('data-tip'); R.win.textContent = ''; }
     if (R.fb && R.fb.textContent && Date.now() > (CB.fbUntil || 0)) { R.fb.textContent = ''; R.fb.className = 'cfb'; }
     const sc = String(Math.round(st.score || 0)); if (R.score.textContent !== sc) R.score.textContent = sc;
     const sk = st.streak > 1 ? t('hud.streak', { n: st.streak }) : ''; if (R.streak.textContent !== sk) R.streak.textContent = sk;

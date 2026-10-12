@@ -411,23 +411,8 @@
     R.rk = rankedPanel(R);
     R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
 
-    // --- sandbox panel
-    if (ctx.mode === 'sandbox') {
-      R.dpsN = h('b', { class: 'dpsn', text: '0' }); R.totN = h('b', { class: 'totn', text: '0' });
-      R.list = h('div', { class: 'clist' });
-      R.mapLine = h('div', { class: 'maplin' });   // current map name (Free Play / sandbox top line)
-      R.side = h('div', { class: 'hudp hside' },
-        R.mapLine,
-        h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, h('span', { class: 'sp', text: t('hud.total') }), R.totN),
-        h('div', { class: 'srow2' },
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.refresh && In.hooks.refresh(), text: t('hud.refresh') + ' [' + IT.Settings.label(IT.Settings.keyOf('refresh')) + ']' }),
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.spawn && In.hooks.spawn(), text: t('hud.spawn') + ' [' + IT.Settings.label(IT.Settings.keyOf('spawn')) + ']' }),
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.resetDummies && In.hooks.resetDummies(), text: t('hud.resetDummies') + ' [' + IT.Settings.label(IT.Settings.keyOf('resetDummies')) + ']' }),
-          ctx.free ? h('button', { type: 'button', class: 'mini place', 'data-tip': t('hud.placeEnemy.d'), onclick: () => In.hooks.armEnemy && In.hooks.armEnemy(), text: t('hud.placeEnemy') }) : null),
-        h('div', { class: 'ch2', text: t('hud.combos') }), R.list);
-      H.buildList();
-      root.appendChild(R.side);
-    }
+    // --- sandbox panel (v6 WP7: fixed-height pane, see H.buildSide)
+    if (ctx.mode === 'sandbox') { R.top.classList.add('sbx'); H.buildSide(ctx, root); }
     R.cheat = h('div', { class: 'hudp cheat', style: { display: 'none' } });
     R.live = h('div', { class: 'hudp live', style: { display: 'none' } });
     root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim); root.appendChild(R.cheat); root.appendChild(R.live);
@@ -454,16 +439,134 @@
     H.update(0);
   };
 
+  // ---------------------------------------------------------------- sandbox side panel (v6 WP7)
+  // Fixed-height pane (never taller than the stage, clear of the hero bar): header (map + fold), DPS meter with sparkline,
+  // icon tool buttons (+ auto-refresh toggle), sliders (scarecrows, enemy tier), then the combo browser: search, tier filter, scrollable list.
+  const SBI = {
+    refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13.5 1.5V5H10"/>',
+    spawn: '<path d="M6 2h4v3H6zM8 5v9M2 8h12M5 14h6"/>',
+    reset: '<path d="M3 5h8a3 3 0 0 1 0 6H6M3 5l3-3M3 5l3 3"/>',
+    place: '<path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4M6.5 6.5h3v3h-3z"/>',
+    auto: '<path d="M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z"/>',
+    fold: '<path d="M3 6l5 5 5-5"/>',
+    lock: '<path d="M4 7h8v7H4zM5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+  };
+  const sbIcon = k => { const s = IT.UI.h('span', { class: 'sbi' }); s.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + SBI[k] + '</svg>'; return s; };
+  const SB_FILTERS = ['all', 'basic', 'intermediate', 'advanced', 'items'];
+
+  H.buildSide = function (ctx, root) {
+    const { h } = IT.UI, t = IT.t, In = IT.Input, R = H.refs, S = IT.Settings;
+    if (!H.sb || H.sb.w !== ctx.w) H.sb = { w: ctx.w, filter: 'all', q: '', min: false, auto: false, tier: null, peak: 0, tiered: new Set(), cur: null, ck: '', sp: 0, tc: 0 };
+    const sb = H.sb; sb.ck = ''; sb.cur = null; const free = !!ctx.free, key = a => S.label(S.keyOf(a));
+    const tool = (ic, label, desc, act, hook) => h('button', {
+      type: 'button', class: 'sbx-ib ' + act, 'aria-label': label, 'data-tip': label + (key(act) ? ' [' + key(act) + ']' : '') + '\n' + desc,
+      onclick: ev => { ev.currentTarget.blur(); if (In.hooks[hook]) In.hooks[hook](); },
+    }, sbIcon(ic), key(act) && act !== 'armEnemy' ? h('kbd', { text: key(act) }) : null);
+    const slider = (cls, label, tip, min, max, val, oninput) => {
+      const inp = h('input', { type: 'range', class: 'sbx-rg', min, max, step: 1, value: val, 'aria-label': label, oninput: ev => oninput(+ev.target.value) });
+      inp.addEventListener('change', () => inp.blur());
+      const out = h('span', { class: 'v' });
+      return { row: h('div', { class: 'sbx-sl ' + cls, 'data-tip': tip }, h('label', { text: label }), inp, out), inp, out };
+    };
+
+    R.mapLine = h('div', { class: 'maplin' });   // current map name (Free Play / sandbox top line)
+    R.fold = h('button', { type: 'button', class: 'sbx-fold', 'aria-label': t(sb.min ? 'sbx.expand' : 'sbx.collapse'), 'data-tip': t(sb.min ? 'sbx.expand' : 'sbx.collapse'),
+      onclick: ev => { ev.currentTarget.blur(); sb.min = !sb.min; R.side.classList.toggle('min', sb.min); const tp = t(sb.min ? 'sbx.expand' : 'sbx.collapse'); R.fold.setAttribute('data-tip', tp); R.fold.setAttribute('aria-label', tp); } }, sbIcon('fold'));
+    // DPS meter
+    R.dpsN = h('b', { class: 'dpsn', text: '0' }); R.totN = h('b', { class: 'totn', text: '0' }); R.peakN = h('span', { class: 'pk' });
+    R.spark = h('canvas', { class: 'sbx-spark', width: 160, height: 24, 'data-tip': t('sbx.spark') });
+    // tools
+    R.tools = h('div', { class: 'sbx-tools' },
+      tool('refresh', t('hud.refresh'), t('sbx.refresh.d'), 'refresh', 'refresh'),
+      free ? tool('spawn', t('hud.spawn'), t('sbx.spawn.d'), 'spawn', 'spawn') : null,
+      tool('reset', t('hud.resetDummies'), t('sbx.reset.d'), 'resetDummies', 'resetDummies'),
+      free ? (R.place = tool('place', t('hud.placeEnemy'), t('hud.placeEnemy.d'), 'armEnemy', 'armEnemy')) : null,
+      R.autoB = h('button', { type: 'button', class: 'sbx-ib auto' + (sb.auto ? ' on' : ''), 'aria-label': t('sbx.auto'), 'aria-pressed': sb.auto ? 'true' : 'false', 'data-tip': t('sbx.auto') + '\n' + t('sbx.auto.d'),
+        onclick: ev => { ev.currentTarget.blur(); sb.auto = !sb.auto; R.autoB.classList.toggle('on', sb.auto); R.autoB.setAttribute('aria-pressed', sb.auto ? 'true' : 'false'); } }, sbIcon('auto')));
+    // sliders (scarecrow count / enemy tier): free play + combo sandbox only (scenario sandbox replays the scenario)
+    let sliders = null;
+    if (free) {
+      const n0 = Math.max(1, Math.min(5, IT.Units.trainers(ctx.w).length || 1));
+      const sd = R.sd = slider('sd', t('sbx.dummies'), t('sbx.dummies.d'), 1, 5, n0, v => { H.sbDummies(v); });
+      const tiers = IT.DIFFICULTY.order, ti = R.st = slider('st', t('sbx.diff'), t('sbx.diff.d'), 0, tiers.length - 1, sb.tier != null ? sb.tier : 2, v => { sb.tier = v; H.sbTier(true); });
+      R.sdN = sd.inp; R.sdV = sd.out; R.stV = ti.out;
+      sliders = h('div', { class: 'sbx-sec sbx-sls' }, sd.row, ti.row);
+      sd.out.textContent = String(n0);
+      ti.out.textContent = sb.tier != null ? t('diff.' + tiers[sb.tier]) : t('sbx.diff.keep');
+    }
+    // combo browser
+    R.search = h('input', { type: 'text', class: 'sbx-q', placeholder: t('sbx.search'), 'aria-label': t('sbx.search'), spellcheck: 'false', autocomplete: 'off', maxlength: 24, value: sb.q,
+      oninput: ev => { sb.q = ev.target.value; H.filterList(); },
+      onkeydown: ev => { if (ev.key === 'Escape') { ev.stopPropagation(); ev.preventDefault(); if (R.search.value) { R.search.value = ''; sb.q = ''; H.filterList(); } else R.search.blur(); } } });
+    R.lcount = h('span', { class: 'cnt' });
+    R.chips = SB_FILTERS.map(f => h('button', { type: 'button', class: 'sbx-fc' + (f === 'all' ? '' : ' t-' + f) + (sb.filter === f ? ' on' : ''), text: t(f === 'all' ? 'sbx.all' : 'tier.' + f),
+      onclick: ev => { ev.currentTarget.blur(); sb.filter = f; R.chips.forEach((c, i) => c.classList.toggle('on', SB_FILTERS[i] === f)); H.filterList(); } }));
+    R.list = h('div', { class: 'clist' });
+    R.side = h('div', { class: 'hudp hside' + (sb.min ? ' min' : '') },
+      h('div', { class: 'sbx-head' }, R.mapLine, R.fold),
+      h('div', { class: 'sbx-body' },
+        h('div', { class: 'sbx-sec sbx-meter' },
+          h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, R.peakN, h('span', { class: 'sp', text: t('hud.total') }), R.totN), R.spark),
+        h('div', { class: 'sbx-sec' }, R.tools),
+        sliders,
+        h('div', { class: 'sbx-lh' }, h('span', { class: 'ch2', text: t('hud.combos') }), R.lcount, R.search),
+        h('div', { class: 'sbx-fl' }, R.chips),
+        R.list));
+    // the wheel belongs to the pane (list scroll), never to the game zoom
+    R.side.addEventListener('wheel', ev => ev.stopPropagation(), { passive: true });
+    H.buildList();
+    root.appendChild(R.side);
+  };
+
+  // scarecrow count slider: spawn on free dummy spots / remove the newest (never the first trainer, never the combo's dummy)
+  H.sbDummies = function (n) {
+    const c = H.c, w = c && c.w, sb = H.sb; if (!w || !sb) return;
+    const U = IT.Units, lo = w.loadout || {}, cur = w.combo && w.combo.dummy;
+    let ds = U.trainers(w);
+    const spots = (w.map && w.map.spawns && w.map.spawns.dummies) || [];
+    while (ds.length < n) {
+      const s = spots.find(p => !ds.some(d => Math.hypot(d.x - p.x, d.y - p.y) < 150));
+      if (!s) break;
+      U.spawnDummy(w, { x: s.x, y: s.y, preset: lo.preset, skin: lo.skin });
+      ds = U.trainers(w);
+    }
+    while (ds.length > n && ds.length > 1) {
+      const d = ds.slice(1).reverse().find(x => x.id !== cur); if (!d) break;
+      w.remove(d); ds = U.trainers(w);
+    }
+    if (H.refs.sdV) H.refs.sdV.textContent = String(ds.length);
+  };
+
+  // enemy tier slider: reaction / item warning / awareness / damage of every real enemy (placed ones too, once the slider was used)
+  H.sbTier = function (all) {
+    const c = H.c, w = c && c.w, sb = H.sb, R = H.refs; if (!w || !sb || sb.tier == null) return;
+    const df = IT.DIFFICULTY.get(sb.tier), AK = IT.GAME.ENEMY_ATTACK || {};
+    if (R.stV) R.stV.textContent = IT.t('diff.' + IT.DIFFICULTY.order[sb.tier]);
+    for (const e of w.query(x => x.kind === 'enemy' && !x.refill)) {
+      if (!all && sb.tiered.has(e.id)) continue;
+      sb.tiered.add(e.id);
+      e.reaction = df.reaction; e.telegraph = df.telegraph; e.awareness = df.awareness; e.notice = df.notice; e.fights = !!df.fights;
+      const AT = e.attack && AK[e.atkKind];
+      if (AT) {
+        const mn = Math.round(AT.min * df.dmgMul), mx = Math.max(mn, Math.round(AT.max * df.dmgMul));
+        e.attack.min = mn; e.attack.max = mx; if (e.base) { e.base.dmgMin = mn; e.base.dmgMax = mx; }
+      }
+    }
+  };
+
+  // all combos as rows (built once per bind); H.filterList shows / hides them by tier chip + search text
   H.buildList = function () {
     const { h } = IT.UI, t = IT.t, c = H.c, R = H.refs;
     if (!R.list || !IT.Combo) return;
     R.list.textContent = '';
-    const lo = c.w.loadout, grant = !!c.grant;
+    const lo = c.w.loadout, grant = !!c.grant, CBar = IT.ComboBar;
     const av = new Set(IT.Combo.available(lo, { grantMissing: grant }).map(x => x.id));
+    const abName = id => (IT.hasT('spell.' + id) ? t('spell.' + id) : IT.hasT('item.' + id) ? t('item.' + id) : id || '');
+    R.rows = []; R.heads = {}; R.cmap = {};
     let lastTier = null;
     for (const cb of (IT.COMBOS || [])) {
-      if (cb.tier !== lastTier) { lastTier = cb.tier; R.list.appendChild(h('div', { class: 'ctier', text: t('tier.' + cb.tier) })); }
-      const ok = av.has(cb.id);
+      if (cb.tier !== lastTier) { lastTier = cb.tier; R.list.appendChild(R.heads[cb.tier] = h('div', { class: 'ctier t-' + cb.tier, text: t('tier.' + cb.tier) })); }
+      const ok = av.has(cb.id), name = (cb.name && (cb.name[IT.lang] || cb.name.en)) || cb.id;
       let tip = '';
       if (!ok) {
         const m = IT.Combo.missing(lo, cb), bits = [];
@@ -472,12 +575,91 @@
         if (m.scepter) bits.push(t('item.scepter')); if (m.shard) bits.push(t('item.shard'));
         tip = t('hud.needs', { x: bits.join(', ') });
       } else tip = IT.Combo.tipText(cb, IT.Values.ctx(c.w.loadout), IT.lang);
-      R.list.appendChild(h('button', {
-        type: 'button', class: 'citem' + (ok ? '' : ' lock'), 'data-tip': tip, text: (cb.name && (cb.name[IT.lang] || cb.name.en)) || cb.id,
-        onclick: () => { if (!ok) { IT.UI.toast(t('toast.locked'), 'warn'); return; } IT.Combo.start(c.w, cb.id); },
-      }));
+      const steps = (cb.steps || []).filter(s => s.type !== 'position' && s.type !== 'move'), shown = steps.slice(0, 9);
+      const el = h('button', {
+        type: 'button', class: 'citem t-' + cb.tier + (ok ? '' : ' lock'), 'data-tip': tip, 'data-id': cb.id,
+        onclick: ev => { ev.currentTarget.blur(); if (!ok) { IT.UI.toast(t('toast.locked'), 'warn'); return; } IT.Combo.start(c.w, cb.id); },
+      },
+        h('span', { class: 'ci-top' }, h('b', { class: 'ci-name', text: name }), ok ? null : h('span', { class: 'ci-lock' }, sbIcon('lock')), h('em', { class: 'ci-tier', text: t('sbx.t.' + cb.tier) })),
+        h('span', { class: 'ci-steps' }, shown.map(s => CBar.stepIcon(s)), steps.length > shown.length ? h('i', { class: 'more', text: '+' + (steps.length - shown.length) }) : null));
+      R.list.appendChild(el); R.cmap[cb.id] = el;
+      const hay = [(cb.name && cb.name.en) || '', (cb.name && cb.name.pt) || '', ...steps.map(s => abName(s.ability))].join(' ').toLowerCase();
+      R.rows.push({ el, cb, hay });
+    }
+    R.empty = h('div', { class: 'cnone', text: t('sbx.none'), hidden: true }); R.list.appendChild(R.empty);
+    H.filterList();
+  };
+
+  H.filterList = function () {
+    const R = H.refs, sb = H.sb; if (!R.rows || !sb) return;
+    const q = (sb.q || '').trim().toLowerCase(), seen = {};
+    let n = 0;
+    for (const r of R.rows) {
+      const on = (sb.filter === 'all' || r.cb.tier === sb.filter) && (!q || r.hay.indexOf(q) >= 0);
+      r.el.hidden = !on; if (on) { n++; seen[r.cb.tier] = true; }
+    }
+    for (const k in R.heads) R.heads[k].hidden = sb.filter !== 'all' || !seen[k];
+    R.empty.hidden = n > 0;
+    R.lcount.textContent = n + '/' + R.rows.length;
+    R.list.scrollTop = 0;
+  };
+
+  // sparkline of the last 10 s of damage dealt to the enemies (40 buckets of 0.25 s)
+  H.drawSpark = function (now) {
+    const cv = H.refs.spark; if (!cv || !cv.getContext) return;
+    const g = cv.getContext('2d'), W = cv.width, Hh = cv.height, N = 40, bw = W / N, arr = new Array(N).fill(0);
+    for (const d of H.dps) { const i = N - 1 - Math.floor((now - d[0]) / 0.25); if (i >= 0 && i < N) arr[i] += d[1]; }
+    let mx = 1; for (const v of arr) if (v > mx) mx = v;
+    g.clearRect(0, 0, W, Hh);
+    g.fillStyle = '#ffd23f';
+    for (let i = 0; i < N; i++) { const v = arr[i]; if (v <= 0) continue; const bh = Math.max(2, Math.round(v / mx * (Hh - 3))); g.fillRect(Math.floor(i * bw), Hh - bh, Math.max(1, Math.ceil(bw) - 1), bh); }
+    g.fillStyle = '#3a2a63'; g.fillRect(0, Hh - 1, W, 1);
+  };
+
+  // per-frame: meter, sliders sync, auto-refresh, armed Place enemy, active combo highlight
+  H.updSide = function (dt, w, hero, ca) {
+    const R = H.refs, sb = H.sb, t = IT.t; if (!sb) return;
+    const now = w.t;
+    while (H.dps.length && now - H.dps[0][0] > 10) H.dps.shift();
+    let s5 = 0; for (const d of H.dps) if (now - d[0] <= 5) s5 += d[1];
+    const dps = Math.round(s5 / 5);
+    if (H.total === 0) sb.peak = 0;   // meter reset (Reset dummies / new scenario)
+    if (dps > sb.peak) sb.peak = dps;
+    setText(R.dpsN, String(dps), ca, 'dps'); setText(R.totN, String(Math.round(H.total)), ca, 'tot');
+    setText(R.peakN, sb.peak ? t('sbx.peak', { n: sb.peak }) : '', ca, 'pk');
+    sb.sp += dt; if (sb.sp > 0.12) { sb.sp = 0; H.drawSpark(now); }
+    if (sb.auto && hero) {
+      for (const k in hero.cd) hero.cd[k] = 0;
+      if (hero.inv) hero.inv.invokeCd = 0;
+      for (const it of hero.items || []) if (it) it.cd = 0;
+      hero.mana = hero.maxMana;
+    }
+    if (R.place) { const on = !!(IT.Input.armed && IT.Input.armed.place); if (ca.plA !== on) { ca.plA = on; R.place.classList.toggle('on', on); } }
+    sb.tc += dt;
+    if (sb.tc > 0.4) {
+      sb.tc = 0;
+      if (R.sdN) {
+        const n = IT.Units.trainers(w).length;
+        if (document.activeElement !== R.sdN) { if (+R.sdN.value !== Math.min(5, Math.max(1, n))) R.sdN.value = Math.min(5, Math.max(1, n)); }
+        setText(R.sdV, String(n), ca, 'sdv');
+      }
+      if (sb.tier != null) H.sbTier(false);
+    }
+    const st = w.combo, cur = st && st.def ? st.current : null, ck = cur ? cur + '|' + st.phase : '';
+    if (sb.ck !== ck) {
+      const old = R.cmap && R.cmap[sb.cur], el = cur && R.cmap && R.cmap[cur];
+      if (old && old !== el) old.classList.remove('on', 'done', 'fail');
+      if (el) {
+        el.classList.add('on'); el.classList.toggle('done', st.phase === 'done'); el.classList.toggle('fail', st.phase === 'fail');
+        if (sb.cur !== cur && !el.hidden) {   // bring the running combo into view inside the list (own scroll math: never scrolls the stage)
+          const l = R.list, top = el.offsetTop, bot = top + el.offsetHeight;
+          if (top < l.scrollTop) l.scrollTop = Math.max(0, top - 4); else if (bot > l.scrollTop + l.clientHeight) l.scrollTop = bot - l.clientHeight + 4;
+        }
+      }
+      sb.cur = cur; sb.ck = ck;
     }
   };
+
 
   H.unbind = function () {
     for (const f of H.off) { try { f(); } catch (e) { /* ignore */ } }
@@ -759,11 +941,7 @@
     }
     if (R.bchips) for (const b of R.bchips) { const rem = Math.max(0, b.s.until - w.t); const v = rem >= 10 ? String(Math.ceil(rem)) : rem.toFixed(1); if (b.v !== v) { b.v = v; b.tx.textContent = v; } }
     // sandbox panel
-    if (R.dpsN) {
-      const now = w.t; while (H.dps.length && now - H.dps[0][0] > 5) H.dps.shift();
-      let sum = 0; for (const d of H.dps) sum += d[1];
-      setText(R.dpsN, String(Math.round(sum / 5)), ca, 'dps'); setText(R.totN, String(Math.round(H.total)), ca, 'tot');
-    }
+    if (R.dpsN) H.updSide(dt, w, hero, ca);
     if (H.statsOn) { H.accT += dt; if (H.accT > 0.4) { H.accT = 0; H.buildLive(); } }
     if (IT.ComboBar) IT.ComboBar.update(dt);
     if (IT.DummyChat && IT.DummyChat.update) IT.DummyChat.update(dt);

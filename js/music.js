@@ -1,15 +1,15 @@
-// Procedural music (WebAudio, original): themes menu | sandbox | ranked + stingers. Owner: S5.
+// Procedural music (WebAudio, original): situation tracks menu | sandbox | countdown | play | escape | splash | result_win | result_fail (+ lowtime layer) + stingers. Owner: S5 / v6 WP10.
 // One lookahead scheduler (setInterval + AudioContext time) drives the active theme; themes crossfade. Routed to the 'music' bus.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  const LOOK = 0.4, TICK = 90, FADE = 1.6;
+  const LOOK = 0.4, TICK = 90, FADE = 1.6, LOW_TIME = 8;
   const mf = m => 440 * Math.pow(2, (m - 69) / 12);
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const SFX = () => G.SFX || IT.SFX;
 
-  let c = null, out = null, tb = null, theme = null, want = null, target = 0, inten = 0, timer = 0, gesture = false, olds = [];
+  let c = null, out = null, tb = null, theme = null, want = null, target = 0, inten = 0, timer = 0, gesture = false, olds = [], low = false, wantLow = false;
 
   function settings() { try { return IT.Settings && IT.Settings.get && IT.Settings.get(); } catch (e) { return null; } }
   function audible() { const s = settings(); return !s || (s.sound !== false && (!s.audio || (s.audio.musicOn !== false && s.audio.music > 0))); }
@@ -92,77 +92,203 @@
     th.nodes.push(...nodes);
   }
 
-  // ---------------------------------------------------------------- themes: sd(x) step length (16th), init(th), step(th, i, t, sd, x)
-  const A = 57, F = 53, Dm = 50, E = 52; // midi roots (A3, F3, D3, E3)
+  // ---------------------------------------------------------------- themes: sd(x, low) step length (16th), init(th), step(th, i, t, sd, x, low)
+  // 8th-note melody helper: arr = 8 slots per bar (0 = hold/rest), s = 16th step in the bar; fn(midi, seconds)
+  function mel(arr, s, sd, fn) {
+    if (s & 1) return;
+    const k = s >> 1, m = arr[k]; if (!m) return;
+    let n = 1; while (n < 4 && k + n < 8 && !arr[k + n]) n++;
+    fn(m, n * 2 * sd);
+  }
+  const lead = (th, t, m, d, g) => { // bright square + detuned saw + soft sub-octave
+    const f = mf(m);
+    note(th, t, f, d * 0.95, { type: 'square', g: g * 0.55, a: 0.006, lp: 3400, lp2: 1800 });
+    note(th, t, f, d * 0.95, { type: 'sawtooth', g: g * 0.5, a: 0.008, det: 7, lp: 2800, lp2: 1500 });
+    note(th, t, f / 2, d * 0.9, { type: 'triangle', g: g * 0.5, a: 0.01 });
+  };
+  const bass = (th, t, m, d, g, lp) => { note(th, t, mf(m), d, { type: 'sawtooth', g, a: 0.004, lp: lp || 700, lp2: 220 }); note(th, t, mf(m), d, { type: 'sine', g: g * 1.1, a: 0.006 }); };
+  const stab = (th, t, ms, d, g, lp) => ms.forEach((m, k) => note(th, t + k * 0.006, mf(m), d, { type: 'sawtooth', g, a: 0.004, det: k % 2 ? 6 : -6, lp: lp || 2600, lp2: 700 }));
+  const crash = (th, t, g, d) => nz(th, t, d || 1.2, { ft: 'highpass', f: 5500, g, a: 0.003 });
+  const beep = (th, t, f, g) => note(th, t, f, 0.06, { type: 'sine', g, a: 0.002 });
+
+  // low-time layer (< 8 s left): clock ticks on the beat, a bar-long noise riser, extra kick before the bar line
+  function lowLayer(th, s, t, sd) {
+    if (s % 4 === 0) beep(th, t, s === 0 ? 2093 : 1568, 0.05);
+    if (s % 4 === 2) beep(th, t, 1175, 0.025);
+    if (s === 0) nz(th, t, sd * 16, { ft: 'highpass', f: 1800, f2: 9000, g: 0.05, a: sd * 14 });
+    if (s === 14 || s === 15) kick(th, t, 0.16);
+  }
+
+  const MENU_PROG = ['C', 'G', 'Am', 'F', 'C', 'G', 'F', 'G'];
+  const MENU_CH = { C: [60, 64, 67], G: [55, 59, 62], Am: [57, 60, 64], F: [53, 57, 60] }, MENU_RT = { C: 36, G: 43, Am: 45, F: 41 };
+  const MENU_LEAD = [[76, 0, 79, 0, 81, 79, 76, 0], [74, 0, 79, 0, 83, 0, 81, 79], [81, 0, 84, 0, 81, 0, 79, 81], [77, 0, 81, 0, 84, 0, 81, 0],
+    [84, 0, 83, 81, 79, 0, 76, 79], [74, 76, 79, 0, 83, 0, 79, 0], [81, 0, 77, 0, 81, 84, 0, 81], [83, 0, 81, 0, 79, 0, 74, 0]];
+
+  const PLAY_PROG = ['Dm', 'Bb', 'C', 'A'];
+  const PLAY_CH = { Dm: [50, 53, 57], Bb: [46, 50, 53], C: [48, 52, 55], A: [45, 49, 52] }, PLAY_RT = { Dm: 38, Bb: 34, C: 36, A: 33 };
+  const PLAY_ARP = [0, 1, 2, 3, 2, 1, 2, 3, 0, 1, 2, 3, 4, 3, 2, 1];
+  const PLAY_LEAD = [[74, 0, 77, 0, 81, 0, 79, 77], [70, 0, 74, 0, 77, 0, 74, 70], [72, 0, 76, 0, 79, 0, 76, 72], [76, 0, 81, 0, 85, 0, 88, 85]];
+
+  const ESC_PROG = ['Am', 'F', 'G', 'E'];
+  const ESC_CH = { Am: [45, 48, 52], F: [41, 45, 48], G: [43, 47, 50], E: [40, 44, 47] }, ESC_RT = { Am: 33, F: 29, G: 31, E: 28 };
+  const ESC_LEAD = [[81, 0, 81, 0, 84, 0, 83, 81], [77, 0, 77, 0, 81, 0, 79, 77], [79, 0, 79, 0, 83, 0, 81, 79], [80, 0, 83, 0, 88, 0, 86, 83]];
+
+  const SPL_PROG = ['E', 'B', 'C#m', 'A', 'E', 'B', 'A', 'B'];
+  const SPL_CH = { E: [52, 56, 59], B: [47, 51, 54], 'C#m': [49, 52, 56], A: [45, 49, 52] }, SPL_RT = { E: 40, B: 35, 'C#m': 37, A: 33 };
+  const SPL_LEAD = [[76, 0, 80, 0, 83, 0, 88, 0], [87, 0, 83, 0, 78, 0, 83, 0], [85, 0, 88, 0, 85, 0, 80, 0], [81, 0, 85, 0, 88, 0, 85, 0],
+    [88, 0, 83, 0, 80, 0, 83, 0], [83, 0, 87, 0, 90, 0, 87, 0], [88, 0, 85, 0, 81, 0, 85, 88], [90, 0, 0, 0, 87, 0, 83, 0]];
+
+  const RLX_PROG = [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]], RLX_RT = [29, 28, 26, 24];
+
   const THEMES = {
-    // slow arcane pad + drone, distant war drum, sparse bell plucks. Am F Dm E
+    // MENU: upbeat, bright C major, 126 BPM. C G Am F C G F G, catchy square lead, four-on-the-floor, bouncing bass, off-beat stabs
     menu: {
-      sd: () => 60 / 56 / 4,
-      init(th) { drone(th, 55, 0.07, 260); },
+      sd: () => 60 / 126 / 4,
+      init(th) { drone(th, 65.4, 0.015, 900); },
       step(th, i, t, sd) {
-        const s = i % 16, bar = Math.floor(i / 16) % 4, ch = [[57, 60, 64], [53, 57, 60], [50, 53, 57], [52, 56, 59]][bar], root = [33, 29, 26, 28][bar];
-        if (s === 0) {
-          pad(th, t, ch, sd * 17, 0.07);
-          pad(th, t, [ch[0] + 12, ch[2] + 12], sd * 17, 0.03);
-          note(th, t, mf(root), sd * 15, { type: 'sine', g: 0.2, a: 0.5, rel: sd * 6 });
-          if (bar % 2 === 0) taiko(th, t, bar === 0 ? 0.22 : 0.13);
-        }
-        if (bar === 3 && s === 8) tom(th, t, 0.1, 110);
-        if ((s === 0 || s === 6 || s === 10 || s === 13) && Math.random() < (s === 0 ? 0.7 : 0.4)) {
-          const f = mf(pick(ch) + pick([12, 24]));
-          note(th, t, f, 1.5, { type: 'triangle', g: 0.06, a: 0.004 });
-          note(th, t, f * 2.76, 0.25, { type: 'sine', g: 0.012, a: 0.002 });
-          note(th, t + sd * 3, f, 1.0, { type: 'triangle', g: 0.025, a: 0.004 }); // echo
-        }
+        const s = i % 16, bar = Math.floor(i / 16) % 8, k = MENU_PROG[bar], ch = MENU_CH[k], root = MENU_RT[k], hi = bar >= 4;
+        if (s % 4 === 0) kick(th, t, 0.24);
+        if (s === 4 || s === 12) clap(th, t, 0.08);
+        if (s % 4 === 2) hat(th, t, 0.035); else if ((s & 1) && hi) hat(th, t, 0.012);
+        if (!(s & 1)) bass(th, t, root + (s % 8 === 6 ? 12 : s % 8 === 4 ? 7 : 0), sd * 1.7, 0.1);
+        if (s === 3 || s === 6 || s === 10 || s === 14) stab(th, t, ch, sd * 1.5, 0.028, 2400);
+        if (s === 0) pad(th, t, ch.map(m => m - 12), sd * 17, 0.03);
+        if (s === 0 && bar % 4 === 0) crash(th, t, 0.05);
+        mel(MENU_LEAD[bar], s, sd, (m, d) => lead(th, t, m, d, 0.07));
+        if (hi && (s & 1)) note(th, t, mf(ch[(s >> 1) % 3] + 24), sd * 1.2, { type: 'triangle', g: 0.03, a: 0.003 }); // sparkle arp
+        if (bar === 7 && s >= 12) tom(th, t, 0.1, 210 - (s - 12) * 24);
       },
     },
-    // ambient forest: low drone, wind, sparse pentatonic plucks with echo, birds
+    // SANDBOX (Free Play): relaxed 78 BPM, soft Rhodes-ish chords, quiet beat, wind, pentatonic pluck + echo
     sandbox: {
-      sd: () => 0.5,
+      sd: () => 60 / 78 / 4,
       init(th) {
-        drone(th, 73.4, 0.05, 200);
+        drone(th, 87.3, 0.025, 240);
         const S = SFX(), src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), l = c.createOscillator(), lg = c.createGain();
-        src.buffer = S.noise(); src.loop = true; f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.6; g.gain.value = 0.018;
-        l.frequency.value = 0.09; lg.gain.value = 0.012; l.connect(lg); lg.connect(g.gain);
+        src.buffer = S.noise(); src.loop = true; f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.6; g.gain.value = 0.012;
+        l.frequency.value = 0.09; lg.gain.value = 0.008; l.connect(lg); lg.connect(g.gain);
         src.connect(f); f.connect(g); g.connect(th.g); src.start(); l.start(); th.nodes.push(src, f, g, l, lg);
       },
       step(th, i, t, sd) {
-        const s = i % 16, bar = Math.floor(i / 16) % 4, ch = [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 48, 52]][bar];
-        if (s === 0) pad(th, t, ch, sd * 18, 0.045);
-        if (Math.random() < 0.15) {
-          const f = mf(pick([62, 65, 67, 69, 72]) + pick([0, 12, 12])), g = rnd(0.04, 0.07);
-          note(th, t, f, 2.0, { type: 'triangle', g, a: 0.005 });
-          note(th, t + 0.75, f, 1.2, { type: 'triangle', g: g * 0.4, a: 0.005 });
-          note(th, t + 1.5, f, 0.8, { type: 'triangle', g: g * 0.15, a: 0.005 });
+        const s = i % 16, bar = Math.floor(i / 16) % 4, ch = RLX_PROG[bar];
+        if (s === 0 || s === 10) ch.forEach((m, k) => { note(th, t + k * 0.02, mf(m), sd * 8, { type: 'triangle', g: 0.04, a: 0.01 }); note(th, t + k * 0.02, mf(m + 12), sd * 4, { type: 'sine', g: 0.012, a: 0.01 }); });
+        if (s === 0) pad(th, t, ch.slice(0, 3), sd * 17, 0.03);
+        if (s === 0 || s === 8 || s === 11) note(th, t, mf(RLX_RT[bar] + (s === 11 ? 7 : 0) + 12), sd * 5, { type: 'sine', g: 0.12, a: 0.01 });
+        if (s === 0 || s === 10) kick(th, t, 0.1);
+        if (s === 8) nz(th, t, 0.08, { ft: 'bandpass', f: 1800, g: 0.03 });
+        if (s % 4 === 2) hat(th, t, 0.012);
+        if (Math.random() < 0.09) {
+          const f = mf(pick([72, 74, 76, 79, 81, 84])), g = rnd(0.03, 0.05);
+          note(th, t, f, 1.6, { type: 'triangle', g, a: 0.005 });
+          note(th, t + 0.55, f, 1.0, { type: 'triangle', g: g * 0.4, a: 0.005 });
+          note(th, t + 1.1, f, 0.7, { type: 'triangle', g: g * 0.15, a: 0.005 });
         }
-        if (Math.random() < 0.025) { // bird: two quick rising chirps
-          const f = rnd(2800, 4200);
-          for (let k = 0; k < 3; k++) note(th, t + k * 0.11, f * (1 + k * 0.05), 0.08, { type: 'sine', f2: f * 1.35, g: 0.012, a: 0.01 });
-        }
+        if (Math.random() < 0.012) { const f = rnd(2800, 4200); for (let k = 0; k < 3; k++) note(th, t + k * 0.11, f * (1 + k * 0.05), 0.08, { type: 'sine', f2: f * 1.35, g: 0.01, a: 0.01 }); }
       },
     },
-    // tense ostinato; x (0..1) raises tempo and adds layers: hats, clap+taiko, strings, riser, double kick
-    ranked: {
-      sd: x => 60 / (118 + 34 * x) / 4,
-      init(th) { drone(th, 55, 0.06, 300); drone(th, 82.4, 0.025, 500); },
-      step(th, i, t, sd, x) {
-        const s = i % 16, bar = Math.floor(i / 16) % 4, ch = [[57, 60, 64], [58, 62, 65], [57, 60, 64], [56, 59, 64]][bar], root = [33, 34, 33, 28][bar];
-        const OST = [0, 0, 12, 0, 0, 7, 0, 12, 0, 0, 12, 0, 3, 0, 7, 12];
-        note(th, t, mf(root + OST[s]), sd * 1.7, { type: 'sawtooth', g: (s % 4 === 0 ? 0.11 : 0.07) * (0.9 + 0.3 * x), a: 0.003, lp: 800 + 500 * x, lp2: 180 });
+    // COUNTDOWN: tense pulse that builds over ~4 bars (filter opens, heartbeat kick, bar-long risers, tritone pad, closing tom fill)
+    countdown: {
+      sd: () => 60 / 124 / 4,
+      init(th) { drone(th, 36.7, 0.05, 220); },
+      step(th, i, t, sd) {
+        const s = i % 16, bar = Math.floor(i / 16), b = Math.min(1, i / 64);
+        if (!(s & 1)) note(th, t, mf(bar % 4 === 3 && s >= 8 ? 37 : 38), sd * 1.6, { type: 'sawtooth', g: 0.05 + 0.08 * b, a: 0.003, lp: 260 + 1000 * b, lp2: 160 });
+        if (s === 0) { pad(th, t, [50, 56], sd * 17, 0.025 + 0.03 * b); if (bar >= 1) kick(th, t, 0.1 + 0.2 * b); }
+        if (bar >= 1 && s === 3) kick(th, t, 0.07 + 0.12 * b);
+        if (bar >= 2 && s % 4 === 0 && s) kick(th, t, 0.14 + 0.14 * b);
+        if (b > 0.4 && s % 4 === 2) hat(th, t, 0.02 + 0.02 * b);
+        if (s === 0) nz(th, t, sd * 16, { ft: 'highpass', f: 700, f2: 8000, g: 0.025 + 0.05 * b, a: sd * 14 });
+        if (bar >= 2 && s === 8) pluck(th, t, mf(74), 0.035, 0.4);
+        if (bar >= 2 && s >= 12) tom(th, t, 0.08 + (s - 12) * 0.03, 150 - (s - 12) * 8);
+        if (bar >= 3 && s === 8) taiko(th, t, 0.22);
+      },
+    },
+    // PLAY: driving D minor battle track, 140 BPM (x -> 152). Dm Bb C A: 16th arpeggio, pumping bass, kick/clap/hats, taiko; lead riff in bars 5-8; x adds layers
+    play: {
+      sd: (x, low) => 60 / ((140 + 12 * x) * (low ? 1.05 : 1)) / 4,
+      init(th) { drone(th, 73.4, 0.04, 320); },
+      step(th, i, t, sd, x, low) {
+        const s = i % 16, cyc = Math.floor(i / 16) % 8, bar = cyc % 4, k = PLAY_PROG[bar], ch = PLAY_CH[k], root = PLAY_RT[k];
+        const tones = [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[0] + 24, ch[1] + 24];
+        pluck(th, t, mf(tones[PLAY_ARP[s]]), 0.05 + 0.02 * x, sd * 2.2);
+        if (!(s & 1)) bass(th, t, root + (s % 8 === 6 ? 12 : 0), sd * 1.7, s % 4 === 0 ? 0.11 : 0.075, 800);
+        if (s === 0) { pad(th, t, ch, sd * 17, 0.04 + 0.02 * x); if (bar % 2 === 0) taiko(th, t, 0.25); }
+        if (s === 0 || s === 6 || s === 8 || (x > 0.5 && s === 14)) kick(th, t, 0.28);
+        if (s === 4 || s === 12) clap(th, t, 0.09 + 0.05 * x);
+        if (!(s & 1)) hat(th, t, 0.02 + 0.015 * x); else if (x > 0.5) hat(th, t, 0.012);
+        if (cyc >= 4) mel(PLAY_LEAD[bar], s, sd, (m, d) => { note(th, t, mf(m), d * 0.9, { type: 'sawtooth', g: 0.055 + 0.02 * x, a: 0.01, det: 8, lp: 2400, lp2: 1200 }); note(th, t, mf(m - 12), d * 0.9, { type: 'square', g: 0.025, a: 0.01, lp: 1500 }); });
+        if (bar === 3 && s >= 12 && !(s & 1)) tom(th, t, 0.13, 170 - (s - 12) * 10);
+        if (x > 0.65 && s % 4 === 2) stab(th, t, ch.map(m => m + 24), sd * 1.2, 0.012);
+        if (cyc === 0 && s === 0) crash(th, t, 0.04, 1.0);
+        if (low) lowLayer(th, s, t, sd);
+      },
+    },
+    // ESCAPE / HOLD: pursuit. A minor, 158 BPM (x -> 172), galloping bass, relentless 16th hats, 4-on-the-floor + snare ghost, siren glide, off-beat arp, hook in bars 5-8
+    escape: {
+      sd: (x, low) => 60 / ((158 + 14 * x) * (low ? 1.04 : 1)) / 4,
+      init(th) { drone(th, 55, 0.045, 380); },
+      step(th, i, t, sd, x, low) {
+        const s = i % 16, cyc = Math.floor(i / 16) % 8, bar = cyc % 4, k = ESC_PROG[bar], ch = ESC_CH[k], root = ESC_RT[k];
+        if (s % 4 !== 1) bass(th, t, root + (s % 8 === 7 ? 12 : 0), sd * 0.95, s % 4 === 0 ? 0.11 : 0.08, 900); // gallop: x . x x
+        if (s % 4 === 0) kick(th, t, 0.28);
+        if (s === 10) kick(th, t, 0.18);
+        if (s === 4 || s === 12) clap(th, t, 0.11);
+        if (s === 15 || (x > 0.5 && s === 7)) clap(th, t, 0.05);
+        hat(th, t, s % 2 ? 0.014 : 0.03);
+        if (s & 1) note(th, t, mf(ch[(s >> 1) % 3] + 24), sd * 1.3, { type: 'triangle', g: 0.04, a: 0.003 });
+        if (s === 0 || s === 3 || s === 6 || s === 10) stab(th, t, ch.map(m => m + 12), sd * 1.2, 0.02, 2200);
+        if (s === 0) { pad(th, t, ch, sd * 17, 0.04); if (bar % 2 === 0) taiko(th, t, 0.24); }
+        if (s === 0 && bar % 2 === 0) note(th, t, mf(root + 36), sd * 30, { type: 'sawtooth', f2: mf(root + 43), g: 0.022, a: sd * 20, lp: 2400, lp2: 3500 }); // siren
+        if (cyc >= 4) mel(ESC_LEAD[bar], s, sd, (m, d) => lead(th, t, m, d, 0.06));
+        if (bar === 3 && s >= 12) tom(th, t, 0.12, 190 - (s - 12) * 18);
+        if (low) lowLayer(th, s, t, sd);
+      },
+    },
+    // SPLASH: triumphant E major, 104 BPM. Opens on the medal-stinger motif (E major triad rising), brass chords, taiko, choir pad, sparkles
+    splash: {
+      sd: () => 60 / 104 / 4,
+      init(th) { drone(th, 82.4, 0.03, 600); },
+      step(th, i, t, sd) {
+        const s = i % 16, bar = Math.floor(i / 16) % 8, k = SPL_PROG[bar], ch = SPL_CH[k], root = SPL_RT[k];
         if (s === 0) {
-          pad(th, t, [ch[0], ch[1], ch[2] + (bar === 1 ? -1 : 0)], sd * 17, 0.045 + 0.03 * x);
-          if (bar % 2 === 0) taiko(th, t, 0.3);
+          taiko(th, t, bar % 2 ? 0.2 : 0.34);
+          pad(th, t, ch.map(m => m + 12), sd * 17, 0.06);
+          chord(th, t, ch, sd * 8, 0.07);
+          note(th, t, mf(root), sd * 16, { type: 'sine', g: 0.22, a: 0.02, rel: sd * 3 });
+          note(th, t, mf(root + 12), sd * 15, { type: 'sawtooth', g: 0.06, a: 0.02, lp: 600 });
         }
-        if (s % 4 === 0) kick(th, t, 0.3);
-        if (x > 0.85 && (s === 6 || s === 14)) kick(th, t, 0.2);
-        if (x > 0.25) hat(th, t, 0.02 + 0.03 * x);
-        if (x > 0.45 && (s === 4 || s === 12)) { clap(th, t, 0.1 + 0.08 * x); }
-        if (x > 0.5 && s === 15 && bar % 2 === 1) { tom(th, t, 0.16, 130); tom(th, t + sd * 0.5, 0.12, 105); }
-        if (x > 0.65 && s % 2 === 0) pluck(th, t, mf(ch[(s >> 1) % 3] + 24), 0.04 + 0.03 * x, 0.25); // high strings
-        if (x > 0.85 && s === 0 && bar % 2 === 1) nz(th, t, sd * 16, { ft: 'highpass', f: 3000, f2: 9000, g: 0.05, a: sd * 14 }); // riser
+        if (s === 8) chord(th, t, ch, sd * 7, 0.05);
+        if (s === 6 || s === 14) tom(th, t, 0.08, 140);
+        if (s % 4 === 2) hat(th, t, 0.02);
+        if (s === 4 || s === 12) nz(th, t, 0.1, { ft: 'bandpass', f: 1800, g: 0.05 });
+        mel(SPL_LEAD[bar], s, sd, (m, d) => { note(th, t, mf(m), d * 0.95, { type: 'sawtooth', g: 0.07, a: 0.03, det: 7, lp: 3200, lp2: 1800 }); note(th, t, mf(m - 12), d * 0.95, { type: 'triangle', g: 0.05, a: 0.03 }); });
+        if (s & 1) note(th, t, mf(ch[(s >> 1) % 3] + 36), sd * 1.5, { type: 'sine', g: 0.022, a: 0.003 }); // sparkles
+        if (bar === 3 && s >= 12) tom(th, t, 0.1 + (s - 12) * 0.02, 180 - (s - 12) * 8);
+        if (bar === 7 && s >= 8) tom(th, t, 0.1 + (s - 8) * 0.012, 200 - (s - 8) * 6);
+        if (bar === 0 && s === 0) crash(th, t, 0.07, 1.8);
+      },
+    },
+    // RESULT stingers: a short phrase over the first ~1.4 s, then silence (the next scenario's countdown crossfades in)
+    result_win: {
+      sd: () => 60 / 132 / 4, fade: 0.05,
+      step(th, i, t, sd) {
+        if (i === 0) { taiko(th, t, 0.34); pad(th, t, [57, 61, 64], sd * 14, 0.05); crash(th, t, 0.04, 1.0); }
+        if (i < 8 && i % 2 === 0) { const m = [69, 73, 76, 81][i >> 1]; note(th, t, mf(m), 0.6, { type: 'triangle', g: 0.12, a: 0.004 }); note(th, t, mf(m + 12), 0.3, { type: 'sine', g: 0.03, a: 0.003 }); }
+        if (i === 8) { stab(th, t, [57, 61, 64, 69], sd * 8, 0.04, 2400); lead(th, t, 88, sd * 8, 0.07); }
+        if (i >= 8 && i < 12) note(th, t, mf([93, 97, 100, 105][i - 8]), 0.5, { type: 'sine', g: 0.035, a: 0.004 });
+      },
+    },
+    result_fail: {
+      sd: () => 60 / 100 / 4, fade: 0.05,
+      step(th, i, t, sd) {
+        if (i === 0) { note(th, t, 70, 0.8, { type: 'sine', f2: 36, g: 0.28, a: 0.005 }); pad(th, t, [45, 48, 51], sd * 12, 0.04); }
+        if (i % 3 === 0 && i < 12) { const m = [64, 62, 60, 57][i / 3]; note(th, t, mf(m - 12), i === 9 ? 1.0 : 0.45, { type: 'sawtooth', g: 0.09, a: 0.02, lp: 900, lp2: 300 }); }
+        if (i === 9) taiko(th, t, 0.2);
       },
     },
   };
+  THEMES.ranked = THEMES.play; // legacy name
+
 
   // ---------------------------------------------------------------- scheduler / transitions
   function tick() {
@@ -173,8 +299,8 @@
     if (theme.t < now - 0.25) theme.t = now + 0.05; // resync after a stall
     let n = 0;
     while (theme.t < now + LOOK && n++ < 64) {
-      const sd = theme.def.sd(inten);
-      try { theme.def.step(theme, theme.i, theme.t, sd, inten); } catch (e) { if (!theme.err) { theme.err = 1; if (G.console) G.console.warn('music step', e); } } // never kill the scheduler
+      const sd = theme.def.sd(inten, low);
+      try { theme.def.step(theme, theme.i, theme.t, sd, inten, low); } catch (e) { if (!theme.err) { theme.err = 1; if (G.console) G.console.warn('music step', e); } } // never kill the scheduler
       theme.t += sd; theme.i++;
     }
   }
@@ -188,17 +314,19 @@
     olds.push(th);
     setTimeout(() => { killTheme(th); olds = olds.filter(o => o !== th); }, sec * 1000 + 600);
   }
-  function start(name) {
+  function start(name, fade) {
     if (!ready()) return;
     if (!tb) { tb = c.createGain(); tb.connect(out); }
     const def = THEMES[name];
     if (!def) return;
-    if (theme) fadeOut(theme, FADE);
+    fade = fade != null ? fade : def.fade != null ? def.fade : FADE;
+    if (theme) fadeOut(theme, Math.max(0.15, Math.min(FADE, fade * 2)));
     const g = c.createGain(), t = c.currentTime;
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + FADE);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + fade);
     g.connect(tb);
     theme = { name, def, g, nodes: [], i: 0, t: t + 0.08 };
-    try { def.init(theme); } catch (e) { /* ignore */ }
+    low = wantLow; inten = def.x0 != null ? def.x0 : inten;
+    try { def.init && def.init(theme); } catch (e) { /* ignore */ }
     if (!timer) timer = setInterval(tick, TICK);
     tick();
   }
@@ -256,15 +384,36 @@
     },
   };
 
+  const ALIAS = { ranked: 'play', infinite: 'play', hold: 'escape', result: 'result_win', win: 'result_win', fail: 'result_fail' };
   const Music = {
     get theme() { return theme ? theme.name : null; },
-    play(name) {
+    get low() { return low; },
+    names() { return Object.keys(THEMES).filter(k => k !== 'ranked'); },
+    // switch the situation track with a crossfade: menu | sandbox | countdown | play | escape | splash | result_win | result_fail
+    situation(name, o) {
+      name = ALIAS[name] || name;
       if (!THEMES[name]) return;
+      if (o && o.low != null) Music.lowtime(o.low);
       want = name;
       if (theme && theme.name === name) return;
       if (!ready()) { if (theme) { fadeOut(theme, FADE); theme = null; } return; } // started on first gesture via refresh()
-      start(name);
+      const prev = theme ? theme.name : '';
+      let fade = o && o.fade;
+      if (fade == null && prev === 'countdown' && (name === 'play' || name === 'escape')) { fade = 0.25; if (audible()) Music.stinger('start'); } // go!
+      else if (fade == null && prev.indexOf('result_') === 0) fade = 0.4;
+      start(name, fade);
     },
+    lowtime(on) { wantLow = !!on; low = wantLow; },
+    // per-frame hook: derive the situation from the world (scenario run phase / objective / time left); no run = Free Play sandbox
+    sync(w) {
+      const r = w && w.ranked, pr = r && r.pr;
+      if (!r || !pr) { Music.situation('sandbox', { low: false }); return; }
+      if (r.phase === 'result') { Music.situation(r.result && r.result.ok ? 'result_win' : 'result_fail', { low: false }); return; }
+      if (r.phase !== 'play') { Music.situation('countdown', { low: false }); return; }
+      const ty = pr.sc && pr.sc.obj && pr.sc.obj.type, left = r.mode === 'sandbox' ? null : pr.limit - (w.t - r.t0);
+      Music.situation(ty === 'escape' || ty === 'hold' ? 'escape' : 'play', { low: left != null && left < LOW_TIME });
+    },
+    play(name) { Music.situation(name); },
     stop() {
       want = null;
       if (theme && c) { fadeOut(theme, 1.0); theme = null; }
@@ -282,6 +431,7 @@
       tb.gain.cancelScheduledValues(t); tb.gain.setTargetAtTime(0.3, t, 0.05); tb.gain.setTargetAtTime(1, t + len, 0.5);
     },
     refresh,
+    _tick: tick, // test hook
   };
   IT.Music = Music;
   if (IT.Settings && IT.Settings.onChange) IT.Settings.onChange(refresh);
