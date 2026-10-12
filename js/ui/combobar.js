@@ -107,11 +107,10 @@
     const c = CB.c; if (!c) return;
     const st = c.w.combo, R = CB.refs, t = IT.t, { h, icon } = IT.UI;
     updResult(c);
-    const scn = !!(c.w.ranked && c.w.ranked.pr);   // scenario modes (ranked/infinite/scenario sandbox): never the idle prompt
-    if (!st) { R.empty.style.display = scn ? 'none' : ''; CB.el.style.display = scn ? 'none' : ''; return; }
+    if (!st) { R.empty.style.display = 'none'; CB.el.style.display = 'none'; return; }   // Free Play has no combo mode any more: the pinned guide strip (hud.js) replaces the idle prompt
     const def = st.def;
-    R.empty.style.display = def ? 'none' : '';
-    CB.el.style.display = scn && !def ? 'none' : '';
+    R.empty.style.display = 'none';
+    CB.el.style.display = def ? '' : 'none';   // no combo running: nothing to show (the Free Play guide strip lives in hud.js)
     R.name.style.display = R.tier.style.display = R.steps.style.display = def ? '' : 'none';
     // chips
     if (def) {

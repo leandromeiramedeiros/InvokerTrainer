@@ -1,5 +1,5 @@
 'use strict';
-// v6 hotkeys: Space freed, center F1, recipe sheet I, live stats O, reset dummies [; migration of stored old defaults; no clashes; F-key preventDefault.
+// v6 hotkeys: Space freed, center F1, recipe sheet I, live stats O; P and [ removed (Free Play rework); migration of stored old defaults; no clashes; F-key preventDefault.
 const test = require('node:test'), assert = require('node:assert');
 const { rig } = require('./input_rig');
 
@@ -7,7 +7,7 @@ const S = () => rig().IT.Settings;
 
 test('defaults: new common keys, Space unbound', () => {
   const s = S(), c = s.defaults().keys.common;
-  assert.equal(c.center, 'F1'); assert.equal(c.cheat, 'I'); assert.equal(c.stats, 'O'); assert.equal(c.spawn, 'P'); assert.equal(c.resetDummies, '[');
+  assert.equal(c.center, 'F1'); assert.equal(c.cheat, 'I'); assert.equal(c.stats, 'O'); assert.ok(!('spawn' in c) && !('resetDummies' in c), 'P / [ hotkeys removed');
   assert.equal(c.camLock, 'L'); assert.equal(c.refresh, 'Backspace');
   const d = s.defaults();
   for (const sc of ['slots', 'legacy']) assert.ok(!s.entries(d, sc).some(e => e.key === 'Space'), sc + ': nothing on Space');
@@ -15,35 +15,36 @@ test('defaults: new common keys, Space unbound', () => {
 });
 
 test('migration: stored old defaults -> new defaults', () => {
-  const s = S(), old = { center: 'Space', cheat: 'F1', stats: 'K', resetDummies: 'O' };
-  const d = s.merge(s.defaults(), { keys: { common: Object.assign({ orbQ: 'Q', spawn: 'P' }, old) } });
-  assert.deepEqual([d.keys.common.center, d.keys.common.cheat, d.keys.common.stats, d.keys.common.resetDummies], ['F1', 'I', 'O', '[']);
+  const s = S(), old = { center: 'Space', cheat: 'F1', stats: 'K' };
+  const d = s.merge(s.defaults(), { keys: { common: Object.assign({ orbQ: 'Q', spawn: 'P', resetDummies: '[' }, old) } });
+  assert.deepEqual([d.keys.common.center, d.keys.common.cheat, d.keys.common.stats], ['F1', 'I', 'O']);
+  assert.ok(!('spawn' in d.keys.common) && !('resetDummies' in d.keys.common), 'stale P / [ binds dropped');
   assert.equal(d.keysVersion, s.KEYS_VERSION);
   assert.equal(s.conflicts(d).size, 0);
 });
 
 test('migration: custom binds are kept, only old-default ones move', () => {
   const s = S();
-  const d = s.merge(s.defaults(), { keys: { common: { center: 'G', cheat: 'F1', stats: 'M', resetDummies: 'O' } } });
+  const d = s.merge(s.defaults(), { keys: { common: { center: 'G', cheat: 'F1', stats: 'M' } } });
   assert.equal(d.keys.common.center, 'G'); assert.equal(d.keys.common.stats, 'M');
-  assert.equal(d.keys.common.cheat, 'I'); assert.equal(d.keys.common.resetDummies, '[');
+  assert.equal(d.keys.common.cheat, 'I');
   assert.equal(s.conflicts(d).size, 0);
 });
 
 test('migration: runs once (keysVersion current -> stored values are never rewritten)', () => {
   const s = S();
-  const d = s.merge(s.defaults(), { keysVersion: s.KEYS_VERSION, keys: { common: { center: 'Space', cheat: 'F1', stats: 'K', resetDummies: 'O' } } });
-  assert.deepEqual([d.keys.common.center, d.keys.common.cheat, d.keys.common.stats, d.keys.common.resetDummies], ['Space', 'F1', 'K', 'O']);
+  const d = s.merge(s.defaults(), { keysVersion: s.KEYS_VERSION, keys: { common: { center: 'Space', cheat: 'F1', stats: 'K' } } });
+  assert.deepEqual([d.keys.common.center, d.keys.common.cheat, d.keys.common.stats], ['Space', 'F1', 'K']);
 });
 
 test('migration: a new default already taken by a custom bind keeps the old key (no new clash)', () => {
   const s = S();
-  const d = s.merge(s.defaults(), { keys: { common: { center: 'Space', cheat: 'F1', stats: 'K', resetDummies: 'O', spawn: 'I' } } });   // spawn on I
+  const d = s.merge(s.defaults(), { keys: { common: { center: 'Space', cheat: 'F1', stats: 'K', refresh: 'I' } } });   // refresh on I
   assert.equal(d.keys.common.cheat, 'F1', 'cheat keeps F1');
   assert.equal(d.keys.common.center, 'Space', 'F1 is held by cheat: center keeps Space');
   assert.equal(s.conflicts(d).size, 0);
-  const d2 = s.merge(s.defaults(), { keys: { common: { stats: 'K', resetDummies: 'O', refresh: '[' } } });   // [ taken
-  assert.equal(d2.keys.common.resetDummies, 'O'); assert.equal(d2.keys.common.stats, 'K', 'stats waits behind O');
+  const d2 = s.merge(s.defaults(), { keys: { common: { stats: 'K', refresh: 'O' } } });   // O taken
+  assert.equal(d2.keys.common.refresh, 'O'); assert.equal(d2.keys.common.stats, 'K', 'stats waits behind O');
   assert.equal(s.conflicts(d2).size, 0);
 });
 
@@ -56,10 +57,10 @@ test('keyName: [ ] and friends round-trip through label / actionFor', () => {
   assert.equal(s.keyName({ code: 'Space', key: ' ' }), 'Space');
   assert.equal(s.label('['), '['); assert.equal(s.label(']'), ']');
   const d = s.defaults();
-  assert.equal(s.actionFor('[', d), 'resetDummies'); assert.equal(s.actionFor('I', d), 'cheat'); assert.equal(s.actionFor('O', d), 'stats');
+  assert.equal(s.actionFor('[', d), null, '[ is unbound'); assert.equal(s.actionFor('P', d), null, 'P is unbound'); assert.equal(s.actionFor('I', d), 'cheat'); assert.equal(s.actionFor('O', d), 'stats');
   assert.equal(s.actionFor('F1', d), 'center'); assert.equal(s.actionFor('Space', d), null);
-  d.keys.common.spawn = s.keyName({ code: 'BracketRight', key: ']' });
-  assert.equal(s.keyOf('spawn', d), ']'); assert.equal(s.conflicts(d).size, 0);
+  d.keys.common.camLock = s.keyName({ code: 'BracketRight', key: ']' });
+  assert.equal(s.keyOf('camLock', d), ']'); assert.equal(s.conflicts(d).size, 0);
 });
 
 test('no conflicts across default, legacy and slots layouts', () => {
@@ -68,7 +69,7 @@ test('no conflicts across default, legacy and slots layouts', () => {
   const all = [];
   for (const sc of ['slots', 'legacy']) for (const e of s.entries(d, sc)) all.push(e.key);
   for (const k of ['I', 'O', '[', 'F1']) assert.ok(!s.RESERVED.includes(k));
-  assert.ok(all.includes('I') && all.includes('O') && all.includes('['));
+  assert.ok(all.includes('I') && all.includes('O') && !all.includes('[') && !all.includes('P'));
 });
 
 test('input: F1 = select hero / center; Space does nothing and never ends the countdown', () => {
@@ -92,14 +93,14 @@ test('input: F1 always preventDefault (browser help) incl. paused / frozen; boun
   assert.ok(run('F1'), 'frozen countdown');
   r.w.paused = false; r.In.hooks.inspect = null;
   assert.equal(run('F5'), false, 'unbound F5 untouched (reload works)');
-  r.IT.Settings.data.keys.common.spawn = 'F5';
+  r.IT.Settings.data.keys.common.camLock = 'F5';
   assert.ok(run('F5'), 'bound F5 swallowed');
-  r.IT.Settings.data.keys.common.spawn = 'P';
+  r.IT.Settings.data.keys.common.camLock = 'L';
 });
 
-test('input: I toggles the recipe sheet, O toggles live stats, [ resets dummies', () => {
+test('input: I toggles the recipe sheet, O toggles live stats, P and [ do nothing', () => {
   const r = rig({ autoAttack: false }); r.at(10);
-  const calls = []; r.In.hooks.cheat = () => calls.push('cheat'); r.In.hooks.resetDummies = () => calls.push('reset'); r.In.hooks.stats = () => calls.push('stats');
+  const calls = []; r.In.hooks.cheat = () => calls.push('cheat'); r.In.hooks.resetDummies = () => calls.push('reset'); r.In.hooks.spawn = () => calls.push('spawn'); r.In.hooks.stats = () => calls.push('stats');
   r.key('i'); r.key('['); const ev = r.down('o'); r.up(ev);
-  assert.deepEqual(calls, ['cheat', 'reset', 'stats']);
+  r.key('p'); assert.deepEqual(calls, ['cheat', 'stats']);
 });

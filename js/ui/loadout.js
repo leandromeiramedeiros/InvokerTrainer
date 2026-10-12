@@ -1,5 +1,5 @@
 // Free Play screen (match panel: map + enemies; hero loadout in tabs) and Scenarios screen (ranked START + card grid).
-// State persisted in localStorage 'it2.loadout'. IT.UI.LoadoutScreen = { state, build, buildScenarios, startOpts, scenarioOpts, comboPreset, save, load, derived, trim }.
+// State persisted in localStorage 'it2.loadout'. IT.UI.LoadoutScreen = { state, build, buildScenarios, startOpts, scenarioOpts, save, load, derived, trim }.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -9,9 +9,8 @@
 
   const DEF_MAP = 'dota';   // Free Play default (the old 'grounds' training clearing is gone from the picker)
   const HIDDEN_MAPS = ['grounds'];
-  const st = { lo: null, count: 1, fog: true, tod: 'day', grant: true, scenario: null, map: DEF_MAP, diff: 'common', enemy: { count: 0, items: [], list: [] }, tab: 'hero' };
+  const st = { lo: null, count: 1, fog: true, tod: 'day', grant: true, scenario: null, map: DEF_MAP, diff: 'common', tab: 'hero' };
   const TOD = ['day', 'night', 'cycle'];   // v6 Free Play time of day (js/data/daynight.js)
-  const normEnemy = e => IT.EnemyCard.normalize(e);   // Free Play enemy card (count, item set, one row per enemy): js/sim/enemycard.js
   const diffOk = d => IT.DIFFICULTY.order.indexOf(IT.DIFFICULTY.migrate(d)) >= 0;
 
   const scenarios = () => IT.SCENARIOS || [];
@@ -21,16 +20,9 @@
   const scnTip = s => scnLoc(s.desc || s.goal || s.tip) || (s.descKey ? IT.t(s.descKey) : '');
 
   const mapOk = id => !!(id && HIDDEN_MAPS.indexOf(id) < 0 && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
-  // enemy rows keep an explicit skin (Pedro / Renan / Vitinho): legacy 'auto' rows get the next one in rotation
-  function fixEnemy(e) {
-    e.count = Math.max(0, Math.min(e.count | 0, e.list.length));
-    const SK = (IT.GAME && IT.GAME.SKINS) || [];
-    for (let i = 0; i < e.list.length; i++) if (SK.length && SK.indexOf(e.list[i].skin) < 0) e.list[i].skin = SK[i % SK.length];
-    return e;
-  }
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.tod = 'day'; st.grant = true; st.scenario = null; st.map = DEF_MAP; st.diff = 'common'; st.enemy = fixEnemy(normEnemy());
+    st.count = 1; st.fog = true; st.tod = 'day'; st.grant = true; st.scenario = null; st.map = DEF_MAP; st.diff = 'common';
   }
   function load() {
     fresh();
@@ -40,16 +32,15 @@
     const lo = IT.Loadout.normalize(raw.lo);
     if (!IT.Loadout.validate(lo).ok) return;
     st.lo = lo;
-    st.count = 1;   // one scarecrow at the start; more are placed in the match (P / HUD)
+    st.count = 1;   // the match starts empty; enemies and dummies are added from the in-game side panel
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
     st.tod = TOD.indexOf(raw.tod) >= 0 ? raw.tod : 'day';   // v6 Free Play time of day
-    st.enemy = fixEnemy(normEnemy(raw.enemy));
     st.diff = diffOk(raw.diff) ? IT.DIFFICULTY.migrate(raw.diff) : 'common';
     st.map = mapOk(raw.map) ? raw.map : DEF_MAP;
   }
   function save() {
     st.lo.mode = 'sandbox';
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, fog: st.fog, tod: st.tod, grant: st.grant, map: st.map, diff: st.diff, enemy: st.enemy })); } catch (e) { /* ignore */ }
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, fog: st.fog, tod: st.tod, grant: st.grant, map: st.map, diff: st.diff })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -433,35 +424,6 @@
       itemBox.appendChild(h('div', { class: 'icat' }, pool));
     }
 
-    // ---- enemies (Free Play): one row per enemy = skin picker + difficulty + remove; max EnemyCard.MAX. They are on the map at the start.
-    const eneBox = reg('enemy', 'enemy');
-    const EC = IT.EnemyCard;
-    function renderEnemy() {
-      eneBox.textContent = '';
-      const en = st.enemy, full = en.count >= EC.MAX;
-      eneBox.appendChild(h('div', { class: 'ehead' },
-        h('span', { class: 'lbl', text: en.count + ' / ' + EC.MAX }),
-        h('button', {
-          type: 'button', class: 'btn sm addbtn' + (full ? ' dis' : ''), 'data-tip': full ? t('fp.max', { n: EC.MAX }) : '', text: '+ ' + t('fp.add'),
-          onclick: () => { if (en.count >= EC.MAX) { flash(t('fp.max', { n: EC.MAX })); return; } en.count++; fixEnemy(en); changed(); },
-        })));
-      for (let i = 0; i < en.count; i++) {
-        const r = en.list[i];
-        eneBox.appendChild(h('div', { class: 'erow' },
-          h('span', { class: 'en', text: String(i + 1) }),
-          h('div', { class: 'eskins', 'data-tip': t('fp.skin') }, GM.SKINS.map(s => h('button', {
-            type: 'button', class: 'eskin' + (r.skin === s ? ' on' : ''), 'data-tip': GM.SKIN_NAMES[s], onclick: () => { r.skin = s; changed(); },
-          }, portrait(s)))),
-          h('select', { class: 'mapsel etier', 'data-tip': t('fp.diff'), onchange: ev => { r.tier = ev.target.value; changed(); } },
-            IT.DIFFICULTY.order.map(d => h('option', { value: d, selected: r.tier === d ? true : null, text: t('diff.' + d) }))),
-          h('button', {
-            type: 'button', class: 'btn sm dim erm', 'data-tip': t('fp.remove'), 'aria-label': t('fp.remove'), text: 'x',
-            onclick: () => { en.list.splice(i, 1); en.list.push(normEnemy().list[0]); en.count--; fixEnemy(en); changed(); },
-          })));
-      }
-      eneBox.appendChild(h('p', { class: 'fine', text: en.count ? t('fp.enemy.hint') : t('fp.none') }));
-    }
-
     // ---- map
     const mapBox = reg('map', 'mapbox');
     // Map preview: a sized placeholder first; the (cached) tile thumbnail is drawn once it is on screen and the browser is idle.
@@ -506,6 +468,11 @@
       optBox.appendChild(h('div', { class: 'row wrap', 'data-tip': t('lo.tod.d') }, h('span', { text: t('lo.tod') }),
         h('select', { class: 'mapsel todsel', onchange: ev => { st.tod = ev.target.value; changed(); } },
           TOD.map(k => h('option', { value: k, selected: st.tod === k ? true : null, text: t('lo.tod.' + k) })))));
+      // v6 item 23: difficulty new enemies start with (each enemy can be changed in the match)
+      if (IT.UI.DiffBar) {
+        const db = IT.UI.DiffBar.create({ value: st.diff, onChange: v => { st.diff = v; save(); } });
+        optBox.appendChild(h('div', { class: 'row wrap diffrow', 'data-tip': t('fp.diff.d') }, h('span', { text: t('fp.diff') }), db.el));
+      }
       const n = avail();
       if (n >= 0) optBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
     }
@@ -565,21 +532,17 @@
       for (const b of tabBar.children) b.classList.toggle('on', b.getAttribute('data-tab') === st.tab);
     }
 
-    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderEnemy(); renderMap(); renderOpts(); renderPrev(); renderGo(); }
+    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderMap(); renderOpts(); renderPrev(); renderGo(); }
     const sec = (title, ...kids) => h('section', { class: 'sec' }, h('h3', { text: title }), kids);
 
-    const combo = !!st.combo;
     const el = h('div', { class: 'scr loadout fp' },
       h('div', { class: 'lo-head' },
         h('button', { type: 'button', class: 'btn sm dim', text: t('ui.back'), onclick: () => IT.App.go('title') }),
-        h('h1', { text: t(combo ? 'fp.combo' : 'fp.title') }),
+        h('h1', { text: t('fp.title') }),
         IT.UI.langToggle()),
       h('div', { class: 'fp-body' },
         h('div', { class: 'fp-match' },
-          combo ? null : h('button', { type: 'button', class: 'combocard', 'data-snd': 'start', onclick: () => IT.App.go('combo') },
-            h('b', { text: t('fp.combo') }), h('span', { text: t('fp.combo.d') })),
           sec(t('lo.map'), mapBox),
-          combo ? null : sec(t('fp.enemies'), eneBox),
           sec(t('fp.match'), optBox)),
         h('div', { class: 'fp-hero' },
           tabBar,
@@ -756,8 +719,7 @@
   // the Free Play match
   function startOpts() {
     save();
-    const en = normEnemy(st.enemy);
-    if (st.combo) en.count = 0;
+    const en = IT.EnemyCard.normalize(null);   // the map starts empty: enemies and dummies are added in the match
     return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: 1, fog: st.fog, tod: st.tod, grant: st.grant, scenario: null, map: mapOk(st.map) ? st.map : DEF_MAP, diff: diffOk(st.diff) ? IT.DIFFICULTY.migrate(st.diff) : 'common', enemy: en };
   }
   // one scenario played alone (no rating): the tier follows the scenario's level
@@ -766,10 +728,7 @@
     save();
     return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: 1, fog: st.fog, grant: st.grant, scenario: sc ? sc.id : null, map: mapOk(st.map) ? st.map : DEF_MAP, diff: sc ? IT.EnemyCard.tierOfLevel(sc.level) : 'common', enemy: null };
   }
-  // Combo Sandbox: Free Play with no enemies and every combo granted (a transient flag, not saved)
-  function comboPreset(on) { st.combo = on !== false; if (st.combo) st.grant = true; }
-
   load();
   IT.UI.ScnFilter = ScnFilter;
-  IT.UI.LoadoutScreen = { state: st, build, buildScenarios, startOpts, scenarioOpts, comboPreset, save, load, derived, trim };
+  IT.UI.LoadoutScreen = { state: st, build, buildScenarios, startOpts, scenarioOpts, save, load, derived, trim };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,11 +5,11 @@
   const KEY = 'it2.settings';
   const SPELLS = ['coldsnap', 'ghostwalk', 'icewall', 'emp', 'tornado', 'alacrity', 'sunstrike', 'forgespirit', 'chaosmeteor', 'deafeningblast'];
   const LEG = ['Y', 'V', 'G', 'C', 'X', 'Z', 'T', 'F', 'D', 'B'];
-  const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'stats', 'refresh', 'spawn', 'resetDummies'];
+  const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'stats', 'refresh'];
   const RESERVED = ['Escape', 'Tab'];
   // keybind migration: stored bindings still equal to the pre-v6 default move to the new default (custom ones stay)
   const KEYS_VERSION = 2;
-  const KEY_MIG = { center: ['Space', 'F1'], cheat: ['F1', 'I'], stats: ['K', 'O'], resetDummies: ['O', '['] };
+  const KEY_MIG = { center: ['Space', 'F1'], cheat: ['F1', 'I'], stats: ['K', 'O'] };
 
   function defaults() {
     const slots = { slot1: 'D', slot2: 'F' }, legacy = {};
@@ -28,11 +28,12 @@
       rmbRepeat: false,            // hold right mouse = repeated move/attack clicks (~8/s)
       comboOrder: false,           // scenario panel shows the full ordered action list (spells + items + moves)
       dummyChat: true,             // dummies taunt on fumbles / slow play
+      beliefUI: true,              // enemy belief markers (what each enemy thinks it knows about you)
       keysVersion: KEYS_VERSION,   // bump = run the KEY_MIG table over stored binds once
       fpsCap: 60,                  // 0 = display rate; otherwise render cap (paced to a divisor of the display rate)
       audio: { master: 0.8, music: 0.5, sfx: 0.8, ui: 0.6, musicOn: true, muteUnfocused: true },
       keys: {
-        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'F1', camLock: 'L', cheat: 'I', stats: 'O', refresh: 'Backspace', spawn: 'P', resetDummies: '[' },
+        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'F1', camLock: 'L', cheat: 'I', stats: 'O', refresh: 'Backspace' },
         slots, legacy,
       },
     };
@@ -250,9 +251,9 @@
       iface: ['set.nav.iface', () => [
         grid(kRow('common', 'cheat'), kRow('common', 'stats')),
         sh(t('set.h.options')),
-        list(chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat'))),
+        list(chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat')), chk(draft, 'beliefUI', t('set.beliefUI'))),
         sh(t('set.h.sandbox')),
-        grid(kRow('common', 'refresh'), kRow('common', 'spawn'), kRow('common', 'resetDummies')),
+        grid(kRow('common', 'refresh')),
         sh(t('set.h.fixed')),
         grid(fxRow(t('set.fx.pause'), t('set.fx.esc'))),
       ]],

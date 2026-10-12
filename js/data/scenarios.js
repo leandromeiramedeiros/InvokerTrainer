@@ -13,6 +13,9 @@
 //            behavior (enemy AI: stationary wander escape disable_escape defend), items, useBkb, aware (0..1 base awareness),
 //            msMul (x scripted move speed: a booted chaser) }]  (enemy NPC heroes)
 //   obj    = kill | kill_with {how} | killN {n, one, span} | push {n} (one Deafening Blast) | destroyTower | rootAll | escape {time, caught, bump} | hold {time}
+//            v6 item 27: escape {unseen (s in a row unseen = win), burn (detection the foes must waste first), noInvis} | reach {spot, r, noInvis}
+//   spots  = { name: spot } (v6 item 27) resolved after the units -> w.spots; steps / focus 'spot:<name>'; spot fields from (a spot / unit k),
+//            unseenBy [k | spot], turn (deg), far [[k, d]], strict (d is a hard bound)
 //            escape: caught = visible contact distance (default Ranked.CAUGHT), bump = an invisible hero a foe walks within is found too
 //            how = { ability:[ids], by:'hero'|'spirit', low, high, inv } checked on every kill (a wrong kill = the 'method' fail)
 //   fail   = subset of: time died cross (a foe reaches the gate) seen (an enemy notices you before your first hit) method escaped caught tower
@@ -118,6 +121,19 @@
     Object.assign({ id, level, map, tags, par, hero: Object.assign({ lvl: 25 }, hero), units, obj, fail, steps }, extra || {});
   const SEEN = (d, o) => W(['level', 'seen'], Object.assign({ d }, o || {}));   // a foe on the hero's level, in plain sight
   const KILL = { type: 'kill' };
+  // v6 item 27 (juke) builders: JH = hero start (arena index i, never in the river / a Dire tower's range); JC(n, d, extra) = n chasers
+  // (the first SEEN d u away, the others 220 u to its sides; the third only from common up); JSP = the named spots 'cover' (hidden from
+  // every chaser) and 'hide' (from the cover, bent, far from the chasers, hidden from the cover too); JS = the bot route cover -> hide
+  const JH = (where, i) => W(where, { d: [0, 4000], i, not: ['river', 'dtower'] });
+  const JC = (n, d, ex) => [U(SEEN(d || [1100, 1400], { i: 0 }), Object.assign({ mot: 'chase', hp: 1 }, (ex || [])[0])),
+    U({ of: 0, side: 220 }, Object.assign({ mot: 'chase', hp: 1 }, (ex || [])[1])), U({ of: 0, side: -220 }, Object.assign({ mot: 'chase', hp: 1, minDf: 'common' }, (ex || [])[2]))].slice(0, n);
+  const JSP = (n, ct, ci, hj, o) => {
+    o = o || {}; const st = !!o.strict, vb = [0, 1, 2].slice(0, n);
+    return { cover: W(ct, { d: st ? [300, 650] : [300, 600], unseenBy: vb, i: ci, strict: st }),
+      hide: W(['level'], { from: 'cover', d: o.hid || (st ? [500, 950] : [500, 900]), unseenBy: vb.concat('cover'), turn: st ? 70 : 80, far: vb.map(k => [k, o.far || (st ? 1300 : 1200)]), i: hj, strict: st }) };
+  };
+  const JS = [{ a: 'move', at: 'spot:cover' }, { a: 'move', at: 'spot:hide' }], JF = ['caught', 'died', 'method'];
+  const JX = sp => ({ spots: sp, focus: ['spot:cover', 'spot:hide'], rand: { pick: 1 }, vary: { boots: 'boots', posJit: 0 } });   // fixed arenas: the route is the puzzle
 
   const V5 = [
     // ---------------------------------------------------------------- level 1: one target, one idea
@@ -256,6 +272,35 @@
       [U(SEEN([1000, 1250], { clear: 2, not: ['dtower'] }), { hp: 0.4, behavior: 'wander', aware: 0.3 }), U({ of: 0, side: 250 }, { hp: 0.4, behavior: 'wander', aware: 0.3 })],
       KILL, ['seen', 'time'],
       [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0' }, { a: 'tornado', at: 'mid' }, { a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.8 }]),
+    // ---------------------------------------------------------------- v6 item 27: JUKE (lose them in the fog; texts: js/data/i18n/scn.js)
+    // Chasers carry a belief (js/sim/belief.js): they run at you while they SEE you, then walk to where they think you went, stand
+    // confused there ('?'), then search a widening ring (split at hard+). Every arena below was picked by a search over all maps
+    // (strict spots: cover 300-650 u from the start, out of the chasers' sight; hide 500-950 u on from the cover, bent >= 70 deg, far from
+    // the chasers) and checked with the scripted bot (cover -> hide) at every tier: tests/juke_v6.test.js. The chasers start 1100-1400 u
+    // away and see you; chase speed 380 x tier + boots beats the hero's 325 from common up: running straight loses, juking wins.
+    // obj: escape + unseen = win after that many s in a row unseen (time = the limit); escape + burn = the foes must waste that much
+    // detection (Dust that finds nothing) first; reach = get into the goal ring at spot obj.spot. noInvis = Ghost Walk is the 'method' fail.
+    // Unit extras: gem (Gem of True Sight carrier, 900 u true sight), recatch (hard: Force Staff, bambam: + Blink, used on a reacquire),
+    // minDf (that tier and up only: difficulty-scaled packs).
+    V('treeline_loop', 4, 'rad_triangle', ['juke', 'fun', 'fog'], 20, { lvl: 8, at: JH(['level'], 4) }, JC(2),
+      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, JS, JX(JSP(2, ['level'], 2, 2))),
+    V('river_fog_crossing', 5, 'mid_river', ['juke', 'fun', 'river'], 14, { lvl: 10, at: JH(['choke'], 1) }, JC(2),
+      { type: 'reach', spot: 'hide', noInvis: true }, JF.concat('time'), JS, JX(JSP(2, ['high'], 0, 0, { strict: true, hid: [800, 1400] }))),
+    V('highground_bait', 6, 'river_top', ['juke', 'fun', 'highground'], 20, { lvl: 12, at: JH(['open'], 4) }, JC(2),
+      { type: 'escape', time: 20, unseen: 7, noInvis: true }, JF, JS, JX(JSP(2, ['high'], 1, 1, { strict: true }))),
+    V('ramp_shuffle', 7, 'rad_mid_t1', ['juke', 'fun', 'highground'], 14, { lvl: 14, at: JH(['choke'], 4) }, JC(2),
+      { type: 'reach', spot: 'hide', noInvis: true }, JF.concat('time'), JS, JX(JSP(2, ['high'], 0, 0, { strict: true, hid: [800, 1400] }))),
+    // night (js/data/daynight.js): enemy sight 800, so the pack starts 620-760 u away; a third chaser from common up
+    V('night_juke', 7, 'river_bot', ['juke', 'fun', 'fog'], 20, { lvl: 16, at: JH(['choke'], 0) }, JC(3, [620, 760]),
+      { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, JX(JSP(3, ['level'], 0, 0, { strict: true, far: 900 }))),
+    // the Gem carrier sees through Ghost Walk within 900 u: go invisible, then still break its line and distance
+    V('ghost_vs_gem', 8, 'lotus_rad', ['juke', 'fun', 'invisible', 'items'], 20, { lvl: 18, at: JH(['choke'], 0) }, JC(2, null, [{ gem: true }]),
+      { type: 'escape', time: 20, unseen: 7 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['high'], 0, 0, { strict: true }))),
+    // a Dust carrier: let it dust where it THINKS you are (a hit = caught), then stay unseen 5 s
+    V('dust_bait', 9, 'dire_mid_t2', ['juke', 'fun', 'invisible', 'items'], 25, { lvl: 20, at: JH(['level'], 0) }, JC(2, null, [{ items: ['dust'] }]),
+      { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] }))),
+    V('no_invis_juke', 10, 'rad_off_t1', ['juke', 'fun'], 20, { lvl: 24, at: JH(['choke'], 0) }, JC(3, null, [{ recatch: true }, { recatch: true }]),
+      { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, JX(JSP(3, ['level'], 0, 0, { strict: true }))),
   ];
 
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as
@@ -304,7 +349,7 @@
   for (const s of all) s.tier = s.level <= 3 ? 1 : s.level <= 7 ? 2 : 3;
   // ---- v6 boots everywhere: Boots of Travel where the plan needs > ~1200 u of running within par (hold / gate / escape / tower scenarios),
   //      Boots of Speed elsewhere. Max 6 items (no scenario carries more than 2 others).
-  const TRAVELS = s => s.obj.type === 'escape' || s.obj.type === 'hold' || s.obj.type === 'destroyTower' || !!s.gate || (s.tags || []).indexOf('towers') >= 0;
+  const TRAVELS = s => (s.tags || []).indexOf('juke') < 0 && (s.obj.type === 'escape' || s.obj.type === 'hold' || s.obj.type === 'destroyTower' || !!s.gate || (s.tags || []).indexOf('towers') >= 0);   // v6 item 27: juke heroes get plain boots (the chasers must out-run them)
   for (const s of all) {
     const it = (s.hero.items || []).filter(x => x !== 'boots' && x !== 'travels');
     s.hero = Object.assign({}, s.hero, { items: it.concat(TRAVELS(s) ? 'travels' : 'boots').slice(-6) });
@@ -312,7 +357,8 @@
 
   // ---- v6 item 39: reveal = the start reveal (a Sun-Strike-shaped vision circle on each foe unseen at the start) also at hard / bambam.
   //      ian / easy / common always reveal; at hard / bambam only these snipe / prediction scenarios do (Ranked.revealOn).
-  const REVEAL = ['sun_flee', 'uphill_snipe', 'sun_snipe', 'fog_ambush', 'blink_fog'];
+  const REVEAL = ['sun_flee', 'uphill_snipe', 'sun_snipe', 'fog_ambush', 'blink_fog',
+    'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke'];   // + v6 item 27 juke set
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)

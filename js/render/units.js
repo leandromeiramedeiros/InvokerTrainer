@@ -68,8 +68,8 @@
 
   function sheetOf(e) {
     if (e.kind === 'hero') return IT.Art.heroSheet ? IT.Art.heroSheet() : 'invoker';
-    if (e.kind === 'spirit') return 'forge';
-    if (e.kind === 'dummy' && e.scarecrow && IT.Art.sheets.scarecrow) return 'scarecrow';
+    if (e.kind === 'spirit') return IT.Art.forgeSheet ? IT.Art.forgeSheet() : 'forge';
+    if (e.kind === 'dummy' && e.scarecrow && IT.Art.sheets.scarecrow) return IT.Art.dummySheet ? IT.Art.dummySheet() : 'scarecrow';
     return IT.Art.sheets[e.skin] ? e.skin : 'pedro';
   }
   function isUnit(e) { return e.kind === 'hero' || e.kind === 'dummy' || e.kind === 'enemy' || e.kind === 'spirit'; }

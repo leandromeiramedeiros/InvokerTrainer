@@ -14,6 +14,9 @@ const R = IT.Ranked, SC = IT.SCENARIOS;
 const DIFFS = ['ian', 'easy', 'common', 'hard', 'bambam'];
 const NEW = ['bridge_hold', 'ghost_slip', 'jungle_hold', 'plateau_escape'];
 const JIT_EXEMPT = new Set(['sun_flee']);   // a fleeing foe with a jittered start can run into a Radiant tower (that kill would count as 'method')
+// v6 item 27: Bam-Bam's belief extrapolates the bot's straight-line run (walk away from the nearest foe) and Dusts the predicted spot:
+// the naive escape is meant to lose there (tests/juke_v6.test.js); a real juke still clears it
+const BELIEF_OK = new Set(['plateau_escape:bambam:s5']);
 
 function build(id, diff, seed) {
   const run = R.create({ mode: 'practice', diff: diff || 'easy', scenario: id, seed: seed || 5 });
@@ -185,7 +188,7 @@ test('new scenarios: an idle hero loses every tier, the bot wins every tier (two
   const bad = [];
   for (const id of NEW) for (const df of DIFFS) for (const seed of [5, 8]) {
     const r = bot(id, df, seed);
-    if (!(r && r.ok)) bad.push(id + ':' + df + ':s' + seed + ':' + (r && r.reason));
+    if (!(r && r.ok) && !BELIEF_OK.has(id + ':' + df + ':s' + seed)) bad.push(id + ':' + df + ':s' + seed + ':' + (r && r.reason));
   }
   assert.deepEqual(bad, []);
 });
@@ -198,7 +201,8 @@ test('fog_ambush stays winnable for the bot (ian..hard) now that foes see 1800',
 test('every level 1-4 scenario has rand.jit (except the documented exemption)', () => {
   const low = SC.filter(s => s.level <= 4 && !s.legacy);
   assert.ok(low.length >= 9, 'low-level scenarios: ' + low.length);
-  for (const s of low) if (!JIT_EXEMPT.has(s.id)) assert.ok(s.rand && s.rand.jit > 0, s.id + ' jit');
+  // v6 item 27: juke scenarios use a fixed arena on purpose (rand.pick 1, posJit 0: the route is the puzzle; tests/juke_v6.test.js)
+  for (const s of low) if (!JIT_EXEMPT.has(s.id) && (s.tags || []).indexOf('juke') < 0) assert.ok(s.rand && s.rand.jit > 0, s.id + ' jit');
 });
 
 test('jit moves the foes across seeds, stays deterministic per seed, and keeps spots valid', () => {

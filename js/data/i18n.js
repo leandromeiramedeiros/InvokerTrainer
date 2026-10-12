@@ -197,8 +197,6 @@
   D('hud.dps', 'DPS', 'DPS');
   D('hud.total', 'Total damage', 'Dano total');
   D('hud.refresh', 'Refresh', 'Reiniciar recargas');
-  D('hud.spawn', 'Spawn dummy', 'Criar alvo');
-  D('hud.resetDummies', 'Reset dummies', 'Reiniciar alvos');
   D('hud.combos', 'Combos', 'Combos');
   D('hud.noneYet', 'No combo running. Pick one from the list.', 'Nenhum combo em andamento. Escolha um da lista.');
   D('hud.locked', 'locked', 'bloqueado');
@@ -270,12 +268,12 @@
   const act = {
     orbQ: 'Quas', orbW: 'Wex', orbE: 'Exort', invoke: 'Invoke', slot1: 'Spell slot 1', slot2: 'Spell slot 2',
     stop: 'Stop', hold: 'Hold position', center: 'Select hero / Center camera', camLock: 'Toggle camera lock', cheat: 'Recipe sheet',
-    refresh: 'Refresh cooldowns', spawn: 'Spawn dummy', resetDummies: 'Reset dummies',
+    refresh: 'Refresh cooldowns',
   };
   const actPt = {
     orbQ: 'Quas', orbW: 'Wex', orbE: 'Exort', invoke: 'Invocar', slot1: 'Slot de magia 1', slot2: 'Slot de magia 2',
     stop: 'Parar', hold: 'Manter posição', center: 'Selecionar herói / Centralizar câmera', camLock: 'Alternar câmera presa', cheat: 'Folha de receitas',
-    refresh: 'Reiniciar recargas', spawn: 'Criar alvo', resetDummies: 'Reiniciar alvos',
+    refresh: 'Reiniciar recargas',
   };
   for (const k in act) D('act.' + k, act[k], actPt[k]);
   for (let i = 1; i <= 6; i++) D('act.item' + i, 'Item ' + i, 'Item ' + i);

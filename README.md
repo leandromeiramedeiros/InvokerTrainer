@@ -28,7 +28,7 @@ Values come from `SteamDatabase/GameTracking-Dota2` (`npc_dota_hero_invoker.txt`
 | F1, L | Select hero / center camera, lock camera |
 | Tab, Esc | Cycle selection, pause |
 | I, O (toggle) | Recipe sheet, live stats (floating panels: drag the title bar, resize the corner grip) |
-| P, [, Backspace | Spawn dummy, reset dummies, refresh cooldowns |
+| Backspace | Refresh cooldowns |
 
 Settings: normal-cast mode (aim with range/AoE preview), the legacy one-key-per-spell scheme, and full rebinding with conflict detection. UI in English or Portuguese.
 
@@ -47,7 +47,7 @@ Settings: normal-cast mode (aim with range/AoE preview), the legacy one-key-per-
 | QWE | Deafening Blast |
 
 ## Modes
-- **Sandbox**: no prompts, 1–5 dummies, DPS meter, cooldown refresh.
+- **Free Play**: one mode, no prompts. Starts empty; the side pane adds/removes enemies (max 5) and dummies (max 3) in-game, each with a skin picker and difficulty bar, plus time of day, DPS meter, cooldown refresh and the combo browser. Click a combo to pin a compact step guide on top (click again to unpin).
 
 Dummies: Pedro, Renan and Vitinho, with Training (stationary), Standard (wander) and Expert (hides behind trees, dodges delayed spells) presets. Some combos have the dummy cast a stun bolt (counter it with BKB, a disable, or by leaving range) or blink away when hit (root it first, or Sun Strike the landing spot). Trees block vision, so fog of war is on.
 

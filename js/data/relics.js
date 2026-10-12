@@ -23,10 +23,10 @@
     // ---- Invoker hero relics (rare relics in Dota Plus)
     D('sunstrike_kills', 'KillEaterEventType_Invoker_SunstrikeKills', 'sunstrike', 'n', 23, 15, { weight: 3, row: 2 }),
     D('tornado_kills', 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', 32, 3, { weight: 3, row: 2 }),
-    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2, weight: 3, special: true }),
-    D('three_emp', 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', 579, 5, { min: 3, weight: 3, special: true }),
-    D('three_deafening', 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', 580, 5, { min: 3, weight: 3, special: true }),
-    D('multi_meteor', 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', 581, 20, { min: 2, weight: 3, special: true }),
+    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2, weight: 3, special: true, pts: 5 }),
+    D('three_emp', 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', 579, 5, { min: 3, weight: 3, special: true, pts: 5 }),
+    D('three_deafening', 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', 580, 5, { min: 3, weight: 3, special: true, pts: 5 }),
+    D('multi_meteor', 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', 581, 20, { min: 2, weight: 3, special: true, pts: 5 }),
     D('alacrity_dmg', 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', 582, 25000, { weight: 1, row: 2 }),
     // ---- generic relics every hero has (common relics)
     D('kills', 'KillEaterEventType_Kills', 'invoke', 'n', 0, 75, { weight: 1, row: 3 }),
@@ -72,7 +72,23 @@
   const ROWS = [SPECIAL, ...[2, 3, 4].map(n => LIST.filter(r => r.dota && !r.special && r.row === n).map(r => r.id))];
   const TRAINER = LIST.filter(r => !r.dota).map(r => r.id);
   const isSpecial = id => !!(BY[id] && BY[id].special);
+
+  // ---- v6 item 15: POINTS = the spendable currency (Skin SHOP). The medal (StatsCollector.relicScore) stays the run PERFORMANCE grade;
+  // points are paid from the same relic deltas but accumulate for good in the lifetime blob (points / spent) and never lower a medal.
+  // points = (delta / (step x goalpost)) x base x diffMul x POINTS_K.  base: 5 for the 4 specials (`pts`), 1 for the others.
+  // diffMul: ian 0.5 .. bambam 1.5 (0.5 + 0.25 x tierIdx). goalpost ("move the goalpost"): the level step grows on easy, shrinks on hard,
+  // steps x (1.5 - 0.25 x tierIdx) clamped 0.5..1.5, so easy cannot farm. Only the points use it: displayed relic tiers keep the Dota steps.
+  const POINTS_K = 40, DIFF_COMMON = 2;
+  const clampIdx = i => (typeof i === 'number' && isFinite(i) ? Math.max(0, Math.min(4, Math.round(i))) : DIFF_COMMON);
+  const diffMul = i => 0.5 + 0.25 * clampIdx(i);
+  const goalpost = i => Math.max(0.5, Math.min(1.5, 1.5 - 0.25 * clampIdx(i)));
+  const baseOf = id => (BY[id] && BY[id].pts) || 1;
+  const points = (id, delta, diffIdx) => {
+    const r = BY[id], unit = r && (r.step || r.tiers[0]);
+    if (!r || !(delta > 0) || !(unit > 0)) return 0;
+    return (delta / (unit * goalpost(diffIdx))) * baseOf(id) * diffMul(diffIdx) * POINTS_K;
+  };
   const ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V'];
 
-  IT.RELICS = { LIST, BY, MAX, ROMAN, SPECIAL, ROWS, TRAINER, DOTA, isSpecial, tierOf, progress, fmt, get: id => BY[id] || null };
+  IT.RELICS = { LIST, BY, MAX, ROMAN, SPECIAL, ROWS, TRAINER, DOTA, isSpecial, tierOf, progress, fmt, get: id => BY[id] || null, POINTS_K, diffMul, goalpost, baseOf, points };
 })(typeof window !== 'undefined' ? window : globalThis);

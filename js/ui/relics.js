@@ -116,6 +116,11 @@
     } catch (err) { /* decorative */ }
   }
 
+  // v6 item 15: "+N points this run" (the spendable currency, js/data/shop.js); e.pts = the run's points so far, from StatsCollector
+  function ptsLine(e) {
+    return e && e.pts > 0 ? IT.UI.h('span', { class: 'rl-pts-line', text: IT.t('pts.run', { n: e.pts }) }) : null;
+  }
+
   // ---- special relic toast queue: one at a time, ~3 s each (pure + injectable timer so it is testable without a DOM)
   const SPECIAL_MS = 3000;
   function createQueue(show, setT) {
@@ -177,7 +182,8 @@
         h('small', { text: t('relics.specialToast', { t: R.ROMAN[e.tier] }) }),
         h('b', { text: name(e.id) }),
         h('div', { class: 'rl-bar' }, h('i', { style: { width: (pg.frac * 100).toFixed(1) + '%' } })),
-        h('span', { class: 'rl-val', text: pg.next == null ? t('relics.max') : R.fmt(e.id, e.value || 0) + ' / ' + R.fmt(e.id, pg.next) })));
+        h('span', { class: 'rl-val', text: pg.next == null ? t('relics.max') : R.fmt(e.id, e.value || 0) + ' / ' + R.fmt(e.id, pg.next) }),
+        ptsLine(e)));
     const wrap = h('div', { class: 'rl-sp', 'data-relic': e.id, style: { '--ac': accent } },
       h('span', { class: 'rl-rays' }), h('span', { class: 'rl-bloom big' }), card, h('span', { class: 'rl-pts' }, pts));
     box.appendChild(wrap);
@@ -199,7 +205,7 @@
     if (!box) { box = h('div', { class: 'rl-toasts' }); stage.appendChild(box); }
     const el = h('div', { class: 'rl-toast t' + e.tier },
       h('span', { class: 'rl-bloom' }), icon(IT.RELICS.get(e.id).icon),
-      h('div', {}, h('small', { text: t('relics.toast', { t: IT.RELICS.ROMAN[e.tier] }) }), h('b', { text: name(e.id) })));
+      h('div', {}, h('small', { text: t('relics.toast', { t: IT.RELICS.ROMAN[e.tier] }) }), h('b', { text: name(e.id) }), ptsLine(e)));
     box.appendChild(el);
     while (box.children.length > 3) box.removeChild(box.firstChild);
     glowSand(el, e.tier);

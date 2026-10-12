@@ -176,6 +176,7 @@
         btn('ui.stats', () => A.go('stats'), 'slt sm'),
         btn('ui.settings', () => A.go('settings'), 'slt sm')),
       h('div', { class: 'lang-row' }, langToggle()),
+      IT.UI.shopTab ? IT.UI.shopTab() : null,    // v6 item 15: SHOP side tab (js/ui/shop.js)
       h('div', { class: 'foot', text: IT.t('title.hint') }));
   }
 

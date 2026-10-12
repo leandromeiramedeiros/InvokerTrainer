@@ -305,7 +305,8 @@ function dustRun(id, diff, off, secs, after) {
 
 test('10: Dust only on the labelled escape scenarios (one carrier each), texts say so; ENEMY_ITEMS has dust', () => {
   assert.ok(IT.GAME.ENEMY_ITEMS.includes('dust'));
-  const carriers = SC.filter(s => (s.units || []).some(u => (u.items || []).includes('dust'))).map(s => s.id).sort();
+  // v6 item 27: the juke set has its own Dust carrier (dust_bait, tests/juke_v6.test.js)
+  const carriers = SC.filter(s => (s.tags || []).indexOf('juke') < 0 && (s.units || []).some(u => (u.items || []).includes('dust'))).map(s => s.id).sort();
   assert.deepEqual(carriers, ['dust_escape', 'plateau_escape']);
   for (const id of carriers) {
     const sc = SC.get(id);

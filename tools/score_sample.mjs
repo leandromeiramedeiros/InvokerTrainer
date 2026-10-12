@@ -156,6 +156,7 @@ function ranked(seed, rating, fixedIdx, sloppy) {
     proj = { clear, relic, score: clear + relic };
   }
   sum.proj = proj;
+  sum.points = w._stats.data.points; sum.time = w._stats.data.time;   // item 15: spendable points of this run (+ play seconds)
   return sum;
 }
 
@@ -171,7 +172,7 @@ for (const set of SETS) {
       const rows = [];
       for (let s = 1; s <= SEEDS; s++) {
         const m = ranked(1000 + s * 37, table[df], set === 'fixed' ? IT.DIFFICULTY.get(df).idx : null, pl === 'sloppy');
-        rows.push({ seed: s, score: m.score, clear: m.clearScore, relic: m.relicScore, solved: m.solved, medal: medal(m.score, m.solved), proj: m.proj });
+        rows.push({ seed: s, score: m.score, clear: m.clearScore, relic: m.relicScore, solved: m.solved, medal: medal(m.score, m.solved), proj: m.proj, points: m.points, time: m.time });
         for (const q of m.relicParts || []) { const a = PARTS[q.id] || (PARTS[q.id] = { runs: 0, pts: 0, v: 0 }); a.runs++; a.pts += q.pts; a.v += q.v; }
         RUNS++;
       }
@@ -181,13 +182,13 @@ for (const set of SETS) {
         solvedP50: pct(solved, 0.5),
         total: [0.1, 0.5, 0.9, 0.95].map(p => pct(sc, p)), clear: [0.1, 0.5, 0.9].map(p => pct(rows.map(r => r.clear), p)), relic: [0.1, 0.5, 0.9].map(p => pct(rows.map(r => r.relic), p)),
         perfectTotal: perfect.length ? [0.5, 0.95].map(p => pct(perfect.map(r => r.score), p)) : null,
-        medals: rows.map(r => r.medal),
+        medals: rows.map(r => r.medal), points: [0.1, 0.5, 0.9].map(p => pct(rows.map(r => r.points), p)), pointsMean: Math.round(rows.reduce((a, r) => a + r.points, 0) / rows.length), timeMean: Math.round(rows.reduce((a, r) => a + r.time, 0) / rows.length),
         proj: rows.some(r => r.proj) ? [0.1, 0.5, 0.95].map(p => pct(rows.filter(r => r.proj).map(r => r.proj.score), p)) : null,
         projClear: rows.some(r => r.proj) ? pct(rows.filter(r => r.proj).map(r => r.proj.clear), 0.5) : null,
         projRelic: rows.some(r => r.proj) ? pct(rows.filter(r => r.proj).map(r => r.proj.relic), 0.5) : null,
       };
       groups.push(g);
-      if (!JSON_OUT) console.log(`${set.padEnd(5)} ${df.padEnd(6)} ${pl.padEnd(6)} n=${g.n} 8/8=${g.perfect} solved50=${g.solvedP50} | total p10/50/90/95 ${g.total.join('/')} | clear ${g.clear.join('/')} | relic ${g.relic.join('/')} | perfect p50/p95 ${g.perfectTotal ? g.perfectTotal.join('/') : '-'} | p50 medal ${medal(g.total[1], g.solvedP50)} | 8/8 proj p10/50/95 ${g.proj ? g.proj.join('/') + ' (clear ' + g.projClear + ' + relic ' + g.projRelic + ') -> ' + medal(g.proj[1], 8) + ' / ' + medal(g.proj[2], 8) : '-'}`);
+      if (!JSON_OUT) console.log(`${set.padEnd(5)} ${df.padEnd(6)} ${pl.padEnd(6)} n=${g.n} 8/8=${g.perfect} solved50=${g.solvedP50} | total p10/50/90/95 ${g.total.join('/')} | clear ${g.clear.join('/')} | relic ${g.relic.join('/')} | perfect p50/p95 ${g.perfectTotal ? g.perfectTotal.join('/') : '-'} | p50 medal ${medal(g.total[1], g.solvedP50)} | points p10/50/90 ${g.points.join('/')} mean ${g.pointsMean} in ${g.timeMean}s | 8/8 proj p10/50/95 ${g.proj ? g.proj.join('/') + ' (clear ' + g.projClear + ' + relic ' + g.projRelic + ') -> ' + medal(g.proj[1], 8) + ' / ' + medal(g.proj[2], 8) : '-'}`);
     }
   });
 }

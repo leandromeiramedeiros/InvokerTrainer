@@ -409,7 +409,7 @@
   // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'stop'|'hold'|'pos', id }]
   function rkActions(rk) {
     const w = H.c.w, GM = IT.GAME, out = [];
-    const def = w.combo && w.combo.def;
+    const def = rk.def || (w.combo && w.combo.def);   // rk.def: the pinned guide combo (Free Play)
     if (def) {
       for (const s of def.steps) {
         if (s.ability) out.push({ k: GM.SPELL_ORBS[s.ability] ? 'spell' : 'item', id: s.ability });
@@ -498,7 +498,10 @@
     const state = { orbs: hero.inv.orbs, slots: hero.inv.slots, items: hero.items.map(x => x && x.id), preinvoked: sc && sc.hero && sc.hero.preinvoked };
     H.trk = { key, tr: S.tracker(S.plan(steps, state)) };
   }
-  function trkFeed(ev) { if (H.trk && H.trk.tr) H.trk.tr.feed(ev); }
+  function trkFeed(ev) {
+    if (H.trk && H.trk.tr) H.trk.tr.feed(ev);
+    if (H.sb && H.c && H.sb.w === H.c.w && H.sb.gd) H.sb.gd.feed(ev);   // the pinned combo guide follows the same hero events
+  }
   const fmtS = s => { s = Math.max(0, s || 0); const v = Math.floor(s * 10) / 10, m = Math.floor(v / 60); return m + ':' + (v - m * 60).toFixed(1).padStart(4, '0'); };
   const fmtM = s => { const v = Math.max(0, Math.floor(s || 0)), m = Math.floor(v / 60); return m + ':' + String(v - m * 60).padStart(2, '0'); };
   function setIcon(b, id) {
@@ -626,64 +629,80 @@
     H.update(0);
   };
 
-  // ---------------------------------------------------------------- sandbox side panel (v6 WP7)
-  // Fixed-height pane (never taller than the stage, clear of the hero bar): header (map + fold), DPS meter with sparkline,
-  // icon tool buttons (+ auto-refresh toggle), sliders (scarecrows, enemy tier), then the combo browser: search, tier filter, scrollable list.
+  // ---------------------------------------------------------------- sandbox side panel (v6 items 21 + 33)
+  // A draggable / resizable / persisted IT.UI.Panel ('sbx', Free Play only): map line, DPS meter + sparkline, tools (refresh, auto-refresh, reset
+  // targets, grant items), time of day (Day / Night / Cycle + a slider), the enemy / dummy roster (skin picker, difficulty bar, remove X, "+ Enemy" /
+  // "+ Dummy") and the combo browser. Clicking a combo pins / unpins the guide strip (R.gd, top centre): the step chain only, no scenario state.
   const SBI = {
     refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13.5 1.5V5H10"/>',
-    spawn: '<path d="M6 2h4v3H6zM8 5v9M2 8h12M5 14h6"/>',
     reset: '<path d="M3 5h8a3 3 0 0 1 0 6H6M3 5l3-3M3 5l3 3"/>',
-    place: '<path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4M6.5 6.5h3v3h-3z"/>',
     auto: '<path d="M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z"/>',
-    fold: '<path d="M3 6l5 5 5-5"/>',
+    grant: '<path d="M3 6h10v8H3zM6 6V4a2 2 0 0 1 4 0v2"/>',
+    plus: '<path d="M8 3v10M3 8h10"/>',
+    x: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>',
+    menu: '<path d="M2 4h12M2 8h12M2 12h12"/>',
     lock: '<path d="M4 7h8v7H4zM5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
   };
   const sbIcon = k => { const s = IT.UI.h('span', { class: 'sbi' }); s.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + SBI[k] + '</svg>'; return s; };
   const SB_FILTERS = ['all', 'basic', 'intermediate', 'advanced', 'items'];
+  // 32px portrait of a skin; dummy skins without art of their own wear the scarecrow sheet
+  function skinPor(skin, kind) {
+    const { portrait } = IT.UI;
+    let ok = false;
+    try { ok = !!(IT.Art && IT.Art.canvas(skin, 'portrait')); } catch (e) { ok = false; }
+    return portrait(ok ? skin : kind === 'dummy' ? 'scarecrow' : skin);
+  }
 
   // pure: the side pane exists only in Free Play (ctx.free = no scenario run); never in ranked / practice scenarios
   H.hasSide = ctx => !!ctx && ctx.mode === 'sandbox' && !!ctx.free;
 
   H.buildSide = function (ctx, root) {
-    const { h } = IT.UI, t = IT.t, In = IT.Input, R = H.refs, S = IT.Settings;
-    if (!H.sb || H.sb.w !== ctx.w) H.sb = { w: ctx.w, filter: 'all', q: '', min: false, auto: false, tier: null, peak: 0, tiered: new Set(), cur: null, ck: '', sp: 0, tc: 0 };
-    const sb = H.sb; sb.ck = ''; sb.cur = null; const free = !!ctx.free, key = a => S.label(S.keyOf(a));
-    const tool = (ic, label, desc, act, hook) => h('button', {
-      type: 'button', class: 'sbx-ib ' + act, 'aria-label': label, 'data-tip': label + (key(act) ? ' [' + key(act) + ']' : '') + '\n' + desc,
-      onclick: ev => { ev.currentTarget.blur(); if (In.hooks[hook]) In.hooks[hook](); },
-    }, sbIcon(ic), key(act) && act !== 'armEnemy' ? h('kbd', { text: key(act) }) : null);
-    const slider = (cls, label, tip, min, max, val, oninput) => {
-      const inp = h('input', { type: 'range', class: 'sbx-rg', min, max, step: 1, value: val, 'aria-label': label, oninput: ev => oninput(+ev.target.value) });
-      inp.addEventListener('change', () => inp.blur());
-      const out = h('span', { class: 'v' });
-      return { row: h('div', { class: 'sbx-sl ' + cls, 'data-tip': tip }, h('label', { text: label }), inp, out), inp, out };
-    };
+    const { h } = IT.UI, t = IT.t, In = IT.Input, R = H.refs, S = IT.Settings, Ro = IT.UI.Roster;
+    const stateFn = () => { const hr = H.c && H.c.hero; return hr ? { orbs: hr.inv.orbs, slots: hr.inv.slots, items: hr.items.map(x => x && x.id), preinvoked: [] } : {}; };
+    if (!H.sb || H.sb.w !== ctx.w) H.sb = { w: ctx.w, filter: 'all', q: '', auto: false, peak: 0, sp: 0, tc: 0, pick: null, gd: IT.UI.Guide.create(stateFn), gdGrant: null };
+    const sb = H.sb, key = a => S.label(S.keyOf(a));
+    sb.rsig = ''; sb.tc = 1;
 
-    R.mapLine = h('div', { class: 'maplin' });   // current map name (Free Play / sandbox top line)
-    R.fold = h('button', { type: 'button', class: 'sbx-fold', 'aria-label': t(sb.min ? 'sbx.expand' : 'sbx.collapse'), 'data-tip': t(sb.min ? 'sbx.expand' : 'sbx.collapse'),
-      onclick: ev => { ev.currentTarget.blur(); sb.min = !sb.min; R.side.classList.toggle('min', sb.min); const tp = t(sb.min ? 'sbx.expand' : 'sbx.collapse'); R.fold.setAttribute('data-tip', tp); R.fold.setAttribute('aria-label', tp); } }, sbIcon('fold'));
+    R.mapLine = h('div', { class: 'maplin' });   // current map name (Free Play top line)
     // DPS meter
     R.dpsN = h('b', { class: 'dpsn', text: '0' }); R.totN = h('b', { class: 'totn', text: '0' }); R.peakN = h('span', { class: 'pk' });
     R.spark = h('canvas', { class: 'sbx-spark', width: 160, height: 24, 'data-tip': t('sbx.spark') });
-    // tools
+    // tools: refresh cooldowns, auto-refresh, reset targets, grant items for the followed combos
+    const tool = (ic, label, desc, cls, fn, kb) => h('button', {
+      type: 'button', class: 'sbx-ib ' + cls, 'aria-label': label, 'data-tip': label + (kb ? ' [' + kb + ']' : '') + '\n' + desc,
+      onclick: ev => { ev.currentTarget.blur(); fn(ev.currentTarget); },
+    }, sbIcon(ic), kb ? h('kbd', { text: kb }) : null);
+    const flip = (btn, on) => { btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); };
     R.tools = h('div', { class: 'sbx-tools' },
-      tool('refresh', t('hud.refresh'), t('sbx.refresh.d'), 'refresh', 'refresh'),
-      free ? tool('spawn', t('hud.spawn'), t('sbx.spawn.d'), 'spawn', 'spawn') : null,
-      tool('reset', t('hud.resetDummies'), t('sbx.reset.d'), 'resetDummies', 'resetDummies'),
-      free ? (R.place = tool('place', t('hud.placeEnemy'), t('hud.placeEnemy.d'), 'armEnemy', 'armEnemy')) : null,
-      R.autoB = h('button', { type: 'button', class: 'sbx-ib auto' + (sb.auto ? ' on' : ''), 'aria-label': t('sbx.auto'), 'aria-pressed': sb.auto ? 'true' : 'false', 'data-tip': t('sbx.auto') + '\n' + t('sbx.auto.d'),
-        onclick: ev => { ev.currentTarget.blur(); sb.auto = !sb.auto; R.autoB.classList.toggle('on', sb.auto); R.autoB.setAttribute('aria-pressed', sb.auto ? 'true' : 'false'); } }, sbIcon('auto')));
-    // sliders (scarecrow count / enemy tier): free play + combo sandbox only (scenario sandbox replays the scenario)
-    let sliders = null;
-    if (free) {
-      const n0 = Math.max(1, Math.min(5, IT.Units.trainers(ctx.w).length || 1));
-      const sd = R.sd = slider('sd', t('sbx.dummies'), t('sbx.dummies.d'), 1, 5, n0, v => { H.sbDummies(v); });
-      const tiers = IT.DIFFICULTY.order, ti = R.st = slider('st', t('sbx.diff'), t('sbx.diff.d'), 0, tiers.length - 1, sb.tier != null ? sb.tier : 2, v => { sb.tier = v; H.sbTier(true); });
-      R.sdN = sd.inp; R.sdV = sd.out; R.stV = ti.out;
-      sliders = h('div', { class: 'sbx-sec sbx-sls' }, sd.row, ti.row);
-      sd.out.textContent = String(n0);
-      ti.out.textContent = sb.tier != null ? t('diff.' + tiers[sb.tier]) : t('sbx.diff.keep');
+      tool('refresh', t('hud.refresh'), t('sbx.refresh.d'), 'refresh', () => { if (In.hooks.refresh) In.hooks.refresh(); }, key('refresh')),
+      R.autoB = tool('auto', t('sbx.auto'), t('sbx.auto.d'), 'auto' + (sb.auto ? ' on' : ''), b => { sb.auto = !sb.auto; flip(b, sb.auto); }),
+      tool('reset', t('sbx.reset'), t('sbx.reset.d'), 'reset', () => H.sbReset()),
+      R.grantB = tool('grant', t('sbx.grant'), t('sbx.grant.d'), 'grant' + (ctx.grant ? ' on' : ''), b => H.sbGrant(b, flip)));
+
+    // time of day: Day / Night / Cycle + slider over the 10 min day (dragging it switches to Cycle from that moment)
+    let tod = null;
+    if (IT.DayNight) {
+      R.todBtns = ['day', 'night', 'cycle'].map(m => h('button', { type: 'button', class: 'sbx-tb', 'data-mode': m, 'data-tip': t('lo.tod.d'), text: t('lo.tod.' + m).split(' (')[0],
+        onclick: ev => { ev.currentTarget.blur(); Ro.todSetMode(ctx.w, m); H.syncTod(true); } }));
+      R.todSl = h('input', { type: 'range', class: 'sbx-rg', min: 0, max: Ro.todFull() - 1, step: 1, value: 0, 'aria-label': t('tod.time'), 'data-tip': t('tod.time'),
+        oninput: ev => { Ro.todSetPos(ctx.w, +ev.target.value); H.syncTod(true); } });
+      R.todSl.addEventListener('change', () => R.todSl.blur());
+      R.todOut = h('span', { class: 'v' });
+      tod = h('div', { class: 'sbx-sec sbx-tod' }, h('div', { class: 'sbx-sh', text: t('tod.title') }), h('div', { class: 'sbx-tbs' }, R.todBtns),
+        h('div', { class: 'sbx-sl' }, R.todSl, R.todOut));
     }
+
+    // roster: enemies and dummies of the map
+    const addBtn = kind => {
+      const b = h('button', { type: 'button', class: 'sbx-add ' + kind, onclick: ev => { ev.currentTarget.blur(); if (In.hooks.armEnemy) In.hooks.armEnemy(kind); H.syncRoster(true); } });
+      b.append(sbIcon('plus'), h('span', { class: 'an', text: t(kind === 'dummy' ? 'ros.addDummy' : 'ros.addEnemy').replace(/^\+\s*/, '') }), h('em', { class: 'ac' }));
+      b.setAttribute('data-tip', t(kind === 'dummy' ? 'ros.addDummy.d' : 'ros.addEnemy.d', { n: Ro.MAX[kind] }));
+      return b;
+    };
+    R.addE = addBtn('enemy'); R.addD = addBtn('dummy');
+    R.rosList = h('div', { class: 'ros-list' });
+    const roster = h('div', { class: 'sbx-sec sbx-ros' }, h('div', { class: 'sbx-sh', text: t('ros.title') }), h('div', { class: 'ros-add' }, R.addE, R.addD), R.rosList);
+
     // combo browser
     R.search = h('input', { type: 'text', class: 'sbx-q', placeholder: t('sbx.search'), 'aria-label': t('sbx.search'), spellcheck: 'false', autocomplete: 'off', maxlength: 24, value: sb.q,
       oninput: ev => { sb.q = ev.target.value; H.filterList(); },
@@ -692,56 +711,136 @@
     R.chips = SB_FILTERS.map(f => h('button', { type: 'button', class: 'sbx-fc' + (f === 'all' ? '' : ' t-' + f) + (sb.filter === f ? ' on' : ''), text: t(f === 'all' ? 'sbx.all' : 'tier.' + f),
       onclick: ev => { ev.currentTarget.blur(); sb.filter = f; R.chips.forEach((c, i) => c.classList.toggle('on', SB_FILTERS[i] === f)); H.filterList(); } }));
     R.list = h('div', { class: 'clist' });
-    R.side = h('div', { class: 'hudp hside' + (sb.min ? ' min' : '') },
-      h('div', { class: 'sbx-head' }, R.mapLine, R.fold),
-      h('div', { class: 'sbx-body' },
-        h('div', { class: 'sbx-sec sbx-meter' },
-          h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, R.peakN, h('span', { class: 'sp', text: t('hud.total') }), R.totN), R.spark),
-        h('div', { class: 'sbx-sec' }, R.tools),
-        sliders,
-        h('div', { class: 'sbx-lh' }, h('span', { class: 'ch2', text: t('hud.combos') }), R.lcount, R.search),
-        h('div', { class: 'sbx-fl' }, R.chips),
-        R.list));
+    R.side = h('div', { class: 'sbx-wrap' },
+      R.mapLine,
+      h('div', { class: 'sbx-sec sbx-meter' },
+        h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, R.peakN, h('span', { class: 'sp', text: t('hud.total') }), R.totN), R.spark),
+      h('div', { class: 'sbx-sec' }, R.tools),
+      tod, roster,
+      h('div', { class: 'sbx-lh' }, h('span', { class: 'ch2', text: t('hud.combos') }), R.lcount, R.search),
+      h('div', { class: 'sbx-fl' }, R.chips),
+      R.list);
     // the wheel belongs to the pane (list scroll), never to the game zoom
     R.side.addEventListener('wheel', ev => ev.stopPropagation(), { passive: true });
+
+    // the pane itself: draggable, resizable, persisted; open by default the first time (nothing stored yet)
+    R.sbxOpen = h('button', { type: 'button', class: 'sbx-open', hidden: true, 'aria-label': t('sbx.open'), 'data-tip': t('sbx.open'), onclick: ev => { ev.currentTarget.blur(); R.sideP.setOpen(true); } }, sbIcon('menu'));
+    root.appendChild(R.sbxOpen);
+    R.sideP = IT.UI.Panel.create({ id: 'sbx', title: t('sbx.pane'), content: R.side, host: root, min: { w: 104, h: 96 }, max: { w: 240, h: 262 }, default: { x: 358, y: 15, w: 118, h: 172 },
+      onChange: on => { R.sbxOpen.hidden = on; } });
+    let stored = 'x'; try { stored = G.localStorage ? G.localStorage.getItem(IT.UI.Panel.KEY + 'sbx') : null; } catch (e) { stored = 'x'; }
+    if (stored == null) R.sideP.setOpen(true);
+    R.sbxOpen.hidden = R.sideP.isOpen();
+    R.sideP.front();
+    H.off.push(() => R.sideP.destroy());
+
+    // the pinned guide strip (item 33): step chain only
+    R.gdChain = h('div', { class: 'rkcombo ord' }); R.gdR = { rkCombo: R.gdChain, rkChips: [] };
+    R.gdOk = h('i', { class: 'gdok', text: '✓' }); R.gdCnt = h('b', { class: 'gdcnt' });
+    R.gd = h('div', { class: 'gdp', hidden: true }, R.gdChain, R.gdOk, R.gdCnt);
+    R.top.insertBefore(R.gd, R.top.firstChild);
+
     H.buildList();
-    root.appendChild(R.side);
+    H.syncRoster(true); H.syncTod(true);
   };
 
-  // scarecrow count slider: spawn on free dummy spots / remove the newest (never the first trainer, never the combo's dummy)
-  H.sbDummies = function (n) {
-    const c = H.c, w = c && c.w, sb = H.sb; if (!w || !sb) return;
-    const U = IT.Units, lo = w.loadout || {}, cur = w.combo && w.combo.dummy;
-    let ds = U.trainers(w);
-    const spots = (w.map && w.map.spawns && w.map.spawns.dummies) || [];
-    while (ds.length < n) {
-      const s = spots.find(p => !ds.some(d => Math.hypot(d.x - p.x, d.y - p.y) < 150));
-      if (!s) break;
-      U.spawnDummy(w, { x: s.x, y: s.y, preset: lo.preset, skin: lo.skin });
-      ds = U.trainers(w);
-    }
-    while (ds.length > n && ds.length > 1) {
-      const d = ds.slice(1).reverse().find(x => x.id !== cur); if (!d) break;
-      w.remove(d); ds = U.trainers(w);
-    }
-    if (H.refs.sdV) H.refs.sdV.textContent = String(ds.length);
+  // "Reset targets": every enemy / dummy back on its spot at full health, damage meter cleared
+  H.sbReset = function () {
+    const c = H.c; if (!c) return;
+    if (c.R && c.R.clearVfx) c.R.clearVfx();
+    IT.UI.Roster.resetAll(c.w);
+    H.resetMeter();
+    IT.UI.toast(IT.t('toast.dummiesReset'), 'info');
+    H.syncRoster(true);
   };
 
-  // enemy tier slider: reaction / item warning / awareness / damage of every real enemy (placed ones too, once the slider was used)
-  H.sbTier = function (all) {
-    const c = H.c, w = c && c.w, sb = H.sb, R = H.refs; if (!w || !sb || sb.tier == null) return;
-    const df = IT.DIFFICULTY.get(sb.tier), AK = IT.GAME.ENEMY_ATTACK || {};
-    if (R.stV) R.stV.textContent = IT.t('diff.' + IT.DIFFICULTY.order[sb.tier]);
-    for (const e of w.query(x => x.kind === 'enemy' && !x.refill)) {
-      if (!all && sb.tiered.has(e.id)) continue;
-      sb.tiered.add(e.id);
-      e.reaction = df.reaction; e.telegraph = df.telegraph; e.awareness = df.awareness; e.notice = df.notice; e.fights = !!df.fights;
-      const AT = e.attack && AK[e.atkKind];
-      if (AT) {
-        const mn = Math.round(AT.min * df.dmgMul), mx = Math.max(mn, Math.round(AT.max * df.dmgMul));
-        e.attack.min = mn; e.attack.max = mx; if (e.base) { e.base.dmgMin = mn; e.base.dmgMax = mx; }
+  // "Grant items": the combos that need items / Aghanim become available (granted when pinned); switching it off unpins and takes them back
+  H.sbGrant = function (btn, flip) {
+    const c = H.c, w = c && c.w; if (!w) return;
+    H.gdUnpin();
+    c.grant = !c.grant; flip(btn, c.grant);
+    if (IT.Combo && !(w.combo && w.combo.def)) IT.Combo.mode(w, 'sandbox', { loadout: w.loadout, grantMissing: c.grant });
+    H.buildList();
+  };
+
+  // ---- time of day block
+  H.syncTod = function (force) {
+    const R = H.refs, c = H.c; if (!R.todSl || !c) return;
+    const w = c.w, Ro = IT.UI.Roster, mode = Ro.todMode(w), pos = Ro.todPos(w), t = IT.t;
+    R.todBtns.forEach(b => b.classList.toggle('on', b.getAttribute('data-mode') === mode));
+    if (document.activeElement !== R.todSl && (force || +R.todSl.value !== Math.round(pos))) R.todSl.value = Math.round(pos);
+    const C = IT.DayNight.CYCLE || 300, night = pos >= C, within = Math.floor(pos % C), m = Math.floor(within / 60), s = within % 60;
+    R.todOut.textContent = t(night ? 'tod.night' : 'tod.day') + ' ' + t('tod.clock', { m, s: String(s).padStart(2, '0') });
+  };
+
+  // ---- roster block: rows rebuilt only when the roster / picker / language / skin ownership changes
+  H.syncRoster = function (force) {
+    const R = H.refs, c = H.c, sb = H.sb; if (!R.rosList || !c || !sb) return;
+    const w = c.w, Ro = IT.UI.Roster, t = IT.t, In = IT.Input;
+    const units = Ro.list(w, 'enemy').concat(Ro.list(w, 'dummy'));
+    if (sb.pick != null && !units.some(e => e.id === sb.pick)) sb.pick = null;
+    const own = Ro.skins('enemy').concat(Ro.skins('dummy')).map(s => (s.locked ? 1 : 0)).join('');
+    const sig = units.map(e => e.id + ':' + e.ros.skin + ':' + (e.ros.tier || '')).join(',') + '|' + sb.pick + '|' + IT.lang + '|' + own;
+    for (const kind of ['enemy', 'dummy']) {
+      const b = kind === 'dummy' ? R.addD : R.addE, n = Ro.count(w, kind), full = n >= Ro.MAX[kind];
+      b.classList.toggle('full', full);
+      const ac = b.querySelector('.ac'); if (ac && ac.textContent !== n + '/' + Ro.MAX[kind]) ac.textContent = n + '/' + Ro.MAX[kind];
+      const armed = !!(In.armed && In.armed.place && (In.armed.kind === 'dummy' ? 'dummy' : 'enemy') === kind);
+      b.classList.toggle('on', armed);
+    }
+    if (!force && sb.rsig === sig) return;
+    sb.rsig = sig;
+    R.rosList.textContent = '';
+    const { h } = IT.UI, DB = IT.UI.DiffBar, nth = { enemy: 0, dummy: 0 };
+    if (!units.length) { R.rosList.appendChild(h('div', { class: 'ros-none', text: t('ros.none') })); return; }
+    for (const e of units) {
+      const kind = e.ros.kind, name = t(kind === 'dummy' ? 'ros.dummy' : 'ros.enemy') + ' ' + (++nth[kind]);
+      const por = h('button', { type: 'button', class: 'ros-sk' + (sb.pick === e.id ? ' on' : ''), 'data-tip': t('ros.skin.n', { name: Ro.skinName(e.ros.skin, kind) }),
+        onclick: ev => { ev.currentTarget.blur(); sb.pick = sb.pick === e.id ? null : e.id; H.syncRoster(true); } }, skinPor(e.ros.skin, kind));
+      const x = h('button', { type: 'button', class: 'ros-x', 'aria-label': t('ros.remove'), 'data-tip': t('ros.remove'),
+        onclick: ev => { ev.currentTarget.blur(); Ro.remove(w, e); H.syncRoster(true); } }, sbIcon('x'));
+      const main = h('div', { class: 'ros-main' }, h('span', { class: 'ros-nm', text: name }));
+      if (kind === 'enemy') {
+        const bar = DB.create({ value: e.ros.tier, name: t('db.title'), onChange: id => { Ro.edit(w, e, { tier: id }); H.syncRoster(true); } });
+        main.appendChild(bar.el);
       }
+      const row = h('div', { class: 'ros-row ' + kind }, por, main, x);
+      if (sb.pick === e.id) {
+        const pick = h('div', { class: 'ros-pick' }, Ro.skins(kind).map(s => h('button', {
+          type: 'button', class: 'ros-ps' + (s.id === e.ros.skin ? ' on' : '') + (s.locked ? ' lk' : ''), 'data-tip': s.locked ? t('ros.locked') : s.name,
+          onclick: ev => {
+            ev.currentTarget.blur();
+            if (s.locked) { IT.UI.toast(t('ros.locked'), 'warn'); return; }
+            sb.pick = null; Ro.edit(w, e, { skin: s.id }); H.syncRoster(true);
+          } }, skinPor(s.id, kind))));
+        R.rosList.appendChild(h('div', { class: 'ros-blk' }, row, pick));
+      } else R.rosList.appendChild(row);
     }
+  };
+
+  // ---- pinned combo guide (item 33)
+  H.gdMark = function () {
+    const R = H.refs, sb = H.sb, t = IT.t; if (!R.cmap || !sb) return;
+    for (const id in R.cmap) {
+      const el = R.cmap[id], on = sb.gd.id === id, base = el.getAttribute('data-base') || '';
+      el.classList.toggle('on', on); el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      el.setAttribute('data-tip', base + (el.classList.contains('lock') ? '' : '\n' + t(on ? 'gd.unpin' : 'gd.pin')));
+    }
+  };
+  H.gdUnpin = function () {
+    const c = H.c, sb = H.sb; if (!c || !sb) return;
+    if (sb.gdGrant) { IT.UI.Roster.revokeGrant(c.w, sb.gdGrant); sb.gdGrant = null; }
+    sb.gd.clear(); H.gdMark();
+  };
+  // click on a combo: pin it (granting what it needs when "Grant items" is on), swap to it, or (same one) remove the strip
+  H.gdToggle = function (cb, ok) {
+    const c = H.c, sb = H.sb, t = IT.t; if (!c || !sb) return;
+    const same = sb.gd.id === cb.id;
+    if (!ok && !same) { IT.UI.toast(t('toast.locked'), 'warn'); return; }
+    if (sb.gdGrant) { IT.UI.Roster.revokeGrant(c.w, sb.gdGrant); sb.gdGrant = null; }
+    if (!same && c.grant) sb.gdGrant = IT.UI.Roster.grantFor(c.w, cb);
+    sb.gd.toggle(cb);
+    H.gdMark();
   };
 
   // all combos as rows (built once per bind); H.filterList shows / hides them by tier chip + search text
@@ -767,8 +866,8 @@
       } else tip = IT.Combo.tipText(cb, IT.Values.ctx(c.w.loadout), IT.lang);
       const steps = (cb.steps || []).filter(s => s.type !== 'position' && s.type !== 'move'), shown = steps.slice(0, 9);
       const el = h('button', {
-        type: 'button', class: 'citem t-' + cb.tier + (ok ? '' : ' lock'), 'data-tip': tip, 'data-id': cb.id,
-        onclick: ev => { ev.currentTarget.blur(); if (!ok) { IT.UI.toast(t('toast.locked'), 'warn'); return; } IT.Combo.start(c.w, cb.id); },
+        type: 'button', class: 'citem t-' + cb.tier + (ok ? '' : ' lock'), 'data-tip': tip, 'data-base': tip, 'data-id': cb.id,
+        onclick: ev => { ev.currentTarget.blur(); H.gdToggle(cb, ok); },
       },
         h('span', { class: 'ci-top' }, h('b', { class: 'ci-name', text: name }), ok ? null : h('span', { class: 'ci-lock' }, sbIcon('lock')), h('em', { class: 'ci-tier', text: t('sbx.t.' + cb.tier) })),
         h('span', { class: 'ci-steps' }, shown.map(s => CBar.stepIcon(s)), steps.length > shown.length ? h('i', { class: 'more', text: '+' + (steps.length - shown.length) }) : null));
@@ -778,6 +877,7 @@
     }
     R.empty = h('div', { class: 'cnone', text: t('sbx.none'), hidden: true }); R.list.appendChild(R.empty);
     H.filterList();
+    H.gdMark();
   };
 
   H.filterList = function () {
@@ -806,48 +906,50 @@
     g.fillStyle = '#3a2a63'; g.fillRect(0, Hh - 1, W, 1);
   };
 
-  // per-frame: meter, sliders sync, auto-refresh, armed Place enemy, active combo highlight
+  // guide strip per frame: build the chips for the pinned combo, advance the lit step, hold the finished chain (check mark + counter), then reset
+  function updGuide(dt, hero, ca) {
+    const R = H.refs, sb = H.sb, gd = sb.gd, t = IT.t;
+    if (!R.gd) return;
+    const on = gd.active();
+    if (R.gd.hidden === on) R.gd.hidden = !on;
+    if (!on) { ca.gdSig = null; return; }
+    const sig = gd.rev + '|' + IT.lang + '|' + chipSig(hero);
+    if (ca.gdSig !== sig) {
+      ca.gdSig = sig; ca.gdSt = null;
+      rkBuildChips(R.gdR, { def: gd.def }, true, true);
+      R.gd.setAttribute('data-tip', ((gd.def.name && (gd.def.name[IT.lang] || gd.def.name.en)) || gd.id) + '\n' + t('gd.unpin'));
+    }
+    if (gd.tick(dt)) ca.gdSt = null;
+    const st = gd.states(), k = st.join('') + '|' + (gd.hold > 0 ? 1 : 0) + '|' + gd.laps;
+    if (ca.gdSt === k) return;
+    ca.gdSt = k;
+    R.gdR.rkChips.forEach((c, i) => { c.classList.toggle('done', st[i] === 'done'); c.classList.toggle('now', st[i] === 'now'); });
+    R.gd.classList.toggle('fin', gd.hold > 0);
+    R.gdOk.setAttribute('data-tip', t('gd.done'));
+    R.gdCnt.textContent = gd.laps > 0 ? t('gd.count', { n: gd.laps }) : '';
+  }
+
+  // per-frame: meter, auto-refresh, roster / time-of-day sync, guide strip
   H.updSide = function (dt, w, hero, ca) {
     const R = H.refs, sb = H.sb, t = IT.t; if (!sb) return;
     const now = w.t;
     while (H.dps.length && now - H.dps[0][0] > 10) H.dps.shift();
     let s5 = 0; for (const d of H.dps) if (now - d[0] <= 5) s5 += d[1];
     const dps = Math.round(s5 / 5);
-    if (H.total === 0) sb.peak = 0;   // meter reset (Reset dummies / new scenario)
+    if (H.total === 0) sb.peak = 0;   // meter reset (Reset targets / new scenario)
     if (dps > sb.peak) sb.peak = dps;
     setText(R.dpsN, String(dps), ca, 'dps'); setText(R.totN, String(Math.round(H.total)), ca, 'tot');
     setText(R.peakN, sb.peak ? t('sbx.peak', { n: sb.peak }) : '', ca, 'pk');
-    sb.sp += dt; if (sb.sp > 0.12) { sb.sp = 0; H.drawSpark(now); }
+    sb.sp += dt; if (sb.sp > 0.12) { sb.sp = 0; if (R.sideP.isOpen()) H.drawSpark(now); }
     if (sb.auto && hero) {
       for (const k in hero.cd) hero.cd[k] = 0;
       if (hero.inv) hero.inv.invokeCd = 0;
       for (const it of hero.items || []) if (it) it.cd = 0;
       hero.mana = hero.maxMana;
     }
-    if (R.place) { const on = !!(IT.Input.armed && IT.Input.armed.place); if (ca.plA !== on) { ca.plA = on; R.place.classList.toggle('on', on); } }
     sb.tc += dt;
-    if (sb.tc > 0.4) {
-      sb.tc = 0;
-      if (R.sdN) {
-        const n = IT.Units.trainers(w).length;
-        if (document.activeElement !== R.sdN) { if (+R.sdN.value !== Math.min(5, Math.max(1, n))) R.sdN.value = Math.min(5, Math.max(1, n)); }
-        setText(R.sdV, String(n), ca, 'sdv');
-      }
-      if (sb.tier != null) H.sbTier(false);
-    }
-    const st = w.combo, cur = st && st.def ? st.current : null, ck = cur ? cur + '|' + st.phase : '';
-    if (sb.ck !== ck) {
-      const old = R.cmap && R.cmap[sb.cur], el = cur && R.cmap && R.cmap[cur];
-      if (old && old !== el) old.classList.remove('on', 'done', 'fail');
-      if (el) {
-        el.classList.add('on'); el.classList.toggle('done', st.phase === 'done'); el.classList.toggle('fail', st.phase === 'fail');
-        if (sb.cur !== cur && !el.hidden) {   // bring the running combo into view inside the list (own scroll math: never scrolls the stage)
-          const l = R.list, top = el.offsetTop, bot = top + el.offsetHeight;
-          if (top < l.scrollTop) l.scrollTop = Math.max(0, top - 4); else if (bot > l.scrollTop + l.clientHeight) l.scrollTop = bot - l.clientHeight + 4;
-        }
-      }
-      sb.cur = cur; sb.ck = ck;
-    }
+    if (sb.tc > 0.25) { sb.tc = 0; H.syncRoster(false); H.syncTod(false); }
+    updGuide(dt, hero, ca);
   };
 
 

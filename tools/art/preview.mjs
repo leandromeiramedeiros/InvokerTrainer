@@ -5,6 +5,7 @@ const ctx = vm.createContext({ console, Math });
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/art.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/invoker.js'), 'utf8'), ctx);
 if (fs.existsSync(path.join(ROOT, 'js/art/invoker_skins.js'))) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/art/invoker_skins.js'), 'utf8'), ctx);
+for (const f of ['js/art/dummies.js', 'js/art/skins_v6.js']) if (fs.existsSync(path.join(ROOT, f))) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
 const [name, re, sc = '10', out = 'x'] = process.argv.slice(2);
 const S = ctx.IT.Art.sheets[name]; const s = +sc; const rx = new RegExp(re);
 const keys = Object.keys(S.frames).filter(k => rx.test(k));
@@ -19,7 +20,7 @@ for (let i = 0; i < W * H; i++) img.set(((i * 2654435761 >>> 0) % 100) < 8 ? bg2
 for (let i = 0; i < W * H; i++) img[i * 4 + 3] = 255;
 keys.forEach((k, n) => {
   const ox = (n % cols) * (fw + 2) * s + s, oy = Math.floor(n / cols) * (fh + 2) * s + s;
-  S.frames[k].forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '.') return; const c = hex(S.pal[ch]); for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) { const i = ((oy + y * s + dy) * W + ox + x * s + dx) * 4; img[i] = c[0]; img[i + 1] = c[1]; img[i + 2] = c[2]; } }));
+  S.frames[k].forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '.') return; const c = hex(S.pal[ch]); for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) { const i = ((oy + y * s + dy) * W + ox + x * s + dx) * 4; const a = c[3] / 255; img[i] = Math.round(img[i] * (1 - a) + c[0] * a); img[i + 1] = Math.round(img[i + 1] * (1 - a) + c[1] * a); img[i + 2] = Math.round(img[i + 2] * (1 - a) + c[2] * a); } }));
 });
 const crcT = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
 const crc = b => { let c = -1; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };

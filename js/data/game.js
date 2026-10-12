@@ -35,10 +35,9 @@
     ITEMS_EXTRA: ['blink', 'boots', 'travels', 'forcestaff', 'dust'],
     ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust', 'boots', 'travels'],   // v6 item 40: boots / travels add the KV ms bonus; items an enemy NPC may carry (v4; v6 dust: one charge, used by a chaser at the last-seen spot)
     // v6 item 22: 'default' (bland hooded grunt) is FIRST: the skin a plain enemy wears. Flair lines per skin live in js/data/flair.js.
-    // TODO(ranked package): js/sim/ranked.js apply() rotates SK[(s0+i)%SK.length]; once the shop gates skins, ranked uses 'default' only.
-    // TODO(art): 'nando' needs a sprite sheet in js/art/dummies.js before it joins SKINS (flair lines already exist in flair.js); add 'nando' after 'vitinho'.
+    // v6 item 15: ranked rotates IT.Skins.pool('enemy') = the free 'default' + the enemy skins bought in the SHOP (js/data/shop.js); 'nando' is a shop enemy.
     // TODO(CEO): 'ian' slot reserved (no skin, no sprite, no flair yet).
-    SKINS: ['default', 'pedro', 'renan', 'vitinho'],
+    SKINS: ['default', 'pedro', 'renan', 'vitinho', 'nando'],
     SKIN_NAMES: { default: 'Grunt', pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho', nando: 'Nando' /* , ian: 'Ian' */ },
     // Dummy stat presets. Behavior: stationary | wander | evasive.
     DUMMY_PRESETS: {
@@ -74,5 +73,53 @@
       blink: { range: 1000, minRange: 500, tell: 0.35 },
     },
     HERO: { radius: 24 },
+    // v6 item 15 (Skin SHOP): the other two skin families. Player: hero sheet + spell icon / VFX palette. Dummy: the training scarecrow.
+    PLAYER_SKINS: ['default', 'kid', 'dark', 'exalted'],
+    PLAYER_SKIN_NAMES: { default: 'Invoker', kid: 'Invoker Kid', dark: 'Dark Artistry Invoker', exalted: 'Exalted Invoker' },
+    DUMMY_SKINS: ['scarecrow', 'raven'],
+    DUMMY_SKIN_NAMES: { scarecrow: 'Scarecrow', raven: 'Raven Scarecrow' },
   };
+
+  // ---- IT.Skins: which skins a mode may use (SHOP ownership comes from IT.Shop.owned when js/data/shop.js is loaded; without it every skin is open,
+  // which keeps the headless sim tests unchanged) + the pure per-skin colour tint of spell icons / VFX / the Forge Spirit.
+  const FREE = { enemy: 'default', player: 'default', dummy: 'scarecrow' };
+  const LISTS = () => ({ enemy: IT.GAME.SKINS, player: IT.GAME.PLAYER_SKINS, dummy: IT.GAME.DUMMY_SKINS });
+  function pool(kind) {
+    const all = (LISTS()[kind] || []).slice();
+    if (!IT.Shop || !IT.Shop.owned) return all;
+    const out = all.filter(s => s === FREE[kind] || IT.Shop.owned(s, kind));
+    return out.length ? out : [FREE[kind]];
+  }
+  // hue shift (deg), saturation x, lightness x, lightness +, optional pull toward a target hue (0..1)
+  const TINT = {
+    kid: { dh: 28, sm: 1.18, lm: 1.08, lb: 0.03 },                       // candy: warmer, brighter, a bit louder
+    dark: { dh: 0, sm: 0.92, lm: 0.86, lb: -0.02, to: 272, pull: 0.72 },    // Dark Artistry: every hue bends toward violet / indigo
+    exalted: { dh: 0, sm: 1.05, lm: 1, lb: 0.03, to: 44, pull: 0.6 },       // gold with a warm pull (the red edge glow is drawn on the sprite)
+  };
+  const rgb2hsl = (r, g, b) => {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return [0, 0, l];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [(h * 60 + 360) % 360, s, l];
+  };
+  const hsl2rgb = (h, s, l) => {
+    const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+  };
+  // tintRgb(skinId, [r,g,b]) -> [r,g,b]; identity for unknown / default skins. Greys (s ~ 0) stay grey except for the lightness curve.
+  function tintRgb(skin, c) {
+    const T = TINT[skin];
+    if (!T) return [c[0], c[1], c[2]];
+    const [h, s, l] = rgb2hsl(c[0], c[1], c[2]);
+    let nh = (h + T.dh) % 360;
+    if (T.to != null && s > 0.12) {   // pull toward the target hue along the short arc
+      let d = ((T.to - nh + 540) % 360) - 180;
+      nh = (nh + d * T.pull + 360) % 360;
+    }
+    return hsl2rgb(nh, Math.max(0, Math.min(1, s * T.sm)), Math.max(0, Math.min(0.97, l * T.lm + T.lb)));
+  }
+  IT.Skins = { FREE, pool, tintRgb, TINT, has: (kind, s) => (LISTS()[kind] || []).indexOf(s) >= 0 };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -26,6 +26,7 @@
     shadow_strike: { nightAt: 3 },  // two wanderers 1000-1250 away: spot them, then walk in under the dark
     fog_ambush: { nightAt: 4 },     // still foe 1000-1300 away in the fog: strike before dark or lose sight of it
     blink_fog: { nightAt: 6 },      // foe 890-1130 away, Blink range 1200
+    night_juke: 'night',            // v6 item 27: the pack starts 620-760 u away (night sight 800); the other juke scenarios play by day (sight 1800)
   };
 
   const VALID = { day: 1, night: 1, cycle: 1 };

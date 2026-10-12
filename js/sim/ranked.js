@@ -10,7 +10,7 @@
   const RESULT_MIN = 1.0, RESULT_AUTO = 3.0;
   const TURNS = 8, COUNTDOWN = 12, SOLO_COUNTDOWN = 3, RESULT_HOLD = RESULT_MIN + RESULT_AUTO, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
   // v6: tags of the "fun" scenarios (fog, invisibility, river, prediction, vision); a ranked run gives at least FUN_TURNS of its turns to them
-  const FUN_TAGS = ['fog', 'invisible', 'river', 'prediction', 'vision'], FUN_TURNS = 4;
+  const FUN_TAGS = ['fog', 'invisible', 'river', 'prediction', 'vision', 'juke'], FUN_TURNS = 4;
   const isFun = sc => (sc.tags || []).some(t => FUN_TAGS.indexOf(t) >= 0);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lang = () => IT.lang || 'en';
@@ -434,15 +434,28 @@
       if (!need.every(t => tg.indexOf(t) >= 0) || not.some(t => tg.indexOf(t) >= 0)) return false;
       if (s.clear && !clearAround(map, a.x, a.y, s.clear)) return false;
       if (s.beyond === 'gate' && !beyondGate(w, a, base)) return false;
+      if (s.unseenBy && !unseenBy(w, a, s.unseenBy)) return false;   // v6 item 27: out of the listed placed units' / spots' sight
+      if (s.turn && s._o && turnDeg(s._o, base, a) < s.turn) return false;   // v6 item 27: o -> base -> a bends by >= turn degrees
+      if (s.far && !s.far.every(([k, m]) => { const u = typeof k === 'string' ? w.spots && w.spots[k] : w._placed && w._placed[k]; return !u || dist2(a, u) >= m; })) return false;
       if (s.has && !arenas(w, s.has, a).some(b => { const db = dist2(a, b); return db >= (s.has.d || [0, 1e9])[0] && db <= (s.has.d || [0, 1e9])[1]; })) return false;
       return true;
     };
     const all = ((map.spawns && map.spawns.arenas) || []).filter(ok);
     let pool = all.filter(a => dist(a) >= d[0] && dist(a) <= d[1]);
-    if (!pool.length) pool = all;
+    if (!pool.length && !s.strict) pool = all;   // v6 item 27: strict = d is a hard bound (no match -> the spot falls back to its base)
     return pool.sort((a, b) => Math.abs(dist(a) - mid) - Math.abs(dist(b) - mid));
   }
   const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const turnDeg = (o, b, a) => { const u = Math.atan2(b.y - o.y, b.x - o.x), v = Math.atan2(a.y - b.y, a.x - b.x); let d = Math.abs(u - v) % (2 * Math.PI); if (d > Math.PI) d = 2 * Math.PI - d; return d * 180 / Math.PI; };
+  // v6 item 27: arena a is hidden from every listed viewer k: a placed unit index, or a named spot already resolved (beyond HERO_SIGHT,
+  // above it, or behind trees / cliffs)
+  function unseenBy(w, a, ks) {
+    const V = IT.Vision, map = w.map;
+    return ks.every(k => {
+      const u = typeof k === 'string' ? w.spots && w.spots[k] : w._placed && w._placed[k]; if (!u) return true;
+      return dist2(a, u) > HERO_SIGHT || map.elevAt(a.x, a.y) > map.elevAt(u.x, u.y) || (V && !V.los(map, u.x, u.y, a.x, a.y));
+    });
+  }
   // relative to an anchor (tower / structure / gate), oriented by base -> anchor
   function around(anchor, base, s) {
     const dd = Math.hypot(anchor.x - base.x, anchor.y - base.y) || 1, ux = (anchor.x - base.x) / dd, uy = (anchor.y - base.y) / dd;
@@ -466,6 +479,10 @@
     o = o || {};
     const map = w.map;
     let p = { x: base.x + (s.dx || 0), y: base.y + (s.dy || 0) };
+    if (s.from != null) {   // v6 item 27: measure d / tags from a named spot (or placed unit k) instead of the hero start; turn is relative to that leg
+      const f = typeof s.from === 'string' ? w.spots && w.spots[s.from] : placed[s.from];
+      if (f) { s = Object.assign({}, s, { _o: base }); base = f; }
+    }
     if (s.where) {
       // by default the hero never starts inside a Dire tower's range and foes never stand in a Radiant tower's (towers:true opts out)
       const q = s.towers || !o.role ? s : Object.assign({}, s, { not: (s.not || []).concat(o.role === 'hero' ? ['dtower'] : ['rtower']) });
@@ -476,6 +493,7 @@
     else if (s.struct) { const t = structOf(map, base, s.struct); if (t) p = around(t, base, s); }
     else if (s.gate && w.gate) p = around(w.gate, base, s);
     else if (s.of != null && placed[s.of]) p = around(placed[s.of], base, s);
+    else if (s.spot && w.spots && w.spots[s.spot]) p = around(w.spots[s.spot], base, s);
     else if (s.pit) { const q = pitBank(w, s, o); if (q) return q; }
     if (o.jit) p = jitter(w, p, base, o, s);
     return nearWalk(w, p.x, p.y);
@@ -487,6 +505,25 @@
     tough: { ok: sc => (sc.units || []).length > 0 && sc.obj.type !== 'push' && sc.obj.type !== 'rootAll', name: { en: 'Tough foes (+15% HP)', pt: 'Inimigos resistentes (+15% de vida)' } },
     alert: { ok: sc => (sc.units || []).length > 0 && (sc.fail || []).indexOf('seen') < 0, name: { en: 'Alert foes', pt: 'Inimigos atentos' } },
   };
+
+  // v6 item 27 (juke): per-unit extras. A chaser (mot 'chase') gets a belief (IT.Belief, tier params df.belief; idx / n among the
+  // scenario's chasers, for split predictions + search bearings); unit `gem` = a Gem of True Sight carrier (passive true-sight aura,
+  // IT.Values item_gem radius, 900 fallback: no gem in the KV dump); unit `recatch` = at tiers whose belief lists recatch items
+  // (hard: Force Staff, bambam: Blink + Force Staff) the chaser gets them in its free slots (chase() uses them on a reacquire).
+  const GOAL_R = 220, GEM_R = 900;
+  function jukeUnit(w, e, d, df, i, list) {
+    if (d.gem) { e.trueSight = (IT.Values && IT.Values.item ? IT.Values.item('item_gem', 'radius') : 0) || GEM_R; e.gem = true; }
+    if (d.mot !== 'chase' || !IT.Belief) return;
+    const P = IT.Belief.params(df), idx = list.slice(0, i).filter(u => u.mot === 'chase').length, n = list.filter(u => u.mot === 'chase').length;
+    e.belief = IT.Belief.create(e, P, { idx, n });
+    if (d.recatch && Array.isArray(P.recatch) && e.items) for (const id of P.recatch) {
+      if (e.items.some(s => s && s.id === id)) continue;
+      const k = e.items.indexOf(null); if (k >= 0) e.items[k] = { id, cd: 0, charges: 0 };
+    }
+  }
+  const spotOf = (w, name) => (w && w.spots && w.spots[name]) || null;
+  const TIER_ORDER = ['ian', 'easy', 'common', 'hard', 'bambam'];
+  const tierOn = (d, df) => !d.minDf || !df || TIER_ORDER.indexOf(df.id) < 0 || TIER_ORDER.indexOf(df.id) >= TIER_ORDER.indexOf(d.minDf);
 
   // swap the world over to a prepared scenario, in place (hero kept, everything else removed)
   function apply(w, pr) {
@@ -513,12 +550,15 @@
     hero.items = []; for (let i = 0; i < 6; i++) hero.items.push(pr.lo.items[i] ? { id: pr.lo.items[i], cd: 0, charges: 0 } : null);
     hero.lastSeen = { x: hero.x, y: hero.y, t: w.t };
     w.fog = pr.fog; w.loadout = pr.lo;
-    const out = [], placed = [], E = IT.GAME.ENEMY, SK = IT.GAME.SKINS, s0 = Math.max(0, SK.indexOf(pr.skin)), tw = pr.twist, vy = pr.vary;
+    const out = [], placed = [], E = IT.GAME.ENEMY, SK = IT.Skins ? IT.Skins.pool('enemy') : IT.GAME.SKINS, s0 = Math.max(0, SK.indexOf(pr.skin)), tw = pr.twist, vy = pr.vary;
     w.gate = sc.gate ? Object.assign(spot(w, sc.gate, sp, placed, { pick: R.pick }), { r: sc.gate.r || 260 }) : null;   // 'cross' line (a circle on the map)
-    (sc.units || sc.dummies || []).forEach((d, i) => {
+    w._placed = placed; w.spots = {};   // v6 item 27: spot filters relative to placed units (unseenBy / far); named spots resolve after the units
+    const ulist = sc.units || sc.dummies || [], jlist = ulist.filter(d => tierOn(d, df));
+    ulist.forEach((d, i) => {
       const mot = d.mot, boot = vy ? vy.boots[i] : null;
       const p = spot(w, d, sp, placed, { pick: R.pick, jit: d.of != null ? 0 : (R.jit || 0) + (vy ? vy.posJit : 0), rng: vy ? IT.U.mulberry32((vy.seed + i * 7919) >>> 0) : null, role: 'unit' });
       placed[i] = p;
+      if (!tierOn(d, df)) return;   // v6 item 27: unit `minDf` (tier id) = only at that tier and above (its spot stays placed for `of` offsets)
       const items0 = d.items || (df.useBkb || d.useBkb ? ['bkb'] : undefined);
       const items = boot ? (items0 || []).filter(x => x !== boot).concat(boot) : items0;
       const skin = SK[(s0 + i) % SK.length], lap = Math.floor(i / SK.length);   // every foe wears a different NPC hero skin + name
@@ -544,15 +584,23 @@
       if (d.msMul && mot) { e.ms = Math.round(e.ms * d.msMul); e.base.ms = e.ms; }
       if (tw === 'swift') { e.ms = Math.round(e.ms * 1.15); e.base.ms = e.ms; }
       e.scn = { mot: mot || null, next: 0, lastSeen: null, search: null, idx: i, n: (sc.units || sc.dummies || []).length };
+      jukeUnit(w, e, d, df, jlist.indexOf(d), jlist);   // v6 item 27: belief (chasers), Gem, re-catch items
       out.push(e);
     });
+    // v6 item 27: named spots (sc.spots { name: spec }, resolved from the hero start after the units; a spec may sit relative to an earlier
+    // spot: { spot:'name', ahead, side }) -> w.spots; the 'reach' objective's spot is the goal ring (w.goal)
+    w.spots = {};
+    for (const k of Object.keys(sc.spots || {})) w.spots[k] = spot(w, sc.spots[k], sp, placed, { pick: R.pick, role: 'hero' });
+    w.goal = sc.obj.type === 'reach' && w.spots[sc.obj.spot] ? Object.assign({}, w.spots[sc.obj.spot], { r: sc.obj.r || GOAL_R }) : null;
     if (out.length) hero.facing = Math.atan2(out[0].y - hero.y, out[0].x - hero.x);   // start facing the first foe (Force Staff pushes that way)
     return out;
   }
 
   // the enemy team sees the hero (shared vision: units + towers; Ghost Walk hides it unless true sight / a reveal)
   const heroSeen = w => { const h = w.hero; if (!h) return false; return IT.Vision && IT.Vision.teamSees && w.map ? IT.Vision.teamSees(w, 1, h) : !IT.Status.has(h, 'ghost'); };
-  const SEARCH_R0 = 150, SEARCH_GROW = 110, SEARCH_MAX = 900;   // chaser search ring around the last seen spot: radius 150 + 110/s, max 900
+  const SEARCH_R0 = 150, SEARCH_GROW = 110, SEARCH_MAX = 900;
+  // chaser search ring around the last seen spot: radius 150 + 110/s, max 900
+  const DETECT = { dust: 1, gem: 1, sentry: 1 };   // v6 item 27: foe item uses that count as burnt detection (obj.burn)
 
   // ---------------------------------------------------------------- v6 items 13 + 39: the pre-round intro (pure data + world reads)
   // Countdowns >= INTRO_MIN s get a camera tour (stops on a timeline scaled to the countdown, 12 s nominal): hero (hold) -> each foe group
@@ -566,6 +614,8 @@
     if (f === 'pit') { const p = pitRegion(w.map); return p ? { x: p.x, y: p.y, r: 380 } : null; }
     if (f === 'gate') return w.gate ? { x: w.gate.x, y: w.gate.y, r: w.gate.r } : null;
     if (f === 'tower') { const t = towerOf(w.map, base, { team: 1 }); return t ? { x: t.x, y: t.y, r: 700 } : null; }
+    if (f === 'goal') return w.goal ? { x: w.goal.x, y: w.goal.y, r: w.goal.r } : null;   // v6 item 27: the 'reach' ring
+    if (typeof f === 'string' && f.indexOf('spot:') === 0) { const p = spotOf(w, f.slice(5)); return p ? { x: p.x, y: p.y, r: 300 } : null; }
     return null;
   }
   // -> { T, t, stops:[{ kind:'hero'|'foes'|'gate'|'focus', x, y, r, ids, t (start), glide (s) }], reveals:[{ id, x, y, at, done }], unseen:[ids], cur, tour }
@@ -694,7 +744,7 @@
     };
 
     // used = step abilities that hit a foe (or, SELF_OK, were cast); hurt = a foe damaged the hero (escape: caught)
-    const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null, used: new Set(), castAt: {}, hurt: false });
+    const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null, used: new Set(), castAt: {}, hurt: false, burned: 0, burnAt: null, unseenFrom: null });
     function enter(w) {
       run.dummies = apply(w, run.pr);
       // v6 (fog always on): the world is frozen through the countdown, so refresh the fog now -- the start picture is the real one and
@@ -766,6 +816,7 @@
         if (p.ability === 'deafeningblast') s.blasts.push(new Set());
       });
       w.on('towerDown', p => { if (run.phase === 'play') st().towers.push({ team: p.team, tier: p.tier }); });
+      w.on('itemUse', p => { if (run.phase === 'play' && foeOf(p.unit) && DETECT[p.ability]) { st().burned++; st().burnAt = w.t; } });   // v6 item 27: detection the foes burned
       enter(w);
       return run;
     };
@@ -854,15 +905,26 @@
       else if (o.type === 'push') { if (st.blasts.some(b => b.size >= o.n)) return conclude(true); }
       else if (o.type === 'destroyTower') { if (st.towers.some(t => t.team === (o.team == null ? 1 : o.team))) return conclude(true); }
       else if (o.type === 'rootAll') { if (alive.length && alive.every(d => IT.Status.has(d, 'root') || IT.Status.has(d, 'atosRoot'))) return conclude(true); }
-      else if (o.type === 'escape') {
+      else if (o.type === 'escape' || o.type === 'reach') {
         // v6: caught = a foe hurt the hero, or the hero is VISIBLE to the enemy team (Ghost Walk hides it unless a Dire tower's true sight /
         // a reveal shows it) with a foe within CAUGHT
         // playtest 2: obj.caught = a per-scenario visible-contact distance; obj.bump = a foe that walks into the INVISIBLE hero finds it too
         if (st.hurt) return conclude(false, 'caught');
         const vis = heroSeen(w), reach = vis ? o.caught || CAUGHT : o.bump || 0;
         if (reach > 0) for (const d of alive) if (Math.hypot(d.x - h.x, d.y - h.y) < reach) return conclude(false, 'caught', vis ? null : 'bump');
-        if (el >= o.time) return conclude(true);
-        return;
+        // v6 item 27 (juke): obj.unseen = win once the enemy team has not seen the hero for that many s in a row; obj.burn = the foes must
+        // first spend that many detection items (Dust, itemUse events; the unseen streak counts from the last burn); 'reach' = get into
+        // the goal ring (w.goal, obj.spot); obj.noInvis = a juke without Ghost Walk (casting it is the 'method' fail)
+        if (o.noInvis && st.casts.ghostwalk) return conclude(false, 'method', 'invis');
+        if (vis) st.unseenFrom = null; else if (st.unseenFrom == null) st.unseenFrom = w.t;
+        if (st.burnAt != null && st.unseenFrom != null && st.unseenFrom < st.burnAt) st.unseenFrom = st.burnAt;
+        const burnOk = !o.burn || st.burned >= o.burn;
+        if (o.type === 'reach') { if (burnOk && w.goal && Math.hypot(h.x - w.goal.x, h.y - w.goal.y) < w.goal.r) return conclude(true); }
+        else {
+          if (o.unseen && burnOk && st.unseenFrom != null && w.t - st.unseenFrom >= o.unseen - 1e-9) return conclude(true);
+          if (el >= o.time) return !burnOk ? conclude(false, 'method', 'burn') : o.unseen ? conclude(false, 'time') : conclude(true);
+          return;
+        }
       }
       else if (o.type === 'hold') { if (el >= o.time) return conclude(true); return; }
       for (const d of alive) if ((d.scn.mot === 'flee' || fail.indexOf('escaped') >= 0) && Math.hypot(d.x - h.x, d.y - h.y) > ESCAPED) return conclude(false, 'escaped');
@@ -889,21 +951,78 @@
       }
     }
     // chase (v6): while the enemy team SEES the hero, run at it and remember the spot. Unseen (Ghost Walk outside a Dire tower's true sight,
-    // fog, high ground), the hero's real position is never read: walk to the last seen spot, then search a widening ring around it, each
-    // chaser on its own bearing (spread apart).
+    // fog, high ground), the hero's real position is never read.
+    // v6 item 27: a chaser with a belief (IT.Belief, see belief.js) walks to the LIVE prediction (last heading x time, biased toward gaps /
+    // ramps / home at higher tiers), stands confused there ('juked'), then searches a widening ring around it (split bearings at hard+).
+    // Detection: a Dust carrier dusts on arriving at the prediction (useDust: hidden hero only, reaction wait, telegraph); at hard+ (P.detect)
+    // also early, mid-walk, once confidence >= P.dustConf and the prediction is within half the dust radius. Re-catch (hard+): on a reacquire a chaser holding P.recatch items Blinks short of the hero / Force Staffs toward it, telegraphed ('blinkTell').
     function chase(w, d, h, seen) {
+      const c = d.scn, B = d.belief;
+      if (!B || !IT.Belief) return chaseRing(w, d, h, seen);
+      const Bel = IT.Belief, P = B.P;
+      Bel.observe(w, B, h, seen);
+      if (seen) {
+        c.lastSeen = { x: h.x, y: h.y, t: w.t }; c.search = null;
+        if (recatch(w, d, h, B)) return;
+        IT.Orders.issue(w, d, { type: 'move', x: h.x, y: h.y }); return;
+      }
+      if (!B.last) {   // never saw it: search around itself (no '?': it was never fooled)
+        B.last = { x: d.x, y: d.y, t: w.t }; B.pred = { x: d.x, y: d.y }; B.own = true;
+        B.state = 'searching'; B.since = w.t; B.search = { t0: w.t, k: 0, to: null, cx: d.x, cy: d.y };
+      }
+      if (!c.lastSeen) c.lastSeen = { x: B.last.x, y: B.last.y, t: B.last.t, own: !!B.own };
+      const L = { x: B.pred.x, y: B.pred.y, t: B.last.t };   // Dust spot = the prediction (= last seen for a standing hero)
+      if (d.tele) return;   // telegraphing an item
+      if (B.state === 'lost') return;   // a beat before it commits to a guess (LOST_HOLD)
+      if (B.state === 'predicted') {
+        if (P.detect && !B.own && B.conf >= P.dustConf && Math.hypot(d.x - L.x, d.y - L.y) <= dustR() * 0.5 && IT.Units.useDust(w, d, { x: d.x, y: d.y, t: B.last.t })) { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
+        if (Math.hypot(d.x - L.x, d.y - L.y) > Bel.ARRIVE) {
+          const o = d.orders[0];
+          if (!o || o.type !== 'move' || Math.hypot(o.x - L.x, o.y - L.y) > 30) IT.Orders.issue(w, d, { type: 'move', x: L.x, y: L.y });
+          return;
+        }
+        Bel.juke(w, B);
+      }
+      // a Dust carrier holds the predicted spot for its reaction time + telegraph, dusts it once (IT.Units.useDust), then searches
+      if (!B.own && IT.Units.useDust(w, d, L)) { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
+      if (B.state === 'juked') { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
+      if (B.state !== 'searching') return;
+      const S = B.search, o = d.orders[0];
+      c.search = S;
+      if (S.to && o && o.type === 'move' && Math.hypot(d.x - S.to.x, d.y - S.to.y) > 50) return;   // still walking to the current probe
+      const p = Bel.probe(w, B);
+      if (p) IT.Orders.issue(w, d, { type: 'move', x: p.x, y: p.y });
+    }
+    const dustR = () => (IT.Values && IT.Values.item ? IT.Values.item('item_dust', 'radius') : 0) || 1050;
+    // hard+ re-catch: just reacquired (<= 1 s) -> Blink to a point short of the hero, else Force Staff toward it
+    function recatch(w, d, h, B) {
+      const R = B.P.recatch;
+      if (!Array.isArray(R) || !R.length || d.tele || !d.items || !IT.Units.useItem || !IT.Status.canAct(d)) return false;
+      const dd = Math.hypot(h.x - d.x, h.y - d.y), fresh = B.reacq != null && w.t - B.reacq <= 1.0;
+      if (!fresh) return false;   // only right after a reacquire (a re-catch, not an opener)
+      const ang = Math.atan2(h.y - d.y, h.x - d.x), has = id => R.indexOf(id) >= 0 && d.items.some(s => s && s.id === id);
+      const tell = () => w.emit('fx', { name: 'blinkTell', x: d.x, y: d.y, unit: d.id, dur: Math.max(0.35, d.telegraph || 0) });
+      if (has('blink') && dd > 350) {
+        const range = (IT.Values.item('item_blink', 'blink_range') || 1200) * 0.95, k = Math.min(range, dd - 150);
+        const p = nearWalk(w, d.x + Math.cos(ang) * k, d.y + Math.sin(ang) * k);
+        if (dd - 150 <= range + 1 && IT.Units.useItem(w, d, 'blink', { x: p.x, y: p.y })) { tell(); return true; }
+      }
+      if (has('forcestaff') && dd > 300 && dd < 800 && IT.Units.useItem(w, d, 'forcestaff', { face: ang })) { d.facing = ang; tell(); return true; }
+      return false;
+    }
+    // the pre-belief chase (no IT.Belief loaded): last seen spot, Dust, then a widening ring around it
+    function chaseRing(w, d, h, seen) {
       const c = d.scn;
       if (seen) { c.lastSeen = { x: h.x, y: h.y, t: w.t }; c.search = null; IT.Orders.issue(w, d, { type: 'move', x: h.x, y: h.y }); return; }
       if (!c.lastSeen) c.lastSeen = { x: d.x, y: d.y, t: w.t, own: true };   // never saw it: search around itself
       const L = c.lastSeen;
       if (!c.search) {
         if (Math.hypot(d.x - L.x, d.y - L.y) > 60) { IT.Orders.issue(w, d, { type: 'move', x: L.x, y: L.y }); return; }
-        // a Dust carrier holds the last-seen spot for its reaction time + telegraph, dusts it once (IT.Units.useDust), then searches
         if (!L.own && IT.Units.useDust(w, d, L)) { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
         c.search = { t0: w.t, k: 0, to: null };
       }
       const S = c.search, o = d.orders[0];
-      if (S.to && o && o.type === 'move' && Math.hypot(d.x - S.to.x, d.y - S.to.y) > 50) return;   // still walking to the current probe
+      if (S.to && o && o.type === 'move' && Math.hypot(d.x - S.to.x, d.y - S.to.y) > 50) return;
       const R = Math.min(SEARCH_MAX, SEARCH_R0 + SEARCH_GROW * (w.t - S.t0));
       const a = (c.idx / Math.max(1, c.n)) * Math.PI * 2 + S.k * 2.39996 + (w.rng() - 0.5) * 0.8, r = R * (0.6 + 0.4 * w.rng());
       S.k++;
@@ -1013,6 +1132,7 @@
     TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, buildIntro, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
+    GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,
     profile, record, reset, load, prepare, pitRegion, inPit, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS, variation, VARY,
     comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
   };

@@ -17,7 +17,7 @@
     keys: new Set(), mouse: { x: 0, y: 0, in: false },
     win: { x: 0, y: 0, in: false },     // cursor in window (client) px, for edge scroll
     locked: false, vx: 0, vy: 0,        // pointer lock: virtual cursor (client px)
-    hooks: {},    // pause, stats (toggle), cheat (toggle), refresh, spawn, resetDummies, debug
+    hooks: {},    // pause, stats (toggle), cheat (toggle), refresh, armEnemy, placeEnemy, debug
     sfx,
     now: () => (G.performance && G.performance.now ? G.performance.now() : Date.now()),
     _q: [], _tap: {}, _ctap: 0, _cat: null, _rmb: null, _done: null,
@@ -391,7 +391,7 @@
         return;
       }
       case 'camLock': cam.lock = !cam.lock; return;
-      case 'cheat': case 'refresh': case 'spawn': case 'resetDummies': if (In.hooks[action]) In.hooks[action](); return;
+      case 'cheat': case 'refresh': if (In.hooks[action]) In.hooks[action](); return;
       default: {
         const id = abilityId(action);
         if (id === null) return;

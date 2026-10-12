@@ -142,6 +142,11 @@
     if (!m || m.mode === 'infinite' || m.clearScore == null) return '';
     return IT.t('end.sp.breakdown', { clear: fmtN(m.clearScore), relic: fmtN(m.relicScore || 0), total: fmtN(m.score) });
   }
+  // v6 item 15: "+120 points" under the breakdown = the spendable currency earned this run (the medal above is the run grade; points buy skins in the SHOP)
+  function pointsLine(S) {
+    const n = S && Math.round(S.points || 0);
+    return n > 0 ? IT.UI.h('div', { class: 'sp-on sp-points', 'data-tip': IT.t('pts.d'), text: IT.t('pts.plus', { n: fmtN(n) }) }) : null;
+  }
   // everything the share card needs, resolved in the current language
   function shareData(m, cur) {
     const inf = m.mode === 'infinite', r = medalOf(m, cur), dm = cur.damage || { total: 0, bySpell: [] };
@@ -347,6 +352,7 @@
       else if (m.failReason) { const dk = 'scn.fail.' + m.failReason + (m.failDetail ? '.' + m.failDetail : ''); why = IT.hasT(dk) ? t(dk) : IT.hasT('scn.fail.' + m.failReason) ? t('scn.fail.' + m.failReason) : m.failReason; }
       if (why) side.appendChild(h('div', { class: 'sp-why', text: t('end.sp.failedBy', { why }) }));
       if (m.failName) side.appendChild(h('div', { class: 'sp-on', text: t('end.sp.failedOn', { name: nameOf(m.failName) }) }));
+      if (pointsLine(info.stats)) side.appendChild(pointsLine(info.stats));
     } else {
       const r = medalOf(m, cur), K = IT.StatsCollector.medalKey;
       // best medal before this run (main.js passes it; a synthetic call falls back to the stored best)
@@ -359,6 +365,7 @@
       side.appendChild(h('div', { class: 'sp-score' }, h('span', { text: t('end.sp.score') + ' ' }), h('b', { text: fmtN(m.score) })));
       const bd = breakdown(m);
       if (bd) side.appendChild(h('div', { class: 'sp-on sp-break', 'data-tip': t('end.sp.breakdown.d'), text: bd }));
+      if (pointsLine(info.stats)) side.appendChild(pointsLine(info.stats));
       if (newMedal) side.appendChild(h('div', { class: 'sp-best new', text: t('end.sp.newMedal') }));
       else if (prev) side.appendChild(h('div', { class: 'sp-best', text: t('end.sp.bestMedal', { name: medalName(prev) }) }));
     }

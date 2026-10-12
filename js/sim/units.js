@@ -684,7 +684,8 @@
     }
     if (!h) return;
     // v6: an unseen hero (Ghost Walk, fog, high ground) is never located: the AI runs from where it last saw it
-    const hp = a.seesHero ? h : a.heroAt || h;
+    // v6 item 27: a unit with a belief (ranked chasers, IT.Belief) runs from its best guess (last seen / predicted) instead
+    const hp = a.seesHero ? h : (e.belief && IT.Belief ? IT.Belief.where(e.belief) : null) || a.heroAt || h;
     const escaping = a.behavior === 'escape' || a.escaping;
     if (escaping && e.aware && a.awareSince != null && w.t - a.awareSince >= reactionOf(e) - 1e-9 && U.dist(e, hp) < E.flee.range) {
       const d = U.dist(e, hp), ang = away(hp, e);
@@ -728,6 +729,6 @@
   });
 
   IT.Units = {
-    spawnDummy, spawnEnemy, bootBonus, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, bootBonus, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, useItem, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

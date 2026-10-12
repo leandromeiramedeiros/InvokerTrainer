@@ -20,6 +20,7 @@
       combos: { done: 0, byTier: {}, fails: 0, best: {}, score: 0 },
       scn: {},                    // scenario id -> { cleared, best (s) } from scnResult ok (lifetime: Scenarios screen check + best time)
       relics: {},                 // relic id -> amount this run (scenario runs only)
+      points: 0, pointsBy: {},    // v6 item 15: spendable POINTS earned this run (total / per relic); lifetime blob keeps points + spent
     };
   }
 
@@ -46,11 +47,17 @@
       if (!(v > 0) || !live()) return;
       const before = S.relics[id] || 0;
       S.relics[id] = before + v;
+      const Rp = IT.RELICS;
+      if (Rp && Rp.points) {   // points: delta / step x base x difficulty (relics.js); the difficulty is read live (ranked ramps it)
+        let di = 2; try { if (w.ranked && w.ranked.diffIndex) di = w.ranked.diffIndex(); } catch (e) { /* default common */ }
+        const p = Rp.points(id, v, di);
+        if (p > 0) { S.points += p; S.pointsBy[id] = (S.pointsBy[id] || 0) + p; }
+      }
       const H = IT.StatsCollector && IT.StatsCollector.hooks, Rd = IT.RELICS;
       if (!Rd || !H || !H.tier) return;
       if (base == null) { try { base = (H.base && H.base()) || {}; } catch (e) { base = {}; } }
       const b = (base[id] || 0) + before, t0 = Rd.tierOf(id, b), t1 = Rd.tierOf(id, b + v);
-      if (t1 > t0) { try { H.tier({ id, tier: t1, value: b + v }); } catch (e) { /* UI optional */ } }
+      if (t1 > t0) { try { H.tier({ id, tier: t1, value: b + v, pts: Math.round(S.points) }); } catch (e) { /* UI optional */ } }
     };
     const DIS = { stun: 1, frozen: 1, hex: 1, lift: 1, root: 1, atosRoot: 1, silence: 1 }, STUN = { stun: 1, frozen: 1, hex: 1, lift: 1 };
     // ability -> [relic, foes needed, window s]: one window per cast (the sim already dedupes hits per cast)
@@ -177,6 +184,8 @@
         o.cc.uptime = round(o.cc.uptime);
         o.cc.ratio = S.time > 0 ? round(S.cc.uptime / S.time) : 0;
         for (const k in o.relics) o.relics[k] = round(o.relics[k]);
+        o.points = Math.round(S.points);
+        for (const k in o.pointsBy) o.pointsBy[k] = round(o.pointsBy[k]);
         return o;
       },
       destroy() { for (const f of off) if (typeof f === 'function') f(); off.length = 0; if (w._stats === api) w._stats = null; },
@@ -218,6 +227,7 @@
     }
     L.relics = L.relics || {};
     if (s.relics) { addMap(L.relics, s.relics); for (const k in L.relics) L.relics[k] = round(L.relics[k]); }
+    L.points = Math.round((L.points || 0) + (s.points || 0)); L.spent = L.spent || 0;
     // s.run (main.js commitStats, ranked runs only): { mode, score, solved, turns, medal:{tier,stars,name,id} } -> runs count + best medal
     if (s.run && s.run.mode === 'ranked') {
       L.runs = (L.runs || 0) + 1;
@@ -283,7 +293,10 @@
     return { score: Math.round(score), parts };
   }
 
-  IT.StatsCollector = Object.assign(IT.StatsCollector || {}, { create, merge, blank, curated, ornament, medal, damageOf, medalKey, relicScore, RELIC_K, RELIC_CAP });
+  // spendable points of a lifetime blob (earned - spent, never negative)
+  const balance = life => Math.max(0, Math.round(((life && life.points) || 0) - ((life && life.spent) || 0)));
+
+  IT.StatsCollector = Object.assign(IT.StatsCollector || {}, { create, merge, blank, curated, ornament, medal, damageOf, medalKey, relicScore, balance, RELIC_K, RELIC_CAP });
   IT.StatsCollector.hooks = IT.StatsCollector.hooks || {};
   IT.World.system('statsCollector', 90, (w, dt) => { if (w._stats) w._stats.sys(w, dt); });
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -34,7 +34,7 @@ test('every t() literal of the new screens exists in the v6 pack or an older pac
   for (const f of ['js/ui/loadout.js', 'js/ui/menus.js', 'js/ui/endsplash.js']) {
     for (const m of rd(f).matchAll(/\bt\('((?:title|fp|sc|tag|end\.btn)\.[a-zA-Z.]+)'/g)) assert.ok(keys.has(m[1]), f + ' uses ' + m[1]);
   }
-  for (const k of ['title.free', 'title.scn', 'fp.add', 'fp.start', 'title.ranked', 'title.ranked.d', 'title.nomedal', 'fp.combo.d', 'end.btn.infinite.d']) assert.ok(pack.en[k], k);
+  for (const k of ['title.free', 'title.scn', 'fp.add', 'fp.start', 'title.ranked', 'title.ranked.d', 'title.nomedal', 'end.btn.infinite.d']) assert.ok(pack.en[k], k);
 });
 
 test('main menu: RANKED (direct start) on top, FREE PLAY + SCENARIOS below; no Combo Sandbox, no Infinite Run', () => {
@@ -58,23 +58,19 @@ test('main menu: RANKED (direct start) on top, FREE PLAY + SCENARIOS below; no C
   assert.equal(pack.pt['title.scn.d'], 'Pratique qualquer cenário, sem ranking');
 });
 
-test('Free Play: no dummy panel, enemy rows (skin + difficulty + remove), max 5, grounds map hidden', () => {
+test('Free Play: one mode (no Combo Sandbox card), no enemy/dummy panel, default difficulty bar, grounds map hidden', () => {
   const src = rd('js/ui/loadout.js');
-  assert.doesNotMatch(src, /dummy/i, 'no DUMMY panel');
-  assert.match(src, /IT\.GAME\.SKINS|SKINS/);
-  assert.match(src, /IT\.DIFFICULTY|DIFFICULTY/);
-  assert.match(src, /EC\.MAX/);
+  assert.doesNotMatch(src, /dummy|combocard|go\('combo'\)|fp\.combo/i, 'enemies / dummies / combo sandbox live in the in-game pane now');
+  assert.match(src, /DiffBar/);
   assert.match(src, /HIDDEN_MAPS\s*=\s*\['grounds'\]/);
   assert.match(src, /buildScenarios/);
   const sc = src.slice(src.indexOf('function buildScenarios'), src.indexOf('// the Free Play match'));
   assert.doesNotMatch(sc, /go\('ranked'\)|sc\.ranked|sc\.start|rankBox/, 'no ranked block on the Scenarios screen');
-  const fp = src.slice(src.indexOf('const combo = !!st.combo'), src.indexOf('function buildScenarios'));
-  assert.match(fp, /combocard[^]*?go\('combo'\)[^]*?fp\.combo\.d/, 'Combo Sandbox card in the Free Play match column');
 });
 
-test('Scenarios: single-scenario start opts + Free Play start opts clamp the enemy count', () => {
+test('Scenarios: single-scenario start opts + Free Play starts empty', () => {
   const src = rd('js/ui/loadout.js');
-  assert.match(src, /e\.count = Math\.max\(0, Math\.min\(e\.count \| 0, e\.list\.length\)\)/, 'fixEnemy clamps a corrupt saved count');
+  assert.match(src, /st\.count = 1;/, 'the match starts empty (count is only the legacy field)');
   assert.match(src, /function scenarioOpts/);
   assert.match(src, /IT\.App\.start\(scenarioOpts\(/);
 });

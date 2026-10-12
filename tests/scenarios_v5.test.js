@@ -12,7 +12,7 @@ const FILES = ['js/data/i18n.js', 'js/data/i18n/s3.js', 'js/data/i18n/f1.js', 'j
   'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/sim/stats.js', 'js/sim/towers.js', 'js/sim/ranked.js', 'js/ui/hudsteps.js'];
 const IT = load(FILES);
 const R = IT.Ranked, SC = IT.SCENARIOS;
-const OBJ = ['kill', 'kill_with', 'killN', 'push', 'destroyTower', 'rootAll', 'escape', 'hold'];
+const OBJ = ['kill', 'kill_with', 'killN', 'push', 'destroyTower', 'rootAll', 'escape', 'hold', 'reach'];
 const FAIL = ['time', 'died', 'cross', 'seen', 'method', 'escaped', 'caught', 'tower'];
 const DIFFS = ['ian', 'easy', 'common', 'hard', 'bambam'];
 // scenarios the scripted bot cannot play fairly (foes that read the hero and run / dodge with items: the bot has no chase logic)
@@ -116,7 +116,8 @@ test('every scenario builds on its map at every difficulty: towers spawned, hero
     assert.equal(m.w.ents.filter(e => e.kind === 'tower').length, map.towers.length, sc.id + ' towers');
     assert.ok(map.walkable(h.x, h.y), sc.id + ' hero walkable');
     const ok = reach(map, h.x, h.y);
-    assert.equal(m.run.dummies.length, sc.units.length, sc.id);
+    // v6 item 27: a unit with minDf only spawns from that tier up
+    assert.equal(m.run.dummies.length, sc.units.filter(u => !u.minDf || DIFFS.indexOf(df) >= DIFFS.indexOf(u.minDf)).length, sc.id);
     for (const d of m.run.dummies) {
       assert.equal(d.kind, 'enemy', sc.id);
       assert.ok(map.walkable(d.x, d.y) && ok(d), sc.id + ' foe walkable + reachable');
@@ -370,7 +371,7 @@ function bot(id, diff, seed, trace) {
 test('bot clears every scriptable scenario at easy', () => {
   const bad = [];
   for (const sc of SC) {
-    if (NO_BOT.has(sc.id)) continue;
+    if (NO_BOT.has(sc.id) || (sc.tags || []).indexOf('juke') >= 0) continue;   // juke: needs belief + day/night + the spot bot (tests/juke_v6.test.js)
     const r = bot(sc.id, 'easy', 5);
     if (!r || !r.ok) bad.push(sc.id + ':' + (r ? r.reason : 'none'));
   }

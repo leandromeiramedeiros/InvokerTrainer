@@ -55,11 +55,6 @@
 .chipb.tierb{padding:.25em .5em}.chipb.tierb .tb{margin:0}
 
 /* Free Play enemy card: one row per enemy */
-.erow{display:flex;flex-wrap:wrap;align-items:center;gap:.4em .5em;margin:.45em 0;padding:.4em .5em;background:var(--panel2);border:1px solid var(--line)}
-.erow .en{font-size:.85em;color:var(--gold);min-width:5em}
-.erow .tb{margin:0}
-.erow select{min-width:0;max-width:100%;font-size:.8em;padding:.2em .3em;background:#0b0618;color:var(--ink);border:2px solid var(--line)}
-.erow .tog{margin:0;font-size:.8em}
 .row.tiers{margin-top:.5em}
 
 /* ---- v6 screens: Free Play (match panel + hero tabs) and Scenarios (ranked START + card grid). Everything fits one screen: no page scroll. */
@@ -95,16 +90,7 @@
 .fp .mapside .mapsel,.fp .opts select{width:100%}
 .fp .mapthumb{flex:none;margin:0}
 .fp .mapside .fine{margin:.3em 0 0;font-size:.78em}
-.fp .ehead{display:flex;align-items:center;justify-content:space-between;margin-bottom:.3em}
-.fp .erow{flex-wrap:nowrap;margin:.2em 0;padding:.2em .4em;gap:.4em}
-.fp .erow .en{min-width:1.2em;text-align:center}
-.eskins{display:flex;gap:.25em}
-.eskin{padding:0;background:#0b0618;border:2px solid var(--line);opacity:.65}
-.eskin .por{width:1.9em;height:1.9em}
 .fp .enemy .fine{font-size:.72em;line-height:1.3;margin-top:.3em}
-.eskin:hover{opacity:1;border-color:var(--mag)}.eskin.on{opacity:1;border-color:var(--gold);box-shadow:0 0 .6em rgba(242,196,68,.4)}
-.fp .erow .etier{flex:1;min-width:0}
-.fp .erm{padding:.2em .6em;min-width:0}
 .fp .opts .tog{margin:.2em 1em .2em 0}.fp .opts .fine{margin:.2em 0 0}
 .mapsel{background:#0b0618;color:var(--ink);border:2px solid var(--line);padding:.25em .4em;font-size:.85em}
 /* scenarios */
@@ -118,10 +104,6 @@
 .scard .scn{font-size:.8em;line-height:1.15;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .scard .sctags{display:flex;flex-wrap:wrap;gap:.25em}
 .scard .sctags i{font-style:normal;font-weight:normal;font-size:.62em;padding:0 .4em;border:1px solid var(--line);color:var(--dim);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-.combocard{flex:none;display:flex;flex-direction:column;gap:.3em;align-items:flex-start;text-align:left;padding:.8em 1.2em;background:linear-gradient(#3a2a63,#241544);border:3px solid var(--gold);box-shadow:0 0 0 2px #000,0 0 .8em rgba(242,196,68,.25);color:var(--ink)}
-.combocard b{color:var(--gold);font-size:1.05em;letter-spacing:.12em;text-transform:uppercase}
-.combocard span{color:var(--dim);font-weight:normal;font-size:.75em;line-height:1.25}
-.combocard:hover{background:linear-gradient(#4a3680,#2e1a58);box-shadow:0 0 0 2px #000,0 0 1.1em rgba(242,196,68,.5)}
 /* items: slots in 2 rows of 3 (Dota layout) beside a compact catalogue; drag and drop between them */
 .sec>.items{display:flex;gap:.8em;align-items:flex-start}
 .islotbox{flex:none}
@@ -145,7 +127,6 @@
 .scard{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round}
 .scard:hover{border-image-source:var(--orn-mini-gold)}
 .fp-foot .btn.go{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round}
-.combocard{border-image:var(--orn-frame-gold) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
 .islot,.iopt{image-rendering:pixelated}
 
 /* orb rows: same pip style as the HUD (shared js/ui/orbpips.js); locked = level gate not reached yet */
@@ -189,3 +170,7 @@
 .scard .scok{flex:none;margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;line-height:1.05}
 .scard .scok em{font-style:normal;color:var(--good,#7bd88f);font-size:.9em;font-weight:bold}
 .scard .scok small{font-size:.6em;color:var(--dim)}
+
+/* difficulty bar row (IT.UI.DiffBar, css/diffbar.css) */
+.fp .diffrow{align-items:center;gap:.6em}
+.fp .diffrow .dbar{flex:1;min-width:0;max-width:22em;font-size:.9em}

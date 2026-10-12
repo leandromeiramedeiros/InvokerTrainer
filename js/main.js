@@ -44,11 +44,6 @@
   }
 
   // ---------------------------------------------------------------- game session
-  function spawnDummyAt(i, lo) {
-    const ds = g.w.map.spawns.dummies, sp = ds[i % ds.length];
-    return IT.Units.spawnDummy(g.w, { x: sp.x, y: sp.y, preset: lo.preset, skin: lo.skin });
-  }
-
   // round start (first round, every swap / redo): hard-snap the camera onto the hero's NEW spot; cam.lock is left as is
   function snapCam() { g.cam.setMap(g.w.map); g.cam.snap(g.hero.x, g.hero.y); }
 
@@ -92,13 +87,13 @@
     const hero = IT.Hero.create(w, lo, sp.x, sp.y);
     g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv, run, menu: false, quiet: false, failAt: {} };
     g.cam.centerOn(hero.x, hero.y); g.cam.lock = !!set.camLock;
-    const n = run ? 0 : opts.mode === 'sandbox' ? Math.max(1, opts.count | 0) : 1;
+    // Free Play starts EMPTY (0 enemies = none, no default dummy): enemies and dummies are added from the in-game side panel (IT.UI.Roster).
+    // opts.enemy.count > 0 (programmatic starts only) still spawns that many enemies, registered as roster rows.
     if (!run && IT.Towers && map.towers && map.towers.length) IT.Towers.spawnAll(w, map);   // scenario runs spawn theirs in Ranked.apply
-    for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
-    g.nDummies = n;
-    g.placed = 0;
-    if (!run && opts.enemy && opts.enemy.count > 0) {   // free play only: the enemy card -> NPC enemies (own skin / behaviour / tier / items each) on derived arena spots
-      g.placed = IT.EnemyCard.spawnAll(opts.enemy, w, sp, lo.skin).length;
+    g.nDummies = 0;
+    g.defTier = IT.UI.Roster ? IT.UI.Roster.defTier({ tier: opts.diff }) : 'common';
+    if (!run && opts.enemy && opts.enemy.count > 0) {
+      IT.EnemyCard.spawnAll(opts.enemy, w, sp, lo.skin).forEach((e, i) => { e.ros = { kind: 'enemy', skin: e.skin, tier: e.tier || g.defTier, ord: i + 1, items: (opts.enemy.items || []).slice() }; });
     }
     if (IT.StatsCollector) IT.StatsCollector.create(w);
     IT.Sfx && IT.Sfx.attach(w);
@@ -192,7 +187,7 @@
     go(name) {
       if (name === 'again') { abandon(); if (lastOpts) start(lastOpts); else App.go('freeplay'); return; }
       if (name === 'loadout') name = lastOpts && lastOpts.scenario ? 'scenarios' : 'freeplay';   // pause menu "Loadout": the screen the match came from
-      if (name === 'sandbox') name = 'combo';
+      if (name === 'sandbox' || name === 'combo') name = 'freeplay';   // v6 item 21: one Free Play (the Combo Sandbox card is gone)
       if (name === 'ranked') { abandon(); commitStats(); start({ mode: 'ranked' }); return; }
       if (name === 'infinite') { abandon(); commitStats(); start({ mode: 'infinite' }); return; }
       abandon();
@@ -202,7 +197,7 @@
       state = name;
       music('menu');
       if (name === 'title') UI.set(UI.title);
-      else if (name === 'freeplay' || name === 'combo') { IT.UI.LoadoutScreen.comboPreset(name === 'combo'); UI.set(IT.UI.LoadoutScreen.build); }
+      else if (name === 'freeplay') UI.set(IT.UI.LoadoutScreen.build);
       else if (name === 'scenarios') UI.set(IT.UI.LoadoutScreen.buildScenarios);
       else if (name === 'stats') UI.set(IT.UI.statsScreen);
       else if (name === 'settings') { IT.UI.settingsOpen(); UI.set(IT.UI.settingsPanel); }
@@ -254,42 +249,24 @@
       else { g.hero.cd = {}; g.hero.inv.invokeCd = 0; g.hero.mana = g.hero.maxMana; }
       UI.toast(IT.t('toast.refreshed'), 'good');
     },
-    spawn() {
-      if (!g || g.mode !== 'sandbox') return;
-      const alive = IT.Units.trainers(g.w);
-      if (alive.length >= 8 || g.run) return;
-      const spots = g.w.map.spawns.dummies;
-      for (const s of spots) if (!alive.some(d => Math.hypot(d.x - s.x, d.y - s.y) < 150)) {
-        IT.Units.spawnDummy(g.w, { x: s.x, y: s.y, preset: g.lo.preset, skin: g.lo.skin });
-        UI.toast(IT.t('toast.spawned'), 'info'); return;
-      }
-    },
-    // Free Play "Place enemy": arm a map click that drops the next enemy of the enemy card (see IT.Input onDown)
-    armEnemy() {
-      if (!g || g.mode !== 'sandbox' || g.run || g.menu || g.ended) return;
-      IT.Input.armed = { id: '__place', place: true };
-      UI.toast(IT.t('hud.placeEnemy.d'), 'info');
+    // Free Play side pane (js/ui/roster.js): "+ Enemy" / "+ Dummy" arm a map click that places the new unit (Esc / right-click cancels)
+    armEnemy(kind) {
+      if (!g || g.mode !== 'sandbox' || g.run || g.menu || g.ended) return false;
+      kind = kind === 'dummy' ? 'dummy' : 'enemy';
+      const Ro = IT.UI.Roster;
+      if (!Ro.canAdd(g.w, kind)) { UI.toast(IT.t(kind === 'dummy' ? 'ros.maxDummy' : 'ros.maxEnemy', { n: Ro.MAX[kind] }), 'bad'); return false; }
+      IT.Input.armed = { id: '__place', place: true, kind };
+      UI.toast(IT.t('ros.placeNow', { what: IT.t(kind === 'dummy' ? 'ros.dummy' : 'ros.enemy').toLowerCase() }), 'info');
+      return true;
     },
     placeEnemy(p) {
       if (!g || g.mode !== 'sandbox' || g.run || !p) return false;
-      const EC = IT.EnemyCard;
-      if (g.w.query(e => e.kind === 'enemy' && !e.refill).length >= EC.WORLD_CAP) { UI.toast(IT.t('toast.enemyFull', { n: EC.WORLD_CAP }), 'bad'); return false; }
-      if (!EC.place(g.opts.enemy, g.w, g.placed, p.x, p.y, g.lo.skin)) { UI.toast(IT.t('toast.enemyBad'), 'bad'); return false; }
-      g.placed++; UI.toast(IT.t('toast.enemyPlaced'), 'good'); return true;
-    },
-    resetDummies() {
-      if (!g || g.mode !== 'sandbox') return;
-      if (g.run) { g.run.redo(); UI.toast(IT.t('toast.dummiesReset'), 'info'); return; }   // scenario sandbox: replay it
-      if (g.R && g.R.clearVfx) g.R.clearVfx();
-      const ds = IT.Units.trainers(g.w);
-      ds.forEach((d, i) => {
-        if (i >= g.nDummies) { g.w.remove(d); return; }
-        const dl = g.w.map.spawns.dummies, sp = dl[i % dl.length];
-        d.x = sp.x; d.y = sp.y; d.hp = d.maxHp; d.mana = d.maxMana; d.orders.length = 0; d.path.length = 0;
-        for (const s of d.statuses.slice()) IT.Status.remove(g.w, d, s.type);
-      });
-      if (IT.HUD.resetMeter) IT.HUD.resetMeter();
-      UI.toast(IT.t('toast.dummiesReset'), 'info');
+      const Ro = IT.UI.Roster, a = IT.Input.armed, kind = a && a.kind === 'dummy' ? 'dummy' : 'enemy';
+      if (!Ro.canAdd(g.w, kind)) { UI.toast(IT.t(kind === 'dummy' ? 'ros.maxDummy' : 'ros.maxEnemy', { n: Ro.MAX[kind] }), 'bad'); IT.Input.armed = null; return false; }
+      const e = Ro.spawn(g.w, kind, p.x, p.y, { tier: g.defTier, items: g.opts.enemy && g.opts.enemy.items });
+      if (!e) { UI.toast(IT.t('ros.badSpot'), 'bad'); return false; }
+      UI.toast(IT.t('ros.placed', { what: IT.t(kind === 'dummy' ? 'ros.dummy' : 'ros.enemy') }), 'good');
+      return true;
     },
   };
 

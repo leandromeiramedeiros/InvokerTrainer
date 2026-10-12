@@ -53,6 +53,23 @@
     });
   }
 
+  // v6 item 27 (juke): two short belief stings. beliefHuh = a chaser reached its guess and you are not there (a falling, wobbling
+  // two-note "huh?"); beliefAlert = it found you again (a bright rising double ping + click).
+  if (SFX && SFX.define && SFX.T && SFX.N) {
+    const T = SFX.T, N = SFX.N;
+    SFX.define('beliefHuh', b => {
+      T(b, { type: 'triangle', f: 660, f2: 520, d: 0.16, g: 0.07, a: 0.006 });
+      T(b, { type: 'triangle', f: 560, f2: 430, d: 0.24, g: 0.07, a: 0.006, at: 0.15, mr: 9, mi: 0.4, mdec: 0.2 });
+      N(b, { nk: 'pink', ft: 'bandpass', f: 1800, d: 0.08, g: 0.015, q: 2 });
+    });
+    SFX.define('beliefAlert', b => {
+      N(b, { nk: 'white', ft: 'highpass', f: 4000, d: 0.03, g: 0.04 });
+      T(b, { type: 'square', f: 880, f2: 1320, d: 0.07, g: 0.045, a: 0.002, lp: 3000 });
+      T(b, { type: 'square', f: 1175, f2: 1760, d: 0.1, g: 0.045, a: 0.002, at: 0.08, lp: 3200 });
+      T(b, { type: 'sine', f: 1760, d: 0.25, g: 0.04, a: 0.002, at: 0.08 });
+    });
+  }
+
   // ---------------------------------------------------------------- engine
 
   // Per-voice metadata. verb = reverb send, prio = never dropped under load, low = first to be dropped,
@@ -68,7 +85,7 @@
     cast_ghostwalk: { verb: 0.25 }, invoke: { verb: 0.15 }, spiritSpawn: { verb: 0.2 }, deafeningHit: { grp: 'hit' }, 'fx:gleipnirHit': { grp: 'hit', verb: 0.15, vol: 0.8 },
     'fx:orchidBurst': { verb: 0.2 }, sunBeam: { verb: 0.15 },
     towerShot: { vol: 0.8, low: 1, grp: 'hit' }, towerDown: { prio: 1, verb: 0.35, vol: 0.5 }, kill: { vol: 0.7, grp: 'hit', low: 1 }, heroDeath: { prio: 1, verb: 0.3, vol: 0.8 },
-    cdTick: { prio: 1 }, cdGo: { prio: 1 }, levelUp: { verb: 0.25 },
+    cdTick: { prio: 1 }, cdGo: { prio: 1 }, levelUp: { verb: 0.25 }, beliefHuh: { vol: 0.7, verb: 0.15 }, beliefAlert: { prio: 1, vol: 0.75 },
   };
   // throttle: max per 100 ms per id, plus per-group caps so per-tick sounds never pile up into a harsh buzz
   const MAXN = { dmgTick: 2, hit: 3, csProc: 2, csTarget: 2, failSoft: 1, orbQ: 3, orbW: 3, orbE: 3, comboStep: 2, blocked: 2, spiritLaunch: 3, spiritImpact: 3,
@@ -177,6 +194,11 @@
       const isHero = id => w.hero && id === w.hero.id;
       const posOf = id => { const e = w.get(id); return e ? { x: e.x, y: e.y } : null; };
       const on = (t, f) => off.push(w.on(t, f));
+      // v6 item 27: belief stings (juked '?' / reacquired '!'), one per 0.4 s whatever the pack size; gated like the markers (IT.Belief.uiOn)
+      on('belief', p => {
+        if (!(p.state === 'juked' || (p.state === 'seen' && p.reacquired)) || !IT.Belief || !IT.Belief.uiOn(w) || !once('belief:' + p.state, 400)) return;
+        P(p.state === 'juked' ? 'beliefHuh' : 'beliefAlert', posOf(p.unit));
+      });
       const paused = () => !!(w.paused || (IT.dev && IT.dev.paused && IT.dev.w === w));
 
       // ---- loops that follow an entity (tornado / meteor) and die with it. find() resolves the entity lazily.

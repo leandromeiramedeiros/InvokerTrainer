@@ -277,7 +277,7 @@
   // ---------- Invoke burst: 0.3-0.4 s of misty sand from the hands and the three orbs, tinted by the orbs held now ----------
   const MIST = {};
   function mistRamp(orbs) {
-    const key = 'invoke_' + orbs;
+    const key = 'invoke_' + SKIN + orbs;
     if (MIST[key]) return MIST[key];
     const os = orbs.split('').filter(o => ORB_RGB[o]);
     let b = [222, 222, 236];
@@ -306,16 +306,18 @@
     // v6 item 13: the intro camera tour focuses a foe group / the gate / a focus area -> pulse its markers while the camera is on it
     w.on('tourFocus', p => { tour = p.kind === 'hero' ? null : Object.assign({}, p, { t0: R_.time, w }); });
     w.on('tourEnd', () => { tour = null; }); w.on('scnGo', () => { tour = null; });
+    if (IT.BeliefFX) IT.BeliefFX.init(R);   // v6 item 27: enemy belief indicators (js/render/belief.js)
   }
   let tour = null;                 // the focused tour stop { kind, x, y, r, ids, glide, hold, t0 }
   const revT = new Map();          // start-reveal thinker id -> render time first drawn (the world is frozen in the countdown, so it animates on render time)
 
   // drop every one-shot / channel / telegraph / damage number / order path (scenario swap, restart)
-  function clear() { iwReg.clear(); iwLay.clear(); iwRoots.length = 0; tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); }
+  function clear() { iwReg.clear(); iwLay.clear(); iwRoots.length = 0; tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); if (IT.BeliefFX) IT.BeliefFX.clear(); }
 
   // ---------- per-frame update ----------
   function update(R, dt) {
     const w = R.w, t = R.time;
+    applySkin(); ravenFeathers(R, dt);
     fxs = fxs.filter(f => t - f.t0 < f.dur);
     for (let i = chans.length - 1; i >= 0; i--) { const c = chans[i]; if (t > c.until || (c.end != null && t - c.end > 0.35)) chans.splice(i, 1); }
     for (let i = texts.length - 1; i >= 0; i--) if (t - texts[i].t0 > 1.0) texts.splice(i, 1);
@@ -895,6 +897,36 @@
     return p;
   }
 
+  // ---------- v6 item 15: player SKIN palette (Kid / Dark Artistry / Exalted) ----------
+  // The equipped skin recolours the three orb colours (IT.Skins.tintRgb); the orb-derived spell colours (orbPal, mistRamp, PX.mixOrbs / ORB_HEX) follow.
+  // Applied in place when the skin changes, checked once per update(). Raven scarecrow: drifting feathers.
+  let SKIN = 'default';
+  const ORB0 = { Q: ORB_RGB.Q.slice(), W: ORB_RGB.W.slice(), E: ORB_RGB.E.slice() };
+  const PXORB0 = { Q: PX.ORB_RGB.Q.slice(), W: PX.ORB_RGB.W.slice(), E: PX.ORB_RGB.E.slice() };
+  function applySkin() {
+    const sk = IT.Art && IT.Art.playerSkin ? IT.Art.playerSkin() : 'default';
+    if (sk === SKIN) return;
+    SKIN = sk;
+    const T = IT.Skins && IT.Skins.tintRgb && sk !== 'default' ? c => IT.Skins.tintRgb(sk, c).map(Math.round) : c => c.slice();
+    for (const o of 'QWE') {
+      ORB_RGB[o] = T(ORB0[o]);
+      const c = T(PXORB0[o]); PX.ORB_RGB[o] = c; PX.ORB_HEX[o] = PX.hex(c[0], c[1], c[2]);
+    }
+    for (const k in ORB_CACHE) delete ORB_CACHE[k];
+  }
+  let featherAcc = 0, featherRamp = null;
+  function ravenFeathers(R, dt) {
+    if (!IT.Art || !IT.Art.dummySheet || IT.Art.dummySheet() !== 'scarecrow_raven' || !IT.Particles) return;
+    if (!featherRamp) featherRamp = IT.Particles.addRamp('raven_feather', ['#2b2d40', '#4a5072', '#8a92bd', '#5a3a7c']);
+    featherAcc += dt * 1.4;
+    for (const e of R.w.ents) {
+      if (e.dead || e.kind !== 'dummy' || !e.scarecrow || !lit(R, e.x, e.y) || featherAcc < 1) continue;
+      featherAcc -= 1;
+      IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 14, y: e.y, n: 1, ramp: featherRamp, speed: 5, up: 6, spread: 10, life: 1.8, settle: false, z: 26 });
+    }
+    if (featherAcc > 3) featherAcc = 0;
+  }
+
   // basic attack projectile: solid pixel orb (hero: colour of its current orbs, spirit: molten fire)
   function drawFireball(R, e, x, by, gy) {
     const cx = R.cx, t = R.time, src = R.w.byId.get(e.src), arc = src && src.kind === 'hero', tg = R.w.byId.get(e.target);
@@ -1199,6 +1231,7 @@
       PX.ring(cx, x, y, 5, '#8a80b0', t * 0.1, 3);
       cx.globalAlpha = 1;
     }
+    if (IT.BeliefFX) IT.BeliefFX.hud(R);   // v6 item 27: last-seen ghost, prediction arrow, '?' / '!', Gem ring, item chips
   }
 
   IT.FX = { init, clear, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal, iceWallLayout, iceWallPhase, iceWallSprite, IW };
