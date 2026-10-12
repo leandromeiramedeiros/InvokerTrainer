@@ -121,6 +121,7 @@
       type: 'range', min: 1, max: 30, step: 1, value: lo.heroLevel, class: 'slider',
       oninput: ev => {
         lo.heroLevel = +ev.target.value;
+        if (IT.UISound) IT.UISound.play('level');
         const c = trim(lo);
         if (c) flash(t('lo.fix'));
         changed();

@@ -29,7 +29,7 @@ function setup(settings) {
   const ctx = vm.createContext(g);
   g.window = ctx;
   vm.runInContext('globalThis.IT = {};', ctx);
-  for (const f of ['js/audio.js', 'js/sfx.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+  for (const f of ['js/audio.js', 'js/sfxvoices.js', 'js/sfx.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
   const IT = ctx.IT;
   if (settings) IT.Settings = { get: () => settings };
   const errs = [], played = [];
