@@ -39,3 +39,16 @@ W1 launched (Sonnet, background), ids in session transcript:
 - Remaining W1 work is in `git stash` "v4 W1 WIP (agents stopped at 72%)" — partial, 36 test failures, DO NOT pop blindly.
   Per agent: MAPS/ENT/PROG/VFX/MODES/HUD partial (ENT mid-rewrite of units.js; PROG mid difficulty/spells; HUD mid CSS).
   Resume one agent at a time: `git checkout stash@{0} -- <that agent's files>` (+ `stash@{0}^3` for new files), finish, test, commit.
+
+## Resume (user: 25 % left, stop limit raised to 96 %)
+- Pushed: 8b853e9 input v4; next commit VFX partial (sand persistence 1/3, lift markers, scarecrow art, enemy item visuals guarded). Tornado lift not visually confirmed.
+- PROG agent resumed alone to finish G1-G4/A3/issueGroup green. After it: commit+push, then maybe ENT if budget allows.
+
+## Stop at 80 % (5 h) / 86 % (weekly) — session end
+- Pushed d16290e PROG: G1-G4 (orbs lock/gate, max 7, invoke CD by orb sum, talents 27-30), preinvoked, A3 RMB keeps attack, issueGroup.
+  Loadout without orbs/level now defaults to lvl 30 best legal build (sandbox was unplayable otherwise). Tests 270/270, browser smoke OK.
+- Not started this session (still in stash@{0}, partial): ENT (enemy/dummy split, enemy AI + items, awareness, telegraph, player
+  forcestaff/dust/shiva/gleipnir), MAPS (>=10 maps, towers), MODES (ranked flow, splash/stats/PNG, infinite run), HUD (F1-F5).
+  Stopped: ENT alone touches ~10 sim files incl. a units.js rewrite; an agent run would exceed the 96 % cap.
+- Next session order: ENT -> MODES -> HUD -> MAPS, one agent at a time, from stash@{0}.
+- TODO small: ranked.js pass scenario `preinvoked` to normalize + `Hero.applyPreinvoked`; dummychat ignore fail reason 'locked'.
