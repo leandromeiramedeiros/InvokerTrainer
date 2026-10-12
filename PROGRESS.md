@@ -77,6 +77,9 @@ W1 launched (Sonnet, background), ids in session transcript:
     behavior/scenario/useBkb opts) must become kind 'enemy' (or render as enemy); plain stationary targets stay scarecrows. Check render/units.js,
     ui/dummychat.js, ranked.js apply(), main.js sandbox spawns, Free Play enemy section.
 
+## Session 2026-10-12 (fresh window)
+- DONE all USER TODO 1-10: c090f38 (10), 6b179ef (4 Cataclysm hits fogged foes + vision), f9a49df (2/3/6/7/8), 420047e (1/5/9). Tests 298/298, browser smoke OK.
+
 ## NEXT SESSION (start here)
 Stash work is also on branch `wip/v4-stash` (origin) — use `git checkout origin/wip/v4-stash -- <files>` instead of stash@{0} if the stash is missing.
 Rules: BE TERSE; no Claude co-author in commits; Opus orchestrates, max 1 Sonnet/Haiku agent at a time; tests green + browser smoke
