@@ -52,3 +52,10 @@ W1 launched (Sonnet, background), ids in session transcript:
   Stopped: ENT alone touches ~10 sim files incl. a units.js rewrite; an agent run would exceed the 96 % cap.
 - Next session order: ENT -> MODES -> HUD -> MAPS, one agent at a time, from stash@{0}.
 - TODO small: ranked.js pass scenario `preinvoked` to normalize + `Hero.applyPreinvoked`; dummychat ignore fail reason 'locked'.
+
+## Continued to 92 % (same session)
+- 286736f ranked passes `preinvoked`; dummychat ignores 'locked'.
+- f2abf61 ENT done: isFoe, spawnDummy scarecrow (never dies), spawnEnemy (dies, 5 behaviors, bkb/blink/shadowblade/euls/forcestaff, awareness x2.5, telegraph), player dust + forcestaff. Legacy AI dummies kept for ranked. Dead code: combat.js killFrac/refillBelow.
+- 23f4209 difficulty tiers ian/easy/common/hard/bambam (+desc, migrate old ids).
+- e14e41c MODES core: B1 title, C4 8 turns, C2 10 s countdown + START, C7 badge.
+- Remaining (stash@{0}): HUD F1-F5 (hud.js/css), MAPS (maps.js/towers/terrain), scenario v4 content (scenarios.js), end splash/stats PNG/infinite run, B2 FP enemy card.
