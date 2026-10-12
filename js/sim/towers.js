@@ -36,6 +36,7 @@
   // ---- damage gate
   function gate(w, target, amount, src, ability) {
     if (!target || !target.building) return amount;
+    if (target.invulnerable) return 0;
     const a = ability || 'attack';
     if (a === 'meteorhammer' || a === 'item_meteor_hammer') return amount;
     if (a !== 'attack') return 0;
@@ -150,5 +151,72 @@
     }
   });
 
-  IT.Towers = { TIERS, RANGE, PROT_R, spawn, spawnAll, gate };
+  // ---- static map structures (map.structures: barracks, fort, filler, fountain, shop, outpost): not sim entities, never damaged
+  // (Dota keeps them invulnerable behind their towers; this trainer has no creeps / backdoor rules). Selectable for a HUD status card.
+  // HP / armor: npc_units.txt (SteamDatabase/GameTracking-Dota2 master, 2026-10-12): melee rax 2200/15, ranged rax 1300/9,
+  // fort 4500/23, fillers 1000/10, watch tower (outpost) 450/0, fountain armor 0 + attack 290-310 range 1200; shops have no unit.
+  const STRUCT_KV = {
+    melee: { hp: 2200, armor: 15, name: { en: 'Melee Barracks', pt: 'Quartel Corpo a Corpo' } },
+    range: { hp: 1300, armor: 9, name: { en: 'Ranged Barracks', pt: 'Quartel à Distância' } },
+    fort: { hp: 4500, armor: 23, name: { en: 'Ancient', pt: 'Ancient' } },
+    filler: { hp: 1000, armor: 10, name: { en: 'Effigy Building', pt: 'Construção Efígie' } },
+    outpost: { hp: 450, armor: 0, name: { en: 'Outpost', pt: 'Outpost' } },
+    fountain: { hp: 0, armor: 0, name: { en: 'Fountain', pt: 'Fonte' }, attack: { min: 290, max: 310, range: 1200 } },
+    shop: { hp: 0, armor: 0, name: { en: 'Shop', pt: 'Loja' } },
+    secret: { hp: 0, armor: 0, name: { en: 'Secret Shop', pt: 'Loja Secreta' } },
+  };
+  const TEAM_NAME = { 0: { en: 'Radiant', pt: 'Radiant' }, 1: { en: 'Dire', pt: 'Dire' } };
+  const loc = v => v == null ? '' : typeof v === 'object' ? (v[IT.lang] || v.en || '') : String(v);
+  // structure sub-kind: barracks melee / range from the Dota entity name at that world tile; shops near a fountain = home shop, else secret
+  function structSub(map, s) {
+    if (s.sub) return s.sub;
+    let sub = s.kind;
+    const D = IT.DOTAWORLD, wd = map && map.world;
+    if (s.kind === 'barracks') {
+      sub = s.tx % 2 ? 'melee' : 'range';
+      if (D && wd && D.ents && D.ents.barracks) {
+        for (const e of D.ents.barracks) {
+          const tx = Math.floor((e.x - D.x0) / D.tile) - wd.gx0, ty = Math.floor((D.y1 - e.y) / D.tile) - wd.gy0;
+          if (tx === s.tx && ty === s.ty) { sub = /range/.test(e.name || '') ? 'range' : 'melee'; break; }
+        }
+      }
+    } else if (s.kind === 'shop') {
+      sub = (map.structures || []).some(f => f.kind === 'fountain' && Math.hypot(f.x - s.x, f.y - s.y) < 2400) ? 'shop' : 'secret';
+    }
+    s.sub = sub;
+    return sub;
+  }
+  // HUD card of a structure (cached on it): an entity-shaped read-only object
+  function structCard(map, s) {
+    const sub = structSub(map, s), K = STRUCT_KV[sub] || STRUCT_KV.filler;
+    const team = s.team, tn = TEAM_NAME[team];
+    const card = s._card || (s._card = { kind: 'structure', building: true, structure: true, statuses: [], items: [], ms: 0, magicRes: 0 });
+    Object.assign(card, {
+      id: 'S' + (map.structures || []).indexOf(s), sub, team: team == null ? -1 : team, x: s.x, y: s.y, radius: (s.hw + 0.5) * (map.tile || 48),
+      name: (tn ? loc(tn) + ' ' : '') + loc(K.name), hp: K.hp, maxHp: K.hp, armor: K.armor, invulnerable: true,
+      attack: K.attack ? { min: K.attack.min, max: K.attack.max, range: K.attack.range } : null,
+    });
+    return card;
+  }
+  // sprite heights (world units) above a building's base, for click picking (render/towers.js draws them this tall)
+  const PICK_H = { tower: 64, barracks: 46, fort: 84, filler: 48, fountain: 46, shop: 42, outpost: 52 };
+  // building under world point p: { ent } for a tower entity, { struct: index } for a map structure, or null. P = world units per px.
+  function buildingAt(w, p, P) {
+    P = P || (IT.GAME && IT.GAME.UNIT_PX) || 6;
+    let best = null, bd = Infinity;
+    const test = (x, y, hw, h, foot, r) => {
+      if (Math.abs(p.x - x) > hw || p.y > y + foot || p.y < y + foot - h) return;
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bd) { bd = d; best = r; }
+    };
+    for (const e of w.ents) if (!e.dead && e.kind === 'tower') test(e.x, e.y, 12 * P, PICK_H.tower * P, 11 * P, { ent: e });
+    const sts = (w.map && w.map.structures) || [];
+    for (let i = 0; i < sts.length; i++) {
+      const s = sts[i], half = (s.hw + 0.5) * w.map.tile;
+      test(s.x, s.y, half, (PICK_H[s.kind] || 44) * P, half, { struct: i });
+    }
+    return best;
+  }
+
+  IT.Towers = { TIERS, RANGE, PROT_R, spawn, spawnAll, gate, STRUCT_KV, structSub, structCard, buildingAt };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -58,6 +58,8 @@
     if (j != null && j !== d.i) IT.Items.swap(c.w, c.hero, d.i, j);
   }
 
+  const ul = (en, pt) => (IT.lang === 'pt' ? pt : en);
+  const UCMD_ICON = { attack: 'ui_atk', stop: 'ui_stop', hold: 'ui_hold' };
   // bottom bar for a selected non-hero unit (Dota-style): portrait, name, bars, armor/MR/speed, 6 items
   function unitBar(R) {
     const { h } = IT.UI, t = IT.t;
@@ -65,13 +67,18 @@
     R.uname = h('div', { class: 'uname' });
     R.uhp = h('div', { class: 'bar hp' }, R.uhpf = h('i'), R.uhpt = h('span'));
     R.ump = h('div', { class: 'bar mp' }, R.umpf = h('i'), R.umpt = h('span'));
-    R.ua = h('b'); R.um = h('b'); R.us = h('b');
-    R.ustats = h('div', { class: 'ustats' }, h('span', {}, t('hud.armor') + ' ', R.ua), h('span', {}, t('hud.mres') + ' ', R.um), h('span', {}, t('hud.ms') + ' ', R.us));
+    R.ua = h('b'); R.um = h('b'); R.us = h('b'); R.ud = h('b');
+    R.udw = h('span', {}, ul('DAMAGE', 'DANO') + ' ', R.ud);
+    R.umw = h('span', {}, t('hud.mres') + ' ', R.um); R.usw = h('span', {}, t('hud.ms') + ' ', R.us);
+    R.ustats = h('div', { class: 'ustats' }, R.udw, h('span', {}, t('hud.armor') + ' ', R.ua), R.umw, R.usw);
+    R.unote = h('div', { class: 'ustats', style: { display: 'none', color: '#ffd27a' } });   // buildings: team + invulnerable note
     R.uitems = [0, 1, 2, 3, 4, 5].map(() => { const ic = h('span', { class: 'ic' }); return { el: h('div', { class: 'hbtn item' }, ic), ic }; });
+    // v6: own Forge Spirit card -> its own Attack / Stop / Hold commands (with the bound keys) instead of item slots
+    R.ucmd = ['attack', 'stop', 'hold'].map(a => { const b = btnEl('item cmd', () => IT.Input.doAction(a, { hud: true })); b.act = a; b.el.style.display = 'none'; return b; });
     return h('div', { class: 'hudp hbar hunit', style: { display: 'none' } },
       R.upor,
-      h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats),
-      h('div', { class: 'hitems' }, R.uitems.map(b => b.el)));
+      h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats, R.unote),
+      h('div', { class: 'hitems' }, R.uitems.map(b => b.el), R.ucmd.map(b => b.el)));
   }
   // ---------------------------------------------------------------- Aghanim's hood emblem (Dota layout)
   // three orb sockets (Wex top, Quas left, Exort right) on a steel frame, Scepter = teardrop gem, Shard = gem trio below.
@@ -532,16 +539,34 @@
     const { h, icon } = IT.UI, t = IT.t;
     if (ca.uid !== U.id) {
       ca.uid = U.id;
+      const bld = !!U.building, own = U.kind === 'spirit' && U.team === 0;
       const sheet = U.kind === 'hero' ? IT.Art.heroSheet() : U.kind === 'spirit' ? 'forge' : (IT.Art.sheets[U.skin] ? U.skin : null);
-      R.upor.textContent = ''; R.upor.appendChild(sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' }));
-      R.upor.classList.toggle('foe', U.team !== 0); R.uhp.classList.toggle('foe', U.team !== 0);
+      const bp = bld && IT.TowerDraw && IT.TowerDraw.portrait ? IT.TowerDraw.portrait(U, w) : null;
+      R.upor.textContent = ''; R.upor.appendChild(bp || (sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' })));
+      R.upor.classList.toggle('foe', U.team === 1); R.uhp.classList.toggle('foe', U.team === 1);
       R.uname.textContent = U.name || t('hud.unit');
-      for (const k of ['uhp', 'ump', 'ua', 'um', 'us']) delete ca[k];
+      R.umw.style.display = R.usw.style.display = bld ? 'none' : '';
+      const note = bld ? [U.team === 0 ? 'Radiant' : U.team === 1 ? 'Dire' : ul('Neutral', 'Neutro'), U.invulnerable ? ul('Invulnerable', 'Invulnerável') : U.destroyed ? ul('Destroyed', 'Destruída') : ''].filter(Boolean).join('  |  ') : '';
+      R.unote.textContent = note; R.unote.style.display = note ? '' : 'none';
+      R.uitems.forEach(b => { b.el.style.display = own || bld ? 'none' : ''; });
+      R.ucmd.forEach(b => {
+        b.el.style.display = own ? '' : 'none';
+        if (own && !b.ic.firstChild && hasIcon(UCMD_ICON[b.act])) b.ic.appendChild(icon(UCMD_ICON[b.act]));
+        b.el.title = { attack: ul('Attack', 'Atacar'), stop: ul('Stop', 'Parar'), hold: ul('Hold', 'Segurar') }[b.act];
+      });
+      for (const k of ['uhp', 'ump', 'ua', 'um', 'us', 'ud', 'uk']) delete ca[k];
+    }
+    if (U.kind === 'spirit' && U.team === 0) {   // key labels follow live rebinds
+      const kk = R.ucmd.map(b => keyLab(b.act)).join('|');
+      if (ca.uk !== kk) { ca.uk = kk; R.ucmd.forEach(b => { b.key.textContent = keyLab(b.act); }); }
     }
     const hk = Math.max(0, Math.round(U.hp)) + '/' + Math.round(U.maxHp);
     if (ca.uhp !== hk) { ca.uhp = hk; R.uhpt.textContent = hk; R.uhpf.style.width = (U.maxHp ? Math.max(0, U.hp / U.maxHp) * 100 : 0) + '%'; }
     const mmp = Math.round(U.maxMana || 0), mk = Math.max(0, Math.round(U.mana || 0)) + '/' + mmp;
-    R.ump.style.display = mmp > 0 ? '' : 'none';
+    R.ump.style.display = mmp > 0 && !U.building ? '' : 'none';
+    R.uhp.style.display = U.maxHp > 0 ? '' : 'none';   // fountain / shops: no hp
+    const at = U.attack, dk = at && at.max > 0 ? (Math.round(at.min) === Math.round(at.max) ? String(Math.round(at.min)) : Math.round(at.min) + '-' + Math.round(at.max)) : '';
+    R.udw.style.display = dk ? '' : 'none'; setText(R.ud, dk, ca, 'ud');
     if (ca.ump !== mk) { ca.ump = mk; R.umpt.textContent = mk; R.umpf.style.width = (U.maxMana ? Math.max(0, U.mana / U.maxMana) * 100 : 0) + '%'; }
     setText(R.ua, String(Math.round((U.armor || 0) * 10) / 10), ca, 'ua');
     setText(R.um, Math.round((U.magicRes || 0) * 100) + '%', ca, 'um');
@@ -700,7 +725,7 @@
       R.aim.style.display = armed ? '' : 'none';
     }
     // selected unit (IT.Input.selected) replaces the hero bar; hero bar returns when null
-    const sel = IT.Input.selected != null ? w.get(IT.Input.selected) : null, U = sel && sel !== hero && !sel.dead ? sel : null;
+    const sel = IT.Input.selectedUnit ? IT.Input.selectedUnit(w) : IT.Input.selected != null ? w.get(IT.Input.selected) : null, U = sel && sel !== hero && !sel.dead ? sel : null;
     const um = U ? U.id : null;
     if (ca.umode !== um) {
       ca.umode = um; ca.uid = null;

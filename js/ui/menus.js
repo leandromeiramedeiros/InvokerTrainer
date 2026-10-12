@@ -137,10 +137,9 @@
     return h('div', { class: 'panel ' + (cls || '') }, title ? h('h2', { class: 'ph', text: title }) : null, body);
   }
 
-  // ---- title (mode-first). RANKED on top, then practice / sandbox / stats / settings.
+  // ---- title: two big primary buttons (FREE PLAY, SCENARIOS); every option lives on the screen after the click. Combo Sandbox / Stats / Settings are secondary.
   const FS_SVG = '<svg viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
   // player's medal + rank name + rating under RANKED; nothing if ranked data or medal art is missing
-  const infBest = () => { try { return IT.Ranked.infiniteProfile().best | 0; } catch (e) { return 0; } };
   function rankBox() {
     let p = null;
     try { p = IT.Ranked && IT.Ranked.profile ? IT.Ranked.profile() : null; } catch (e) { p = null; }
@@ -169,13 +168,13 @@
         h('div', { class: 'logo-b', text: IT.t('app.sub') })),
       h('div', { class: 'orbs-deco' }, icon('quas'), icon('wex'), icon('exort')),
       h('div', { class: 'tag', text: IT.t('app.tag') }),
-      h('div', { class: 'menu tmenu' },
-        h('button', { class: 'btn grn ranked', type: 'button', 'data-snd': 'start', onclick: () => A.go('ranked'), text: IT.t('title.ranked') }),
-        rankBox(),
-        h('button', { class: 'btn grn inf', type: 'button', 'data-snd': 'start', 'data-tip': IT.t('title.infinite.d', { n: infBest() }), onclick: () => A.go('infinite'), text: IT.t('title.infinite') }),
-        btn('title.sandbox', () => A.go('sandbox'), 'slt'),
-        btn('ui.stats', () => A.go('stats'), 'slt'),
-        btn('ui.settings', () => A.go('settings'), 'slt')),
+      h('div', { class: 'tbig' },
+        h('button', { class: 'btn grn tbtn free', type: 'button', 'data-snd': 'start', onclick: () => A.go('freeplay') }, h('b', { text: IT.t('title.free') }), h('span', { text: IT.t('title.free.d') })),
+        h('button', { class: 'btn grn tbtn scn', type: 'button', 'data-snd': 'start', onclick: () => A.go('scenarios') }, h('b', { text: IT.t('title.scn') }), h('span', { text: IT.t('title.scn.d') }))),
+      h('div', { class: 'tmore' },
+        btn('title.sandbox', () => A.go('sandbox'), 'slt sm'),
+        btn('ui.stats', () => A.go('stats'), 'slt sm'),
+        btn('ui.settings', () => A.go('settings'), 'slt sm')),
       h('div', { class: 'lang-row' }, langToggle()),
       h('div', { class: 'foot', text: IT.t('title.hint') }));
   }
@@ -207,5 +206,5 @@
     A.back();
   });
 
-  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, title, pause };
+  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, rankBox, title, pause };
 })(typeof window !== 'undefined' ? window : globalThis);

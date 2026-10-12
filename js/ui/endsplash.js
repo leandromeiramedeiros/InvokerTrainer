@@ -158,9 +158,12 @@
       });
     };
     shareBtn = h('button', { class: 'btn', type: 'button', 'data-share': '1', onclick: share, text: t('end.btn.share') });
+    // v6: Infinite Run is only offered after a perfect ranked run (all turns solved); an infinite run offers RANKED back
+    const perfect = !inf && (m.solved | 0) >= (m.turns || 8);
+    const infBtn = perfect ? h('button', { class: 'btn red infbtn', type: 'button', 'data-snd': 'start', 'data-tip': t('end.btn.infinite.d'), onclick: () => A.go('infinite'), text: t('end.btn.infinite') }) : null;
     const btns = h('div', { class: 'sp-btns' },
       btn('end.btn.again', () => A.go('again'), 'gold'),
-      inf ? btn('end.btn.ranked', () => A.go('ranked'), 'grn') : btn('end.btn.infinite', () => A.go('infinite'), 'grn'),
+      inf ? btn('end.btn.ranked', () => A.go('ranked'), 'grn') : infBtn,
       shareBtn,
       btn('end.btn.back', () => A.go('title'), 'dim'));
 

@@ -283,18 +283,19 @@
       HK.map(x => nb(x[0], t(x[1]), true)),
       NAV.map(x => nb(x[0], t(x[1]), false)));
 
-    return h('div', { class: 'scr settings' },
+    // the .scr element becomes the full-screen .screen (menus.js mount): the panel is its own child so it can be sized to one screen
+    return h('div', { class: 'scr settings' }, h('div', { class: 'set-panel' },
       h('div', { class: 'set-top' }, h('h2', { class: 'set-title', text: t('set.title') }), btn('set.reset', resetAll, 'sm')),
       h('div', { class: 'set-wrap' }, nav,
         h('div', { class: 'set-main' }, h('h2', { class: 'set-sec', text: t(V[view][0]) }), V[view][1]())),
-      h('div', { class: 'set-foot' }, msgBox, btn('ui.cancel', () => cancel()), btn('ui.done', () => save(), 'gold')));
+      h('div', { class: 'set-foot' }, msgBox, btn('ui.cancel', () => cancel()), btn('ui.done', () => save(), 'gold'))));
   }
 
   function refresh(top) {
     if (!IT.UI.depth()) return;
-    const old = G.document.querySelector('.scr.settings'), y = old ? old.scrollTop : 0;
+    const old = G.document.querySelector('.scr.settings .set-main'), y = old ? old.scrollTop : 0;
     IT.UI.rebuild();
-    const el = G.document.querySelector('.scr.settings');
+    const el = G.document.querySelector('.scr.settings .set-main');
     if (el) el.scrollTop = top ? 0 : y;
   }
   function go(id) { sec = id; capture = null; note = ''; refresh(true); }

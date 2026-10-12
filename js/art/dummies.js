@@ -3504,3 +3504,72 @@
     IT.Art.sheet('scarecrow', { pal, anchor: [12, 30], frames });
   })();
 })(typeof window !== 'undefined' ? window : globalThis);
+
+// v6: Forge Spirit HUD portrait (32x32): molten-rock bust, flame crown, glowing eyes, lava chest core.
+// Added onto the 'forge' sheet (js/art/invoker.js) so IT.UI.portrait('forge') works like the hero / dummy portraits.
+(function (G) {
+  'use strict';
+  const IT = G.IT, A = IT && IT.Art, S = A && A.sheets && A.sheets.forge;
+  if (!S) return;
+  const N = 32, g = [];
+  for (let y = 0; y < N; y++) g.push(new Array(N).fill('.'));
+  const P = (x, y, c) => { if (x >= 0 && y >= 0 && x < N && y < N) g[y][x] = c; };
+  const hh = (x, y) => { let n = (x * 374761393 + y * 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  // flame crown: tongues of varying height above the head; white-hot core -> gold -> orange -> ember edge
+  const tongue = x => 3 + 7 * Math.max(0, Math.cos((x - 16) * 0.55)) * (0.65 + 0.35 * Math.abs(Math.sin(x * 1.7))) + (Math.abs(x - 16) < 9 ? 3 : 0);
+  for (let x = 6; x <= 25; x++) {
+    const top = Math.round(12 - tongue(x));
+    for (let y = Math.max(0, top); y <= 11; y++) {
+      const d = (y - top) / Math.max(1, 12 - top), edge = Math.abs(x - 16) > 8;
+      P(x, y, d < 0.18 ? 'j' : d < 0.4 ? 'o' : d < 0.7 && !edge ? 'O' : d < 0.7 ? 'o' : edge ? 'j' : 'E');
+    }
+  }
+  // shoulders (behind the head): broad rock plates with lava seams and a molten chest core
+  for (let y = 21; y < N; y++) {
+    const half = Math.min(15, 8 + (y - 21) * 1.6);
+    for (let x = Math.round(16 - half); x <= Math.round(15 + half); x++) {
+      const t = (y - 21) / 10, lx = x - 16;
+      let c = hh(x, y) < 0.12 ? 'q' : 'R';
+      if (y === Math.round(21 + Math.abs(lx) * 0.25) || hh(x * 3, y) < 0.08) c = 'r';
+      if (x > 16 + half * 0.55 || y > 29) c = 'q';
+      if (Math.abs(lx) === Math.round(5 + t * 3) && y > 23) c = 'f';   // seams
+      const cd = Math.hypot(lx * 0.9, (y - 27) * 1.1);
+      if (cd < 4.6) c = cd < 1.6 ? 'E' : cd < 2.8 ? 'O' : cd < 3.8 ? 'o' : 'f';   // chest core
+      P(x, y, c);
+    }
+  }
+  // head: rock dome, top-left lit, bottom-right shaded, lava cracks
+  for (let y = 7; y <= 22; y++) for (let x = 7; x <= 24; x++) {
+    const dx = (x - 15.5) / 8.2, dy = (y - 14.5) / 7.6, r = dx * dx + dy * dy;
+    if (r > 1) continue;
+    let c = 'R';
+    if (dx + dy < -0.75) c = 'r'; else if (dx + dy > 0.7) c = 'q';
+    if (r > 0.82 && dy > 0.2) c = 'q';
+    if (hh(x, y) < 0.07) c = 'q';
+    P(x, y, c);
+  }
+  [[10, 9], [11, 10], [11, 11], [21, 9], [20, 10], [16, 8], [16, 9], [8, 16], [9, 17], [23, 17], [22, 18]].forEach(([x, y]) => P(x, y, 'f'));
+  P(16, 10, 'o'); P(11, 12, 'o');
+  // brow ridge + glowing eyes
+  for (let x = 10; x <= 21; x++) if (x < 15 || x > 16) P(x, 12, 'q');
+  for (const ex of [11, 18]) {
+    P(ex, 13, 'O'); P(ex + 1, 13, 'O'); P(ex + 2, 13, 'o');
+    P(ex, 14, 'E'); P(ex + 1, 14, 'E'); P(ex + 2, 14, 'O');
+    P(ex, 15, 'o'); P(ex + 1, 15, 'O'); P(ex + 2, 15, 'o');
+  }
+  P(15, 15, 'q'); P(16, 15, 'q'); P(15, 16, 'R'); P(16, 17, 'q');   // nose ridge
+  // jaw: lava mouth slit with ember teeth
+  for (let x = 12; x <= 19; x++) { P(x, 18, x % 2 ? 'q' : 'R'); P(x, 19, x === 12 || x === 19 ? 'f' : 'o'); P(x, 20, x % 3 ? 'O' : 'o'); }
+  P(15, 19, 'E'); P(16, 19, 'E');
+  // sparks
+  [[4, 6], [27, 4], [25, 1], [5, 2], [28, 9]].forEach(([x, y]) => P(x, y, hh(x, y) < 0.5 ? 'O' : 'j'));
+  // 1px dark outline around everything solid
+  const out = g.map(r => r.slice());
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (g[y][x] !== '.') continue;
+    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => { const c = g[y + b] && g[y + b][x + a]; return c && c !== '.' && c !== 'O' && c !== 'j'; });
+    if (nb) out[y][x] = 'K';
+  }
+  S.frames.portrait = out.map(r => r.join(''));
+  A.sheet('forge', S);   // re-validate
+})(typeof window !== 'undefined' ? window : globalThis);

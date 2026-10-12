@@ -5,9 +5,11 @@
   const IT = G.IT = G.IT || {};
   const PX = IT.Pixel;
   const CELL = 4, LW = 120, LH = 68, LEVELS = 9;
-  const AMB = [0.30, 0.37, 0.60];
-  const EXPL = 0.38;      // outside-vision brightness relative to ambient (very dark, terrain still readable)
+  // v6: bright, near-neutral daylight inside vision (was a blue night ambient 0.30/0.37/0.60); outside vision keeps the old dark level
+  const AMB = [0.86, 0.88, 0.90];
+  const OUTV = [0.114, 0.141, 0.228];   // explored but not in vision (= old AMB * 0.38): very dark, terrain still readable
   const DARK = 0.015;
+  const LK = 0.55;        // point lights scaled down over the brighter ambient so glows read without blowing the area out
 
   function create(VW, VH) {
     const LW = Math.ceil(VW / CELL), LH = Math.ceil(VH / CELL);   // grid follows the view size (zoom)
@@ -34,7 +36,7 @@
         lights++;
         const x0 = Math.max(0, Math.floor((sx - r) / CELL)), x1 = Math.min(LW - 1, Math.floor((sx + r) / CELL));
         const y0 = Math.max(0, Math.floor((sy - r) / CELL)), y1 = Math.min(LH - 1, Math.floor((sy + r) / CELL));
-        const r2 = r * r, ir = 1 / r, R = rgb[0] / 255 * inten, Gc = rgb[1] / 255 * inten, B = rgb[2] / 255 * inten;
+        const r2 = r * r, ir = 1 / r, R = rgb[0] / 255 * inten * LK, Gc = rgb[1] / 255 * inten * LK, B = rgb[2] / 255 * inten * LK;
         for (let cy = y0; cy <= y1; cy++) {
           const dy = cy * CELL + 2 - sy;
           for (let cxx = x0; cxx <= x1; cxx++) {
@@ -57,9 +59,9 @@
             if (f < 2) {
               if (f >= 1) {
                 const t = f - 1;
-                r = AMB[0] * EXPL + (r - AMB[0] * EXPL) * t; g = AMB[1] * EXPL + (g - AMB[1] * EXPL) * t; b = AMB[2] * EXPL + (b - AMB[2] * EXPL) * t;
+                r = OUTV[0] + (r - OUTV[0]) * t; g = OUTV[1] + (g - OUTV[1]) * t; b = OUTV[2] + (b - OUTV[2]) * t;
               } else {
-                r = DARK + (AMB[0] * EXPL - DARK) * f; g = DARK + (AMB[1] * EXPL - DARK) * f; b = DARK * 1.4 + (AMB[2] * EXPL - DARK * 1.4) * f;
+                r = DARK + (OUTV[0] - DARK) * f; g = DARK + (OUTV[1] - DARK) * f; b = DARK * 1.4 + (OUTV[2] - DARK * 1.4) * f;
               }
             }
           }
@@ -102,5 +104,5 @@
     return L;
   }
 
-  IT.Light = { create, AMB, LW, LH, LEVELS, SCALE: 1.25 };
+  IT.Light = { create, AMB, OUTV, LW, LH, LEVELS, SCALE: 1.25 };
 })(typeof window !== 'undefined' ? window : globalThis);

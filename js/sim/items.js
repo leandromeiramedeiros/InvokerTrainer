@@ -127,6 +127,19 @@
       },
     });
   }
+  function burnBuilding(w, c, b, id) {
+    const dur = iv(id, 'burn_duration'), step = iv(id, 'burn_interval') || 1, dmg = iv(id, 'burn_dps_buildings') * step, total = Math.round(dur / step);
+    // buildings take no statuses (status.js): the burn is only this damage thinker
+    let n = 0;
+    w.thinker({
+      x: b.x, y: b.y, team: c.team, ability: id,
+      upd(w2, e) {
+        const t = w2.get(b.id); if (!t || t.destroyed) return true;
+        while (n < total && e.age >= (n + 1) * step - 1e-9) { n++; IT.Combat.damage(w2, { src: c.id, target: t, ability: id, type: 'magical', amount: dmg }); w2.emit('fx', { name: 'hammerBurn', x: t.x, y: t.y, unit: t.id }); }
+        return n >= total;
+      },
+    });
+  }
   item('meteorhammer', {
     target: 'point',
     channel() { return iv('meteorhammer', 'max_duration'); },
@@ -140,8 +153,15 @@
         upd(w2, e) {
           if (e.age < land - 1e-9) return false;
           const hit = enemies(w2, c, u => dist(u, e) <= r + (u.radius || 0));
+          const blds = w2.query(u => u.building && !u.destroyed && !u.invulnerable && u.team !== c.team && u.hp > 0 && dist(u, e) <= r + (u.radius || 0));
           w2.emit('fx', { name: 'meteorImpact', ability: 'meteorhammer', x: e.x, y: e.y, r });
-          if (!hit.length) w2.emit('miss', { src: c.id, ability: id, x: e.x, y: e.y });
+          if (!hit.length && !blds.length) w2.emit('miss', { src: c.id, ability: id, x: e.x, y: e.y });
+          // buildings (towers): KV impact_damage_buildings + burn_dps_buildings, no stun / slow (IT.Towers.gate lets this ability through)
+          for (const b of blds) {
+            IT.Combat.damage(w2, { src: c.id, target: b, ability: id, type: 'magical', amount: iv(id, 'impact_damage_buildings') });
+            burnBuilding(w2, c, b, id);
+            w2.emit('hit', { src: c.id, target: b.id, ability: id });
+          }
           for (const u of hit) {
             IT.Combat.damage(w2, { src: c.id, target: u, ability: id, type: 'magical', amount: iv(id, 'impact_damage_units') });
             S.add(w2, u, 'stun', iv(id, 'stun_duration'), { src: c.id, ability: id });

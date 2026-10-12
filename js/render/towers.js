@@ -109,12 +109,16 @@
     return c;
   }
 
-  // ---- static structures (map.structures): baked per kind x team; footprint half-size hw tiles (3x3 -> hw 1, fort 5x5 -> hw 2)
-  const SDIM = { barracks: [44, 44], fort: [72, 80], filler: [32, 44], fountain: [44, 40], shop: [44, 40], outpost: [32, 52] };
+  // ---- static structures (map.structures): baked per kind (+ sub-kind) x team; footprint half-size hw tiles (3x3 -> hw 1, fort 5x5 -> hw 2)
+  // v6: every kind has its own silhouette: melee barracks (hip roof + sword shield + pennants), ranged barracks (dome + bow emblem),
+  // Ancient (huge team crystal on a stepped dais), effigy filler (robed statue holding an orb), fountain (basin + spire),
+  // home shop (striped awning stall), secret shop (indigo tent + moon), outpost (watch post + banner).
+  const SDIM = { melee: [44, 46], range: [44, 46], fort: [72, 84], filler: [32, 48], fountain: [48, 46], shop: [44, 40], secret: [40, 42], outpost: [32, 52] };
+  const CRYS = { 0: ['#f2fff4', '#a8ffb8', '#58d880', '#268a50', '#11502e'], 1: ['#ffe0d0', '#ff7a52', '#d0302a', '#7c1418', '#3c080c'], 2: ['#fff6d8', '#ffe08a', '#d8a640', '#8a6420', '#4a3410'] };
   const structSpr = {};
 
   function bakeStruct(kind, team) {
-    const P = PAL[team < 0 ? 2 : team], d = SDIM[kind] || SDIM.filler, w = d[0], h = d[1], ax = w >> 1, base = h - 1, c = canvas(w, h), x = c.getContext('2d');
+    const P = PAL[team < 0 ? 2 : team], CR = CRYS[team < 0 ? 2 : team], d = SDIM[kind] || SDIM.filler, w = d[0], h = d[1], ax = w >> 1, base = h - 1, c = canvas(w, h), x = c.getContext('2d');
     const blk = (y0, y1, a, b, seed) => stone(x, P, ax, y0, y1, a, b, seed);
     const rect = (px, py, rw, rh, col) => { x.fillStyle = col; x.fillRect(px, py, rw, rh); };
     // hip roof: rows y0..y1, half-width a -> b, shingle lines every 3 rows
@@ -125,48 +129,90 @@
         x.fillStyle = P.roof[0]; x.fillRect(ax - hw, y, 1, 1);
       }
     };
+    // faceted crystal: diamond from (cx, y0) to (cx, y1), widest hw at k = mid; lit left facet, dark right facet, white core streak
+    const crystal = (cx, y0, y1, hw, mid) => {
+      for (let y = y0; y <= y1; y++) {
+        const k = (y - y0) / Math.max(1, y1 - y0), ww = Math.max(0, Math.round(k < mid ? hw * k / mid : hw * (1 - k) / (1 - mid)));
+        for (let px = cx - ww; px <= cx + ww; px++) {
+          const u = ww ? (px - cx) / ww : 0;
+          x.fillStyle = u < -0.55 ? CR[1] : u < 0 ? CR[2] : u < 0.5 ? CR[3] : CR[4];
+          if (px === cx - 1 && k > 0.12 && k < 0.8) x.fillStyle = CR[0];
+          x.fillRect(px, y, 1, 1);
+        }
+      }
+    };
     const door = (cx, y0, dw, dh) => { rect(cx - dw / 2 - 1, y0 - 1, dw + 2, dh + 1, P.trimD); rect(cx - dw / 2, y0, dw, dh, '#120d18'); };
+    const pennant = (px, y0, dir) => { rect(px, y0, 1, 30 - y0, P.st[4]); for (let i = 0; i < 4; i++) rect(dir > 0 ? px + 1 : px - 4 + i, y0 + i, 4 - i, 1, i < 2 ? P.roof[0] : P.roof[1]); };
     let orbY = null;
-    if (kind === 'barracks') {
-      blk(28, base, 12, 12, 2); rect(ax - 12, 28, 24, 1, P.st[0]);
-      roof(11, 27, 3, 15); rect(ax - 3, 10, 6, 1, P.trim);
-      door(ax, 35, 4, 8);
-      for (const o of [-8, 6]) { rect(ax + o, 31, 2, 3, '#120d18'); rect(ax + o, 33, 2, 1, P.trimD); }
-      rect(ax - 12, 27, 24, 1, P.trim);
-    } else if (kind === 'fort') {
-      blk(62, base, 19, 20, 1); rect(ax - 19, 62, 38, 1, P.st[0]);
-      for (const sx of [-1, 1]) { blk(42, 62, 4, 5, 6 + sx); rect(ax + sx * 16 - 5, 40, 10, 2, P.trim); }   // flanking turrets
-      blk(38, 62, 15, 17, 3); rect(ax - 15, 38, 30, 2, P.trim);
-      blk(22, 38, 10, 11, 4); rect(ax - 11, 22, 22, 2, P.trim);
-      for (let i = -10; i < 10; i += 4) { rect(ax + i, 18, 3, 4, P.st[2]); rect(ax + i, 18, 3, 1, P.st[0]); }
-      if (team === 0) roof(9, 17, 2, 8); else for (let y = 0; y < 12; y++) rect(ax - Math.max(0, 4 - (y >> 1)), 6 + y, Math.max(0, 4 - (y >> 1)) * 2 + 1, 1, P.roof[y < 4 ? 0 : y < 8 ? 1 : 2]);
-      door(ax, 69, 9, 10);
-      for (const o of [-9, 5]) { rect(ax + o, 46, 3, 5, '#120d18'); rect(ax + o, 50, 3, 1, P.trimD); }
-      for (const o of [-6, 3]) { rect(ax + o, 28, 3, 5, '#120d18'); rect(ax + o, 32, 3, 1, P.trimD); }
+    if (kind === 'melee') {   // barracks (melee): hip roof, shield + sword over the door, two pennants
+      blk(30, base, 12, 12, 2); rect(ax - 12, 30, 24, 1, P.st[0]);
+      roof(13, 29, 3, 15); rect(ax - 3, 12, 6, 1, P.trim);
+      door(ax, 38, 4, 8);
+      rect(ax - 4, 31, 8, 6, P.trim); rect(ax - 3, 32, 6, 4, P.roof[1]); rect(ax - 2, 36, 4, 1, P.trim);   // shield
+      rect(ax, 29, 1, 9, '#e8e8f0'); rect(ax - 2, 33, 5, 1, P.trimD); rect(ax, 28, 1, 1, '#ffffff');      // sword
+      for (const o of [-9, 7]) { rect(ax + o, 33, 2, 3, '#120d18'); rect(ax + o, 35, 2, 1, P.trimD); }
+      pennant(ax - 12, 4, -1); pennant(ax + 11, 4, 1);
+    } else if (kind === 'range') {   // barracks (ranged): low wall with arrow slits, dome roof, bow emblem
+      blk(30, base, 12, 12, 5); rect(ax - 12, 30, 24, 1, P.st[0]);
+      for (let y = 0; y < 15; y++) {   // dome
+        const hw = Math.round(13 * Math.sqrt(Math.max(0, 1 - Math.pow((14 - y) / 15, 2))));
+        for (let px = ax - hw; px < ax + hw; px++) { const u = (px - ax + hw) / Math.max(1, 2 * hw); rect(px, 15 + y, 1, 1, u < 0.3 ? P.roof[0] : u < 0.75 ? P.roof[1] : P.roof[2]); }
+      }
+      rect(ax - 1, 10, 2, 5, P.trim); rect(ax - 2, 9, 4, 1, P.trimD);
+      for (let y = 18; y <= 27; y++) { const bx = ax - 5 + Math.round(3 * Math.sin((y - 18) / 9 * Math.PI)); rect(bx, y, 1, 1, P.trim); }   // bow arc
+      rect(ax - 5, 18, 1, 10, '#e8e0c8'); rect(ax - 6, 22, 10, 1, '#e8e0c8'); rect(ax + 4, 21, 1, 3, '#ffffff');                // string + arrow
+      for (const o of [-9, -4, 3, 8]) { rect(ax + o, 33, 1, 5, '#120d18'); rect(ax + o - 1, 35, 3, 1, '#120d18'); }               // cross slits
+      door(ax, 39, 4, 7);
+    } else if (kind === 'fort') {   // Ancient: stepped dais + huge team crystal + flanking shards
+      blk(70, base, 22, 24, 1); rect(ax - 22, 70, 44, 1, P.st[0]);
+      blk(62, 69, 16, 19, 3); rect(ax - 16, 62, 32, 1, P.st[0]); rect(ax - 19, 69, 38, 1, P.trim);
+      for (const s of [-1, 1]) { crystal(ax + s * 15, 42, 66, 4, 0.55); blk(64, 70, 4, 5, 6 + s); }
+      crystal(ax, 2, 64, 13, 0.45);
+      rect(ax - 16, 61, 32, 1, P.trim);
+      for (let i = -14; i < 14; i += 5) rect(ax + i, 66, 2, 2, P.trimD);
+      orbY = 26;
+    } else if (kind === 'filler') {   // effigy: robed statue (team cloth) on a wide plinth, both arms raised holding the team orb
+      blk(37, base, 12, 12, 2); rect(ax - 12, 37, 24, 1, P.st[0]); rect(ax - 12, 41, 24, 1, P.trim);
+      for (let y = 18; y < 37; y++) {   // robe: shoulders -> hem
+        const hw = Math.round(5 + (y - 18) * 0.22);
+        for (let px = ax - hw; px < ax + hw; px++) { const u = (px - ax + hw) / Math.max(1, 2 * hw); rect(px, y, 1, 1, u < 0.22 ? P.roof[0] : u < 0.62 ? P.roof[1] : P.roof[2]); }
+      }
+      rect(ax - 1, 19, 2, 17, P.trim); rect(ax - 6, 35, 12, 1, P.trimD); rect(ax - 5, 18, 10, 1, P.st[1]);   // stole + hem
+      rect(ax - 3, 11, 6, 7, P.st[1]); rect(ax + 1, 12, 2, 6, P.st[3]); rect(ax - 3, 11, 6, 1, P.st[0]);    // stone face
+      rect(ax - 4, 10, 8, 2, P.roof[1]); rect(ax - 4, 10, 1, 7, P.roof[1]); rect(ax + 3, 10, 1, 7, P.roof[2]);   // hood
+      rect(ax - 2, 14, 1, 1, P.orb); rect(ax + 1, 14, 1, 1, P.orb);                                          // glowing eyes
+      for (const sd of [-1, 1]) for (let i = 0; i < 12; i++) { const px = ax + sd * (5 - Math.round(i * 0.25)) - (sd > 0 ? 1 : 0); rect(px, 18 - i, 2, 1, i > 9 ? P.st[1] : P.roof[sd < 0 ? 0 : 2]); }   // raised arms
       orbY = 5;
-    } else if (kind === 'filler') {
-      blk(24, base, 8, 9, 2); rect(ax - 9, 30, 18, 1, P.trim);
-      roof(11, 23, 1, 10); rect(ax - 1, 9, 2, 3, P.trim);
-      rect(ax - 1, 34, 2, 4, '#120d18'); rect(ax - 1, 37, 2, 1, P.trimD);
-      orbY = 8;
-    } else if (kind === 'fountain') {
-      const cy = 31;
+    } else if (kind === 'fountain') {   // basin + central spire with a team crystal
+      const cy = 37;
       for (let yy = -9; yy <= 9; yy++) {
-        const hw = Math.round(20 * Math.sqrt(Math.max(0, 1 - (yy / 9.6) * (yy / 9.6))));
+        const hw = Math.round(22 * Math.sqrt(Math.max(0, 1 - (yy / 9.6) * (yy / 9.6))));
         rect(ax - hw, cy + yy, hw * 2, 1, yy < -3 ? P.st[1] : yy > 4 ? P.st[3] : P.st[2]);
       }
-      rect(ax - 17, cy + 7, 34, 1, P.st[4]);
+      rect(ax - 19, cy + 7, 38, 1, P.st[4]);
       for (let yy = -7; yy <= 6; yy++) {
-        const hw = Math.round(16 * Math.sqrt(Math.max(0, 1 - (yy / 7.2) * (yy / 7.2))));
-        for (let px = ax - hw; px < ax + hw; px++) rect(px, cy - 1 + yy, 1, 1, PX.bayer(px, yy + 40) > 0.55 ? '#6ad0ea' : yy < -2 ? '#2a86b0' : '#3aa8d0');
+        const hw = Math.round(18 * Math.sqrt(Math.max(0, 1 - (yy / 7.2) * (yy / 7.2))));
+        for (let px = ax - hw; px < ax + hw; px++) rect(px, cy - 1 + yy, 1, 1, PX.bayer(px, yy + 40) > 0.55 ? '#7ae4ff' : yy < -2 ? '#2a98c8' : '#40b8e4');
       }
-      blk(13, cy, 3, 4, 1); rect(ax - 4, 24, 8, 2, P.trim);
-      orbY = 10;
-    } else if (kind === 'shop') {
+      blk(16, cy, 3, 5, 1); rect(ax - 5, 30, 10, 2, P.trim);
+      crystal(ax, 2, 18, 4, 0.5);
+      orbY = 9;
+    } else if (kind === 'shop') {   // home shop: stone stall, striped awning, gold sign
       blk(24, base, 12, 12, 3); rect(ax - 12, 24, 24, 1, P.st[0]);
       roof(8, 23, 4, 15);
-      for (let px = -12; px < 12; px += 4) { rect(ax + px, 26, 4, 3, (px / 4 & 1) ? P.roof[1] : P.trim); }   // striped awning
-      door(ax, 33, 4, 6); rect(ax + 6, 31, 4, 4, P.trim); rect(ax + 7, 32, 2, 2, P.trimD);
+      for (let px = -14; px < 14; px += 4) { rect(ax + px, 25, 4, 4, (px / 4 & 1) ? '#f4f0e0' : P.trim); rect(ax + px, 28, 4, 1, P.trimD); }   // striped awning
+      door(ax, 33, 4, 6); rect(ax + 6, 31, 5, 4, P.trim); rect(ax + 7, 32, 3, 2, '#fff2b0');
+      rect(ax - 10, 31, 3, 3, '#c89040'); rect(ax - 10, 31, 3, 1, '#ffd070');   // gold crate
+    } else if (kind === 'secret') {   // secret shop: indigo tent, crescent moon, hanging lantern
+      for (let y = 4; y <= base - 2; y++) {
+        const hw = Math.round((y - 4) * 0.55) + 1;
+        for (let px = ax - hw; px < ax + hw; px++) { const u = (px - ax + hw) / Math.max(1, 2 * hw); rect(px, y, 1, 1, ((px - ax) & 3) === 0 ? '#2a1e5a' : u < 0.3 ? '#7a62d8' : u < 0.7 ? '#5440b0' : '#33287a'); }
+      }
+      rect(ax - 1, 1, 2, 4, '#c8b060');
+      rect(ax - 4, base - 12, 8, 11, '#120d18'); rect(ax - 4, base - 12, 8, 1, '#7a62d8');
+      for (const [mx, my] of [[0, 0], [1, 0], [-1, 1], [-1, 2], [-1, 3], [0, 4], [1, 4]]) rect(ax - 1 + mx, 12 + my, 1, 1, '#fff6c0');   // crescent
+      rect(ax + 9, 22, 1, 4, '#3a2a1a'); rect(ax + 8, 26, 3, 3, '#ffd070'); rect(ax + 9, 27, 1, 1, '#ffffff');                          // lantern
+      orbY = null;
     } else {   // outpost: neutral watch post with a banner and a glowing crystal
       blk(40, base, 10, 11, 2); rect(ax - 11, 40, 22, 1, P.st[0]);
       blk(20, 40, 5, 6, 3); rect(ax - 7, 18, 14, 3, P.trim); blk(18, 19, 7, 7, 4);
@@ -180,11 +226,32 @@
   }
 
   const structFoot = s => (s.hw + 0.5) * 8 - 1;
-  const structSprite = s => { const k = s.kind + ':' + s.team; return structSpr[k] || (structSpr[k] = bakeStruct(s.kind, s.team)); };
+  const subOf = (R, s) => (IT.Towers && IT.Towers.structSub && R && R.w ? IT.Towers.structSub(R.w.map, s) : s.sub || s.kind);
+  const sprKind = sub => (sub === 'barracks' ? 'melee' : sub);
+  const structSprite = (s, R) => { const k = sprKind(subOf(R, s)) + ':' + s.team; return structSpr[k] || (structSpr[k] = bakeStruct(sprKind(subOf(R, s)), s.team)); };
+
+  // 32x32 HUD portrait of a building (tower entity or structure card): the sprite scaled to fit, pixel-crisp, bottom-aligned
+  function portrait(U, w) {
+    const c = canvas(32, 32); c.className = 'por';
+    let spr = null;
+    if (U.kind === 'tower') spr = U.destroyed ? (rubble[U.team] || (rubble[U.team] = bakeRubble(U.team))) : sprite(U.team, U.tier || 1);
+    else if (U.structure) { const k = sprKind(U.sub || 'filler') + ':' + U.team; spr = structSpr[k] || (structSpr[k] = bakeStruct(sprKind(U.sub || 'filler'), U.team)); }
+    if (!spr) return c;
+    // crop the transparent margin, then scale by an integer-ish factor so it stays readable
+    const id = spr.getContext('2d').getImageData(0, 0, spr.width, spr.height).data;
+    let x0 = spr.width, y0 = spr.height, x1 = -1, y1 = -1;
+    for (let y = 0; y < spr.height; y++) for (let x = 0; x < spr.width; x++) if (id[(y * spr.width + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return c;
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1, k = Math.min(30 / cw, 30 / ch), dw = Math.max(1, Math.round(cw * k)), dh = Math.max(1, Math.round(ch * k));
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.drawImage(spr, x0, y0, cw, ch, Math.round((32 - dw) / 2), 31 - dh, dw, dh);
+    void w;
+    return c;
+  }
 
   // (sx, sy) = screen px of the footprint centre
   function struct(R, s, sx, sy) {
-    const cx = R.cx, x = Math.round(sx), y = Math.round(sy) + structFoot(s), spr = structSprite(s);
+    const cx = R.cx, x = Math.round(sx), y = Math.round(sy) + structFoot(s), spr = structSprite(s, R);
     if (x < -50 || x > R.VW + 50 || y < -10 || y - spr.height > R.VH + 10) return;
     const rx = (s.hw + 0.5) * 8 + 2;
     cx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -202,7 +269,7 @@
   function structLights(R) {
     const sts = R.w.map.structures;
     for (let i = 0; i < sts.length; i++) {
-      const s = sts[i], spr = structSprite(s); if (spr._orbY == null) continue;
+      const s = sts[i], spr = structSprite(s, R); if (spr._orbY == null) continue;
       const sx = s.x / R.P - R.camX, sy = s.y / R.P - R.camY;
       if (sx < -60 || sx > R.VW + 60 || sy < -20 || sy - spr.height > R.VH + 60) continue;
       const P = PAL[s.team < 0 ? 2 : s.team];
@@ -298,6 +365,16 @@
       if (a > 0.04) dotRing(R, sx, sy, e.attack.range / R.P, e.team === 1 ? '#ff5a4a' : '#5dff7a', a, (R.time * 6) | 0);
       if (sel) dotRing(R, sx, sy, 22, e.team === 1 ? '#ff5a4a' : '#5bff6e', 1, 0);
     }
+    // selected static structure ('S<i>'): footprint ring (+ the fountain's attack range)
+    const sv = IT.Input && IT.Input.selected, sts = w.map && w.map.structures;
+    if (typeof sv === 'string' && sv[0] === 'S' && sts) {
+      const s = sts[+sv.slice(1)];
+      if (s) {
+        const sx = s.x / R.P - R.camX, sy = s.y / R.P - R.camY, col = s.team === 1 ? '#ff5a4a' : s.team === 0 ? '#5bff6e' : '#ffd070';
+        dotRing(R, sx, sy, (s.hw + 0.5) * 8 + 6, col, 1, 0);
+        if (s.kind === 'fountain' && IT.Towers && IT.Towers.STRUCT_KV) dotRing(R, sx, sy, IT.Towers.STRUCT_KV.fountain.attack.range / R.P, col, 0.6, (R.time * 6) | 0);
+      }
+    }
   }
 
   function lights(R) {
@@ -323,5 +400,5 @@
 
   function reset() { for (const k in sprites) delete sprites[k]; for (const k in rubble) delete rubble[k]; for (const k in structSpr) delete structSpr[k]; }
 
-  IT.TowerDraw = { draw, hud, ground, lights, proj, reset, struct, structLights, SW, SH };
+  IT.TowerDraw = { draw, hud, ground, lights, proj, reset, struct, structLights, portrait, bakeStruct, SW, SH };
 })(typeof window !== 'undefined' ? window : globalThis);

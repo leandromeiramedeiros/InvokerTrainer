@@ -371,6 +371,65 @@
     }
   });
 
+  // ---- unit collision (v6 WP4): cheap circle separation after movement. Ground units (hero, spirits, enemies, dummies) never stack:
+  // an overlapping pair is pushed apart along the line between them (2 relaxation passes), moved through IT.Nav.slide so nobody is
+  // pushed into a wall. A unit that cannot move (stun / root / ms 0) yields little; a mover yields more than an idle unit.
+  // Lifted / knocked-back units and `noCollide` ones are skipped. A plain move whose goal sits inside the crowd ends once pushed near it
+  // (no endless shoving at an occupied spot).
+  const SEP_K = 0.9, SEP_PASSES = 2;
+  function sepWeight(u) {
+    if (!S().canMove(u) || !(u.ms > 0)) return 0.1;
+    return u._moved ? 1 : 0.6;
+  }
+  function separate(w) {
+    const us = [];
+    for (const u of w.ents) {
+      if (u.dead || !UNITS[u.kind] || !(u.radius > 0) || u.noCollide || (u.z || 0) > 1) continue;
+      if (S().has(u, 'lift') || S().has(u, 'knockback')) continue;
+      us.push(u);
+    }
+    if (us.length < 2) return;
+    const map = w.map, nav = IT.Nav && map ? IT.Nav : null;
+    for (let pass = 0; pass < SEP_PASSES; pass++) {
+      let any = false;
+      for (let i = 0; i < us.length; i++) for (let j = i + 1; j < us.length; j++) {
+        const a = us[i], b = us[j], min = (a.radius + b.radius) * SEP_K;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        if (Math.abs(dx) >= min || Math.abs(dy) >= min) continue;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 1e-6) { const ang = ((a.id * 7 + b.id * 13) % 16) / 16 * Math.PI * 2; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }
+        else { dx /= d; dy /= d; }
+        const ov = min - (d < 1e-6 ? 0 : d), wa = sepWeight(a), wb = sepWeight(b), ka = wa / (wa + wb), kb = 1 - ka;
+        push(a, -dx * ov * ka, -dy * ov * ka); push(b, dx * ov * kb, dy * ov * kb);
+        sidestep(a, dx, dy, ov); sidestep(b, -dx, -dy, ov);
+        a._sep = b._sep = true; any = true;
+      }
+      if (!any) break;
+    }
+    // a mover walking into the other unit slides around it (sideways, on the side it already leans to) instead of a head-on deadlock
+    function sidestep(u, tx, ty, ov) {
+      const g = u._goal; if (!g || !u._moved || g.turnOnly) return;
+      let gx = g.x - u.x, gy = g.y - u.y; const gl = Math.hypot(gx, gy); if (gl < 1e-6) return;
+      gx /= gl; gy /= gl;
+      if (gx * tx + gy * ty < 0.2) return;
+      const cr = tx * gy - ty * gx, sg = Math.abs(cr) > 0.02 ? Math.sign(cr) : (u.id & 1 ? 1 : -1), k = Math.max(ov, u.radius * 0.35);
+      push(u, -ty * sg * k, tx * sg * k);
+    }
+    function push(u, px, py) {
+      if (Math.abs(px) + Math.abs(py) < 1e-9) return;
+      if (nav) { const p = nav.slide(map, u, u.x + px, u.y + py); u.x = p.x; u.y = p.y; }
+      else { u.x += px; u.y += py; }
+    }
+    for (const u of us) {
+      if (!u._sep) continue;
+      u._sep = false;
+      const o = u.orders[0];
+      if (o && o.type === 'move' && u.orders.length === 1 && dist(u, o) <= u.radius * 2 + 8) finish(w, u, o, true);
+    }
+  }
+  IT.World.system('separate', 21, separate);
+
   // B4/E1: one order for several of the player's units (hero + forge spirits). order: { type:'move'|'attack'|'stop'|'hold', x, y, target, queued };
   // attack with x,y (no target) = attack-move. Spirits given a command stop obeying their AI for good. Several movers get a small spread
   // around the click point. Returns true if at least one unit accepted it.

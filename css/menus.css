@@ -21,7 +21,26 @@
 /* ---- title */
 .title{position:relative}
 .title .menu{width:22em;min-width:0;max-width:90vw;gap:.6em}
-.title .btn.ranked{font-size:1.6em;padding:.55em 1em;width:100%}
+/* v6 main menu: two big primary buttons, three small secondary ones */
+.title{gap:1em}
+.tbig{display:flex;gap:1.2em;justify-content:center;width:min(46em,94%)}
+.btn.tbtn{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.35em;padding:1em .8em;text-transform:none;letter-spacing:.1em}
+.btn.tbtn b{font-size:1.9em;letter-spacing:.18em;font-weight:bold}
+.btn.tbtn span{font-size:.8em;letter-spacing:.03em;font-weight:normal;opacity:.9;text-shadow:0 1px 0 #000}
+.btn.tbtn.scn{background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 .35em,rgba(255,255,255,0) .35em .9em),linear-gradient(#5a6fb0,#2d3a6e);border-color:#b8c8ff;text-shadow:0 .12em 0 #0e1634,0 0 .5em rgba(0,0,0,.55)}
+.btn.tbtn.scn:hover{border-color:#e6ecff;box-shadow:inset 0 0 0 2px rgba(190,205,255,.4),0 3px 0 #000,0 0 1em #8aa0ff99}
+.tmore{display:flex;gap:.8em;justify-content:center}
+.tmore .btn{min-width:9em}
+/* red emphasised button (end splash: Infinite Run after a perfect 8/8) */
+.btn.red{
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 .35em,rgba(255,255,255,0) .35em .9em),linear-gradient(#d23a3a,#7a1414);
+  border:2px solid #ffb4a8;color:#fff;font-weight:bold;letter-spacing:.2em;text-shadow:0 .12em 0 #3a0808,0 0 .5em rgba(0,0,0,.55);
+  box-shadow:inset 0 0 0 2px rgba(255,190,180,.25),inset 0 .12em 0 rgba(255,255,255,.3),0 3px 0 #000,0 0 1em rgba(255,70,50,.45);
+  animation:redPulse 1.6s ease-in-out infinite;
+}
+.btn.red:hover{border-color:#ffe4de;color:#fff;filter:brightness(1.15)}
+@keyframes redPulse{50%{box-shadow:inset 0 0 0 2px rgba(255,190,180,.25),inset 0 .12em 0 rgba(255,255,255,.3),0 3px 0 #000,0 0 1.6em rgba(255,70,50,.8)}}
+@media (prefers-reduced-motion:reduce){.btn.red{animation:none}}
 .rankbox{display:flex;align-items:center;justify-content:center;gap:.7em;margin:.1em 0 .3em;padding:.4em .8em;
   background:#0b0618;border:2px solid var(--line);box-shadow:0 0 0 2px #000,inset 0 0 1em #000;text-align:left}
 .rmed canvas{display:block;width:3.4em;height:3.4em;image-rendering:pixelated}
@@ -37,6 +56,6 @@
 .pause .menu{min-width:17em;gap:.5em}
 
 @media (max-width:600px){
-  .title .menu{width:min(22em,90vw)}
+  .tbig{flex-direction:column}
   .fsbtn{top:.3em;right:.3em}
 }

@@ -219,7 +219,7 @@
   function selected(R, e) {
     const In = IT.Input, c = In && In.ctx;
     if (!c || c.w !== R.w || e.dead) return false;
-    if (In.selected != null) return In.selected === e.id;   // inspecting a foe replaces the unit selection
+    if (In.selected != null && !(In.ownCard && In.ownCard())) return In.selected === e.id;   // inspecting a foe / building replaces the unit selection (a spirit card keeps the group rings)
     return !!(In.sel && In.sel.units && In.sel.units.indexOf(e.id) >= 0);
   }
   function selRing(R, x, y, rr, foe) {

@@ -207,9 +207,12 @@ test('i18n: the end pack has the same keys in en and pt, and covers every key th
   const en = Object.keys(pack.en).sort(), pt = Object.keys(pack.pt).sort();
   assert.deepEqual(en, pt);
   for (const k of en) { assert.ok(pack.en[k] && pack.pt[k], k); assert.equal((pack.en[k].match(/\{\w+\}/g) || []).join(), (pack.pt[k].match(/\{\w+\}/g) || []).join(), 'placeholders ' + k); }
+  let v6 = null;   // end.btn.infinite.d lives in the v6 pack
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/data/i18n/v6.js'), 'utf8'), vm.createContext({ IT: { i18nAdd: p => { v6 = p; } } }));
+  const all = en.concat(Object.keys(v6.en));
   for (const f of ['js/ui/endsplash.js', 'js/ui/share.js']) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    for (const mt of src.matchAll(/\bt\('((?:end\.sp|end\.btn|share)\.[a-zA-Z.]+)'/g)) assert.ok(en.includes(mt[1]), f + ' uses ' + mt[1]);
+    for (const mt of src.matchAll(/\bt\('((?:end\.sp|end\.btn|share)\.[a-zA-Z.]+)'/g)) assert.ok(all.includes(mt[1]), f + ' uses ' + mt[1]);
   }
   for (const id of ['score', 'cleared', 'streak', 'apm', 'fastest', 'sun', 'meteor']) assert.ok(en.includes('end.sp.' + id), id);
 });

@@ -7,21 +7,22 @@
   const PX = IT.Pixel;
   const A = h => PX.abgrHex(h);
 
-  const GRASS = ['#2b4b2b', '#345633', '#3d643a'].map(A), GRASS_TUFT = A('#4c7a47'), GRASS_DARK = A('#223d25');
-  const GRASS_D = ['#303624', '#393d26', '#44452b'].map(A), GRASS_D_TUFT = A('#5a5632'), GRASS_D_DARK = A('#242a1a');
-  const DIRT_D = ['#47302a', '#573b31', '#664839'].map(A), DIRT_D_PEB = A('#80624f');
-  const FLOOR = ['#15251a', '#1b2f20'].map(A), FLOOR_LEAF = A('#27401f');
-  const DIRT = ['#503f2b', '#5f4a33', '#6e583b'].map(A), DIRT_PEB = A('#8a7656');
-  const WATER = ['#1b3f6a', '#214a7b', '#28558a'].map(A), SHORE = A('#3b6c98'), FOAM = A('#6ea0bc');
-  const RIVER = ['#2a6c9c', '#3380ad', '#4094bd'].map(A), RIVER_EDGE = A('#6cb4d0'), RIVER_SAND = A('#9c8c62'), RIVER_FOAM = A('#a8dcec');
-  const STONE = ['#4a4a52', '#55555e', '#61616b'].map(A), STONE_LINE = A('#33333b'), STONE_HI = A('#7a7a86');
-  const ROCK = ['#35323d', '#423e4b', '#4e4a59'].map(A);
-  const R_HI = A('#9c98a8'), R_HI2 = A('#7a7686'), R_FACE = A('#26242d'), R_FACE2 = A('#2f2d38'), R_EDGE = A('#18161d'), R_LEFT = A('#66627a');
+  // v6: brighter, more saturated ground (lit by a near-neutral daylight ambient inside vision; fog outside vision stays dark)
+  const GRASS = ['#3a6e30', '#447e36', '#4f8c3c'].map(A), GRASS_TUFT = A('#64a64a'), GRASS_DARK = A('#2c5626');
+  const GRASS_D = ['#4a4c2c', '#555832', '#62643a'].map(A), GRASS_D_TUFT = A('#7a7840'), GRASS_D_DARK = A('#363a20');
+  const DIRT_D = ['#603a2c', '#704634', '#80543e'].map(A), DIRT_D_PEB = A('#a07a5c');
+  const FLOOR = ['#1c3a20', '#244628'].map(A), FLOOR_LEAF = A('#365e26');
+  const DIRT = ['#76562e', '#866438', '#967242'].map(A), DIRT_PEB = A('#b49866');
+  const WATER = ['#1a4e92', '#205ca8', '#286abc'].map(A), SHORE = A('#4a8cd0'), FOAM = A('#8cc8ec');
+  const RIVER = ['#2480c8', '#2e94d8', '#3ca8e4'].map(A), RIVER_EDGE = A('#7cd2f2'), RIVER_SAND = A('#c4ae6e'), RIVER_FOAM = A('#c4f0fc');
+  const STONE = ['#5c5c6a', '#6a6a78', '#787886'].map(A), STONE_LINE = A('#3e3e4a'), STONE_HI = A('#9a9aac');
+  const ROCK = ['#463f56', '#544c66', '#625a76'].map(A);
+  const R_HI = A('#c2b8d8'), R_HI2 = A('#9c92b4'), R_FACE = A('#302a40'), R_FACE2 = A('#3a344c'), R_EDGE = A('#1c1824'), R_LEFT = A('#80769c');
 
   const TREE_PAL = [
-    { hi: '#4a8640', mid: '#356b33', sh: '#265128', dp: '#183a20', ol: '#0a1a10' },
-    { hi: '#38866a', mid: '#296b55', sh: '#1e5042', dp: '#143a30', ol: '#08181a' },
-    { hi: '#6a8a3a', mid: '#4f7030', sh: '#3a5428', dp: '#263c1c', ol: '#0e1a0c' },
+    { hi: '#5aa844', mid: '#408a36', sh: '#2e6a2c', dp: '#1c4a22', ol: '#0a1a10' },
+    { hi: '#3eaa7c', mid: '#2c8a62', sh: '#1f6a4c', dp: '#144a36', ol: '#08181a' },
+    { hi: '#84ae3e', mid: '#628e32', sh: '#466c2a', dp: '#2e4c1e', ol: '#0e1a0c' },
   ];
   const TREE_SHAPES = [
     [[9, 11, 6.3], [5, 13, 4.3], [13, 13, 4.3], [9, 6.5, 4.6]],
@@ -63,14 +64,14 @@
 
   // ---- true-scale trees: one baked sprite per (family, model variant, scale bucket)
   const FAM_PAL = {
-    pine: { hi: '#58a04c', mid: '#3a7a3c', sh: '#285c32', dp: '#194228', ol: '#09180f' },
-    oak: { hi: '#86ac44', mid: '#5f8a36', sh: '#436a2e', dp: '#2d4a22', ol: '#0e1a0c' },
-    bamboo: { hi: '#94cc62', mid: '#64aa50', sh: '#418446', dp: '#2a5c34', ol: '#0a1c12' },
+    pine: { hi: '#62c04e', mid: '#409a3e', sh: '#2c7434', dp: '#1a522a', ol: '#09180f' },
+    oak: { hi: '#a2d044', mid: '#72aa36', sh: '#4e842e', dp: '#335c22', ol: '#0e1a0c' },
+    bamboo: { hi: '#acec6c', mid: '#74ca56', sh: '#4aa24a', dp: '#2c7036', ol: '#0a1c12' },
   };
   const DIRE_PALS = [
-    { hi: '#725c64', mid: '#524048', sh: '#3a2e3a', dp: '#261e2a', ol: '#0c080e' },
-    { hi: '#70584c', mid: '#523f38', sh: '#3a2c2c', dp: '#271d20', ol: '#0e0809' },
-    { hi: '#645a72', mid: '#483f55', sh: '#342e40', dp: '#221e2c', ol: '#09080e' },
+    { hi: '#946270', mid: '#6c4452', sh: '#4c3040', dp: '#30202e', ol: '#0c080e' },
+    { hi: '#946450', mid: '#6c4638', sh: '#4c302c', dp: '#311f20', ol: '#0e0809' },
+    { hi: '#7c62a0', mid: '#5a4676', sh: '#403254', dp: '#2a2038', ol: '#09080e' },
   ];
   const famOf = m => /^dire_tree/.test(m) ? 'dire' : /pine/.test(m) ? 'pine' : /bamboo/.test(m) ? 'bamboo' : 'oak';
   const strHash = str => { let h = 7; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; };

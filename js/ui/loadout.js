@@ -1,4 +1,5 @@
-// Loadout screen (SANDBOX). State persisted in localStorage 'it2.loadout'. IT.UI.LoadoutScreen = { state, build, startOpts, save, load, derived, trim }.
+// Free Play screen (match panel: map + enemies; hero loadout in tabs) and Scenarios screen (ranked START + card grid).
+// State persisted in localStorage 'it2.loadout'. IT.UI.LoadoutScreen = { state, build, buildScenarios, startOpts, scenarioOpts, comboPreset, save, load, derived, trim }.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -6,7 +7,9 @@
   const ORBS = ['quas', 'wex', 'exort'];
   const ORBK = { quas: 'Q', wex: 'W', exort: 'E' };
 
-  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, map: 'grounds', diff: 'common', enemy: { count: 0, items: [], list: [] } };
+  const DEF_MAP = 'dota';   // Free Play default (the old 'grounds' training clearing is gone from the picker)
+  const HIDDEN_MAPS = ['grounds'];
+  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, map: DEF_MAP, diff: 'common', enemy: { count: 0, items: [], list: [] }, tab: 'hero' };
   const normEnemy = e => IT.EnemyCard.normalize(e);   // Free Play enemy card (count, item set, one row per enemy): js/sim/enemycard.js
   const diffOk = d => IT.DIFFICULTY.order.indexOf(IT.DIFFICULTY.migrate(d)) >= 0;
 
@@ -16,10 +19,17 @@
   const scnLoc = v => (v && typeof v === 'object' ? (v[IT.lang] || v.en) : v) || '';
   const scnTip = s => scnLoc(s.desc || s.goal || s.tip) || (s.descKey ? IT.t(s.descKey) : '');
 
-  const mapOk = id => !!(id && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
+  const mapOk = id => !!(id && HIDDEN_MAPS.indexOf(id) < 0 && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
+  // enemy rows keep an explicit skin (Pedro / Renan / Vitinho): legacy 'auto' rows get the next one in rotation
+  function fixEnemy(e) {
+    e.count = Math.max(0, Math.min(e.count | 0, e.list.length));
+    const SK = (IT.GAME && IT.GAME.SKINS) || [];
+    for (let i = 0; i < e.list.length; i++) if (SK.length && SK.indexOf(e.list[i].skin) < 0) e.list[i].skin = SK[i % SK.length];
+    return e;
+  }
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.map = 'grounds'; st.diff = 'common'; st.enemy = normEnemy();
+    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.map = DEF_MAP; st.diff = 'common'; st.enemy = fixEnemy(normEnemy());
   }
   function load() {
     fresh();
@@ -29,16 +39,15 @@
     const lo = IT.Loadout.normalize(raw.lo);
     if (!IT.Loadout.validate(lo).ok) return;
     st.lo = lo;
-    st.count = Math.max(1, Math.min(5, raw.count | 0 || 1));
+    st.count = 1;   // one scarecrow at the start; more are placed in the match (P / HUD)
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
-    st.scenario = scnOf(raw.scenario) ? raw.scenario : null;
-    st.enemy = normEnemy(raw.enemy);
+    st.enemy = fixEnemy(normEnemy(raw.enemy));
     st.diff = diffOk(raw.diff) ? IT.DIFFICULTY.migrate(raw.diff) : 'common';
-    st.map = mapOk(raw.map) ? raw.map : 'grounds';
+    st.map = mapOk(raw.map) ? raw.map : DEF_MAP;
   }
   function save() {
     st.lo.mode = 'sandbox';
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario, map: st.map, diff: st.diff, enemy: st.enemy })); } catch (e) { /* ignore */ }
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, fog: st.fog, grant: st.grant, map: st.map, diff: st.diff, enemy: st.enemy })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -336,52 +345,36 @@
       itemBox.appendChild(pool);
     }
 
-    // ---- dummy
-    const dumBox = reg('dummy', 'dummy');
-    function renderDummy() {
-      dumBox.textContent = '';
-      dumBox.appendChild(h('div', { class: 'row wrap' }, Object.keys(GM.DUMMY_PRESETS).map(p => h('button', {
-        type: 'button', class: 'chipb' + (lo.preset === p ? ' on' : ''), 'data-tip': t('preset.' + p + '.d'), text: t('preset.' + p), onclick: () => { lo.preset = p; changed(); },
-      }))));
-      dumBox.appendChild(h('div', { class: 'row skins' }, GM.SKINS.map(s => h('button', {
-        type: 'button', class: 'skin' + (lo.skin === s ? ' on' : ''), onclick: () => { lo.skin = s; changed(); },
-      }, portrait(s), h('span', { text: GM.SKIN_NAMES[s] })))));
-      dumBox.appendChild(h('div', { class: 'row cnt' },
-        h('span', { class: 'lbl', text: t('lo.count') }),
-        [1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (st.count === n ? ' on' : ''), text: n, onclick: () => { st.count = n; changed(); } }))));
-    }
-
-    // ---- enemy card (free play only): count 0-5, then one row per enemy (skin, behaviour, tier, items on/off) + the item set they carry
+    // ---- enemies (Free Play): one row per enemy = skin picker + difficulty + remove; max EnemyCard.MAX. They are on the map at the start.
     const eneBox = reg('enemy', 'enemy');
     const EC = IT.EnemyCard;
     function renderEnemy() {
       eneBox.textContent = '';
-      const en = st.enemy;
-      if (st.scenario) { eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.scn') })); return; }
-      eneBox.appendChild(h('div', { class: 'row cnt' }, h('span', { class: 'lbl', text: t('lo.enemy.count') }),
-        [0, 1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (en.count === n ? ' on' : ''), text: n, onclick: () => { en.count = n; changed(); } }))));
-      const sel = (opts, cur, on, cls) => h('select', { class: 'mapsel ' + (cls || ''), onchange: ev => on(ev.target.value) },
-        opts.map(o => h('option', { value: o[0], selected: cur === o[0] ? true : null, text: o[1] })));
+      const en = st.enemy, full = en.count >= EC.MAX;
+      eneBox.appendChild(h('div', { class: 'ehead' },
+        h('span', { class: 'lbl', text: en.count + ' / ' + EC.MAX }),
+        h('button', {
+          type: 'button', class: 'btn sm addbtn' + (full ? ' dis' : ''), 'data-tip': full ? t('fp.max', { n: EC.MAX }) : '', text: '+ ' + t('fp.add'),
+          onclick: () => { if (en.count >= EC.MAX) { flash(t('fp.max', { n: EC.MAX })); return; } en.count++; fixEnemy(en); changed(); },
+        })));
       for (let i = 0; i < en.count; i++) {
         const r = en.list[i];
         eneBox.appendChild(h('div', { class: 'erow' },
-          h('span', { class: 'en', text: t('lo.enemy.row', { n: i + 1 }) }),
-          IT.UI.tierBadge(r.tier),
-          sel([[EC.AUTO, t('lo.enemy.skin.auto')]].concat(GM.SKINS.map(k => [k, GM.SKIN_NAMES[k]])), r.skin, v => { r.skin = v; changed(); }, 'sk'),
-          sel(EC.BEHAVIORS.map(b => [b, t('lo.enemy.b.' + b)]), r.behavior, v => { r.behavior = v; changed(); }, 'bh'),
-          sel(IT.DIFFICULTY.order.map(d => [d, t('diff.' + d)]), r.tier, v => { r.tier = v; changed(); }, 'tr'),
-          h('label', { class: 'tog', 'data-tip': t('lo.enemy.hasItems.d') },
-            h('input', { type: 'checkbox', checked: r.items ? true : null, onchange: ev => { r.items = ev.target.checked; changed(); } }),
-            h('span', { class: 'box' }), h('span', { text: t('lo.enemy.hasItems') }))));
+          h('span', { class: 'en', text: String(i + 1) }),
+          h('div', { class: 'eskins', 'data-tip': t('fp.skin') }, GM.SKINS.map(s => h('button', {
+            type: 'button', class: 'eskin' + (r.skin === s ? ' on' : ''), 'data-tip': GM.SKIN_NAMES[s], onclick: () => { r.skin = s; changed(); },
+          }, portrait(s)))),
+          h('select', { class: 'mapsel etier', 'data-tip': t('fp.diff'), onchange: ev => { r.tier = ev.target.value; changed(); } },
+            IT.DIFFICULTY.order.map(d => h('option', { value: d, selected: r.tier === d ? true : null, text: t('diff.' + d) }))),
+          h('button', {
+            type: 'button', class: 'btn sm dim erm', 'data-tip': t('fp.remove'), 'aria-label': t('fp.remove'), text: 'x',
+            onclick: () => { en.list.splice(i, 1); en.list.push(normEnemy().list[0]); en.count--; fixEnemy(en); changed(); },
+          })));
       }
-      if (!en.count) { eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.hint') })); return; }
-      eneBox.appendChild(h('div', { class: 'row wrap' }, h('span', { class: 'lbl', text: t('lo.enemy.itemset') }), GM.ENEMY_ITEMS.map(id => h('label', { class: 'tog' },
-        h('input', { type: 'checkbox', checked: en.items.includes(id) ? true : null, onchange: ev => { en.items = en.items.filter(x => x !== id); if (ev.target.checked) en.items.push(id); changed(); } }),
-        h('span', { class: 'box' }), h('span', { text: t('item.' + id) })))));
-      eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.hint') }));
+      eneBox.appendChild(h('p', { class: 'fine', text: en.count ? t('fp.enemy.hint') : t('fp.none') }));
     }
 
-    // ---- map (free play only; scenarios bring their own)
+    // ---- map
     const mapBox = reg('map', 'mapbox');
     // Map preview: a sized placeholder first; the (cached) tile thumbnail is drawn once it is on screen and the browser is idle.
     // Building a thumbnail builds the map itself (the 368x368 whole map is the slow one), so nothing runs while the picker is closed.
@@ -399,39 +392,30 @@
     }
     function renderMap() {
       mapBox.textContent = '';
-      if (st.scenario) { mapBox.appendChild(h('p', { class: 'fine', text: t('lo.map.scn') })); return; }
-      const ML = (IT.Maps && IT.Maps.list) || [];
+      const ML = ((IT.Maps && IT.Maps.list) || []).filter(m => HIDDEN_MAPS.indexOf(m.id) < 0);
       if (!ML.length) return;
       const nm = m => (IT.hasT('map.' + m.id) ? t('map.' + m.id) : (m.name && m.name.en) || m.id);
       const sel = h('select', { class: 'mapsel', onchange: ev => { st.map = ev.target.value; changed(); } },
         ML.map(m => h('option', { value: m.id, selected: st.map === m.id ? true : null, text: nm(m) })));
       const cur = ML.find(m => m.id === st.map) || ML[0];
-      mapBox.appendChild(h('div', { class: 'row' }, h('span', { class: 'lbl', text: t('lo.map') }), sel));
       const thumb = h('div', { class: 'mapthumb', 'data-map': cur.id });
-      mapBox.appendChild(thumb); lazyThumb(thumb, cur.id);
-      mapBox.appendChild(h('p', { class: 'fine', text: IT.hasT('map.' + cur.id + '.d') ? t('map.' + cur.id + '.d') : ((cur.blurb && cur.blurb.en) || '') }));
+      mapBox.appendChild(h('div', { class: 'mapline' },
+        h('div', { class: 'mapside' }, sel,
+          h('p', { class: 'fine', text: IT.hasT('map.' + cur.id + '.d') ? t('map.' + cur.id + '.d') : ((cur.blurb && cur.blurb.en) || '') })),
+        thumb));
+      lazyThumb(thumb, cur.id);
     }
 
-    // ---- scenario (optional) + sandbox options
-    const scnBox = reg('scenario', 'scenario');
+    // ---- match options (Free Play)
+    const optBox = reg('opts', 'opts');
     function avail() { try { return IT.Combo ? IT.Combo.available(lo, { grantMissing: st.grant }).length : -1; } catch (e) { return -1; } }
-    function renderScenario() {
-      scnBox.textContent = '';
-      const list = scenarios();
-      const opts = [{ id: null, name: t('lo.freePlay'), tip: t('lo.freePlay.d') }].concat(list.map(s => ({ id: s.id, name: scnName(s), tip: scnTip(s), lvl: s.level })));
-      const sc = scnOf(st.scenario), EC2 = IT.EnemyCard;
-      scnBox.appendChild(h('div', { class: 'row wrap scns' }, opts.map(o => h('button', {
-        type: 'button', class: 'chipb' + (st.scenario === o.id ? ' on' : ''), 'data-tip': o.tip,
-        onclick: () => { st.scenario = o.id; if (o.lvl) st.diff = EC2.tierOfLevel(o.lvl); changed(); },   // picking a scenario suggests the tier its level is aimed at
-      }, o.lvl ? h('span', { class: 'lvb', text: String(o.lvl) }) : null, o.lvl ? IT.UI.tierBadge(EC2.tierOfLevel(o.lvl), { tip: t('lo.lvTier', { n: o.lvl, tier: t('diff.' + EC2.tierOfLevel(o.lvl)) }) }) : null, o.name))));
-      if (sc) scnBox.appendChild(h('div', { class: 'row wrap tiers' }, h('span', { class: 'lbl', 'data-tip': t('lo.diff.d'), text: t('lo.diff') }),
-        IT.DIFFICULTY.order.map(d => h('button', { type: 'button', class: 'chipb tierb' + (st.diff === d ? ' on' : ''), onclick: () => { st.diff = d; changed(); } }, IT.UI.tierBadge(d)))));
-      if (!list.length) scnBox.appendChild(h('p', { class: 'fine', text: t('lo.noScenarios') }));
-      const n = avail();
-      if (n >= 0) scnBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
-      scnBox.appendChild(h('div', { class: 'row wrap' },
+    function renderOpts() {
+      optBox.textContent = '';
+      optBox.appendChild(h('div', { class: 'row wrap' },
         h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: st.grant ? true : null, onchange: ev => { st.grant = ev.target.checked; changed(); } }), h('span', { class: 'box' }), h('span', { text: t('lo.grant') })),
         h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: st.fog ? true : null, onchange: ev => { st.fog = ev.target.checked; changed(); } }), h('span', { class: 'box' }), h('span', { text: t('lo.fog') }))));
+      const n = avail();
+      if (n >= 0) optBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
     }
 
     // ---- preview
@@ -474,41 +458,97 @@
     function renderGo() {
       goBox.textContent = '';
       const errs = problems();
-      if (errs.length) goBox.appendChild(h('div', { class: 'warn' }, errs.map(e => h('div', { text: e }))));
-      goBox.appendChild(h('div', { class: 'row' },
-        h('button', { type: 'button', class: 'btn sm dim', text: t('ui.back'), onclick: () => IT.App.go('title') }),
-        h('button', { type: 'button', class: 'btn big gold go' + (errs.length ? ' dis' : ''), text: t('ui.go'), 'data-tip': errs.length ? errs[0] : '', onclick: () => { const e2 = problems(); if (e2.length) { flash(e2[0]); return; } save(); IT.App.start(startOpts()); } })));
+      if (errs.length) goBox.appendChild(h('div', { class: 'warn gerr' }, errs.map(e => h('div', { text: e }))));
+      goBox.appendChild(h('button', { type: 'button', class: 'btn grn go' + (errs.length ? ' dis' : ''), 'data-snd': 'start', text: t('fp.start'), 'data-tip': errs.length ? errs[0] : '', onclick: () => { const e2 = problems(); if (e2.length) { flash(e2[0]); return; } save(); IT.App.start(startOpts()); } }));
     }
 
-    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderEnemy(); renderMap(); renderScenario(); renderPrev(); renderGo(); }
+    // ---- tabs: Hero (level, orbs, talents) / Items / Aghanim's / Stats. All panes are built; CSS shows the active one.
+    const TABS = [['hero', 'fp.tab.hero'], ['items', 'fp.tab.items'], ['agh', 'fp.tab.agh'], ['stats', 'fp.tab.stats']];
+    const tabBar = h('div', { class: 'lo-tabs', role: 'tablist' }, TABS.map(([id, k]) => h('button', {
+      type: 'button', class: 'tabb', role: 'tab', 'data-tab': id, text: t(k), onclick: () => { st.tab = id; showTab(); },
+    })));
+    function showTab() {
+      if (!TABS.some(x => x[0] === st.tab)) st.tab = 'hero';
+      el.setAttribute('data-tab', st.tab);
+      for (const b of tabBar.children) b.classList.toggle('on', b.getAttribute('data-tab') === st.tab);
+    }
+
+    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderEnemy(); renderMap(); renderOpts(); renderPrev(); renderGo(); }
     const sec = (title, ...kids) => h('section', { class: 'sec' }, h('h3', { text: title }), kids);
 
-    const el = h('div', { class: 'scr loadout' },
-      h('div', { class: 'lo-head' }, h('h1', { text: t('lo.title') }), IT.UI.langToggle()),
-      h('div', { class: 'lo-grid' },
-        h('div', { class: 'col' },
-          sec(t('lo.level'), h('div', { class: 'lvl' }, h('span', { class: 'lv', text: 'Lv' }), lvlVal, slider), ptsBox),
-          sec(t('lo.orbs'), orbBox),
-          sec(t('lo.talents'), talBox),
-          sec(t('lo.aghs'), aghBox)),
-        h('div', { class: 'col' },
-          sec(t('lo.items'), itemBox, h('p', { class: 'fine', text: t('lo.itemsHint') })),
-          sec(t('lo.dummy'), dumBox),
-          sec(t('lo.enemy'), eneBox),
+    const combo = !!st.combo;
+    const el = h('div', { class: 'scr loadout fp' },
+      h('div', { class: 'lo-head' },
+        h('button', { type: 'button', class: 'btn sm dim', text: t('ui.back'), onclick: () => IT.App.go('title') }),
+        h('h1', { text: t(combo ? 'fp.combo' : 'fp.title') }),
+        IT.UI.langToggle()),
+      h('div', { class: 'fp-body' },
+        h('div', { class: 'fp-match' },
           sec(t('lo.map'), mapBox),
-          sec(t('lo.scenario'), scnBox)),
-        h('div', { class: 'col' },
-          sec(t('lo.preview'), prevBox),
-          note, goBox)));
-    all();
+          combo ? null : sec(t('fp.enemies'), eneBox),
+          sec(t('fp.match'), optBox)),
+        h('div', { class: 'fp-hero' },
+          tabBar,
+          h('div', { class: 'lo-panes' },
+            h('div', { class: 'pane hero' },
+              h('div', { class: 'pcol' },
+                sec(t('lo.level'), h('div', { class: 'lvl' }, h('span', { class: 'lv', text: 'Lv' }), lvlVal, slider), ptsBox),
+                sec(t('lo.orbs'), orbBox)),
+              h('div', { class: 'pcol' }, sec(t('lo.talents'), talBox))),
+            h('div', { class: 'pane items' }, sec(t('lo.items'), itemBox, h('p', { class: 'fine', text: t('lo.itemsHint') }))),
+            h('div', { class: 'pane agh' }, sec(t('lo.aghs'), aghBox)),
+            h('div', { class: 'pane stats' }, sec(t('lo.preview'), prevBox))))),
+      h('div', { class: 'fp-foot' }, note, goBox));
+    all(); showTab();
     return el;
   }
 
-  function startOpts() {
-    save();
-    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null, map: mapOk(st.map) ? st.map : 'grounds', diff: diffOk(st.diff) ? IT.DIFFICULTY.migrate(st.diff) : 'common', enemy: scnOf(st.scenario) ? null : normEnemy(st.enemy) };
+  // ---- Scenarios screen: ranked START (rating + medal) and a compact wrapped grid of small cards; a card starts that scenario alone (sandbox).
+  function buildScenarios() {
+    const { h } = IT.UI, t = IT.t, EC = IT.EnemyCard;
+    const list = scenarios();
+    const card = s => {
+      const tags = (s.tags || []).filter(g => IT.hasT('tag.' + g)).slice(0, 3);
+      return h('button', {
+        type: 'button', class: 'scard', 'data-snd': 'start', 'data-tip': scnTip(s),
+        onclick: () => IT.App.start(scenarioOpts(s.id)),
+      },
+        h('span', { class: 'lvb', 'data-tip': t('lo.lvTier', { n: s.level, tier: t('diff.' + EC.tierOfLevel(s.level)) }), text: String(s.level) }),
+        h('span', { class: 'sctx' },
+          h('b', { class: 'scn', text: scnName(s) }),
+          h('span', { class: 'sctags' }, tags.map(g => h('i', { text: t('tag.' + g) })))));
+    };
+    const rb = IT.UI.rankBox ? IT.UI.rankBox() : null;
+    return h('div', { class: 'scr loadout sc' },
+      h('div', { class: 'lo-head' },
+        h('button', { type: 'button', class: 'btn sm dim', text: t('ui.back'), onclick: () => IT.App.go('title') }),
+        h('h1', { text: t('sc.title') }),
+        IT.UI.langToggle()),
+      h('div', { class: 'sc-ranked' },
+        rb,
+        h('div', { class: 'sc-rtxt' }, h('b', { text: t('sc.ranked') }), h('span', { text: t('sc.ranked.d') })),
+        h('button', { type: 'button', class: 'btn grn big sc-go', 'data-snd': 'start', text: t('sc.start'), onclick: () => IT.App.go('ranked') })),
+      h('div', { class: 'sc-prac' },
+        h('h3', { text: t('sc.practice') }), h('p', { class: 'fine', text: t('sc.practice.d') })),
+      list.length ? h('div', { class: 'sc-grid' }, list.map(card)) : h('p', { class: 'fine', text: t('lo.noScenarios') }));
   }
 
+  // the Free Play match
+  function startOpts() {
+    save();
+    const en = normEnemy(st.enemy);
+    if (st.combo) en.count = 0;
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: 1, fog: st.fog, grant: st.grant, scenario: null, map: mapOk(st.map) ? st.map : DEF_MAP, diff: diffOk(st.diff) ? IT.DIFFICULTY.migrate(st.diff) : 'common', enemy: en };
+  }
+  // one scenario played alone (no rating): the tier follows the scenario's level
+  function scenarioOpts(id) {
+    const sc = scnOf(id);
+    save();
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: 1, fog: st.fog, grant: st.grant, scenario: sc ? sc.id : null, map: mapOk(st.map) ? st.map : DEF_MAP, diff: sc ? IT.EnemyCard.tierOfLevel(sc.level) : 'common', enemy: null };
+  }
+  // Combo Sandbox: Free Play with no enemies and every combo granted (a transient flag, not saved)
+  function comboPreset(on) { st.combo = on !== false; if (st.combo) st.grant = true; }
+
   load();
-  IT.UI.LoadoutScreen = { state: st, build, startOpts, save, load, derived, trim };
+  IT.UI.LoadoutScreen = { state: st, build, buildScenarios, startOpts, scenarioOpts, comboPreset, save, load, derived, trim };
 })(typeof window !== 'undefined' ? window : globalThis);

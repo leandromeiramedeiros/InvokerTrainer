@@ -1,4 +1,4 @@
-// App state machine: title -> loadout -> play -> end -> loadout. Owns the world, renderer, camera and the fixed-step loop.
+// App state machine: title -> freeplay | scenarios | combo -> play -> end -> back. Owns the world, renderer, camera and the fixed-step loop.
 (function (G) {
   'use strict';
   const IT = G.IT;
@@ -161,8 +161,9 @@
   // ---------------------------------------------------------------- screens
   const App = IT.App = {
     go(name) {
-      if (name === 'again') { abandon(); if (lastOpts) start(lastOpts); else App.go('loadout'); return; }
-      if (name === 'sandbox') name = 'loadout';
+      if (name === 'again') { abandon(); if (lastOpts) start(lastOpts); else App.go('freeplay'); return; }
+      if (name === 'loadout') name = lastOpts && lastOpts.scenario ? 'scenarios' : 'freeplay';   // pause menu "Loadout": the screen the match came from
+      if (name === 'sandbox') name = 'combo';
       if (name === 'ranked') { abandon(); commitStats(); start({ mode: 'ranked' }); return; }
       if (name === 'infinite') { abandon(); commitStats(); start({ mode: 'infinite' }); return; }
       abandon();
@@ -172,7 +173,8 @@
       state = name;
       music('menu');
       if (name === 'title') UI.set(UI.title);
-      else if (name === 'loadout') UI.set(IT.UI.LoadoutScreen.build);
+      else if (name === 'freeplay' || name === 'combo') { IT.UI.LoadoutScreen.comboPreset(name === 'combo'); UI.set(IT.UI.LoadoutScreen.build); }
+      else if (name === 'scenarios') UI.set(IT.UI.LoadoutScreen.buildScenarios);
       else if (name === 'stats') UI.set(IT.UI.statsScreen);
       else if (name === 'settings') { IT.UI.settingsOpen(); UI.set(IT.UI.settingsPanel); }
     },

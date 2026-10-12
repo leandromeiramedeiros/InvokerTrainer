@@ -144,6 +144,29 @@
     return c.w.ents.filter(e => e.kind === 'spirit' && !e.dead && e.team === 0 && (e.owner == null || e.owner === c.hero.id));
   }
   function setSel(ids, group, auto) { In.sel = { units: ids.slice(), group, auto: !!auto }; }
+  // v6: the HUD card follows a spirits-only selection (first spirit) unless a foe / building is being inspected.
+  // In.selected: unit id (foe / tower / own spirit) or 'S<i>' = map.structures[i] (static, invulnerable building)
+  const isStruct = v => typeof v === 'string' && v[0] === 'S';
+  function ownCard() {   // the card shows one of the commanded spirits
+    const c = In.ctx, v = In.selected; if (!c || v == null || isStruct(v)) return false;
+    const e = c.w.get(v); return mine(e) && e.kind === 'spirit' && In.sel.units.includes(v);
+  }
+  In.ownCard = ownCard;
+  // an action / order drops an inspected foe or building, never the spirit card (orders keep going to the spirit)
+  function clearInspect() { if (In.selected != null && !ownCard()) In.selected = null; syncCard(); }
+  function syncCard() {
+    const c = In.ctx; if (!c) return;
+    const v = In.selected;
+    if (v != null && !isStruct(v)) { const e = c.w.get(v); if (!e || e.dead || (mine(e) && !ownCard())) In.selected = null; }
+    if (In.selected == null && In.sel.group === 'spirits' && In.sel.units.length) In.selected = In.sel.units[0];
+  }
+  In.syncCard = syncCard;
+  In.selectedUnit = function (w) {   // what the HUD card shows (null = hero bar)
+    const v = In.selected; w = w || (In.ctx && In.ctx.w);
+    if (v == null || !w) return null;
+    if (isStruct(v)) { const s = w.map && w.map.structures && w.map.structures[+v.slice(1)]; return s && IT.Towers && IT.Towers.structCard ? IT.Towers.structCard(w.map, s) : null; }
+    const e = w.get(v); return e && !e.dead ? e : null;
+  };
   In.setSel = setSel;
   function resetSel() { In.sel = { units: In.ctx ? [In.ctx.hero.id] : [], group: 'hero', auto: false }; }
   // drop dead ids; 'auto' selections follow every living spirit (new ones join); an empty selection falls back to the hero
@@ -171,7 +194,8 @@
   function giveOrder(o) {
     const { w, hero } = In.ctx, us = orderUnits().filter(u => u && !u.dead);
     if (!us.length) us.push(hero);
-    if (us.length === 1) return IT.Orders.issue(w, us[0], o);
+    // a lone spirit goes through issueGroup too (player flag): a spirit the player already commanded ignores plain AI-style issues
+    if (us.length === 1 && (us[0] === hero || !IT.Orders.issueGroup)) return IT.Orders.issue(w, us[0], o);
     if (IT.Orders.issueGroup) return IT.Orders.issueGroup(w, us, o);
     let ok = false;
     for (const u of us) ok = IT.Orders.issue(w, u, o) || ok;
@@ -183,7 +207,7 @@
     In.selected = null; syncSel();
     if (In.sel.group === 'hero') {
       const sp = spirits();
-      if (sp.length) { setSel(sp.map(e => e.id), 'spirits', true); sfx('click'); return true; }
+      if (sp.length) { setSel(sp.map(e => e.id), 'spirits', true); syncCard(); sfx('click'); return true; }
       return false;
     }
     resetSel(); sfx('click'); return true;
@@ -214,7 +238,30 @@
     if (!ids.length) return;
     const sp = spirits(), hasH = ids.includes(c.hero.id), nS = ids.filter(id => id !== c.hero.id).length;
     setSel(ids, hasH && nS ? 'all' : nS ? 'spirits' : 'hero', nS > 0 && nS === sp.length);   // every spirit selected -> auto-group (new ones join)
-    sfx('click');
+    syncCard(); sfx('click');
+  }
+
+  // own unit (hero or this hero's spirit) under the cursor
+  function ownAt(p) { const c = In.ctx; return hover(p, e => mine(e) && (e.kind === 'hero' ? e === c.hero : (e.owner == null || e.owner === c.hero.id))); }
+  // foe / tower / static building under the cursor -> In.selected value (null = nothing)
+  function inspectAt(p) {
+    const t = unitAt(p, 1); if (t && inspectable(t)) return t.id;
+    const b = IT.Towers && IT.Towers.buildingAt ? IT.Towers.buildingAt(In.ctx.w, p, P) : null;
+    return b ? (b.ent ? b.ent.id : 'S' + b.struct) : null;
+  }
+  function clickOwn(e, shift) {
+    const c = In.ctx;
+    if (e === c.hero) {
+      if (shift) { if (!In.sel.units.includes(e.id)) setSel(In.sel.units.concat(e.id), 'all', false); }
+      else { In.selected = null; setSel([e.id], 'hero', false); }
+      syncSel(); sfx('click'); return;
+    }
+    if (shift) {
+      const has = In.sel.units.includes(e.id), ids = has ? In.sel.units.filter(id => id !== e.id) : In.sel.units.concat(e.id);
+      setSel(ids.length ? ids : [c.hero.id], 'hero', false); syncSel();
+      if (!has && In.sel.group === 'spirits') In.selected = e.id;
+    } else { setSel([e.id], 'spirits', false); In.selected = e.id; }
+    syncCard(); sfx('click');
   }
 
   // ---------------------------------------------------------------- Cataclysm (scepter Sun Strike): double press = self-cast
@@ -282,7 +329,7 @@
       else if (isWarmup(action) && countingDown()) { exec(action, opts, null); return; }
       else if (!isSkipAction(action) || !In.hooks.skip || !In.hooks.skip()) return;
     }
-    if (action !== 'center') In.selected = null;     // any player action returns the HUD to the hero ('center' decides itself: 1st press selects the hero)
+    if (action !== 'center') clearInspect();     // any player action drops an inspected foe / building ('center' decides itself: 1st press selects the hero); a selected spirit keeps its card
     // Cataclysm: Sun Strike key with the scepter spell ready -> press 1 holds, press 2 = self-cast, window over = normal strike
     const sun = !opts.hud && isAbilityAction(action) && abilityId(action) === 'sunstrike';
     if (In._cat && !(sun && In._cat.id === 'sunstrike')) { if (action === 'stop' || action === 'hold') In._cat = null; else resolveCat(); }
@@ -346,7 +393,7 @@
   }
   In.castId = (id, opts) => {
     if (!In.ctx || In.ctx.w.paused) return;
-    In.selected = null;
+    clearInspect();
     cast(id, opts && opts.hud ? 'hud' : 'key', opts && opts.queued);
   };
   In.cancel = function (silent) {
@@ -387,7 +434,7 @@
       if (ev.repeat) return;
       if (w.paused) { if (In.now() - (In._unlockAt || -1e9) > 250 && In.hooks.pause) In.hooks.pause(); return; }   // (ESC that just left pointer lock already paused)
       if (In.armed) In.cancel();
-      else if (In.selected != null) In.selected = null;
+      else if (In.selected != null && !ownCard()) In.selected = null;
       else if (In.hooks.pause) In.hooks.pause();
       return;
     }
@@ -507,7 +554,7 @@
           if (ev.button !== 0) return;
           setMouse(ev);
           if (miniMove()) { mmDrag = true; return; }
-          const t = unitAt(worldMouse(), 1); In.selected = t && inspectable(t) ? t.id : null;
+          In.selected = inspectAt(worldMouse()); syncCard();
           return;
         }
       }
@@ -535,8 +582,10 @@
           cast(a.id, 'click', ev.shiftKey || a.queued); afterClick(a, ev.shiftKey);
           return;
         }
-        const t = unitAt(worldMouse(), 1);
+        const wp = worldMouse(), t = unitAt(wp, 1), own = t ? null : ownAt(wp);
         if (t && inspectable(t)) In.selected = t.id;   // inspect-select only: foes / towers accept no orders
+        else if (own) clickOwn(own, ev.shiftKey);    // own spirit / hero: select it (shift toggles it in the group)
+        else { const b = inspectAt(wp); if (b != null) In.selected = b; }   // towers / static buildings
         In._drag = { w0: worldMouse(), x: In.win.x, y: In.win.y, moved: false };   // becomes a box select once the cursor travels DRAG_PX
         return;
       }
@@ -549,7 +598,7 @@
     function rightClick(shift) {
       const { w, hero } = ctx;
       if (In.armed) { In.cancel(); return; }
-      In.selected = null;
+      clearInspect();
       const m = ctx.R.mmHit(In.mouse.x, In.mouse.y);
       const p = m || worldMouse(), t = m ? null : unitAt(p, 1);
       giveOrder(t ? { type: 'attack', target: t.id, queued: !!shift } : { type: 'move', x: p.x, y: p.y, queued: !!shift });
@@ -639,8 +688,8 @@
     const w = c.w;
     if (w.paused) { In._drag = null; cur('default'); if (In.locked) unlock(); tick(); return; }
     tick();
-    if (In.selected != null && !w.get(In.selected)) In.selected = null;
-    syncSel();
+    if (In.selected != null && !isStruct(In.selected) && !w.get(In.selected)) In.selected = null;
+    syncSel(); syncCard();
     let kind = 'default';
     if (In._drag && In._drag.moved) kind = 'select';
     else if (In.armed) kind = In.armed.attack ? 'amove' : 'aim';
