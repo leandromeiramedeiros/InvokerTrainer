@@ -1,5 +1,5 @@
 // Dota-style pixel-art cursors (baked on canvas -> data URL -> CSS cursor), virtual cursor for pointer lock,
-// and the fullscreen button. IT.Cursor.set('default'|'attack'|'amove'|'aim'). Owner: S1.
+// and the fullscreen button. IT.Cursor.set('default'|'attack'|'amove'|'aim'|'select'). Owner: S1.
 // attack = red arrow (enemy under cursor); amove = red four-way cross (attack-move armed); aim = purple cross (spell targeting).
 (function (G) {
   'use strict';
@@ -14,6 +14,7 @@
     attack: ['#2a0606', '#ffb4aa', '#ff4a3c', '#9c1616'],
     amove: ['#2a0606', '#ffb4aa', '#ff4a3c', '#9c1616'],
     aim: ['#1c0838', '#ecd2ff', '#b36bff', '#6a2cb8'],
+    select: ['#062a0e', '#c8ffd0', '#4ae85e', '#168a2c'],   // box-select drag: green arrow
   };
   // 9x14 arrow with a tail (silver gauntlet-style pointer)
   const ARROW = ['X........', 'XX.......', 'XXX......', 'XXXX.....', 'XXXXX....', 'XXXXXX...', 'XXXXXXX..', 'XXXXXXXX.', 'XXXXXXXXX',
@@ -48,6 +49,7 @@
     attack: bake('attack', ARROW, 0, 0),
     amove: bake('amove', reticle(), 6, 6),
     aim: bake('aim', reticle(), 6, 6),
+    select: bake('select', ARROW, 0, 0),
   };
   Cur.url = k => C[k].url;
   Cur.hot = k => [C[k].hx, C[k].hy];
@@ -60,6 +62,7 @@
     `html.cur-attack,html.cur-attack *{cursor:${rule('attack')} !important}` +
     `html.cur-amove,html.cur-amove *{cursor:${rule('amove')} !important}` +
     `html.cur-aim,html.cur-aim *{cursor:${rule('aim')} !important}` +
+    `html.cur-select,html.cur-select *{cursor:${rule('select')} !important}` +
     `html input[type=text],html textarea{cursor:text !important}` +
     `html.cur-lock,html.cur-lock *{cursor:none !important}` +
     `#vcur{position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;display:none;image-rendering:pixelated}` +
@@ -75,7 +78,7 @@
     if (kind === Cur.kind) return;
     Cur.kind = kind;
     const cl = doc.documentElement.classList;
-    cl.toggle('cur-attack', kind === 'attack'); cl.toggle('cur-amove', kind === 'amove'); cl.toggle('cur-aim', kind === 'aim');
+    cl.toggle('cur-attack', kind === 'attack'); cl.toggle('cur-amove', kind === 'amove'); cl.toggle('cur-aim', kind === 'aim'); cl.toggle('cur-select', kind === 'select');
     if (vc) vc.src = C[kind].url;
     if (vc && vc.style.display !== 'none' && vpos) Cur.virtual(vpos.x, vpos.y);
   };
@@ -116,5 +119,5 @@
   }
 
   Cur.set('default');
-  doc.documentElement.classList.remove('cur-attack', 'cur-amove', 'cur-aim');
+  doc.documentElement.classList.remove('cur-attack', 'cur-amove', 'cur-aim', 'cur-select');
 })(typeof window !== 'undefined' ? window : globalThis);

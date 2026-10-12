@@ -5,7 +5,7 @@
   const KEY = 'it2.settings';
   const SPELLS = ['coldsnap', 'ghostwalk', 'icewall', 'emp', 'tornado', 'alacrity', 'sunstrike', 'forgespirit', 'chaosmeteor', 'deafeningblast'];
   const LEG = ['Y', 'V', 'G', 'C', 'X', 'Z', 'T', 'F', 'D', 'B'];
-  const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'refresh', 'spawn', 'resetDummies'];
+  const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'stats', 'refresh', 'spawn', 'resetDummies'];
   const RESERVED = ['Escape', 'Tab'];
 
   function defaults() {
@@ -21,13 +21,15 @@
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
       pointerLock: false,          // confine the mouse to the game while playing
       heroSkin: 'default',         // 'default'|'kid'|'dark' -> IT.Art.heroSheet()
+      unifiedOrders: true,         // CTRL held: move / attack / stop / hold go to Invoker + all forge spirits together
+      hudMode: 'default',          // scenario top HUD: 'minimal' | 'default' | 'steps'
       rmbRepeat: false,            // hold right mouse = repeated move/attack clicks (~8/s)
       comboOrder: false,           // scenario panel shows the full ordered action list (spells + items + moves)
       dummyChat: true,             // dummies taunt on fumbles / slow play
       fpsCap: 60,                  // 0 = display rate; otherwise render cap (paced to a divisor of the display rate)
       audio: { master: 0.8, music: 0.5, sfx: 0.8, ui: 0.6, musicOn: true, muteUnfocused: true },
       keys: {
-        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'Space', camLock: 'L', cheat: 'F1', refresh: 'Backspace', spawn: 'P', resetDummies: 'O' },
+        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'Space', camLock: 'L', cheat: 'F1', stats: 'K', refresh: 'Backspace', spawn: 'P', resetDummies: 'O' },
         slots, legacy,
       },
     };
@@ -49,6 +51,7 @@
     if (base.castMode !== 'quick' && base.castMode !== 'normal') base.castMode = 'quick';
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
     if (!IT.I18N[base.lang]) base.lang = 'en';
+    if (base.hudMode !== 'minimal' && base.hudMode !== 'steps') base.hudMode = 'default';
     if (base.heroSkin !== 'kid' && base.heroSkin !== 'dark') base.heroSkin = 'default';
     if (!(IT.GAME.ZOOMS || [1]).includes(base.zoom)) base.zoom = 1;
     base.camSpeed = Math.max(0.5, Math.min(2, Number(base.camSpeed) || 1));
@@ -78,7 +81,7 @@
     CapsLock: 'Caps', Mouse4: 'Mouse 4', Mouse5: 'Mouse 5', NumEnter: 'Num Ent' }[k] || (/^Num[0-9+\-*\/.]$/.test(k || '') ? 'Num ' + k.slice(3) : k) || '-');
 
   const S = {
-    data: defaults(), SPELLS, COMMON, RESERVED, keyName, isMod, label, defaults,
+    data: defaults(), SPELLS, COMMON, RESERVED, keyName, isMod, label, defaults, merge,
     load() {
       let raw = null;
       try { raw = JSON.parse(G.localStorage.getItem(KEY)); } catch (e) { raw = null; }
@@ -213,7 +216,8 @@
         sh(t('set.h.orders')),
         grid(kRow('common', 'center'), kRow('common', 'attack'), kRow('common', 'stop'), kRow('common', 'hold')),
         sh(t('set.h.fixed')),
-        grid(fxRow(t('set.fx.move'), t('set.fx.rmb')), fxRow(t('set.fx.queue'), t('set.fx.shift'))),
+        grid(fxRow(t('set.fx.move'), t('set.fx.rmb')), fxRow(t('set.fx.queue'), t('set.fx.shift')),
+          fxRow(t('set.fx.box'), t('set.fx.lmbDrag')), fxRow(t('set.fx.sel'), t('set.fx.tab')), fxRow(t('set.fx.unified'), t('set.fx.ctrl'))),
       ]],
       camera: ['set.nav.camera', () => [
         sh(t('set.h.keys')),
@@ -222,19 +226,22 @@
         list(chk(draft, 'camLock', t('set.camLock')), chk(draft, 'edgeScroll', t('set.edgeScroll')), sl(draft, 'camSpeed', 0.5, 2, 0.05, t('set.camSpeed'), mult)),
       ]],
       iface: ['set.nav.iface', () => [
-        grid(kRow('common', 'cheat')),
+        grid(kRow('common', 'cheat'), kRow('common', 'stats')),
         sh(t('set.h.options')),
-        list(chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat'))),
+        list(row(t('set.hudMode'), rg('hudMode', draft.hudMode, [['minimal', t('set.hud.minimal')], ['default', t('set.hud.default')], ['steps', t('set.hud.steps')]], v => { draft.hudMode = v; })),
+          h('p', { class: 'fine', text: t('set.hud.' + draft.hudMode + '.d') }),
+          chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat'))),
         sh(t('set.h.sandbox')),
         grid(kRow('common', 'refresh'), kRow('common', 'spawn'), kRow('common', 'resetDummies')),
         sh(t('set.h.fixed')),
-        grid(fxRow(t('set.fx.pause'), t('set.fx.esc')), fxRow(t('set.fx.stats'), t('set.fx.tab'))),
+        grid(fxRow(t('set.fx.pause'), t('set.fx.esc'))),
       ]],
       game: ['set.nav.game', () => [
         sh(t('set.h.unitOrders')),
         list(
           row(t('set.autoAttack'), rg('autoAttack', draft.autoAttack ? 'always' : 'never', [['never', t('set.never')], ['always', t('set.always')]], v => { draft.autoAttack = v === 'always'; })),
           chk(draft, 'doubleTap', t('set.doubleTap')),
+          chk(draft, 'unifiedOrders', t('set.unifiedOrders')),
           chk(draft, 'rmbRepeat', t('set.rmbRepeat'))),
         sh(t('set.h.options')),
         list(chk(draft, 'hints', t('set.hints'))),

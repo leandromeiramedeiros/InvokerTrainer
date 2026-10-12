@@ -21,6 +21,8 @@
     sfx,
     now: () => (G.performance && G.performance.now ? G.performance.now() : Date.now()),
     _q: [], _tap: {}, _ctap: 0, _cat: null, _rmb: null, _done: null,
+    sel: { units: [], group: 'hero', auto: false },   // commanded units: group 'hero' | 'spirits' | 'all' (ids resolved lazily, dead dropped)
+    _drag: null, _held: new Set(), _ctrlEv: false, preview: null,   // box-select drag; held ability actions; Ctrl seen on a mouse event; HUD hover preview id
   };
 
   const S = () => IT.Settings.get();
@@ -127,6 +129,89 @@
     return false;
   }
 
+  // ---------------------------------------------------------------- selection (hero + forge spirits) and group orders
+  const DRAG_PX = 5;   // client px before a left press becomes a box select
+  const isFoe = e => (IT.Units && IT.Units.isFoe ? IT.Units.isFoe(e) : e.kind === 'dummy' || e.kind === 'enemy');
+  const inspectable = e => isFoe(e) || e.kind === 'tower';   // click-select only: no orders, no box select
+  const mine = e => !!e && !e.dead && e.team === 0 && (e.kind === 'hero' || e.kind === 'spirit');   // only these can be box-selected / commanded
+  function spirits() {
+    const c = In.ctx; if (!c) return [];
+    return c.w.ents.filter(e => e.kind === 'spirit' && !e.dead && e.team === 0 && (e.owner == null || e.owner === c.hero.id));
+  }
+  function setSel(ids, group, auto) { In.sel = { units: ids.slice(), group, auto: !!auto }; }
+  In.setSel = setSel;
+  function resetSel() { In.sel = { units: In.ctx ? [In.ctx.hero.id] : [], group: 'hero', auto: false }; }
+  // drop dead ids; 'auto' selections follow every living spirit (new ones join); an empty selection falls back to the hero
+  function syncSel() {
+    const c = In.ctx; if (!c) return;
+    const sel = In.sel, sp = spirits();
+    if (sel.auto && sel.group !== 'hero') sel.units = (sel.group === 'all' ? [c.hero.id] : []).concat(sp.map(e => e.id));
+    else sel.units = sel.units.filter(id => mine(c.w.get(id)));
+    if (!sel.units.length) resetSel();
+    else {
+      const hasH = sel.units.includes(c.hero.id), hasS = sel.units.some(id => id !== c.hero.id);
+      sel.group = hasH && hasS ? 'all' : hasS ? 'spirits' : 'hero';
+    }
+  }
+  function selUnits() { syncSel(); return In.sel.units.map(id => In.ctx.w.get(id)).filter(Boolean); }
+  In.selUnits = selUnits;
+  In.ctrlHeld = () => In.keys.has('Control') || In._ctrlEv;
+  // units that receive an order: CTRL (setting unifiedOrders) = hero + every spirit, else the selection
+  function orderUnits() {
+    const c = In.ctx;
+    if (S().unifiedOrders && In.ctrlHeld()) return [c.hero].concat(spirits());
+    return selUnits();
+  }
+  In.orderUnits = orderUnits;
+  function giveOrder(o) {
+    const { w, hero } = In.ctx, us = orderUnits().filter(u => u && !u.dead);
+    if (!us.length) us.push(hero);
+    if (us.length === 1) return IT.Orders.issue(w, us[0], o);
+    if (IT.Orders.issueGroup) return IT.Orders.issueGroup(w, us, o);
+    let ok = false;
+    for (const u of us) ok = IT.Orders.issue(w, u, o) || ok;
+    return ok;
+  }
+  // TAB: hero <-> spirits group (spirits skipped when none are alive)
+  In.cycleSel = function () {
+    const c = In.ctx; if (!c || c.w.paused) return false;
+    In.selected = null; syncSel();
+    if (In.sel.group === 'hero') {
+      const sp = spirits();
+      if (sp.length) { setSel(sp.map(e => e.id), 'spirits', true); sfx('click'); return true; }
+      return false;
+    }
+    resetSel(); sfx('click'); return true;
+  };
+  // screen-space rect (view px) of the running drag, or null while it is still a click
+  function dragRect() {
+    const d = In._drag, c = In.ctx; if (!d || !c || !d.moved) return null;
+    const a = c.cam.toScreen(d.w0.x, d.w0.y);
+    return { x0: Math.min(a.x, In.mouse.x), x1: Math.max(a.x, In.mouse.x), y0: Math.min(a.y, In.mouse.y), y1: Math.max(a.y, In.mouse.y) };
+  }
+  function inRect(e, r) {
+    const s = In.ctx.cam.toScreen(e.x, e.y), m = (e.radius || 0) / P + 3;
+    const ix = s.x >= r.x0 - m && s.x <= r.x1 + m, iy = y => y >= r.y0 - m && y <= r.y1 + m;
+    return ix && (iy(s.y) || iy(s.y - 8));   // ground point or body (the sprite is drawn above it)
+  }
+  function boxCandidates(r) {   // player units only: towers / dummies / enemies are never box-selected
+    const c = In.ctx, out = [];
+    for (const e of c.w.ents) if (mine(e) && !isFoe(e) && (e.kind === 'hero' ? e === c.hero : (e.owner == null || e.owner === c.hero.id)) && inRect(e, r)) out.push(e);
+    return out;
+  }
+  function finishDrag(ev) {
+    const d = In._drag, r = dragRect(); In._drag = null;
+    if (!d || !r || !In.ctx || In.ctx.w.paused) return;
+    const c = In.ctx, hit = boxCandidates(r);
+    In.selected = null;
+    let ids = hit.map(e => e.id);
+    if (ev && ev.shiftKey) ids = Array.from(new Set(In.sel.units.concat(ids)));
+    if (!ids.length) return;
+    const sp = spirits(), hasH = ids.includes(c.hero.id), nS = ids.filter(id => id !== c.hero.id).length;
+    setSel(ids, hasH && nS ? 'all' : nS ? 'spirits' : 'hero', nS > 0 && nS === sp.length);   // every spirit selected -> auto-group (new ones join)
+    sfx('click');
+  }
+
   // ---------------------------------------------------------------- Cataclysm (scepter Sun Strike): double press = self-cast
   function cataReady() {
     const { w, hero } = In.ctx, d = IT.Abilities.get('sunstrike');
@@ -226,7 +311,12 @@
       case 'orbQ': case 'orbW': case 'orbE': IT.Invoke.orb(w, hero, action.slice(3)); return;
       case 'invoke': IT.Invoke.invoke(w, hero); return;
       case 'attack': In.armed = { id: 'attack', attack: true, queued: !!opts.queued }; sfx('click'); return;
-      case 'stop': case 'hold': In.cancel(true); In._cat = null; In._q = In._q.filter(j => !isAbilityAction(j.action)); IT.Orders.issue(w, hero, { type: action }); return;
+      case 'stop': case 'hold': {
+        In.cancel(true); In._cat = null;
+        if (orderUnits().includes(hero)) In._q = In._q.filter(j => !isAbilityAction(j.action));   // spells belong to Invoker: stopping only the spirits keeps his queue
+        giveOrder({ type: action }); return;
+      }
+      case 'select': In.cycleSel(); return;
       case 'center': {
         const now = In.now(), s = S();
         if (!s.doubleTap || (In._ctap && now - In._ctap <= s.doubleTapTimeout * 1000)) { glide(cam, hero.x, hero.y); cam.follow = true; In._ctap = 0; } else In._ctap = now;
@@ -262,11 +352,15 @@
     let a = IT.Settings.actionFor(k);
     if (!a && k === 'H') a = 'cheat';
     if (!a) return false;
+    if (a === 'stats') { In._held.add('stats'); if (In.hooks.statsHold) In.hooks.statsHold(true); return true; }
+    if (isAbilityAction(a)) In._held.add(a);
     In.doAction(a, { queued: !!mods.shift, self: !!mods.alt });
     return true;
   }
   function release(k) {
-    if (k && IT.Settings.actionFor(k) === 'center' && In.ctx) { const c = In.ctx; if (c.cam.follow) glide(c.cam, c.hero.x, c.hero.y); c.cam.follow = false; }   // finish the glide to where the hero is
+    const ra = k ? IT.Settings.actionFor(k) : null;
+    if (ra) { In._held.delete(ra); if (ra === 'stats' && In.hooks.statsHold) In.hooks.statsHold(false); }
+    if (k && ra === 'center' && In.ctx) { const c = In.ctx; if (c.cam.follow) glide(c.cam, c.hero.x, c.hero.y); c.cam.follow = false; }   // finish the glide to where the hero is
   }
 
   In.inspecting = () => !!(In.hooks.inspect && In.hooks.inspect());
@@ -285,7 +379,8 @@
       else if (In.hooks.pause) In.hooks.pause();
       return;
     }
-    if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && In.hooks.statsHold) In.hooks.statsHold(true); return; }
+    if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && !w.paused) In.cycleSel(); return; }
+    { const sk = IT.Settings.keyName(ev); if (sk && !ev.repeat && IT.Settings.actionFor(sk) === 'stats') { ev.preventDefault(); press(sk, {}); return; } }   // live stats also work while paused
     const insp = w.paused && In.inspecting();
     if (w.paused && !insp) return;
     if (ev.key === 'Alt') { ev.preventDefault(); return; }      // keep Alt from focusing the browser menu
@@ -301,7 +396,7 @@
   };
   In.keyUp = function (ev) {
     In.keys.delete(ev.key);
-    if (ev.key === 'Tab' && In.hooks.statsHold) In.hooks.statsHold(false);
+    if (ev.key === 'Control') In._ctrlEv = false;
     if (In.ctx) release(IT.Settings.keyName(ev));
   };
 
@@ -320,6 +415,7 @@
   In.bind = function (ctx) {
     In.unbind();
     In.ctx = ctx; In.enabled = true; In.armed = null; In.keys.clear(); In._q = []; In._tap = {}; In._ctap = 0; In.selected = null; In._cat = null; In._rmb = null; In._done = null;
+    In._drag = null; In._held.clear(); In._ctrlEv = false; In.preview = null; resetSel();
     ctx.cam.follow = false;
     const cv = ctx.cv, doc = G.document;
     let mmDrag = false;
@@ -347,6 +443,7 @@
         In.win.in = true;
         In.mouse.in = !mmDrag && !isUi(el) && el === cv;
         if (mmDrag) miniMove();
+        trackDrag();
         return;
       }
       setMouse(ev);
@@ -355,10 +452,20 @@
       In.win.in = true;
       In.mouse.in = inside && !mmDrag && !isUi(ev.target);
       if (mmDrag) miniMove();
+      trackDrag();
+    };
+    const trackDrag = () => {
+      const d = In._drag; if (!d) return;
+      if (!d.moved && Math.hypot(In.win.x - d.x, In.win.y - d.y) >= DRAG_PX) d.moved = true;
     };
     const onLeave = () => { In.mouse.in = false; };
     const onDocLeave = () => { if (!In.locked) { In.win.in = false; In._rmb = null; } };
-    const onUp = ev => { mmDrag = false; if (!ev || ev.button === 2 || ev.button === undefined) In._rmb = null; };
+    const onUp = ev => {
+      mmDrag = false;
+      if (!ev || ev.button === 2 || ev.button === undefined) In._rmb = null;
+      if (In._drag && (!ev || ev.button === 0 || ev.button === undefined)) finishDrag(ev);
+      In._ctrlEv = false;
+    };
     const onCtx = ev => ev.preventDefault();
     const onLockChange = () => {
       const was = In.locked;
@@ -371,7 +478,7 @@
     };
     const attackClick = shift => {
       const { w, hero } = ctx, p = worldMouse(), t = unitAt(p, 1);
-      IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: shift } : { type: 'attack', x: p.x, y: p.y, queued: shift });
+      giveOrder(t ? { type: 'attack', target: t.id, queued: shift } : { type: 'attack', x: p.x, y: p.y, queued: shift });
       if (!shift) In.armed = null;
     };
     const onDown = ev => {
@@ -380,7 +487,7 @@
         if (!In.inspecting() || ev.button !== 0) return;
         setMouse(ev);
         if (miniMove()) { mmDrag = true; return; }
-        const t = unitAt(worldMouse(), 1); In.selected = t && t.kind === 'dummy' ? t.id : null;
+        const t = unitAt(worldMouse(), 1); In.selected = t && inspectable(t) ? t.id : null;
         return;
       }
       if (In.locked && ev.isTrusted !== false) {   // locked: the event targets the canvas, so route UI clicks by hand
@@ -396,6 +503,7 @@
         try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ }
       }
       setMouse(ev);
+      In._ctrlEv = !!ev.ctrlKey;
       if (ev.button === 0) {
         resolveCat();
         if (miniMove()) { mmDrag = true; return; }
@@ -406,7 +514,8 @@
           return;
         }
         const t = unitAt(worldMouse(), 1);
-        if (t && t.kind === 'dummy') In.selected = t.id;
+        if (t && inspectable(t)) In.selected = t.id;   // inspect-select only: foes / towers accept no orders
+        In._drag = { w0: worldMouse(), x: In.win.x, y: In.win.y, moved: false };   // becomes a box select once the cursor travels DRAG_PX
         return;
       }
       if (ev.button !== 2) return;
@@ -421,7 +530,7 @@
       In.selected = null;
       const m = ctx.R.mmHit(In.mouse.x, In.mouse.y);
       const p = m || worldMouse(), t = m ? null : unitAt(p, 1);
-      IT.Orders.issue(w, hero, t ? { type: 'attack', target: t.id, queued: !!shift } : { type: 'move', x: p.x, y: p.y, queued: !!shift });
+      giveOrder(t ? { type: 'attack', target: t.id, queued: !!shift } : { type: 'move', x: p.x, y: p.y, queued: !!shift });
     }
     In.rightClick = rightClick;
     // after a click-cast: disarm unless shift is held, or the cast did not go through (no target)
@@ -448,7 +557,7 @@
       if (In.enabled) ev.preventDefault();
       release(k);
     };
-    const onBlur = () => { In.keys.clear(); mmDrag = false; In._rmb = null; resolveCat(); In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
+    const onBlur = () => { In.keys.clear(); In._held.clear(); In._drag = null; In._ctrlEv = false; mmDrag = false; In._rmb = null; resolveCat(); In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
     const onKeyD = ev => In.keyDown(ev), onKeyU = ev => In.keyUp(ev);
     let wheelAcc = 0;
     const onWheel = ev => {   // scroll wheel zooms in fixed steps (one notch ~100 delta; trackpads accumulate)
@@ -488,6 +597,7 @@
     unlock();
     if (IT.Cursor) { IT.Cursor.virtual(null); IT.Cursor.set('default'); }
     In._off = null; In.ctx = null; In.enabled = false; In.armed = null; In.selected = null; In.locked = false; In.keys.clear(); In._q = []; In._cat = null; In._rmb = null;
+    In._drag = null; In._held.clear(); In._ctrlEv = false; In.preview = null; In.sel = { units: [], group: 'hero', auto: false };
   };
 
   // mouse as camera sees it: edge scroll triggers at the WINDOW edge (even over the letterbox / HUD), not the canvas edge
@@ -505,49 +615,184 @@
     const c = In.ctx;
     if (!c || !In.enabled) { cur('default'); if (In.locked) unlock(); return; }
     const w = c.w;
-    if (w.paused) { cur('default'); if (In.locked) unlock(); tick(); return; }
+    if (w.paused) { In._drag = null; cur('default'); if (In.locked) unlock(); tick(); return; }
     tick();
     if (In.selected != null && !w.get(In.selected)) In.selected = null;
+    syncSel();
     let kind = 'default';
-    if (In.armed) kind = In.armed.attack ? 'amove' : 'aim';
+    if (In._drag && In._drag.moved) kind = 'select';
+    else if (In.armed) kind = In.armed.attack ? 'amove' : 'aim';
     else if (In.mouse.in && unitAt(worldMouse(), 1)) kind = 'attack';
     cur(kind);
   }
 
-  // ---------------------------------------------------------------- aim overlay (range circle + AoE preview)
-  function aoeRadius(id, ctx) {
-    const d = IT.Abilities.get(id); if (!d) return 0;
-    const V = IT.Values;
-    if (d.dota) {
-      for (const k of ['area_of_effect', 'radius_end', 'radius']) { const v = V.has(d.dota, k) ? V.get(d.dota, k, ctx) : 0; if (v) return v; }
-      return 0;
+  // ---------------------------------------------------------------- rangefinder: cast range + AoE footprint (drawAim paints it on #aim)
+  const FALLBACK = { dust: { radius: 1050 }, forcestaff: { push_length: 600, castRange: 550 } };   // used until the KV carries them
+  // first non-zero KV number among `keys` for spell/item `id`
+  function kv(id, keys, ctx) {
+    const d = IT.Abilities.get(id), V = IT.Values; if (!d) return 0;
+    const nm = typeof d.dota === 'string' ? d.dota : GM.ITEM_DOTA[id];
+    for (const k of keys) {
+      let v = 0;
+      try { v = d.kind === 'spell' ? (d.dota && V.has(d.dota, k) ? V.get(d.dota, k, ctx) : 0) : (nm ? V.item(nm, k) : 0); } catch (e) { v = 0; }
+      if (v) return v;
+      if (FALLBACK[id] && FALLBACK[id][k]) return FALLBACK[id][k];
     }
-    const nm = GM.ITEM_DOTA[id];
-    if (nm) for (const k of ['impact_radius', 'area_of_effect', 'radius']) { const v = V.item(nm, k); if (v) return v; }
     return 0;
+  }
+  const rectPts = (x, y, cs, sn, len, h0, h1) => [[x - sn * h0, y + cs * h0], [x + cs * len - sn * h1, y + sn * len + cs * h1], [x + cs * len + sn * h1, y + sn * len - cs * h1], [x + sn * h0, y - cs * h0]];
+  // Footprint of `id` in world units: [{k:'circle',x,y,r,st}|{k:'poly',pts,st}|{k:'line',a,b,st,arrow}], st = range|aoe|path|tgt|cata|aura.
+  // m = cursor (world), tgt = unit under the cursor (unit-target spells).
+  function aimShapes(id, hero, w, m, tgt) {
+    const d = IT.Abilities.get(id); if (!d) return null;
+    const ctx = hero.ctx || w.ctx, TAU = Math.PI * 2, v = (...k) => kv(id, k, ctx), out = [];
+    const rng = d.range ? (d.range(w, hero) || 0) : 0;
+    const hx = hero.x, hy = hero.y, dd = Math.hypot(m.x - hx, m.y - hy);
+    const dir = dd > 1 ? Math.atan2(m.y - hy, m.x - hx) : (hero.facing || 0), cs = Math.cos(dir), sn = Math.sin(dir);
+    const circ = (x, y, r, st) => { if (r > 1) out.push({ k: 'circle', x, y, r, st }); };
+    let cast = rng > 0 && isFinite(rng) ? rng : 0;
+    switch (id) {
+      case 'tornado': {
+        const dist = v('travel_distance'), r = v('area_of_effect', 'radius');
+        if (dist > 0) { out.push({ k: 'poly', pts: rectPts(hx, hy, cs, sn, dist, r, r), st: 'aoe' }); circ(hx + cs * dist, hy + sn * dist, r, 'aoe'); }
+        break;
+      }
+      case 'deafeningblast': {
+        const dist = v('travel_distance'), r0 = v('radius_start'), r1 = v('radius_end'), n = Math.max(1, Math.round(v('radial_count') || 1));
+        for (let i = 0; i < n; i++) { const a = dir + TAU * i / n; out.push({ k: 'poly', pts: rectPts(hx, hy, Math.cos(a), Math.sin(a), dist, r0, r1), st: 'aoe' }); }
+        break;
+      }
+      case 'chaosmeteor': {
+        const r = v('area_of_effect'), dist = v('travel_distance'), n = Math.max(1, Math.round(v('meteor_count') || 1)), sp = (IT.Spells && IT.Spells.METEOR_SPACING) || 1;
+        for (let i = 0; i < n; i++) {
+          const off = (i - (n - 1) / 2) * sp * r, x0 = m.x - sn * off, y0 = m.y + cs * off;
+          if (dist > 0) out.push({ k: 'poly', pts: rectPts(x0, y0, cs, sn, dist, r, r), st: 'path' });
+          circ(x0, y0, r, 'aoe');
+          if (dist > 0) circ(x0 + cs * dist, y0 + sn * dist, r, 'path');
+        }
+        break;
+      }
+      case 'sunstrike': {
+        circ(m.x, m.y, v('area_of_effect'), 'aoe');
+        if (cataReady()) {   // scepter: pressing again with the cursor on Invoker = Cataclysm (strikes land around every visible enemy)
+          circ(hx, hy, 100, 'cata');
+          if (dd <= 100) {
+            const lo = v('cataclysm_min_range'), hi = v('cataclysm_max_range');
+            for (const e of w.ents) if (!e.dead && isFoe(e) && e.visible !== false) { circ(e.x, e.y, lo, 'cata'); circ(e.x, e.y, hi, 'cata'); }
+          }
+        }
+        break;
+      }
+      case 'icewall': {   // target-less: a wall across the facing direction
+        const f = hero.facing || 0, len = v('wall_total_length'), place = v('wall_place_distance'), width = v('wall_width');
+        const fx = Math.cos(f), fy = Math.sin(f), cx = hx + fx * place, cy = hy + fy * place, h = len / 2;
+        if (len > 0) out.push({ k: 'poly', pts: [[cx + fy * h - fx * width, cy - fx * h - fy * width], [cx - fy * h - fx * width, cy + fx * h - fy * width], [cx - fy * h + fx * width, cy + fx * h + fy * width], [cx + fy * h + fx * width, cy - fx * h + fy * width]], st: 'aoe' });
+        break;
+      }
+      case 'shiva': circ(hx, hy, v('blast_radius'), 'aoe'); circ(hx, hy, v('aura_radius'), 'aura'); break;   // expanding wave is centred on Invoker
+      case 'dust': circ(hx, hy, v('radius'), 'aoe'); break;
+      case 'gleipnir': circ(m.x, m.y, v('radius_tooltip', 'radius'), 'aoe'); break;
+      case 'forcestaff': {
+        const push = v('push_length'), who = tgt || hero, f = who.facing || 0;
+        if (!cast) cast = v('castRange');
+        if (push > 0) { out.push({ k: 'line', a: [who.x, who.y], b: [who.x + Math.cos(f) * push, who.y + Math.sin(f) * push], st: 'aoe', arrow: true }); circ(who.x + Math.cos(f) * push, who.y + Math.sin(f) * push, 30, 'aoe'); }
+        break;
+      }
+      case 'blink': {
+        const R = cast || v('blink_range'), k = dd > R ? R / dd : 1;
+        cast = R; circ(hx + (m.x - hx) * k, hy + (m.y - hy) * k, 40, 'aoe');
+        break;
+      }
+      default: {
+        if (d.target === 'none') circ(hx, hy, v('radius', 'area_of_effect', 'aura_radius'), 'aoe');
+        else if (d.target === 'point') circ(m.x, m.y, v('area_of_effect', 'impact_radius', 'radius', 'radius_end'), 'aoe');
+      }
+    }
+    if (d.target === 'unit' && tgt) circ(tgt.x, tgt.y, (tgt.radius || 20) + 12, 'tgt');
+    if (cast > 0) out.unshift({ k: 'circle', x: hx, y: hy, r: cast, st: 'range' });
+    const inRange = !cast || dd <= cast;
+    return { shapes: out, range: cast, inRange, point: d.target === 'point' };
+  }
+  In.aimShapes = aimShapes;
+
+  // what the rangefinder shows: the armed spell/item, else a HUD-hovered one, else a target-less spell/item whose key is held down
+  function previewId() {
+    const c = In.ctx; if (!c) return null;
+    if (In.armed && !In.armed.attack) return In.armed.id;
+    const noTarget = id => { const d = id && id !== '__none' && IT.Abilities.get(id); return !!d && d.target === 'none'; };
+    if (In.preview && noTarget(In.preview)) return In.preview;
+    for (const a of In._held) { if (!isAbilityAction(a)) continue; const id = abilityId(a); if (noTarget(id)) return id; }
+    return null;
+  }
+  In.previewId = previewId;
+
+  const STY = {   // stroke, fill (in range), stroke/fill when the cursor is out of cast range
+    range: ['rgba(255,226,110,0.85)', 'rgba(255,226,110,0.05)'],
+    aoe: ['rgba(255,90,200,0.98)', 'rgba(255,90,200,0.17)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.07)'],
+    path: ['rgba(255,150,90,0.85)', 'rgba(255,120,60,0.10)', 'rgba(255,255,255,0.40)', 'rgba(255,255,255,0.05)'],
+    tgt: ['rgba(120,255,160,0.95)', 'rgba(120,255,160,0.10)'],
+    cata: ['rgba(255,140,40,0.9)', 'rgba(255,140,40,0.06)'],
+    aura: ['rgba(120,190,255,0.55)', 'rgba(120,190,255,0.02)'],
+  };
+  function drawShapes(g, c, info, k) {
+    const cam = c.cam, lw = Math.max(1, 1.4 * k), pulse = 0.85 + 0.15 * Math.sin(In.now() / 160);
+    const tp = (x, y) => cam.toScreen(x, y);
+    const paint = (sh, trace) => {
+      const sty = STY[sh.st] || STY.aoe, out = !info.inRange && sty.length > 2;
+      const stroke = out ? sty[2] : sty[0], fill = out ? sty[3] : sty[1];
+      g.setLineDash(sh.st === 'range' || sh.st === 'aura' || sh.st === 'cata' ? [4 * k, 3 * k] : []);
+      g.beginPath(); trace();
+      g.lineWidth = lw + 1.6 * k; g.strokeStyle = 'rgba(0,0,0,0.45)'; g.stroke();   // dark underlay keeps it readable on any terrain
+      g.fillStyle = fill; g.globalAlpha = sh.st === 'aoe' ? pulse : 1; g.fill(); g.globalAlpha = 1;
+      g.lineWidth = lw; g.strokeStyle = stroke; g.stroke();
+    };
+    g.save();
+    for (const sh of info.shapes) {
+      if (sh.k === 'circle') { const s = tp(sh.x, sh.y), r = sh.r / P; paint(sh, () => g.arc(s.x, s.y, r, 0, Math.PI * 2)); }
+      else if (sh.k === 'poly') paint(sh, () => { sh.pts.forEach((q, i) => { const s = tp(q[0], q[1]); if (i) g.lineTo(s.x, s.y); else g.moveTo(s.x, s.y); }); g.closePath(); });
+      else if (sh.k === 'line') {
+        const a = tp(sh.a[0], sh.a[1]), b = tp(sh.b[0], sh.b[1]), ang = Math.atan2(b.y - a.y, b.x - a.x), hl = 6 * k;
+        paint({ st: 'path' }, () => { g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); if (sh.arrow) { g.moveTo(b.x - Math.cos(ang - 0.5) * hl, b.y - Math.sin(ang - 0.5) * hl); g.lineTo(b.x, b.y); g.lineTo(b.x - Math.cos(ang + 0.5) * hl, b.y - Math.sin(ang + 0.5) * hl); } });
+      }
+    }
+    g.restore();
+  }
+  function drawSel(g, c, k) {
+    const cam = c.cam, lw = Math.max(1, 1.2 * k), r = dragRect();
+    const ring = (e, a) => {
+      const s = cam.toScreen(e.x, e.y), rr = Math.max(4, (e.radius || 16) / P + 2 * k);
+      g.beginPath(); g.ellipse(s.x, s.y, rr, rr * 0.7, 0, 0, Math.PI * 2);
+      g.lineWidth = lw + 1; g.strokeStyle = 'rgba(0,0,0,0.5)'; g.stroke();
+      g.lineWidth = lw; g.strokeStyle = 'rgba(90,255,110,' + a + ')'; g.stroke();
+    };
+    g.save();
+    if (In.sel.group !== 'hero') for (const e of selUnits()) ring(e, 0.95);
+    if (r) {
+      for (const e of boxCandidates(r)) ring(e, 0.6);
+      const x = r.x0, y = r.y0, ww = r.x1 - r.x0, hh = r.y1 - r.y0;
+      g.fillStyle = 'rgba(70,255,100,0.10)'; g.fillRect(x, y, ww, hh);
+      g.lineWidth = lw + 1.4; g.strokeStyle = 'rgba(0,0,0,0.5)'; g.strokeRect(x, y, ww, hh);
+      g.lineWidth = lw; g.strokeStyle = '#5bff6e'; g.strokeRect(x, y, ww, hh);
+    }
+    g.restore();
   }
   In.drawAim = function (g) {
     g.clearRect(0, 0, GM.VIEW_W, GM.VIEW_H);
     frame();
     const c = In.ctx;
-    if (!c || !In.armed || c.w.paused) return;
-    const d = IT.Abilities.get(In.armed.id); if (!d) return;
-    const { w, hero, cam } = c;
-    const hs = cam.toScreen(hero.x, hero.y);
-    const rng = (d.range(w, hero) || 0) / P;
-    g.lineWidth = 1;
-    if (rng > 0 && isFinite(rng)) {
-      g.strokeStyle = 'rgba(255,230,120,0.75)'; g.fillStyle = 'rgba(255,230,120,0.05)';
-      g.beginPath(); g.ellipse(hs.x, hs.y, rng, rng * 0.8, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    if (!c || c.w.paused) return;
+    const k = GM.VIEW_W / (GM.VIEW_W_BASE || 480);   // view px -> constant on-screen thickness at any zoom
+    drawSel(g, c, k);
+    const id = previewId(); if (!id) return;
+    const { w, hero, cam } = c, d = IT.Abilities.get(id); if (!d) return;
+    const m = worldMouse(), tgt = d.target === 'unit' ? pickTarget(d, m) : null;
+    const info = aimShapes(id, hero, w, m, tgt); if (!info) return;
+    drawShapes(g, c, info, k);
+    if (info.point && info.range > 0) {   // guide from Invoker to the aim point
+      const hs = cam.toScreen(hero.x, hero.y), mx = Math.round(In.mouse.x), my = Math.round(In.mouse.y);
+      g.save(); g.globalAlpha = 0.4; g.lineWidth = Math.max(1, k); g.strokeStyle = info.inRange ? STY.aoe[0] : STY.aoe[2];
+      g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(mx, my); g.stroke(); g.restore();
     }
-    const ctx2 = hero.ctx || w.ctx, ar = aoeRadius(In.armed.id, ctx2) / P;
-    const mx = Math.round(In.mouse.x), my = Math.round(In.mouse.y);
-    const p = worldMouse();
-    const inRange = !rng || !isFinite(rng) || IT.U.dist2(hero.x, hero.y, p.x, p.y) <= (rng * P) * (rng * P);
-    g.strokeStyle = inRange ? 'rgba(255,90,200,0.95)' : 'rgba(255,255,255,0.45)';
-    g.fillStyle = inRange ? 'rgba(255,90,200,0.16)' : 'rgba(255,255,255,0.06)';
-    if (ar > 1) { g.beginPath(); g.ellipse(mx, my, ar, ar * 0.8, 0, 0, Math.PI * 2); g.fill(); g.stroke(); }
-    if (d.target === 'point' && rng > 0 && isFinite(rng)) { g.globalAlpha = 0.35; g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(mx, my); g.stroke(); g.globalAlpha = 1; }
   };
 
   // ---------------------------------------------------------------- never let the browser's own UI in: context menu, autoscroll, back/forward
