@@ -52,21 +52,25 @@ function play(w, h, id, o) {
   }
   for (let i = 0; i < steps.length && act(w); i++) {
     const s = steps[i];
-    const wait = o.wait != null ? o.wait : (s.wait != null ? s.wait : 0.1);
     const nextSpell = steps.slice(i).find(x => x.type === 'cast');
-    let refT = w.t;   // wait counts from the previous step's hit when it had one
     const prev = steps[i - 1];
-    if (prev && prev.ability === 'tornado' && wait > 0 && o.wait == null) {
-      const hitT = () => { const e = logOf(w, 'hit').filter(x => x.ability === prev.ability).pop(); return e ? e.t : null; };
-      for (let k = 0; k < 300 && act(w) && hitT() == null; k++) w.step();
-      if (hitT() != null) refT = hitT();
+    const d1 = dummyOf(w), gap = Math.hypot(d1.x - h.x, d1.y - h.y);
+    const win = IT.Combo.windowOf(c, i, IT.Combo.timing(h.ctx), { dist: gap });
+    let wait = o.wait != null ? o.wait : win ? win.wait : (s.wait != null ? s.wait : 0.1);
+    if (o.shift && o.shift.index === i) wait += o.shift.by;
+    let refT = w.t;   // windows count from the ref step's cast, or from its hit when fx
+    if (win && o.wait == null) {
+      const row = () => w.combo.steps[win.ref];
+      if (win.fx) for (let k = 0; k < 300 && act(w) && row().effT == null && w.combo.pending.some(q => q.idx === win.ref && q.state === 'open'); k++) w.step();
+      refT = win.fx && row().effT != null ? row().effT : row().castT != null ? row().castT : w.t;
     }
     for (let k = 0; k < 900 && act(w) && w.t < refT + wait - 1e-6; k++) { if (nextSpell) prep(w, h, nextSpell.ability); w.step(); }
     if (!act(w)) return;
     if (s.type === 'cast' || s.type === 'item') {
       let guard = 0;
       while (s.type === 'cast' && !h.inv.slots.includes(s.ability) && guard++ < 400) { prep(w, h, s.ability); w.step(); }
-      const t = (s.selfCast || s.ability === 'alacrity') ? h : s.targetVisibility === 'hidden' ? w.combo.hint : dummyOf(w);
+      const spirit = s.onSpirit && w.query(e => e.kind === 'spirit' && e.owner === h.id)[0];
+      const t = spirit || (s.selfCast || s.ability === 'alacrity') ? (spirit || h) : s.targetVisibility === 'hidden' ? w.combo.hint : dummyOf(w);
       if (s.ability === 'icewall') { h.x = t.x - 150; h.y = t.y; h.facing = 0; }   // bot steps up to the target and faces it
       const pull = steps[i + 1] && steps[i + 1].react === 'empPull';   // pull needs the target off-centre, toward the (clear) hero side
       const ang = Math.atan2(h.y - t.y, h.x - t.x), ox = pull ? Math.cos(ang) * 300 : 0, oy = pull ? Math.sin(ang) * 300 : 0;
@@ -88,7 +92,7 @@ function play(w, h, id, o) {
 }
 
 test('data: every combo is well-formed', () => {
-  assert.ok(C.length >= 40);
+  assert.ok(C.length >= 46);
   const ids = new Set();
   for (const c of C) {
     assert.ok(!ids.has(c.id), 'dup ' + c.id); ids.add(c.id);
@@ -174,11 +178,11 @@ test('mustHit: a missed sunstrike fails, then auto-retries', () => {
   assert.equal(logOf(w, 'comboStart').length, 2);
 });
 
-test('within: late second step fails', () => {
+test('late: second step past its window fails', () => {
   const { w, h } = mk();
   IT.Combo.start(w, 'i_tornado_emp', { grantMissing: true });
   play(w, h, 'i_tornado_emp', { wait: 10 });
-  assert.ok(logOf(w, 'comboFail').some(e => e.reason === 'within'));
+  assert.ok(logOf(w, 'comboFail').some(e => e.reason === 'late'));
   assert.equal(logOf(w, 'comboDone').length, 0);
 });
 

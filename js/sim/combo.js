@@ -14,6 +14,49 @@
   const get = id => all().find(c => c.id === id) || null;
   const hasS = (e, t) => IT.Status.has(e, t);
 
+  // ------------------------------------------------------------ timing model
+  // Spell/item timings straight from the baked KV under the player's orb levels (lift_duration scales with Quas...).
+  // Combo data is lazy about it: step.at(T, env) / combo.tip(T) are called with this object, never with constants.
+  const TOL = { basic: 1.6, intermediate: 1.3, advanced: 1.0, items: 1.15 };   // window slack multiplier: easy tiers forgive more
+  const BLAST_CAST = 0.05;
+  function timing(ctx) {
+    const V = IT.Values, S = V.SPELL_IDS;
+    ctx = ctx || V.ctx(IT.Loadout.default());
+    const g = (a, k) => V.get(S[a], k, ctx), it = (id, k) => V.item(IT.GAME.ITEM_DOTA[id], k, 1);
+    return {
+      lift: g('tornado', 'lift_duration'), tornadoSpeed: g('tornado', 'travel_speed') || 1000,
+      emp: g('emp', 'delay'), ss: g('sunstrike', 'delay'), meteor: g('chaosmeteor', 'land_time'),
+      blastSpeed: g('deafeningblast', 'travel_speed') || 1100, blastCast: BLAST_CAST,
+      csDur: g('coldsnap', 'duration'), csFreeze: g('coldsnap', 'freeze_duration'),
+      iceSlow: g('icewall', 'slow_duration'), alacrity: g('alacrity', 'duration'),
+      atos: it('atos', 'duration'), vyse: it('vyse', 'sheep_duration'), gleipnir: it('gleipnir', 'duration'),
+      orchid: it('orchid', 'silence_duration'), hammerStun: it('meteorhammer', 'stun_duration'), hammerChannel: it('meteorhammer', 'max_duration'),
+    };
+  }
+  const sec = x => Math.max(0.1, Math.round(x * 10) / 10);   // seconds for the early/late feedback (never shows 0.0)
+  const ctxOf = w => (w && w.hero && w.hero.ctx) || (w && w.ctx) || null;
+  const tipOf = (def, T) => (def.tipFn ? def.tipFn(T) : def.tip) || { en: '', pt: '' };
+  // tip text in `lang` with the numbers of `ctx` (a Values ctx; none = default build)
+  function tipText(def, ctx, lang) {
+    if (!def) return '';
+    const t = tipOf(def, timing(ctx));
+    return t[lang] || t.en || '';
+  }
+  // window of step i of combo c: { ref, wait, lo, hi } (seconds after the effect of step `ref`), or null for steps without `at`.
+  // at(T, env) -> { ref?, fx?, wait, early?, late? } (fx: measure from the ref's effect/hit, not its cast); slack is scaled by the tier. wait may be negative (cast before the ref lands).
+  function windowOf(c, i, T, env) {
+    const s = c.steps[i];
+    if (!s || typeof s.at !== 'function') return null;
+    const r = s.at(T, env || {}), k = TOL[c.tier] || 1;
+    return { ref: r.ref != null ? r.ref : i - 1, fx: !!r.fx, wait: r.wait, lo: r.wait - (r.early || 0) * k, hi: r.wait + (r.late == null ? 0.6 : r.late) * k };
+  }
+  const withinOf = (s, T) => (typeof s.within === 'function' ? s.within(T) : s.within);
+  // suggested wait before step i (tip/bot): `at` wait, else the static wait
+  function waitOf(c, i, T, env) {
+    const win = windowOf(c, i, T, env);
+    return win ? win.wait : c.steps[i].wait;
+  }
+
   // ------------------------------------------------------------ requirements
   // Effective orb minimums = explicit requires.orbs, raised by the recipe of every spell the combo casts.
   function orbNeeds(c) {
@@ -171,7 +214,8 @@
     if (d.scenario.dummyEscape === 'blink_after_seconds') d.ai.blink.t0 = Infinity;   // armed by the first step
     st.current = c.id; st.def = c; st.dummy = d.id; st.phase = 'active';
     st.stepIndex = 0; st.pending = [];
-    st.steps = c.steps.map((s, i) => ({ status: i === 0 ? 'active' : 'todo', t: null, n: 0 }));
+    st.steps = c.steps.map(() => ({ status: 'todo', t: null, n: 0, fin: false, castT: null, effT: null }));
+    for (const j of candidates(st)) st.steps[j].status = 'active';
     st.startT = w.t; st.lastT = w.t; st.elapsed = 0; st.extra = 0; st.misses = 0;
     st.attempt = retry ? st.attempt + 1 : 0;
     st.hint = hidden ? { x: d.x, y: d.y } : null;
@@ -196,7 +240,7 @@
   }
 
   // ------------------------------------------------------------ completion / failure
-  function fail(w, st, reason, index) {
+  function fail(w, st, reason, index, more) {
     if (!active(st)) return;
     const c = st.def, h = mastery(st, c.id);
     h.fails++;
@@ -205,7 +249,7 @@
     st.resumeAt = w.t + FAIL_DELAY;
     st.lastResult = { id: c.id, ok: false, reason };
     pushHist(st, { id: c.id, tier: c.tier, ok: false, reason, t: w.t });
-    emit(w, 'comboFail', { id: c.id, tier: c.tier, reason, index: index == null ? st.stepIndex : index });
+    emit(w, 'comboFail', Object.assign({ id: c.id, tier: c.tier, reason, index: index == null ? st.stepIndex : index }, more || {}));
   }
 
   function mastery(st, id) { return st.mastery[id] || (st.mastery[id] = { done: 0, fails: 0, best: null }); }
@@ -228,6 +272,40 @@
 
   // ------------------------------------------------------------ step matching
   function nextStep(st) { return st.def.steps[st.stepIndex] || null; }
+  // steps that may be completed next: the first unfinished one, plus its unfinished neighbours sharing its `group` (anyOrder)
+  function candidates(st) {
+    const steps = st.def.steps, out = [];
+    let i = st.stepIndex;
+    while (i < steps.length && st.steps[i] && st.steps[i].fin) i++;
+    if (i >= steps.length) return out;
+    out.push(i);
+    const g = steps[i].group;
+    if (g != null) for (let j = i + 1; j < steps.length && steps[j].group === g; j++) if (!st.steps[j].fin) out.push(j);
+    return out;
+  }
+  // reference time of step `ref`: its cast; with fx, the dummy hit instead (lift, root, stun landing). null = fx hit not known yet.
+  function refTime(st, ref, fx) {
+    const row = st.steps[ref];
+    if (!row || !row.fin) return null;
+    if (!fx) return row.castT != null ? row.castT : row.t;
+    if (row.effT != null) return row.effT;
+    if (st.pending.some(q => q.idx === ref && q.state === 'open')) return null;
+    return row.castT != null ? row.castT : row.t;
+  }
+  function gapDist(w, st) {
+    const h = w.hero, d = dummyOf(w, st);
+    return h && d ? Math.hypot(d.x - h.x, d.y - h.y) : 0;
+  }
+  function winOf(w, st, i) { return windowOf(st.def, i, timing(ctxOf(w)), { dist: gapDist(w, st) }); }
+  // 'early' | 'late' | null for step i if it were cast now
+  function judge(w, st, i) {
+    const win = winOf(w, st, i);
+    if (!win) return null;
+    const rt = refTime(st, win.ref, win.fx), gap = rt == null ? 0 : w.t - rt;
+    if (gap < win.lo - EPS) return { kind: 'early', s: win.lo - gap, win };
+    if (rt != null && gap > win.hi + EPS) return { kind: 'late', s: gap - win.hi, win };
+    return null;
+  }
 
   // movement steps are polled each tick. 'move' remembers where the hero (and the hero-dummy gap) were when it became active.
   function armMove(w, st) {
@@ -247,11 +325,12 @@
     return true;
   }
 
-  function completeStep(w, st, extra) {
-    const i = st.stepIndex, s = st.def.steps[i];
-    st.steps[i].status = 'done'; st.steps[i].t = w.t;
-    st.stepIndex++; st.lastT = w.t;
-    if (st.steps[st.stepIndex]) st.steps[st.stepIndex].status = 'active';
+  function completeStep(w, st, extra, idx) {
+    const i = idx != null ? idx : st.stepIndex, s = st.def.steps[i];
+    st.steps[i].status = 'done'; st.steps[i].t = w.t; st.steps[i].castT = w.t; st.steps[i].fin = true;
+    while (st.stepIndex < st.def.steps.length && st.steps[st.stepIndex].fin) st.stepIndex++;
+    st.lastT = w.t;
+    for (const j of candidates(st)) if (st.steps[j].status === 'todo') st.steps[j].status = 'active';
     armMove(w, st);
     if (i === 0 && st.dummy != null) { const d = dummyOf(w, st); if (d && d.ai && d.ai.blink.t0 === Infinity) d.ai.blink.t0 = w.t; }
     emit(w, 'comboStep', Object.assign({ id: st.def.id, index: i, ability: s.ability, react: s.react, done: st.stepIndex >= st.def.steps.length }, extra || {}));
@@ -260,16 +339,30 @@
   function onCast(w, p) {
     const st = w.combo;
     if (!active(st) || !w.hero || p.unit !== w.hero.id) return;
-    const s = nextStep(st), d = dummyOf(w, st);
-    let ok = !!s && (s.type === 'cast' || s.type === 'item') && s.ability === p.ability;
+    const d = dummyOf(w, st), steps = st.def.steps, cands = candidates(st);
+    const matches = j => { const q = steps[j]; return (q.type === 'cast' || q.type === 'item') && q.ability === p.ability; };
+    const i = cands.find(matches);
+    let ok = i != null;
+    const s = ok ? steps[i] : null;
     if (ok && s.targetVisibility === 'hidden' && (!d || d.visible)) ok = false;
     if (ok && s.targetVisibility === 'visible' && (!d || !d.visible)) ok = false;
     if (ok && s.selfCast && Math.hypot(p.x - w.hero.x, p.y - w.hero.y) > 100) ok = false;
-    if (!ok) { st.extra++; return; }
-    const i = st.stepIndex;
+    if (ok && s.onSpirit) { const t = w.get(p.target); if (!t || t.kind !== 'spirit' || t.owner !== w.hero.id) ok = false; }
+    if (!ok) {
+      st.extra++;
+      // feedback: the spell belongs to the combo (wrong order / wrong target) or is foreign
+      const exp = steps[cands[0]];
+      let kind = 'extra';
+      if (i != null) kind = 'target';
+      else if (steps.some(q => (q.type === 'cast' || q.type === 'item') && q.ability === p.ability)) kind = 'order';
+      emit(w, 'comboHint', { id: st.def.id, kind, got: p.ability, expected: exp && exp.ability ? exp.ability : null, index: cands[0] });
+      return;
+    }
+    const jg = judge(w, st, i);
+    if (jg) { fail(w, st, jg.kind, i, { s: sec(jg.s), ability: p.ability }); return; }
     if (s.mustHitDummy || (s.type === 'item' && s.itemOnDummy)) st.pending.push({ idx: i, ability: p.ability, t: w.t, state: 'open' });
     if (s.react === 'empPull' || s.ability === 'emp') st.pull = d ? { x: d.x, y: d.y } : null;
-    completeStep(w, st);
+    completeStep(w, st, null, i);
     if (st.pending.some(q => q.idx === i && q.state === 'open')) st.steps[i].status = 'pending';   // advanced, hit unconfirmed
     checkDone(w, st);
   }
@@ -280,7 +373,7 @@
     const q = st.pending.find(x => x.state === 'open' && x.ability === p.ability);
     if (!q) return;
     q.state = 'hit';
-    if (st.steps[q.idx]) st.steps[q.idx].status = 'done';
+    if (st.steps[q.idx]) { st.steps[q.idx].status = 'done'; st.steps[q.idx].effT = w.t; }
     checkDone(w, st);
   }
 
@@ -383,9 +476,16 @@
     }
     if (st.phase === 'active' && st.current) {
       const s = nextStep(st), i = st.stepIndex, d = dummyOf(w, st);
-      if (s) {
-        if (s.within != null && i > 0 && w.t - st.lastT > s.within + EPS) { fail(w, st, 'within', i); }
-        else if ((s.type === 'position' || s.type === 'move') && positionOk(w, st, s)) { completeStep(w, st); checkDone(w, st); }
+      let closed = false;
+      for (const j of candidates(st)) {   // a window that has already closed can no longer be met
+        const q = st.def.steps[j];
+        const jg = q.at ? judge(w, st, j) : null;
+        const wi = q.at ? null : withinOf(q, timing(ctxOf(w)));
+        if (jg && jg.kind === 'late') { fail(w, st, 'late', j, { s: sec(jg.s), ability: q.ability }); closed = true; break; }
+        if (wi != null && j > 0 && w.t - st.lastT > wi + EPS) { fail(w, st, 'late', j, { s: sec(w.t - st.lastT - wi), ability: q.ability }); closed = true; break; }
+      }
+      if (s && !closed) {
+        if ((s.type === 'position' || s.type === 'move') && positionOk(w, st, s)) { completeStep(w, st); checkDone(w, st); }
         else if (s.type === 'react' && d) {
           if (s.react === 'blinkPrevented' && blinkBlocked(d)) { completeStep(w, st); checkDone(w, st); }
           else if (s.react === 'empPull' && st.pull && Math.hypot(d.x - st.pull.x, d.y - st.pull.y) >= PULL_MIN) { completeStep(w, st); checkDone(w, st); }
@@ -432,5 +532,6 @@
   IT.World.system('combo', 90, (w, dt) => update(w, dt));
 
   IT.Combo = { get, available, missing, orbNeeds, itemNeeds, start, mode, stop, skip, cancel, score, speedBonus, streakMult, blinkBlocked, refreshAll, positionOk,
+    timing, tipText, windowOf, waitOf, TOL,
     TIMEOUT: RESOLVE_TIMEOUT, FAIL_DELAY, DONE_DELAY, PULL_MIN };
 })(typeof window !== 'undefined' ? window : globalThis);

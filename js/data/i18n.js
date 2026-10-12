@@ -74,8 +74,12 @@
   };
   for (const k in fails) D('fail.' + k, fails[k][0], fails[k][1]);
   const cf = { miss: ['Missed the dummy', 'Errou o alvo'], boltHit: ['The stun bolt hit you', 'O stun bolt te acertou'], within: ['Too slow', 'Muito devagar'],
-    timeout: ['Spell never landed', 'A magia n√£o acertou'], blinked: ['The dummy blinked away', 'O alvo deu blink'] };
+    timeout: ['Spell never landed', 'A magia n√£o acertou'], blinked: ['The dummy blinked away', 'O alvo deu blink'],
+    early: ['Too early: wait {s} s more', 'Cedo demais: espere mais {s} s'], late: ['Too late: {s} s past the window', 'Tarde demais: {s} s fora da janela'] };
   for (const k in cf) D('cfail.' + k, cf[k][0], cf[k][1]);
+  D('chint.order', 'Wrong order: {got} now, the combo wants {exp}', 'Ordem errada: o combo pede {exp}, n„o {got}');
+  D('chint.target', 'Wrong target for {got}', 'Alvo errado para {got}');
+  D('chint.extra', '{got} is not part of this combo', '{got} n„o faz parte deste combo');
   D('toast.combo', 'COMBO! +{score}', 'COMBO! +{score}');
   D('toast.perfect', 'PERFECT! +{score}', 'PERFEITO! +{score}');
   D('toast.comboFail', 'FAILED: {why}', 'FALHOU: {why}');

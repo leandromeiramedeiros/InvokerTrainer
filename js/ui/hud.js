@@ -460,7 +460,7 @@
         if (m.items.length) bits.push(m.items.map(i => t('item.' + i)).join(', '));
         if (m.scepter) bits.push(t('item.scepter')); if (m.shard) bits.push(t('item.shard'));
         tip = t('hud.needs', { x: bits.join(', ') });
-      } else tip = (cb.tip && (cb.tip[IT.lang] || cb.tip.en)) || '';
+      } else tip = IT.Combo.tipText(cb, IT.Values.ctx(c.w.loadout), IT.lang);
       R.list.appendChild(h('button', {
         type: 'button', class: 'citem' + (ok ? '' : ' lock'), 'data-tip': tip, text: (cb.name && (cb.name[IT.lang] || cb.name.en)) || cb.id,
         onclick: () => { if (!ok) { IT.UI.toast(t('toast.locked'), 'warn'); return; } IT.Combo.start(c.w, cb.id); },

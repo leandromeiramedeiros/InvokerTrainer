@@ -6,6 +6,11 @@
 
   const nm = o => (o && (o[IT.lang] || o.en)) || '';
 
+  const hctx = () => { const w = CB.c && CB.c.w; return w && w.hero && w.hero.ctx || (w && w.loadout ? IT.Values.ctx(w.loadout) : null); };
+  // transient feedback line under the tip (wrong order / too early / too late)
+  function feedback(text, kind) { const R = CB.refs; if (!R.fb) return; R.fb.textContent = text; R.fb.className = 'cfb ' + kind; CB.fbUntil = Date.now() + 3200; }
+  const abName = id => id ? (IT.hasT('spell.' + id) ? IT.t('spell.' + id) : IT.hasT('item.' + id) ? IT.t('item.' + id) : id) : '?';
+
   function stepLabel(s) {
     const t = IT.t;
     if (s.type === 'attack') return t('step.attackN', { n: s.count || 1 });
@@ -29,14 +34,16 @@
     R.steps = h('div', { class: 'csteps' }); R.tip = h('div', { class: 'ctip' });
     R.score = h('b', { class: 'sc' }); R.streak = h('span', { class: 'stk' }); R.time = h('b', { class: 'tm' });
     R.skip = h('button', { type: 'button', class: 'mini skip', text: IT.t('hud.skip'), onclick: () => { IT.Combo.skip(ctx.w); } });
+    R.fb = h('div', { class: 'cfb' });
     R.empty = h('div', { class: 'cempty', text: IT.t('hud.noneYet') });
     CB.el = h('div', { class: 'hudp combobar' },
-      h('div', { class: 'cl' }, R.name, R.tier, R.retry, R.steps, R.tip, R.empty),
+      h('div', { class: 'cl' }, R.name, R.tier, R.retry, R.steps, R.tip, R.fb, R.empty),
       h('div', { class: 'cr' }, h('div', { class: 'scr1' }, h('span', { text: IT.t('hud.score') }), R.score), R.streak, R.time, R.skip));
     root.appendChild(CB.el);
     const w = ctx.w, t = IT.t, on = (n, f) => CB.off.push(w.on(n, f));
     on('comboDone', p => { IT.UI.toast(t(p.perfect ? 'toast.perfect' : 'toast.combo', { score: p.score }), 'good'); if (IT.Input) IT.Input.sfx('success'); });
-    on('comboFail', p => { IT.UI.toast(t('toast.comboFail', { why: t('cfail.' + p.reason) }), 'bad'); if (IT.Input) IT.Input.sfx('fail'); });
+    on('comboFail', p => { const why = t('cfail.' + p.reason, { s: p.s }); IT.UI.toast(t('toast.comboFail', { why }), 'bad'); feedback(why, 'bad'); if (IT.Input) IT.Input.sfx('fail'); });
+    on('comboHint', p => feedback(t('chint.' + p.kind, { got: abName(p.got), exp: abName(p.expected) }), 'warn'));
     on('comboLocked', () => IT.UI.toast(t('toast.locked'), 'warn'));
     CB.update(0);
   };
@@ -56,12 +63,12 @@
     R.name.style.display = R.tier.style.display = R.steps.style.display = def ? '' : 'none';
     // chips
     if (def) {
-      const key = def.id + '|' + IT.lang + '|' + (IT.Settings.get().hints ? 1 : 0);
+      const T = IT.Combo.timing(hctx()), key = def.id + '|' + IT.lang + '|' + (IT.Settings.get().hints ? 1 : 0) + '|' + T.lift + '|' + T.emp + '|' + T.ss + '|' + T.meteor + '|' + T.csDur + '|' + T.alacrity;
       if (CB.key !== key) {
         CB.key = key;
         R.name.textContent = nm(def.name);
         R.tier.textContent = t('tier.' + def.tier);
-        R.tip.textContent = IT.Settings.get().hints ? nm(def.tip) : '';
+        R.tip.textContent = IT.Settings.get().hints ? IT.Combo.tipText(def, hctx(), IT.lang) : '';
         R.steps.textContent = ''; CB.chips = [];
         def.steps.forEach((s, i) => {
           const rec = s.type === 'cast' ? IT.GAME.SPELL_ORBS[s.ability] : null;
@@ -84,6 +91,7 @@
       if (R.retry.textContent !== rt) R.retry.textContent = rt;
       R.el = null;
     } else if (CB.key) { CB.key = ''; R.tip.textContent = ''; }
+    if (R.fb && R.fb.textContent && Date.now() > (CB.fbUntil || 0)) { R.fb.textContent = ''; R.fb.className = 'cfb'; }
     const sc = String(Math.round(st.score || 0)); if (R.score.textContent !== sc) R.score.textContent = sc;
     const sk = st.streak > 1 ? t('hud.streak', { n: st.streak }) : ''; if (R.streak.textContent !== sk) R.streak.textContent = sk;
     let tm = '';

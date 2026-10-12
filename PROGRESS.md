@@ -1,5 +1,6 @@
 ## ROADMAP v5 (2026-10-12, overnight run) -- see docs/AUDIT-v5.md for the batch table
 Done+pushed: MAPS v5 real Dota map (tools/dota_extract.py -> js/data/dotaworld.js; 28 windows + 'dota'), B enemies, A 39 scenarios on v5 maps, C end splash/PNG/infinite.
+D (done, uncommitted): combo timing windows from KV (step.at), early/late/order feedback (comboHint + cfail.early/late), anyOrder groups, 6 new combos, items tier base 750; tests/combo_v5.test.js.
 Next in order (one Sonnet agent each; tests + browser smoke + push after each; stop at 96% usage): E hood picker F3 + Free Play enemy card + picker difficulty badge; D combos; F HUD chips/Shiva 900/'dota' perf/map name; S sounds closer to Dota 2; P points system (single pool, talents 1 pt, 0 left at 30 -- research real rules first); G dead code; then FINAL Fable holistic audit (plan vs built) -> fix batches -> PROGRESS.
 Known: hero auto-attack (800 acquire) can steal 'kill with X' kills; splash burst overlaps title briefly; scenario WIP branch wip/scenarios-oldmap is now obsolete (salvaged in A).
 
