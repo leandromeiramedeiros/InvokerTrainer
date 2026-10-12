@@ -97,9 +97,9 @@ test('input: F1 always preventDefault (browser help) incl. paused / frozen; boun
   r.IT.Settings.data.keys.common.spawn = 'P';
 });
 
-test('input: I opens the recipe sheet, O holds live stats, [ resets dummies', () => {
+test('input: I toggles the recipe sheet, O toggles live stats, [ resets dummies', () => {
   const r = rig({ autoAttack: false }); r.at(10);
-  const calls = []; r.In.hooks.cheat = () => calls.push('cheat'); r.In.hooks.resetDummies = () => calls.push('reset'); r.In.hooks.statsHold = v => calls.push('stats' + v);
+  const calls = []; r.In.hooks.cheat = () => calls.push('cheat'); r.In.hooks.resetDummies = () => calls.push('reset'); r.In.hooks.stats = () => calls.push('stats');
   r.key('i'); r.key('['); const ev = r.down('o'); r.up(ev);
-  assert.deepEqual(calls, ['cheat', 'reset', 'statstrue', 'statsfalse']);
+  assert.deepEqual(calls, ['cheat', 'reset', 'stats']);
 });

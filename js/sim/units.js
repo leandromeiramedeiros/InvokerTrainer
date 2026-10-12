@@ -108,6 +108,7 @@
     e.awareness = o.awareness != null ? o.awareness : E.awareness;
     e.notice = o.notice != null ? o.notice : E.notice;   // s of plain sight an awareness-0 enemy needs to register the hero
     e.refill = !!o.refill; e.aware = e.refill; e.tele = null; e.lastHit = -99;
+    if (o.juke) e.juke = { x: o.juke.x, y: o.juke.y, near: o.juke.near || 500, at: null, item: null, done: false };   // v6 pit juke (tickJuke)
     if (o.name) e.name = o.name;
     // hero auto-attack (opts.attack: 'ranged'|'melee' override, false = none). Never auto-acquires: the AI orders it (see fightHero).
     const kind = o.attack === false || e.refill ? null : (typeof o.attack === 'string' ? o.attack : G_.ENEMY_ATTACK_KIND[o.skin] || 'ranged'), AT = kind && G_.ENEMY_ATTACK[kind];
@@ -521,7 +522,7 @@
     const A = IT.Abilities, def = A && A.get(id);
     if (e.tele || !def || !e.items || !e.items.some(s => s && s.id === id) || A.check(w, e, id)) return false;
     const lead = e.telegraph || 0;
-    w.emit('telegraph', { unit: e.id, item: id, lead });
+    w.emit('telegraph', { unit: e.id, item: id, lead, say: (o && o.say) || null });
     if (lead > 1e-9) { e.tele = { item: id, at: w.t, until: w.t + lead, o: o || {} }; return true; }
     return fireItem(w, e, id, o || {});
   }
@@ -565,8 +566,43 @@
     return { x: e.x + Math.cos(ang) * R, y: e.y + Math.sin(ang) * R };
   };
 
+  // v6 pit juke (ranked pit_trap: unit `juke`, e.juke = { x, y (the pit's deepest point), near }): a foe waiting on the bank that, once
+  // hurt or once it SEES the hero within `near`, jumps INTO the pit after its reaction time: Blink onto the point, else Force Staff toward
+  // it (Blink is locked for 3 s after damage, so a hurt foe pushes). Telegraphed: a 'blinkTell' fx flash on the unit + the useItem
+  // 'telegraph' event (e.telegraph s lead, speech line 'juke'), then the item's own fx / sound. A fire that fails (stunned at the end of the
+  // telegraph) is retried. Afterwards it holds the pit: stationary at the landing spot, no item escapes. -> true while it owns the tick.
+  function tickJuke(w, e) {
+    const j = e.juke, h = w.hero, a = e.ai;
+    if (!j || j.done) return false;
+    if (j.item) {   // telegraphed: wait for the fire, confirm it by the spent cooldown
+      if (e.tele) return true;
+      if ((e.cd[j.item] || 0) > 0) {
+        j.done = true; j.t = w.t; a.behavior = 'stationary'; a.home = { x: e.x, y: e.y }; a.moving = false; a.escaping = false;
+        return true;
+      }
+      j.item = null;   // the fire failed: try again
+    }
+    if (j.at == null) {
+      const hurt = e.lastHit > -99, close = !!h && !h.dead && a.seesHero && U.dist(e, h) <= j.near;
+      if (!hurt && !close) return false;
+      j.at = w.t + reactionOf(e); j.why = hurt ? 'hurt' : 'near';
+    }
+    if (w.t < j.at - 1e-9) return true;
+    if (disabled(e) || !IT.Status.canAct(e)) return true;
+    const ang = Math.atan2(j.y - e.y, j.x - e.x), lead = e.telegraph || 0;
+    for (const id of ['blink', 'forcestaff']) {
+      if (!useItem(w, e, id, id === 'blink' ? { x: j.x, y: j.y, say: 'juke' } : { face: ang, say: 'juke' })) continue;
+      j.item = id;
+      w.emit('fx', { name: 'blinkTell', x: e.x, y: e.y, unit: e.id, dur: Math.max(0.35, lead) });
+      if (!e.tele) tickJuke(w, e);   // no telegraph lead: it already fired
+      return true;
+    }
+    return true;
+  }
+
   // first usable item of `chain` against a threat; `ang` = direction away from it
   function defend(w, e, chain, ang) {
+    if (e.juke) return false;   // a pit juker spends its items on the juke only and then holds the pit
     for (const id of chain) {
       const o = id === 'blink' ? blinkTo(e, ang) : id === 'forcestaff' ? { face: ang } : {};
       if (useItem(w, e, id, o)) return true;
@@ -626,6 +662,7 @@
     if (w.t < a.nextThink) return;
     a.nextThink = w.t + 0.1;
     updateAware(w, e);
+    if (tickJuke(w, e)) return;
     if (e.tele) return;
     // ground danger zones we stand in: dodge on foot (if mobile), else items
     if (IT.Status.canAct(e)) for (const t of w.ents) {

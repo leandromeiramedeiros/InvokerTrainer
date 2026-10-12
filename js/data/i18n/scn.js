@@ -4,7 +4,9 @@
   en: {
     'f1.lose.method': 'you get the kill the wrong way', 'f1.lose.tower': 'you step into the tower range',
     'scn.fail.cross': 'A foe crossed the line', 'scn.fail.seen': 'You were spotted', 'scn.fail.method': 'Wrong way to kill', 'scn.fail.method.attack': 'Finished by an auto-attack, not the required ability', 'scn.fail.method.missing': 'A required spell never hit a foe', 'scn.fail.method.burst': 'The kills did not come from one cast', 'scn.fail.tower': 'Inside tower range',
-    'hud.rkTwist': 'Twist:', 'hud.rkLevel': 'Lv {n}',
+    'hud.rkTwist': 'Twist:', 'hud.rkLevel': 'Lv {n}', 'hud.rkHeroLv': 'LV {n}',
+    'scn.fail.method.outside': 'He died outside the pit', 'cfail.method.outside': 'he died outside the pit',
+    'dc.juke.0': 'Catch me in there!', 'dc.juke.1': 'Into the pit!',
 
     'scn.sleepy_target.name': 'Sleeping scout', 'scn.sleepy_target.flair': 'A scout dozed off by the lotus pool, far from his friends.',
     'scn.sleepy_target.desc': 'Sun Strike the sleeping scout', 'scn.sleepy_target.win': 'the scout goes down',
@@ -26,8 +28,8 @@
     'scn.blast_push.desc': 'Push 2+ foes with one Deafening Blast', 'scn.blast_push.win': 'one Blast pushes two or more',
     'scn.tower_dive.name': 'Behind the tower', 'scn.tower_dive.flair': 'He thinks his tower keeps him safe. Blink past it and make him regret it.',
     'scn.tower_dive.desc': 'Blink behind the Dire tower and kill him', 'scn.tower_dive.win': 'you dive, kill and live',
-    'scn.pit_trap.name': 'Pit trap', 'scn.pit_trap.flair': "He hides in Roshan's pit. One way in, one way out.",
-    'scn.pit_trap.desc': 'Kill the enemy in the pit', 'scn.pit_trap.win': 'he dies in the pit',
+    'scn.pit_trap.name': 'Pit trap', 'scn.pit_trap.flair': "He waits on the bank of Roshan's pit with Blink and Force Staff. Hurt him or get close and he jumps in: follow him.",
+    'scn.pit_trap.desc': 'Kill the enemy inside the pit', 'scn.pit_trap.win': 'he dies in the pit', 'scn.pit_trap.lose': 'he dies outside the pit',
     'scn.force_chase.name': 'Force the issue', 'scn.force_chase.flair': 'He runs the moment he sees you. Force Staff closes the gap.',
     'scn.force_chase.desc': 'Catch the runner and kill him', 'scn.force_chase.win': 'caught and killed',
     'scn.ghost_finish.name': 'Ghost finish', 'scn.ghost_finish.flair': 'Call the spirits, then vanish. He will never see who killed him.',
@@ -73,7 +75,9 @@
   pt: {
     'f1.lose.method': 'você mata do jeito errado', 'f1.lose.tower': 'você entra no alcance da torre',
     'scn.fail.cross': 'Um inimigo cruzou a linha', 'scn.fail.seen': 'Você foi visto', 'scn.fail.method': 'Jeito errado de matar', 'scn.fail.method.attack': 'Finalizou com ataque automático, não com a habilidade exigida', 'scn.fail.method.missing': 'Uma magia exigida não acertou nenhum inimigo', 'scn.fail.method.burst': 'As mortes não vieram de um só lançamento', 'scn.fail.tower': 'Dentro do alcance da torre',
-    'hud.rkTwist': 'Variação:', 'hud.rkLevel': 'Nv {n}',
+    'hud.rkTwist': 'Variação:', 'hud.rkLevel': 'Nv {n}', 'hud.rkHeroLv': 'NV {n}',
+    'scn.fail.method.outside': 'Ele morreu fora do fosso', 'cfail.method.outside': 'ele morreu fora do fosso',
+    'dc.juke.0': 'Me pega lá dentro!', 'dc.juke.1': 'Pro fosso!',
 
     'scn.sleepy_target.name': 'Batedor dorminhoco', 'scn.sleepy_target.flair': 'Um batedor cochilou perto do lago de lótus, longe dos amigos.',
     'scn.sleepy_target.desc': 'Acerte o batedor adormecido com Sun Strike', 'scn.sleepy_target.win': 'o batedor cai',
@@ -95,8 +99,8 @@
     'scn.blast_push.desc': 'Empurre 2+ inimigos com um Deafening Blast', 'scn.blast_push.win': 'um Blast empurra dois ou mais',
     'scn.tower_dive.name': 'Atrás da torre', 'scn.tower_dive.flair': 'Ele acha que a torre o protege. Dê Blink por trás dela e faça-o se arrepender.',
     'scn.tower_dive.desc': 'Dê Blink atrás da torre Dire e mate-o', 'scn.tower_dive.win': 'você mergulha, mata e sobrevive',
-    'scn.pit_trap.name': 'Armadilha no fosso', 'scn.pit_trap.flair': 'Ele se esconde no fosso do Roshan. Uma entrada, uma saída.',
-    'scn.pit_trap.desc': 'Mate o inimigo no fosso', 'scn.pit_trap.win': 'ele morre no fosso',
+    'scn.pit_trap.name': 'Armadilha no fosso', 'scn.pit_trap.flair': 'Ele espera na beira do fosso do Roshan com Blink e Force Staff. Fira-o ou chegue perto e ele pula para dentro: vá atrás.',
+    'scn.pit_trap.desc': 'Mate o inimigo dentro do fosso', 'scn.pit_trap.win': 'ele morre no fosso', 'scn.pit_trap.lose': 'ele morre fora do fosso',
     'scn.force_chase.name': 'Force a barra', 'scn.force_chase.flair': 'Ele foge assim que te vê. O Force Staff fecha a distância.',
     'scn.force_chase.desc': 'Alcance o fugitivo e mate-o', 'scn.force_chase.win': 'pego e morto',
     'scn.ghost_finish.name': 'Final fantasma', 'scn.ghost_finish.flair': 'Chame os espíritos e suma. Ele nunca vai saber quem o matou.',

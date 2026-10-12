@@ -29,6 +29,9 @@
     for (let i = 0; i < s.length; i++) { const t = s[i].type; if (t === 'lift' || t === 'cyclone' || t === 'euls') return s[i]; }
     return null;
   }
+  const LIFT_VIS = 1.7;    // tornado victims are drawn LIFT_VIS x the sim height
+  // visual lift in px (shared with shadows.js): tornado raised well above the sim height; Eul's hovers even without sim z
+  const visZ = (L, eul, zp, S) => L && !eul ? zp * LIFT_VIS : eul ? Math.max(zp * 1.3, 15 * S.lA) : zp;
   const isEuls = s => !!s && (s.type === 'euls' || s.type === 'cyclone' || s.ability === 'euls' || !!(s.data && s.data.euls));
   const invisOf = e => has(e, 'invisible') || has(e, 'shadowblade') || has(e, 'invis') || has(e, 'invisFade') || e.invisible === true;
   const hiddenKind = e => invisOf(e) || has(e, 'ghost');
@@ -153,14 +156,6 @@
     return out;
   }
 
-  function shadow(cx, x, y, rx, ry, a) {
-    cx.fillStyle = `rgba(0,0,0,${a})`;
-    for (let dy = -ry; dy <= ry; dy++) {
-      const hw = Math.round(rx * Math.sqrt(1 - (dy * dy) / ((ry + 0.5) * (ry + 0.5))));
-      cx.fillRect(x - hw, y + dy, hw * 2 + 1, 1);
-    }
-  }
-
   const ORB_NAME = { Q: 'orb_q', W: 'orb_w', E: 'orb_e' };
   function drawOrbs(R, e, sx, sy, front) {
     const orbs = e.inv && e.inv.orbs;
@@ -268,7 +263,7 @@
       S.lA = clamp(S.lA + (L ? dt : -dt) / 0.22, 0, 1);
     }
     // visual lift: tornado victims are raised well above the sim height so they read as airborne; Eul's gets a hover even without sim z
-    const zv = L && !eul ? zp * 1.7 : eul ? Math.max(zp * 1.3, 15 * S.lA) : zp;
+    const zv = visZ(L, eul, zp, S);
     const sxp = Math.round(gx), syp = Math.round(gy), sy = Math.round(gy - zv);
     if (!top) {
       if (Math.hypot(e.x - S.lx, e.y - S.ly) > 0.4) S.moveT = R.time;
@@ -291,8 +286,6 @@
     const hgtUnit = Math.max(8, syp - sy + img.height * 0.5);
 
     if (!top) {
-      const zs = Math.min(0.5, zv / 60);
-      shadow(cx, sxp, syp, Math.round(rr * (e.kind === 'spirit' ? 1.0 : 1.25) * (1 - zs) * (sc === 1 ? 1 : 1.1)), Math.max(1, Math.round(rr * 0.45)), (0.38 - zs * 0.3) * Av / A0 * (A0 || 1));
       if (selected(R, e)) { cx.globalAlpha = Av; selRing(R, sxp, syp, rr, isFoe(e)); cx.globalAlpha = A0; }
       if (L) { liftMarker(R, sxp, syp, rr, eul); tether(R, sxp, syp, sy, eul); }
       if (has(e, 'revealed')) dustRing(R, e, sxp, syp, rr, Av);
@@ -703,5 +696,5 @@
     const S = st(R, e); S.castStart = R.time; S.castUntil = R.time + 0.22; S.name = '';
   }
 
-  IT.UnitDraw = { statusIcons, STATUS_ICON, STATUS_NONE, draw, hud, lights, isUnit, isFoe, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
+  IT.UnitDraw = { liftOf, isEuls, visZ, LIFT_VIS, statusIcons, STATUS_ICON, STATUS_NONE, draw, hud, lights, isUnit, isFoe, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
 })(typeof window !== 'undefined' ? window : globalThis);

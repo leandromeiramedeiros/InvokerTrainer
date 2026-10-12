@@ -147,7 +147,8 @@ test('relational spots keep their promise', () => {
     assert.ok(m.w.map.spawns.arenas.some(a => a.tags.includes('river') && Math.hypot(a.x - g.x, a.y - g.y) < 50), id + ' gate in the river');
     for (const u of m.run.dummies) assert.ok(Math.hypot(u.x - m.h.x, u.y - m.h.y) > Math.hypot(g.x - m.h.x, g.y - m.h.y), id + ' foes beyond the gate');
   }
-  const pt = build('pit_trap'); assert.ok(pt.w.map.spawns.arenas.some(a => a.tags.includes('pit') && Math.hypot(a.x - pt.run.dummies[0].x, a.y - pt.run.dummies[0].y) < 260), 'pit_trap: foe in the pit');
+  const pt = build('pit_trap'), pf = pt.run.dummies[0];   // v6: the foe starts on the bank and jukes INTO the pit (levels_v6.test.js)
+  assert.ok(!R.inPit(pt.w.map, pf.x, pf.y) && pf.juke && R.inPit(pt.w.map, pf.juke.x, pf.juke.y), 'pit_trap: foe on the bank, juke target in the pit');
 });
 
 test('seeded placement: same seed -> same spots; rand.pick varies them across seeds', () => {

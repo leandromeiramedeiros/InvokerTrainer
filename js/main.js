@@ -219,11 +219,11 @@
       if (!g || g.ended) return;
       if (settingsOver) { IT.UI.settingsCancel(); return; }
       if (g.menu) App.resume();
-      else { g.menu = true; g.w.paused = true; IT.Input.cancel(true); IT.HUD.statsShow(false); UI.push(UI.pause, true); }
+      else { g.menu = true; g.w.paused = true; IT.Input.cancel(true); UI.push(UI.pause, true); }
     },
     skip() { return !!(g && g.run && !g.menu && !g.ended && g.run.skip()); },   // action key / Start button ends the pre-scenario countdown
     inspect() { return !!(g && g.run && g.run.frozen() && !g.menu && !g.ended && !settingsOver); },   // ranked countdown/result: camera + inspect only
-    statsHold(on) { if (g && !g.menu && !g.ended) IT.HUD.statsShow(on); else if (!on && g) IT.HUD.statsShow(false); },
+    stats() { if (g && !g.menu && !g.ended) IT.HUD.statsToggle(); },
     cheat() { IT.HUD.cheatToggle(); },
     debug() { if (g) { g.R.showDebug = !g.R.showDebug; IT.dev.debug = g.R.showDebug; } },
     refresh() {

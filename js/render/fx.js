@@ -265,10 +265,34 @@
     tele.delete(p.unit);
   }
 
+  // ---------- Invoke burst: 0.3-0.4 s of misty sand from the hands and the three orbs, tinted by the orbs held now ----------
+  const MIST = {};
+  function mistRamp(orbs) {
+    const key = 'invoke_' + orbs;
+    if (MIST[key]) return MIST[key];
+    const os = orbs.split('').filter(o => ORB_RGB[o]);
+    let b = [222, 222, 236];
+    if (os.length) { b = [0, 0, 0]; for (const o of os) for (let i = 0; i < 3; i++) b[i] += ORB_RGB[o][i] / os.length; }
+    const sand = mixc(b, [200, 170, 120], 0.25);       // a little desert in the mist
+    const L = [mixc(b, [255, 255, 255], 0.8), mixc(b, [255, 255, 255], 0.45), b, sand, mixc(b, [30, 20, 40], 0.55), mixc(b, [10, 6, 20], 0.8)];
+    return (MIST[key] = IT.Particles.addRamp(key, L.map(hex)));
+  }
+  function onInvoke(p) {
+    const R = R_, u = R && R.w.byId.get(p.unit);
+    if (!u || u.dead || !u.inv || !u.inv.orbs) return;
+    if (u.team === 1 && !lit(R, u.x, u.y)) return;
+    const orbs = u.inv.orbs.join(''), ramp = mistRamp(orbs), P = R.P, z0 = (u.z || 0), t = R.time;
+    for (let i = 0; i < orbs.length; i++) {         // same orbit as UnitDraw.drawOrbs: 12 px wide, 5 px deep, 12 px up
+      const th = t * 2.6 + i * 2.0944;
+      IT.Particles.emit({ x: u.x + Math.cos(th) * 12 * P, y: u.y, z: z0 + (12 - Math.sin(th) * 5) * P, n: 5, ramp, speed: 22, up: 34, spread: 3 * P, life: 0.35, settle: false });
+    }
+    for (let h = -1; h <= 1; h += 2) IT.Particles.emit({ x: u.x + h * 5 * P, y: u.y, z: z0 + 8 * P, n: 4, ramp, speed: 18, up: 28, spread: 2 * P, life: 0.3, settle: false });
+  }
+
   function init(R) {
     R_ = R;
     const w = R.w;
-    w.on('fx', onFx); w.on('damage', onDamage); w.on('order', onOrder); w.on('blink', onBlink);
+    w.on('fx', onFx); w.on('damage', onDamage); w.on('order', onOrder); w.on('blink', onBlink); w.on('invoke', onInvoke);
     w.on('bolt', p => { if (p.phase === 'cancel' || p.phase === 'hit' || p.phase === 'blocked') tele.delete(p.unit); });
   }
 
@@ -540,7 +564,6 @@
         if (i === 0) { cx.fillStyle = '#b070ff'; cx.fillRect(px, py - 1, 1, 1); }
       }
     }
-    cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.fillRect(x - 4, y, 9, 2);
   }
   function drawIceWall(R, e) {
     const cx = R.cx, list = [];
@@ -587,7 +610,6 @@
     const P = orbPal(src), C = P.ramp;
     let dx = 1, dy = 0;
     if (tg) { dx = tg.x - e.x; dy = tg.y - e.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
-    shadow(R, x, gy, 3);
     const fr = (t * 24 + e.id) | 0;
     for (let k = 5; k >= 1; k--) {     // flickering tail, hash-jittered
       const j = PX.hash2(fr + k * 7, e.id, 3);
@@ -628,7 +650,6 @@
           break;
         }
         case 'bolt': {
-          shadow(R, x, y, 3);
           const by = y - 10 - zp;
           ddisc(R, x, by, 4, '#4a2090', 1); ddisc(R, x, by, 3, '#7a3ad8', 1); ddisc(R, x, by, 2, '#c8a0ff', 1);
           cx.fillStyle = '#fff'; cx.fillRect(x - 1, by - 1, 2, 2);
@@ -712,10 +733,6 @@
     }
   }
 
-  function shadow(R, x, y, r) {
-    R.cx.fillStyle = 'rgba(0,0,0,0.3)'; R.cx.fillRect(x - r, y, r * 2 + 1, 1); R.cx.fillRect(x - r + 1, y + 1, r * 2 - 1, 1);
-  }
-
   // Chaos Meteor: falls from the sky onto the target, then rolls as a fireball.
   function drawMeteor(R, e, x, y) {
     const cx = R.cx, t = R.time;
@@ -732,7 +749,6 @@
       return;
     }
     const by = y - 6;
-    shadow(R, x, y, 6);
     ddisc(R, x, by, 8, '#5a1a08', 1); ddisc(R, x, by, 7, '#c8400c', 1); ddisc(R, x - 1, by - 1, 5, '#ff8a1c', 1); ddisc(R, x - 1, by - 1, 3, '#ffd060', 1);
     cx.fillStyle = '#fff2b0'; cx.fillRect(x - 2, by - 2, 2, 2);
     cx.fillStyle = '#3a1408';
@@ -764,7 +780,6 @@
   // Gleipnir (gold) / Atos (dark violet): a chain of links trails back toward the caster behind a hooked head.
   function drawChainProj(R, e, x, by, gy, gold) {
     const cx = R.cx, t = R.time, src = R.w.byId.get(e.src);
-    shadow(R, x, gy, 3);
     const lo = gold ? '#8a5a10' : '#15101f', mid = gold ? '#ffd24a' : '#3a3060', hi = gold ? '#fff2b0' : '#a898ff';
     let sx = x - 1, sy = by;
     if (src) { R.interp(src); sx = pxs(R, R.ix); sy = pys(R, R.iy) - 10; }

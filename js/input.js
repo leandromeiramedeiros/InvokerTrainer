@@ -17,7 +17,7 @@
     keys: new Set(), mouse: { x: 0, y: 0, in: false },
     win: { x: 0, y: 0, in: false },     // cursor in window (client) px, for edge scroll
     locked: false, vx: 0, vy: 0,        // pointer lock: virtual cursor (client px)
-    hooks: {},    // pause, statsHold(bool), cheat, refresh, spawn, resetDummies, debug
+    hooks: {},    // pause, stats (toggle), cheat (toggle), refresh, spawn, resetDummies, debug
     sfx,
     now: () => (G.performance && G.performance.now ? G.performance.now() : Date.now()),
     _q: [], _tap: {}, _ctap: 0, _cat: null, _rmb: null, _done: null,
@@ -327,6 +327,7 @@
   In.doAction = function (action, opts) {
     if (!In.ctx) return;
     opts = Object.assign({}, opts);
+    if (action === 'cheat' || action === 'stats') { if (In.hooks[action]) In.hooks[action](); return; }   // panel toggles: always available (running, countdown, paused)
     const { w } = In.ctx;
     if (w.paused) {   // frozen ranked countdown: camera / select / sheet keys work; orbs + invoke run without ending it; the first real action (cast, item, attack, stop, hold, move) ends it AND runs
       if (!In.inspecting()) return;
@@ -416,14 +417,13 @@
     let a = IT.Settings.actionFor(k);
     if (!a && k === 'H') a = 'cheat';
     if (!a) return false;
-    if (a === 'stats') { In._held.add('stats'); if (In.hooks.statsHold) In.hooks.statsHold(true); return true; }
     if (isAbilityAction(a)) In._held.add(a);
     In.doAction(a, { queued: !!mods.shift, self: !!mods.alt });
     return true;
   }
   function release(k) {
     const ra = k ? IT.Settings.actionFor(k) : null;
-    if (ra) { In._held.delete(ra); if (ra === 'stats' && In.hooks.statsHold) In.hooks.statsHold(false); }
+    if (ra) In._held.delete(ra);
     if (k && ra === 'center' && In.ctx) { const c = In.ctx; if (c.cam.follow) glide(c.cam, c.hero.x, c.hero.y); c.cam.follow = false; }   // finish the glide to where the hero is
   }
 
@@ -446,7 +446,7 @@
     if (inResult() && !MOD_KEY[ev.key]) { ev.preventDefault(); if (!ev.repeat) w.ranked.cont(); return; }
     if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && !w.paused) In.cycleSel(); return; }
     if (/^F\d+$/.test(ev.key) && (ev.key === 'F1' || IT.Settings.actionFor(ev.key))) ev.preventDefault();   // F1 never opens the browser help; any bound function key stays in the game (also while paused / frozen)
-    { const sk = IT.Settings.keyName(ev); if (sk && !ev.repeat && IT.Settings.actionFor(sk) === 'stats') { ev.preventDefault(); press(sk, {}); return; } }   // live stats also work while paused
+    { const sk = IT.Settings.keyName(ev), a = sk && !ev.repeat && IT.Settings.actionFor(sk); if (a === 'stats' || a === 'cheat') { ev.preventDefault(); press(sk, {}); return; } }   // recipe sheet + live stats (toggles) also work while paused
     const insp = w.paused && In.inspecting();
     if (w.paused && !insp) return;
     if (ev.key === 'Alt') { ev.preventDefault(); return; }      // keep Alt from focusing the browser menu
@@ -645,7 +645,7 @@
       if (In.enabled) ev.preventDefault();
       release(k);
     };
-    const onBlur = () => { In.keys.clear(); In._held.clear(); In._drag = null; In._ctrlEv = false; mmDrag = false; In._rmb = null; resolveCat(); In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
+    const onBlur = () => { In.keys.clear(); In._held.clear(); In._drag = null; In._ctrlEv = false; mmDrag = false; In._rmb = null; resolveCat(); In.win.in = false; ctx.cam.follow = false; };
     const onKeyD = ev => In.keyDown(ev), onKeyU = ev => In.keyUp(ev);
     let wheelAcc = 0;
     const onWheel = ev => {   // scroll wheel zooms in fixed steps (one notch ~100 delta; trackpads accumulate)

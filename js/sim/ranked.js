@@ -99,18 +99,67 @@
   // ---------------------------------------------------------------- scenario preparation (pure)
   // sc + difficulty -> { sc, df, lo, fog, par, limit, skin, hp (per-foe hp of kill scenarios, or null), need (step abilities that must hit) }
   // v6: no pre-invoked spells (the countdown is for invoking), fog of war always on, kill-scenario foe hp derived from the steps (foeHp).
-  function prepare(sc, df, skin) {
-    const H = sc.hero || {}, base = IT.RULES.autoLoadout(H.lvl || 25, H.style || 'qe'), cut = df.orbCut || 0;
-    const orbs = {};
-    for (const k of IT.RULES.orbs) orbs[k] = base.orbs[k] > 0 ? Math.max(1, base.orbs[k] - cut) : 0;
-    const lo = IT.Loadout.normalize({
-      heroLevel: base.heroLevel, orbs, talents: base.talents, scepter: !!H.scepter, scepterOrb: H.scepter || null,
-      shard: !!H.shard, shardSpell: H.shard || null, items: (H.items || []).slice(), skin: skin || IT.GAME.SKINS[0], preset: df.preset, mode: 'free',
-    });
+  // v6 item 11: `lvl` = the hero level of this play (rollLevel: the scenario's base level +-1, feasibility-clamped); omitted = the base level
+  function prepare(sc, df, skin, lvl) {
+    const lo = loadoutAt(sc, df, lvl != null ? lvl : baseLevel(sc), skin);
     const esc = sc.obj.type === 'escape' || sc.obj.type === 'hold';
     const limit = esc ? sc.obj.time : sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK);
     const kill = !!KILL_TYPES[sc.obj.type];
     return { sc, df, lo, fog: true, par: sc.par, limit, skin: lo.skin, twist: null, hp: kill ? foeHp(sc, df, lo) : null, need: kill ? needOf(sc) : [] };
+  }
+  // the scenario loadout at hero level L: IT.RULES.autoLoadout(L, style) (real point / orb-gate rules), the tier's orb cut, scepter / shard / items
+  function loadoutAt(sc, df, L, skin) {
+    const H = sc.hero || {}, base = IT.RULES.autoLoadout(L, H.style || 'qe'), cut = df.orbCut || 0;
+    const orbs = {};
+    for (const k of IT.RULES.orbs) orbs[k] = base.orbs[k] > 0 ? Math.max(1, base.orbs[k] - cut) : 0;
+    return IT.Loadout.normalize({
+      heroLevel: base.heroLevel, orbs, talents: base.talents, scepter: !!H.scepter, scepterOrb: H.scepter || null,
+      shard: !!H.shard, shardSpell: H.shard || null, items: (H.items || []).slice(), skin: skin || IT.GAME.SKINS[0], preset: df.preset, mode: 'free',
+    });
+  }
+
+  // ---------------------------------------------------------------- v6 item 11: hero level per scenario (see DECISIONS.md "v6 item 11")
+  // sc.hero.lvl = the story's base level (laning 6-10, mid game 12-18, late 20-25, legacy / level-30 sets stay high). Each play rolls
+  // base +-1 (run.lvRng: seeded by the run seed -> reproducible in ranked; a seedless sandbox run is random), then the roll must be
+  // feasible (feasible()): every step spell invokable (its orbs >= 1), max mana >= the whole combo's mana (KV manaCost at those orb
+  // levels + item costs), cooldowns within the limit (a spell / item reused before a Refresher: (uses - 1) x cd; invokes beyond the 2
+  // countdown slots: (distinct spells - 2) x Invoke cd), and destroyTower keeps its towerMath window. Infeasible -> the nearest feasible
+  // level within +-LVL_SEARCH of the roll (ties go up), else the base level.
+  const LVL_MIN = 1, LVL_MAX = 30, LVL_SPREAD = 1, LVL_SEARCH = 3, ORB_KEY = { Q: 'quas', W: 'wex', E: 'exort' };
+  const baseLevel = sc => clamp(Math.round((sc.hero && sc.hero.lvl) || 25), LVL_MIN, LVL_MAX);
+  function feasible(sc, df, L) {
+    const lo = loadoutAt(sc, df, L), ctx = IT.Loadout.ctx(lo), V = IT.Values, steps = (sc.steps || []).filter(s => !NO_NEED[s.a]);
+    const isSpell = a => !!IT.GAME.SPELL_ORBS[a];
+    for (const s of steps) if (isSpell(s.a) && IT.GAME.SPELL_ORBS[s.a].split('').some(c => !(lo.orbs[ORB_KEY[c]] > 0))) return { ok: false, why: 'orbs', a: s.a };
+    const GD = IT.GAME.SPELL_DOTA, cost = a => num(isSpell(a) ? V.manaCost(GD[a], ctx) : (() => { try { return V.item(IT.GAME.ITEM_DOTA[a], 'manaCost'); } catch (e) { return 0; } })());
+    const cdOf = a => num(isSpell(a) ? V.cooldown(GD[a], ctx) : (() => { try { return V.item(IT.GAME.ITEM_DOTA[a], 'cooldown'); } catch (e) { return 0; } })());
+    const mana = steps.reduce((t, s) => t + cost(s.a), 0), maxMana = IT.Hero.maxMana(ctx);
+    if (mana > maxMana) return { ok: false, why: 'mana', mana, maxMana };
+    const esc = sc.obj.type === 'escape' || sc.obj.type === 'hold';
+    const limit = esc ? sc.obj.time : sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK);
+    let use = {}, cdNeed = 0;
+    for (const s of steps) {
+      if (s.a === 'refresher') { use = {}; continue; }
+      use[s.a] = (use[s.a] || 0) + 1;
+      if (use[s.a] > 1) cdNeed = Math.max(cdNeed, (use[s.a] - 1) * cdOf(s.a));
+    }
+    const distinct = steps.map(s => s.a).filter((a, i, l) => isSpell(a) && l.indexOf(a) === i).length;
+    const inv = Math.max(0, distinct - 2) * num(V.invokeCooldown(ctx));
+    if (cdNeed > limit || inv > limit) return { ok: false, why: 'cd', cdNeed, inv, limit };
+    if (sc.obj.type === 'destroyTower' && IT.Towers) {   // towers.js not loaded (headless tests): skip the tower window check
+      const t = towerMath(sc, df, lo);
+      if (!(t.tCombo * 1.25 <= t.limit && t.limit < t.tAttack && (t.tHammer == null || t.limit < t.tHammer))) return { ok: false, why: 'tower', t };
+    }
+    return { ok: true, mana, maxMana };
+  }
+  // -> { lvl (the level to play), rolled (base +-1 before the check), base, clamped }
+  function rollLevel(sc, df, rng) {
+    const base = baseLevel(sc), r = rng ? Math.floor(rng() * (2 * LVL_SPREAD + 1)) % (2 * LVL_SPREAD + 1) - LVL_SPREAD : 0;
+    const rolled = clamp(base + r, LVL_MIN, LVL_MAX);
+    for (let d = 0; d <= LVL_SEARCH; d++) for (const L of d ? [rolled + d, rolled - d] : [rolled]) {
+      if (L >= LVL_MIN && L <= LVL_MAX && feasible(sc, df, L).ok) return { lvl: L, rolled, base, clamped: L !== rolled };
+    }
+    return { lvl: base, rolled, base, clamped: base !== rolled };
   }
 
   // ---------------------------------------------------------------- v6: foe hp from the scenario's own combo (pure, IT.Values with the scenario loadout ctx)
@@ -259,12 +308,77 @@
     return true;
   }
   const nearTower = (map, a, team) => (map.towers || []).some(t => t.team === team && Math.hypot(t.x - a.x, t.y - a.y) < TOWER_REACH);
+  // ---------------------------------------------------------------- v6 item 17: Roshan's pit (the walled crater, not the zone box)
+  // maps.js tags 'pit' on every arena inside a 19 x 19-tile box around Roshan's spot (IT.DOTAWORLD.ents.roshan), but in the extracted map
+  // that spot is a solid rock and the box also covers the open river around it. The crater itself is the walkable pocket the rock and the
+  // pit walls close in: tiles where >= PIT_ENC of 8 rays hit an unwalkable tile within PIT_RAY tiles, flood-filled from the most enclosed
+  // tile of the box. pitRegion(map) -> { tiles:Set(ty * w + tx), x, y (world, the deepest tile), n } | null (cached on the map).
+  const PIT_BOX = 9, PIT_RAY = 8, PIT_ENC = 6, D8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  function pitRegion(map) {
+    if (!map || map._pit !== undefined) return map ? map._pit : null;
+    let out = null;
+    const ros = (IT.DOTAWORLD && IT.DOTAWORLD.ents && IT.DOTAWORLD.ents.roshan) || [], g = map.world;
+    const wk = (x, y) => x >= 0 && y >= 0 && x < map.w && y < map.h && map.walkableTile(x, y);
+    const enc = (x, y) => D8.filter(([dx, dy]) => { for (let k = 1; k <= PIT_RAY; k++) if (!wk(x + dx * k, y + dy * k)) return true; return false; }).length;
+    if (g && IT.Maps && IT.Maps.worldToTile) for (const r of ros) {
+      const q = IT.Maps.worldToTile(r.x, r.y), cx = Math.floor(q[0]) - g.gx0, cy = Math.floor(q[1]) - g.gy0;
+      if (cx < 0 || cy < 0 || cx >= map.w || cy >= map.h) continue;
+      const E = {}, inBox = (x, y) => Math.abs(x - cx) <= PIT_BOX && Math.abs(y - cy) <= PIT_BOX;
+      let seed = null, best = -1;
+      for (let y = cy - PIT_BOX; y <= cy + PIT_BOX; y++) for (let x = cx - PIT_BOX; x <= cx + PIT_BOX; x++) {
+        if (!wk(x, y)) continue;
+        const e = E[y * map.w + x] = enc(x, y);
+        if (e > best || (e === best && Math.hypot(x - cx, y - cy) < Math.hypot(seed[0] - cx, seed[1] - cy))) { best = e; seed = [x, y]; }
+      }
+      if (!seed || best < PIT_ENC) continue;
+      const tiles = new Set([seed[1] * map.w + seed[0]]), qu = [seed];
+      for (let k = 0; k < qu.length; k++) for (const [dx, dy] of D8.slice(0, 4)) {
+        const x = qu[k][0] + dx, y = qu[k][1] + dy, i = y * map.w + x;
+        if (!inBox(x, y) || tiles.has(i) || !wk(x, y) || !(E[i] >= PIT_ENC)) continue;
+        tiles.add(i); qu.push([x, y]);
+      }
+      // the deepest tile: the most enclosed, nearest the pocket's centroid
+      const mx = qu.reduce((a, t) => a + t[0], 0) / qu.length, my = qu.reduce((a, t) => a + t[1], 0) / qu.length;
+      const deep = qu.slice().sort((a, b) => E[b[1] * map.w + b[0]] - E[a[1] * map.w + a[0]] || Math.hypot(a[0] - mx, a[1] - my) - Math.hypot(b[0] - mx, b[1] - my))[0];
+      const c = map.center(deep[0], deep[1]);
+      out = { tiles, x: c.x, y: c.y, n: tiles.size };
+      break;
+    }
+    map._pit = out;
+    return out;
+  }
+  const inPit = (map, x, y) => { const p = pitRegion(map); return !!p && p.tiles.has(map.toTile(y) * map.w + map.toTile(x)); };
+  // a Force Staff push (KV push_length) from p toward the pit's deepest point: the walkable end of the push (walls stop it)
+  function pushEnd(map, p, to, len) {
+    const a = Math.atan2(to.y - p.y, to.x - p.x);
+    let q = { x: p.x, y: p.y };
+    for (let s = 16; s <= len; s += 16) { const n = { x: p.x + Math.cos(a) * s, y: p.y + Math.sin(a) * s }; if (!map.walkable(n.x, n.y)) break; q = n; }
+    return q;
+  }
+  // { pit:'bank', d:[min,max] } spot: a walkable point outside the crater, d from its deepest point, from where a Force Staff push toward
+  // that point ends inside the crater (and a Blink reaches it); seeded among the n best (closest to mid(d))
+  function pitBank(w, s, o) {
+    const map = w.map, P = pitRegion(map); if (!P) return null;
+    const d = s.d || [400, 600], mid = (d[0] + d[1]) / 2, len = IT.Values && IT.Values.item ? (num(IT.Values.item(IT.GAME.ITEM_DOTA.forcestaff, 'push_length')) || 600) : 600, el = map.elevAt(P.x, P.y);
+    const out = [];
+    for (let a = 0; a < 64; a++) for (const r of [d[0], mid, d[1]]) {
+      const t = (a / 64) * Math.PI * 2, x = P.x + Math.cos(t) * r, y = P.y + Math.sin(t) * r;
+      if (!map.walkable(x, y) || inPit(map, x, y) || map.elevAt(x, y) !== el) continue;
+      const e = pushEnd(map, { x, y }, P, len); if (!inPit(map, e.x, e.y)) continue;
+      out.push({ x, y, k: Math.abs(r - mid) });
+    }
+    if (!out.length) return null;
+    out.sort((a, b) => a.k - b.k);
+    const n = Math.max(1, Math.min(out.length, (o && o.pick) || 1) * 4), c = out[Math.floor(w.rng() * n) % n];
+    return { x: c.x, y: c.y };
+  }
   // tags of arena a seen from base (static map tags + relative ones)
   function tagsOf(w, a, base) {
     const map = w.map, ea = map.elevAt(a.x, a.y), eb = map.elevAt(base.x, base.y), out = a.tags.slice();
     out.push(ea > eb ? 'high' : ea < eb ? 'low' : 'level');
     const V = IT.Vision, far = Math.hypot(a.x - base.x, a.y - base.y) > HERO_SIGHT;
     out.push(far || ea > eb || (V && !V.los(map, base.x, base.y, a.x, a.y)) ? 'hidden' : 'seen');
+    if (inPit(map, a.x, a.y)) out.push('inpit');   // v6: inside Roshan's crater (pitRegion), not just the zone box
     if (nearTower(map, a, 1)) out.push('dtower');
     if (nearTower(map, a, 0)) out.push('rtower');
     return out;
@@ -325,6 +439,7 @@
     else if (s.struct) { const t = structOf(map, base, s.struct); if (t) p = around(t, base, s); }
     else if (s.gate && w.gate) p = around(w.gate, base, s);
     else if (s.of != null && placed[s.of]) p = around(placed[s.of], base, s);
+    else if (s.pit) { const q = pitBank(w, s, o); if (q) return q; }
     if (o.jit) p = jitter(w, p, base, o, s);
     return nearWalk(w, p.x, p.y);
   }
@@ -378,10 +493,11 @@
       const e = IT.Units.spawnEnemy(w, {
         x: p.x, y: p.y, skin, name: IT.GAME.SKIN_NAMES[skin] + (lap ? ' ' + (lap + 1) : ''), hp, armor: E.armor + (df.armorAdd || 0),
         behavior: d.behavior || (mot ? 'stationary' : ENEMY_BEHAVIOR[df.behavior] || 'stationary'),
-        scenario: { stunBolt: df.stunBolt, dummyEscape: mot ? 'none' : df.escape, blinkAfter: df.blinkAfter },
+        scenario: { stunBolt: df.stunBolt, dummyEscape: mot || d.juke ? 'none' : df.escape, blinkAfter: d.juke ? null : df.blinkAfter },   // a pit juker's only jump is the juke
         useBkb: !!(df.useBkb || d.useBkb), items,
         telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction,
         dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
+        juke: d.juke === 'pit' && pitRegion(w.map) ? { x: pitRegion(w.map).x, y: pitRegion(w.map).y, near: d.near || 500 } : null,   // v6 pit_trap
       });
       e.hpRegen = 0; e.base.hpRegen = 0;
       if (mot === 'flee' || mot === 'chase' || mot === 'march') { const ms = mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase; e.ms = ms; e.base.ms = ms; }
@@ -406,9 +522,10 @@
     opts = opts || {};
     const mode = opts.mode || 'sandbox', ranked = mode === 'ranked', infinite = mode === 'infinite', fixed = opts.scenario ? IT.SCENARIOS.get(opts.scenario) : null;
     const rating = opts.rating != null ? opts.rating : ranked ? profile().rating : 0;
-    const rng = IT.U.mulberry32(opts.seed == null ? (Math.random() * 1e9) | 0 : opts.seed);
+    const seed = opts.seed == null ? (Math.random() * 1e9) | 0 : opts.seed, rng = IT.U.mulberry32(seed);
+    const lvRng = IT.U.mulberry32((seed ^ 0x5bd1e995) >>> 0);   // v6 item 11: hero level rolls (own stream: picks / twists stay as they were)
     const run = {
-      mode, ranked, infinite, fixed, rating, rng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
+      mode, ranked, infinite, fixed, rating, rng, lvRng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
       runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
       pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
@@ -481,7 +598,9 @@
     // choose + prepare the next scenario (does not touch the world). main.js uses .lo/.fog to create the world.
     run.next = () => {
       const sc = pick();
-      run.pr = prepare(sc, run.difficulty(), run.skin);
+      const df = run.difficulty(), lv = rollLevel(sc, df, run.lvRng);
+      run.pr = prepare(sc, df, run.skin, lv.lvl);
+      run.pr.lvl = lv;
       run.pr.twist = twist(sc);
       run.recent.push(sc.id); if (run.recent.length > Math.max(6, run.turns || 0)) run.recent.shift();
       return run.pr;
@@ -535,8 +654,9 @@
       });
       w.on('kill', p => {
         if (run.phase !== 'play' || !foeOf(p.unit)) return;
-        const k = Object.assign({ id: p.unit }, st().last[p.unit] || {}, { t: w.t }), a = st().abil[p.unit];
-        if (k.ability === 'attack' && a && w.t - a.t <= ASSIST) k.assist = a;   // an ability hurt it just before the basic attack finished it
+        const f = w.get(p.unit), k = Object.assign({ id: p.unit }, st().last[p.unit] || {}, { t: w.t }), a = st().abil[p.unit];
+        if (f && w.map) k.inside = inPit(w.map, f.x, f.y) ? 'pit' : null;   // v6: where it died (obj.how.inside)
+        if (k.ability === 'attack' && a && w.t - a.t <= ASSIST) k.assist = Object.assign({}, a, { inside: k.inside });   // an ability hurt it just before the basic attack finished it
         st().kills.push(k);
       });
       w.on('cast', p => {
@@ -571,7 +691,8 @@
       w.emit('scnResult', { id: pr.sc.id, ok, reason: reason || null, detail: detail || null, points: pts, time });
     }
 
-    // does one recorded kill satisfy an objective's "how"? { ability:[ids], by:'hero'|'spirit', low (hero below the foe), high, inv (hero invisible) }
+    // does one recorded kill satisfy an objective's "how"? { ability:[ids], by:'hero'|'spirit', low (hero below the foe), high, inv (hero invisible),
+    // inside:'pit' (the foe died inside Roshan's crater, pitRegion) }
     const howOk = (k, how) => {
       if (!how) return true;
       if (how.ability && how.ability.indexOf(k.ability) < 0) return false;
@@ -579,6 +700,7 @@
       if (how.low && !(k.heroElev < k.foeElev)) return false;
       if (how.high && !(k.heroElev > k.foeElev)) return false;
       if (how.inv && !k.inv) return false;
+      if (how.inside && k.inside !== how.inside) return false;
       return true;
     };
     run.howOk = howOk;
@@ -606,7 +728,11 @@
       // seen: an enemy noticed the hero (vision) before anything of ours had touched a foe
       if (fail.indexOf('seen') >= 0 && st.hit == null) for (const d of alive) if (d.kind === 'enemy' && d.aware) return conclude(false, 'seen');
       // 'attack' => the toast says it was an auto-attack and names what the scenario wanted
-      if (o.how) { const bad = st.kills.find(k => !killOk(k, o.how)); if (bad) return conclude(false, 'method', bad.ability === 'attack' ? 'attack' : 'other', bad.ability === 'attack' ? (o.how.ability || pr.need) : null); }
+      if (o.how) {
+        const bad = st.kills.find(k => !killOk(k, o.how));
+        if (bad && o.how.inside && bad.inside !== o.how.inside) return conclude(false, 'method', 'outside');   // v6 pit_trap: died outside the pit
+        if (bad) return conclude(false, 'method', bad.ability === 'attack' ? 'attack' : 'other', bad.ability === 'attack' ? (o.how.ability || pr.need) : null);
+      }
       // v6: a kill only counts once every step spell / item hit a foe (or, self ones, was cast); the toast names the missing ones.
       // A spell still in flight at the kill (cast within IN_FLIGHT s: Sun Strike delay, Blast wave, Meteor fall) counts too, so a Meteor
       // burn that finishes the foe a moment before the last nuke lands is not a fail
@@ -760,7 +886,7 @@
       result: r.result,
       // result card: canGo once RESULT_MIN s have shown it; auto = whole seconds to the auto-continue
       hold: r.phase === 'result' ? { canGo: (r.held || 0) >= RESULT_MIN, auto: Math.max(0, Math.ceil(r.hold - 1e-9)), held: r.held || 0 } : null,
-      level: pr.sc.level || null, mapName: w.map && w.map.name ? loc(w.map.name) : null,
+      level: pr.sc.level || null, heroLevel: pr.lo.heroLevel, mapName: w.map && w.map.name ? loc(w.map.name) : null,
       twist: pr.twist ? pr.twist : null, twistName: pr.twist && TWISTS[pr.twist] ? loc(TWISTS[pr.twist].name) : null,
     };
   }
@@ -769,7 +895,7 @@
     TURNS, COUNTDOWN, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
-    profile, record, reset, load, prepare, apply, create, hud, spot, arenas, TWISTS,
+    profile, record, reset, load, prepare, pitRegion, inPit, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS,
     comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

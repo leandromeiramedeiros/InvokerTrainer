@@ -98,8 +98,6 @@ body.gl #glow{display:none}
 .tm{font-size:1.5em}
 
 
-.cheat,.live{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:44em;padding:1.2em 1.6em;background:#150d27f2;border:.3em solid var(--mag);font-size:calc(var(--u)*3.3333);max-height:90%;overflow:auto}
-.live{min-width:50em}
 .chead{display:flex;justify-content:space-between;gap:2em;margin-bottom:.8em;color:var(--gold);font-size:max(1.1em,11px)}
 .chead span{color:var(--dim);font-size:.8em}
 .crow{display:flex;align-items:center;gap:.8em;padding:.3em 0;font-size:max(1em,10px)}
@@ -240,7 +238,7 @@ h3{margin:0 0 .5em;color:var(--mag);font-size:.9em;text-transform:uppercase;lett
 :root{--fs:2px;--orn-tex:linear-gradient(#0000,#0000)}
 @supports (width:round(down,5px,1px)){:root{--fs:round(down,calc(var(--g)/7),1px)}}
 /* big riveted bronze frame: corner gems, studs, violet hairline */
-.panel,.cheat,.live{border-image:var(--orn-frame) 12/calc(12*var(--fs)) round;image-rendering:pixelated;background-image:var(--orn-tex);background-size:calc(4*var(--fs)) calc(4*var(--fs))}
+.panel{border-image:var(--orn-frame) 12/calc(12*var(--fs)) round;image-rendering:pixelated;background-image:var(--orn-tex);background-size:calc(4*var(--fs)) calc(4*var(--fs))}
 /* nested boxes: thinner bracket frame */
 .sec,.combobar{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated;background-image:var(--orn-tex);background-size:calc(4*var(--fs)) calc(4*var(--fs))}
 /* buttons: small bronze bracket; hover turns it gold */

@@ -124,6 +124,8 @@
   }
 
   const fmtN = n => String(Math.round(n * 10) / 10);
+  // v6: rolled hero level label for the countdown panel ('LV 12'); '' when the HUD has no hero level
+  const heroLv = rk => (rk && rk.heroLevel && IT.t ? IT.t('hud.rkHeroLv', { n: rk.heroLevel }) : '');
 
-  IT.HudSteps = { WINDOW, kindOf, derive, planOrbs, plan, tracker, loseKeys, fmtN };
+  IT.HudSteps = { WINDOW, kindOf, derive, planOrbs, plan, tracker, loseKeys, fmtN, heroLv };
 })(typeof window !== 'undefined' ? window : globalThis);

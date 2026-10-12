@@ -167,7 +167,7 @@
       say('praise', { p: PRAISE_P, fallback: dead });
     });
     on('kill', p => { D.lastKilled = p.unit; });
-    on('telegraph', p => { const u = p.item === 'dust' && w.get(p.unit); if (u && u.visible) { clearBubble(); D.lastSay = -99; say('dust', { pref: u }); } });   // v6: enemy Dust shout
+    on('telegraph', p => { const u = (p.item === 'dust' || p.say) && w.get(p.unit); if (u && u.visible) { clearBubble(); D.lastSay = -99; say(p.say || 'dust', { pref: u }); } });   // v6: enemy Dust shout / item line (pit juke)
     on('fx', p => { if (p.name === 'dodge' && p.unit != null) say('dodge', { pref: w.get(p.unit), p: DODGE_P }); });
     on('heroDown', p => { if (p.unit === hid()) say('hurt'); });
     on('hit', p => { if (p.ability === 'stunbolt' && p.target === hid()) say('hurt', { p: 0.5 }); });

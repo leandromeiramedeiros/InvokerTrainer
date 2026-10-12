@@ -303,3 +303,35 @@ bonus_movement_speed 45; dota_english: AGI = 1 AS + armor, INT = 0.1% MR.
 - Fix (js/input.js): when locked, the wheel over a HUD element scrolls the nearest scrollable ancestor under the virtual cursor and
   never zooms. A left press in that element's scrollbar gutter starts a thumb drag (scrollTop += dy x scrollHeight / clientHeight) until mouseup.
   Other presses are still routed as synthetic clicks.
+
+## v6 item 11 - hero level per scenario (2026-10-12)
+- Base level (sc.hero.lvl, story fit): laning 6-10, mid game 12-18, late game 20-25. The legacy (25) and level-30 sets are unchanged.
+  - laning: cold_start 7, sleepy_target 8, spirit_pack 8, river_rune 9, two_birds 10, uphill_snipe 10, sun_flee 10
+  - mid game: river_guard 12, ghost_slip 12, ghost_finish 12, fog_ambush 12, bridge_hold 14 (12 lost bambam seed 5 in scenarios_h2), blast_push 14,
+    force_chase 14, dust_escape 14, tower_dive 16, pit_trap 16, dust_hunt 16, bkb_bait 18
+  - late game: jungle_hold 20, cliff_blink 20, river_guard_2 22, highground_hold 24, tower_siege 25 (22 timed out: needs the L25 talent)
+- Roll: base +-1 (LVL_SPREAD) on each play. Ranked uses its own mulberry32 stream (seed ^ 0x5bd1e995), so scenario picks and twists do not move.
+  A run with no seed rolls at random.
+- Feasibility (Ranked.feasible): every orb a step spell needs is at >= 1. The summed step mana (spells and items) is <= max mana.
+  A reused spell's (uses-1) x cd fits the limit, and so does (distinct spells - 2) x invoke cd. destroyTower must fall inside the towerMath window.
+  An infeasible roll searches +d, then -d, for d up to 3 (LVL_SEARCH). If nothing fits, it falls back to the base level.
+  Over 11000 rolls (all scenarios x 5 tiers x 50 seeds) the clamp was never hit.
+- The loadout is autoLoadout at the rolled level, plus scepter/shard/items (Ranked.loadoutAt). foeHp reads that rolled loadout (HP_SHARE / HP_CAP 0.9).
+- HUD: Ranked.hud().heroLevel. HudSteps.heroLv(rk) gives the 'LV n' label (i18n hud.rkHeroLv). The countdown panel itself is drawn in js/ui/hud.js,
+  which this item does not own, so the label is not placed yet. Wiring it is one line in H.updRanked's `if (cd)` block.
+- Bot (levels_v6.test.js, seeds 1-6): easy clears everything, and common kills no foe before its last mandatory step. The exceptions also fail identically at 6afc533:
+  triple_kill s3/s6 burst and shadow_strike s3/s4 missing (easy+common); cataclysm_finish common s2/s4/s5; plateau_escape common s1/s6; gauntlet common (all, time).
+
+## v6 item 17 - pit_trap juke (2026-10-12)
+- Pit region: in the extracted map, Roshan's spot is solid rock. The pit is the walkable crater around it: tiles where >= 6 of 8 rays hit
+  unwalkable ground within 8 tiles, flood-filled inside a 9-tile box (Ranked.pitRegion, cached on map._pit).
+  roshan_pit has 55 tiles and roshan_pit_top 57. The maps.js 'pit' zone box is wider than the crater and also tags arenas outside it, which is why the old spawn landed on the bank.
+  A new 'inpit' tag is real crater membership.
+- Spawn { pit:'bank', d:[450,600] }: a walkable tile outside the crater at the same elevation, from where a 600 u Force Staff push toward the deepest point ends inside.
+- Juke (units.js tickJuke): it triggers when the foe is hurt or sees the hero within 500 u. After its reaction time (and while not disabled) it uses Blink to the deepest point,
+  or Force Staff when Blink is locked by damage. Both go through useItem: telegraph event with say:'juke' -> dummychat line, itemUse sound,
+  and blinkTell fx. After the juke the foe stands still. Juke units skip the legacy dummyEscape / blinkAfter and defend() item escapes.
+- Kill: the kill records inside:'pit' when the foe dies inside the crater. obj.how.inside:'pit' fails with method/outside otherwise. focus:['pit'].
+- js/ui/dummychat.js (not owned): the telegraph handler speaks p.say when it is set (a one-line change).
+- tests/scenarios_v5.test.js: the old "foe in the pit" spot assertion now checks the bank spawn plus the juke target in the pit.
+- Bot: pit_trap clears at easy and common on seeds 1-6. hard/bambam sometimes lose (stun bolt), and ian mostly times out.

@@ -38,6 +38,7 @@
       'hs.range': 'Cast range bonus', 'hs.cdr': 'Cooldown reduction', 'hs.hpr': 'Health regen', 'hs.mpr': 'Mana regen',
       'hs.base': 'Base', 'hs.orbs': 'Orbs', 'hs.items': 'Items', 'hs.slow': 'Slows', 'hs.none': 'No source in this build', 'hs.left': '{n}s left', 'hs.at': 'Attack time',
       'status.towerProt': 'Tower protection',
+      'panel.reset': 'Reset position', 'panel.close': 'Close',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -76,5 +77,6 @@
       'hs.range': 'Alcance de lançamento (bônus)', 'hs.cdr': 'Redução de recarga', 'hs.hpr': 'Regeneração de vida', 'hs.mpr': 'Regeneração de mana',
       'hs.base': 'Base', 'hs.orbs': 'Orbes', 'hs.items': 'Itens', 'hs.slow': 'Lentidões', 'hs.none': 'Sem fonte nesta versão', 'hs.left': '{n}s restantes', 'hs.at': 'Tempo de ataque',
       'status.towerProt': 'Proteção da torre',
+      'panel.reset': 'Redefinir posição', 'panel.close': 'Fechar',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

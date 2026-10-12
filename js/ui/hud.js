@@ -570,11 +570,19 @@
 
     // --- sandbox panel (v6 WP7: fixed-height pane, see H.buildSide)
     if (ctx.mode === 'sandbox') { R.top.classList.add('sbx'); H.buildSide(ctx, root); }
-    R.cheat = h('div', { class: 'hudp cheat', style: { display: 'none' } });
-    R.live = h('div', { class: 'hudp live', style: { display: 'none' } });
     R.clock = IT.DayNight ? clockEl() : null;   // v6 day / night clock (left of the top strip)
     if (R.clock) root.appendChild(R.clock);
-    root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim); root.appendChild(R.cheat); root.appendChild(R.live);
+    root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim);
+    // floating panels (drag / resize / persist): recipe sheet (I) + live stats (O), both toggles
+    R.cheat = h('div', { class: 'pcont cheat' }); R.live = h('div', { class: 'pcont live' });
+    R.cheatP = IT.UI.Panel.create({ id: 'cheat', title: t('cheat.title'), content: R.cheat, host: root, fit: true, min: { w: 80, h: 60 }, max: { w: 300, h: 262 }, default: { x: 58, y: 30, w: 160, h: 170 },
+      onChange: on => { H.cheatOn = on; if (on) H.buildCheat(); } });
+    R.liveP = IT.UI.Panel.create({ id: 'live', title: t('hud.liveStats'), content: R.live, host: root, fit: true, min: { w: 80, h: 60 }, max: { w: 300, h: 262 }, default: { x: 224, y: 30, w: 140, h: 130 },
+      onChange: on => { H.statsOn = on; if (on) H.buildLive(); } });
+    H.off.push(() => { R.cheatP.destroy(); R.liveP.destroy(); });
+    H.cheatOn = R.cheatP.isOpen(); H.statsOn = R.liveP.isOpen();   // restored from localStorage
+    if (H.cheatOn) H.buildCheat();
+    if (H.statsOn) H.buildLive();
     if (IT.ComboBar) IT.ComboBar.bind(ctx, R.top);
     const wm = ev => itemMove(ev), wu = ev => itemUp(ev);
     window.addEventListener('mousemove', wm); window.addEventListener('mouseup', wu);
@@ -828,16 +836,12 @@
   };
 
   // ---------------------------------------------------------------- toggles
-  H.cheatToggle = function () {
-    H.cheatOn = !H.cheatOn;
-    if (H.cheatOn) H.buildCheat();
-    H.refs.cheat.style.display = H.cheatOn ? '' : 'none';
-  };
+  H.cheatToggle = function () { if (H.refs.cheatP) H.refs.cheatP.toggle(); };
   H.buildCheat = function () {
     const { h, icon } = IT.UI, t = IT.t, GM = IT.GAME, R = H.refs, S = IT.Settings;
     R.cheat.textContent = '';
     const key = S.keyOf('cheat');
-    R.cheat.appendChild(h('div', { class: 'chead' }, h('b', { text: t('cheat.title') }), h('span', { text: t('cheat.hint', { key: S.label(key) }) })));
+    R.cheat.appendChild(h('div', { class: 'chead' }, h('span', { text: t('cheat.hint', { key: S.label(key) }) })));
     const rows = h('div', { class: 'crows' });
     for (const s of SPELLS) {
       const rec = GM.SPELL_ORBS[s];
@@ -849,16 +853,13 @@
     }
     R.cheat.appendChild(rows);
   };
-  H.statsShow = function (on) {
-    H.statsOn = !!on; H.refs.live.style.display = on ? '' : 'none';
-    if (on) H.buildLive();
-  };
+  H.statsShow = function (on) { if (H.refs.liveP) H.refs.liveP.setOpen(on); };
+  H.statsToggle = function () { if (H.refs.liveP) H.refs.liveP.toggle(); };
   H.buildLive = function () {
     const c = H.c; if (!c || !c.w._stats) return;
     const { h } = IT.UI, t = IT.t, R = H.refs;
     const S = c.w._stats.summary();
     R.live.textContent = '';
-    R.live.appendChild(h('div', { class: 'chead' }, h('b', { text: t('hud.liveStats') })));
     const f = n => (n == null ? '-' : String(Math.round(n * 10) / 10));
     const row = (a, b) => h('div', { class: 'lrow' }, h('span', { text: a }), h('b', { text: b }));
     R.live.appendChild(row(t('end.time'), f(S.time) + 's'));
@@ -936,7 +937,8 @@
     rkMode(R, ca, !cd);
     if (cd) {
       setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
-      setText(R.rkHint, IT.hasT('rk.countdown.hint') ? IT.t('rk.countdown.hint') : IT.t('rk.countdown.hint.fb'), ca, 'rkhint');
+      const lv = IT.HudSteps && IT.HudSteps.heroLv ? IT.HudSteps.heroLv(rk) : '';
+      setText(R.rkHint, (lv ? lv + ' — ' : '') + (IT.hasT('rk.countdown.hint') ? IT.t('rk.countdown.hint') : IT.t('rk.countdown.hint.fb')), ca, 'rkhint');
     }
     setText(R.rkTv, fmtS(rk.timeLeft), ca, 'rkt'); R.rkTv.classList.toggle('low', rk.timeLeft != null && rk.timeLeft < 5);
     setText(R.rkRv, rk.cleared != null ? String(rk.cleared) : rk.turns != null ? rk.turn + '/' + rk.turns : fmtM(rk.runLeft), ca, 'rkr');

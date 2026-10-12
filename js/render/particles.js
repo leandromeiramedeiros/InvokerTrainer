@@ -10,6 +10,13 @@
   const ramp = new Uint8Array(CAP), st = new Uint8Array(CAP);   // st: 0 free, 1 air, 2 settled
   const RAMP_ID = Object.keys(PX.RAMPS).filter(k => k.endsWith('U')).map(k => k.slice(0, -1));
   const RAMP_U = RAMP_ID.map(k => PX.RAMPS[k + 'U']);
+  // register a custom bright->dark ramp (6 hex colours) under a name; idempotent. Returns the name.
+  function addRamp(name, hexList) {
+    if (RAMP_ID.indexOf(name) >= 0) return name;
+    if (RAMP_ID.length >= 255) return 'fire';
+    RAMP_ID.push(name); RAMP_U.push(hexList.map(PX.abgrHex));
+    return name;
+  }
   const rampIdx = n => Math.max(0, RAMP_ID.indexOf(n));
   let head = 0, live = 0;
 
@@ -88,5 +95,5 @@
   // drop every airborne / settled grain (scenario swap, restart)
   function clear() { st.fill(0); head = 0; live = 0; if (layers) for (const L of layers) L.u.fill(0); }
 
-  IT.Particles = { init, clear, emit, update, draw, get live() { return live; }, CAP };
+  IT.Particles = { init, clear, emit, addRamp, update, draw, get live() { return live; }, CAP };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -221,6 +221,7 @@
       let tm = performance.now();
       IT.Sand.drawGround(R);
       tSand += performance.now() - tm; tm = performance.now();
+      if (IT.Shadows) IT.Shadows.ground(R);      // v6: blob shadows under everything, beneath ground particles / fx
       IT.Particles.draw(R, 0);
       IT.FX.ground(R);
       IT.TowerDraw.ground(R);

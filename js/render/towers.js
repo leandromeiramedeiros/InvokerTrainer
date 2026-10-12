@@ -320,9 +320,6 @@
       } else if (((R.time * 2 + e.id) | 0) % 3 === 0) { cx.fillStyle = 'rgba(80,76,84,0.5)'; cx.fillRect(x - 3 + (((R.time * 3) | 0) % 3), y - 15 - (((R.time * 5) | 0) % 4), 2, 2); }
       return;
     }
-    // ground shadow
-    cx.fillStyle = 'rgba(0,0,0,0.32)';
-    for (let i = 0; i < 6; i++) { const hw = 14 - Math.abs(i - 2) * 2 - (i > 3 ? 2 : 0); cx.fillRect(x - hw + 3, y - 3 + i, hw * 2, 1); }
     const spr = sprite(e.team, e.tier);
     cx.drawImage(spr, x - AX, y - AY);
     // charged orb on top: pulses, flares right after a shot
@@ -387,10 +384,20 @@
     }
   }
 
+  // ground-pass blob shadows (shadows.js): one per standing tower; blob(R, x, y, rx, ry, alpha) in view px
+  function shadows(R, blob) {
+    const ents = R.w.ents, P = R.P;
+    for (let i = 0; i < ents.length; i++) {
+      const e = ents[i];
+      if (e.dead || e.kind !== 'tower' || e.destroyed) continue;
+      R.interp(e);
+      blob(R, Math.round(R.ix / P - R.camX) + 3, Math.round(R.iy / P - R.camY) + FOOT, 14, 3, 0.42);
+    }
+  }
+
   // tower shot: Dire = ember fireball, Radiant = green-gold bolt. (x, y) = screen px with the height already applied, gy = ground y
   function proj(R, e, x, y, gy) {
     const cx = R.cx, t = R.time, dire = e.team === 1;
-    cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.fillRect(x - 2, gy, 5, 2);
     const o = dire ? ['#3a0e0a', '#c02a14', '#ff8a2a', '#ffe6a0'] : ['#0e3a1a', '#2aa84a', '#a8ff7a', '#f4ffd0'];
     IT.FX.ddisc(R, x, y, 4, o[0], 1); IT.FX.ddisc(R, x, y, 3, o[1], 1); IT.FX.ddisc(R, x, y, 2, o[2], 1);
     cx.fillStyle = o[3]; cx.fillRect(x - 1, y - 1, 2, 2);
@@ -400,5 +407,5 @@
 
   function reset() { for (const k in sprites) delete sprites[k]; for (const k in rubble) delete rubble[k]; for (const k in structSpr) delete structSpr[k]; }
 
-  IT.TowerDraw = { draw, hud, ground, lights, proj, reset, struct, structLights, portrait, bakeStruct, SW, SH };
+  IT.TowerDraw = { draw, hud, ground, lights, proj, shadows, reset, struct, structLights, portrait, bakeStruct, SW, SH };
 })(typeof window !== 'undefined' ? window : globalThis);

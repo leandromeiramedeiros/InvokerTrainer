@@ -27,7 +27,7 @@ Values come from `SteamDatabase/GameTracking-Dota2` (`npc_dota_hero_invoker.txt`
 | D D (Sun Strike, scepter) | Cataclysm |
 | F1, L | Select hero / center camera, lock camera |
 | Tab, Esc | Cycle selection, pause |
-| I, O (hold) | Recipe sheet, live stats |
+| I, O (toggle) | Recipe sheet, live stats (floating panels: drag the title bar, resize the corner grip) |
 | P, [, Backspace | Spawn dummy, reset dummies, refresh cooldowns |
 
 Settings: normal-cast mode (aim with range/AoE preview), the legacy one-key-per-spell scheme, and full rebinding with conflict detection. UI in English or Portuguese.

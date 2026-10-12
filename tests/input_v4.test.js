@@ -118,13 +118,13 @@ test('CTRL unified orders: hero + all spirits; off with the setting', () => {
   }
 });
 
-test('stats key (rebindable, default O) holds live stats; Tab is reserved', () => {
+test('stats key (rebindable, default O) toggles live stats; Tab is reserved', () => {
   const r = rig(); r.at(10);
   const calls = [];
-  r.In.hooks.statsHold = v => calls.push(v);
+  r.In.hooks.stats = () => calls.push('stats');
   assert.equal(r.IT.Settings.data.keys.common.stats, 'O');
   const ev = r.down('o', { code: 'KeyO' }); r.up(ev);
-  assert.deepEqual(calls, [true, false]);
+  assert.deepEqual(calls, ['stats']);
   assert.ok(r.IT.Settings.RESERVED ? r.IT.Settings.RESERVED.includes('Tab') : true);
 });
 
