@@ -87,14 +87,14 @@ test('data: scenarios are well-formed', () => {
 
 test('difficulty table covers every id', () => {
   const D = IT.DIFFICULTY;
-  assert.deepEqual(D.order, ['ianzinho', 'easy', 'normal', 'hard', 'bambam']);
+  assert.deepEqual(D.order, ['ian', 'easy', 'common', 'hard', 'bambam']);
   for (const id of D.order) {
     const d = D.get(id);
     assert.ok(IT.GAME.DUMMY_PRESETS[d.preset] && ['stationary', 'wander', 'evasive'].includes(d.behavior), id);
     assert.ok(d.timer > 0 && d.mult > 0 && d.reaction >= 0, id);
   }
-  assert.ok(D.ianzinho.hints && !D.hard.hints && D.bambam.fog && D.bambam.useBkb && D.hard.stunBolt && D.normal.reaction === 0.6 && D.bambam.reaction === 0.25);
-  assert.ok(D.ianzinho.timer >= 2);
+  assert.ok(D.ian.hints && !D.hard.hints && D.bambam.fog && D.bambam.useBkb && D.hard.stunBolt && D.common.reaction === 0.6 && D.bambam.reaction === 0.25);
+  assert.ok(D.ian.timer >= 2);
 });
 
 test('apply(): dummies placed on walkable ground, loadout swapped in place', () => {
@@ -123,7 +123,7 @@ test('countdown freezes the world, then play starts', () => {
   assert.equal(hud.phase, 'play'); assert.ok(hud.scenario && hud.objective && hud.timeLeft > 0);
 });
 
-for (const df of ['ianzinho', 'easy', 'normal', 'hard', 'bambam']) {
+for (const df of ['ian', 'easy', 'common', 'hard', 'bambam']) {
   test('bot solves every scenario at ' + df, () => {
     const bad = [];
     for (const sc of IT.SCENARIOS) {

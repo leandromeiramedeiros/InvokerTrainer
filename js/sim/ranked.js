@@ -108,7 +108,7 @@
       });
       e.reaction = mot === 'still' ? 99 : df.reaction; e.hpRegen = 0; e.base.hpRegen = 0;
       if (mot === 'flee' || mot === 'chase') { const ms = mot === 'flee' ? 330 * df.flee : 380 * df.chase; e.ms = ms; e.base.ms = ms; }
-      if (d.hp != null && d.hp < 1) e.hp = e.maxHp * Math.min(1, 0.25 + (d.hp - 0.25) * (df.hp || 1));
+      if (d.hp != null && d.hp < 1) e.hp = e.maxHp * Math.min(1, 0.25 + (d.hp - 0.25) * (df.hpMul || df.hp || 1));
       e.scn = { mot: mot || null, next: 0, lastSeen: null };
       out.push(e);
     });
@@ -126,7 +126,7 @@
       mode, ranked, fixed, rating, rng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
       runLeft: ranked ? (opts.runSeconds || RUN_SECONDS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
       pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false,
-      diffId: opts.diff || 'normal',
+      diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
       countdown: ranked ? COUNTDOWN : fixed && mode === 'sandbox' ? 0 : PRACTICE_COUNTDOWN,
     };
     const DF = () => IT.DIFFICULTY;
