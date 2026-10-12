@@ -210,13 +210,16 @@
     R.rkBadge = h('span', { class: 'rkdiff' }); R.rkTip = h('span', { class: 'rktip' });
     R.rkGo = h('div', { class: 'rkhint', text: t('hud.rkHint') });   // countdown ends on the first gameplay action (no button)
     R.rkCombo = h('div', { class: 'rkcombo' });
+    R.rkTl = h('div', { class: 'rktl', style: { display: 'none' } });   // F1 step-by-step timeline
+    R.rkWin = h('span', { class: 'rkwin' }); R.rkLoseL = h('span', { class: 'rklose' });   // F1 win + lose lines (all modes)
+    R.rkInfo = h('div', { class: 'rkinfo' }, R.rkWin, R.rkLoseL);
     R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
     R.rkTm = h('div', { class: 'rkt tm' }, h('span', { text: t('hud.rkTime') }), R.rkTv);
     R.rkRl = h('span', { text: t('hud.rkRun') });
     R.rkRn = h('div', { class: 'rkt' }, R.rkRl, R.rkRv);
     R.rkSc = h('div', { class: 'rkt sc' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed);
     R.rkRow = h('div', { class: 'rkrow' }, R.rkTm, R.rkSc, R.rkRn);
-    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkGo, h('div', { class: 'rkscen' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkObj, R.rkTip), R.rkCombo, R.rkRow);
+    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkGo, h('div', { class: 'rkscen' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkObj, R.rkTip), R.rkInfo, R.rkCombo, R.rkTl, R.rkRow);
   }
   // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id }]
   function rkActions(rk) {
@@ -232,12 +235,7 @@
       return out;
     }
     const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null;
-    for (const s of (sc && sc.sol) || []) {
-      if (s.a === 'attack') out.push({ k: 'attack' });
-      else if (s.a === 'move') out.push({ k: 'move' });
-      else if (s.a) out.push({ k: GM.SPELL_ORBS[s.a] ? 'spell' : 'item', id: s.a });
-    }
-    return out;
+    return IT.HudSteps.derive(sc);   // F1: sc.steps, else the solver script / spell list
   }
   function rkBuildCombo(R, rk, ord, hints) {
     const { h, icon } = IT.UI, t = IT.t;
@@ -255,6 +253,88 @@
     });
     R.rkCombo.style.display = acts.length ? '' : 'none';
   }
+  // ---------------------------------------------------------------- F1: scenario HUD modes (minimal | default | steps)
+  const hudMode = () => { const m = IT.Settings && IT.Settings.get ? IT.Settings.get().hudMode : null; return m === 'minimal' || m === 'steps' ? m : 'default'; };
+  const keyLab = a => IT.Settings.label(IT.Settings.keyOf(a));
+  const locT = v => v == null ? '' : typeof v === 'object' ? (v[IT.lang] || v.en || '') : String(v);
+  const dedupeActs = acts => { const seen = new Set(); return acts.filter(a => (a.k === 'spell' || a.k === 'item') && !seen.has(a.id) && seen.add(a.id)); };
+  const stepName = a => a.k === 'spell' || a.k === 'item' ? nmOf(a.id) : t('f1.' + a.k);
+  function orbChip(ch) { const { h, icon } = IT.UI; return h('span', { class: 'tk orb ' + ORBN[ch] }, icon(ORBN[ch], 'mini'), h('b', { text: keyLab('orb' + ch) })); }
+  const invChip = () => { const { h, icon } = IT.UI; return h('span', { class: 'tk inv' }, icon('invoke', 'mini'), h('b', { text: keyLab('invoke') })); };
+  function itemKey(id, hero) { const i = hero.items.findIndex(x => x && x.id === id); return i >= 0 ? keyLab('item' + (i + 1)) : '?'; }
+  function badgeBox(kind) { const { h } = IT.UI; return h('div', { class: 'rka badge ' + kind }, h('b', { text: t(kind === 'attack' ? 'hud.rkAtk' : kind === 'move' ? 'hud.rkMov' : 'hud.rkPos') })); }
+  // default / steps: skill cards (big icon, bigger name, orb keys + invoke / item key)
+  function rkBuildCards(R, rk, ord, hints) {
+    const { h, icon } = IT.UI, hero = H.c.hero;
+    R.rkCombo.textContent = '';
+    let acts = rkActions(rk);
+    if (!ord) acts = dedupeActs(acts);
+    acts.forEach((a, i) => {
+      if (ord && i) R.rkCombo.appendChild(h('i', { class: 'rkar' }));
+      let card;
+      if (a.k === 'spell') {
+        const rec = IT.GAME.SPELL_ORBS[a.id] || '';
+        card = h('div', { class: 'rkc spell' }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }),
+          h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: nmOf(a.id) }),
+            hints ? h('span', { class: 'rkok' }, rec.split('').map(orbChip), invChip()) : null));
+      } else if (a.k === 'item') {
+        card = h('div', { class: 'rkc item' }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }),
+          h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: nmOf(a.id) }), h('span', { class: 'rkok' }, h('span', { class: 'tk key' }, h('b', { text: itemKey(a.id, hero) })))));
+      } else card = h('div', { class: 'rkc badge' }, badgeBox(a.k), h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: stepName(a) })));
+      R.rkCombo.appendChild(card);
+    });
+    R.rkCombo.style.display = acts.length ? '' : 'none';
+  }
+  // step-by-step timeline: one box per planned step (orb presses, invoke, cast / item / attack / move); the tracker flags them
+  function rkBuildTimeline(R, hints) {
+    const { h, icon } = IT.UI, S = IT.Settings, hero = H.c.hero, tr = H.trk && H.trk.tr;
+    R.rkTl.textContent = ''; R.rkTls = [];
+    if (!tr || !tr.steps.length) { R.rkTl.style.display = 'none'; return; }
+    const legacy = S.data.scheme === 'legacy';
+    tr.steps.forEach((s, i) => {
+      const toks = [];
+      s.presses.forEach(p => {
+        let el = null;
+        if (p.t === 'orb') { if (hints) el = orbChip(p.o); }
+        else if (p.t === 'inv') { if (hints) el = invChip(); }
+        else if (p.t === 'cast') el = h('span', { class: 'tk cast' }, hasIcon(s.id) ? icon(s.id, 'mini') : null, h('b', { text: legacy ? S.label(S.data.keys.legacy[s.id]) : keyLab('slot' + (p.slot + 1)) }));
+        else if (p.t === 'item') el = h('span', { class: 'tk item' }, hasIcon(s.id) ? icon(s.id, 'mini') : null, h('b', { text: p.slot >= 0 ? keyLab('item' + (p.slot + 1)) : itemKey(s.id, hero) }));
+        else el = h('span', { class: 'tk badge ' + s.k }, h('b', { text: t(s.k === 'attack' ? 'hud.rkAtk' : s.k === 'move' ? 'hud.rkMov' : 'hud.rkPos') }));
+        if (el) { el._p = p; toks.push(el); }
+      });
+      const lab = s.label ? locT(s.label) : '';
+      const box = h('div', { class: 'tls todo', 'data-tip': t('f1.stepN', { n: i + 1 }) + ' - ' + stepName(s) },
+        h('em', { class: 'tln', text: String(i + 1) }), h('div', { class: 'tlk' }, toks), lab ? h('span', { class: 'tll', text: lab }) : null);
+      box._toks = toks;
+      box.addEventListener('animationend', ev => { if (ev.animationName === 'tlfall') box.classList.add('gone'); });
+      R.rkTl.appendChild(box); R.rkTls.push(box);
+    });
+    R.rkTl.style.display = '';
+  }
+  // flash the current step, fade + drop the finished ones
+  function updTimeline(R) {
+    const tr = H.trk && H.trk.tr;
+    if (!tr || !R.rkTls || !R.rkTls.length) return;
+    const st = tr.states(), cur = st.indexOf('now');
+    const key = st.join('') + '|' + (cur >= 0 ? tr.pressStates(cur).join('') : '');
+    if (R.rkTlKey === key) return;
+    R.rkTlKey = key;
+    R.rkTls.forEach((el, i) => {
+      if (st[i] === 'done') { if (!el._done) { el._done = true; el.className = 'tls done'; } }
+      else if (!el._done) {
+        el.className = 'tls ' + st[i];
+        if (st[i] === 'now') { const ps = tr.pressStates(i); el._toks.forEach(k => { const s = ps[tr.steps[i].presses.indexOf(k._p)]; k.classList.toggle('pd', s === 'done'); k.classList.toggle('pn', s === 'now'); }); }
+      }
+    });
+  }
+  // (re)start step progress for the current scenario: plan the presses from the hero's present orbs / slots / items
+  function rkStartTracker(rk, key) {
+    const hero = H.c.hero, S = IT.HudSteps, sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null;
+    const steps = rkActions(rk);
+    const state = { orbs: hero.inv.orbs, slots: hero.inv.slots, items: hero.items.map(x => x && x.id), preinvoked: sc && sc.hero && sc.hero.preinvoked };
+    H.trk = { key, tr: S.tracker(S.plan(steps, state)) };
+  }
+  function trkFeed(ev) { if (H.trk && H.trk.tr) H.trk.tr.feed(ev); }
   const fmtS = s => { s = Math.max(0, s || 0); const v = Math.floor(s * 10) / 10, m = Math.floor(v / 60); return m + ':' + (v - m * 60).toFixed(1).padStart(4, '0'); };
   const fmtM = s => { const v = Math.max(0, Math.floor(s || 0)), m = Math.floor(v / 60); return m + ':' + String(v - m * 60).padStart(2, '0'); };
   function setIcon(b, id) {
@@ -349,6 +429,15 @@
       if (!s || !tg || tg.team !== 1 || s.team !== 0 || !(p.dealt > 0)) return;
       H.dps.push([w.t, p.dealt]); H.total += p.dealt;
     }));
+    // F1: step progress from the hero's own events
+    H.trk = null; H.scnSeq = 0;
+    const hid = ctx.hero.id;
+    H.off.push(ctx.w.on('orb', p => { if (p.unit === hid) trkFeed({ type: 'orb', orb: p.orb }); }));
+    H.off.push(ctx.w.on('invoke', p => { if (p.unit === hid) trkFeed({ type: 'invoke', spell: p.spell }); }));
+    H.off.push(ctx.w.on('cast', p => { if (p.unit === hid) trkFeed({ type: 'cast', ability: p.ability }); }));
+    H.off.push(ctx.w.on('attack', p => { if (p.src === hid) trkFeed({ type: 'attack' }); }));
+    H.off.push(ctx.w.on('order', p => { if (p.unit === hid && p.order && p.order.type === 'move') trkFeed({ type: 'move' }); }));
+    H.off.push(ctx.w.on('scnStart', () => { H.scnSeq = (H.scnSeq || 0) + 1; }));
     H.lastLang = IT.lang;
     H.update(0);
   };
@@ -461,7 +550,7 @@
   };
 
   // ranked run panel: countdown / flair title / combo icons / timers / score + medal. Hidden when IT.Ranked.hud(w) is null.
-  H.updRanked = function (R, ca) {
+  H.updRanked = function (R, ca, dt) {
     const rk = IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(H.c.w) : null;
     if (!rk) { if (ca.rk !== 0) { ca.rk = 0; R.rk.style.display = 'none'; R.top.classList.remove('rk'); } return; }
     if (ca.rk !== 1) { ca.rk = 1; R.rk.style.display = ''; R.top.classList.add('rk'); }
@@ -489,9 +578,24 @@
     R.rkRn.style.display = rk.runLeft == null && rk.turns == null ? 'none' : '';
     R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
     setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
-    const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def;
-    const ck = rk.id + '|' + rk.n + '|' + (def ? def.id : '') + '|' + IT.lang + '|' + (ord ? 1 : 0) + (hints ? 1 : 0);
-    if (ca.rkCk !== ck) { ca.rkCk = ck; rkBuildCombo(R, rk, ord, hints); R.rkCombo.classList.toggle('ord', ord); }
+    const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def, hm = hudMode();
+    const tk = rk.id + '|' + rk.n + '|' + (H.scnSeq || 0) + '|' + (def ? def.id : '');
+    if (!H.trk || H.trk.key !== tk) { rkStartTracker(rk, tk); ca.rkCk = null; }   // new scenario / redo: restart step progress
+    const ck = tk + '|' + IT.lang + '|' + (ord ? 1 : 0) + (hints ? 1 : 0) + '|' + hm;
+    if (ca.rkCk !== ck) {
+      ca.rkCk = ck; R.rk.className = 'rkp m-' + hm;
+      if (hm === 'minimal') rkBuildCombo(R, rk, ord, hints); else rkBuildCards(R, rk, ord, hints);
+      R.rkCombo.classList.toggle('ord', ord);
+      if (hm === 'steps') { rkBuildTimeline(R, hints); R.rkTlKey = null; } else { R.rkTl.textContent = ''; R.rkTls = []; R.rkTl.style.display = 'none'; }
+      // all modes: win (scenario `win` text; the objective line already states the goal) + lose conditions
+      const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null, HS = IT.HudSteps;
+      const win = sc && sc.win ? locT(sc.win) : '', lose = sc && sc.lose ? locT(sc.lose) : HS.loseKeys(sc, rk.timeLeft != null).filter(k => IT.hasT('f1.lose.' + k)).map(k => t('f1.lose.' + k)).join(', ');
+      R.rkWin.textContent = win ? t('f1.win') + ' ' + win : '';
+      R.rkLoseL.textContent = lose ? t('f1.lose') + ' ' + lose : '';
+      R.rkWin.style.display = win ? '' : 'none'; R.rkLoseL.style.display = lose ? '' : 'none';
+      R.rkInfo.style.display = win || lose ? '' : 'none';
+    }
+    if (hm === 'steps') updTimeline(R);
   };
 
   H.update = function (dt) {
@@ -569,7 +673,7 @@
     }
     if (U) H.updUnit(U, R, ca, w);
     // ranked panel
-    H.updRanked(R, ca);
+    H.updRanked(R, ca, dt);
     H.updHood(R, ca, w.loadout || {}, dt);
     // orbs (a status) sit centred over the ability row; other statuses take slots to their right
     const lk = innerWidth + 'x' + innerHeight + ':' + (U ? 1 : 0);
