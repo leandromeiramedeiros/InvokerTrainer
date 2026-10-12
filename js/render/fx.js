@@ -8,6 +8,8 @@
   let fxs = [];               // one-shots
   const tele = new Map();     // unit id -> { t0, dur, kind }
   const trail = new Map();    // entity id -> accumulated emit time
+  const pathRec = new Map();  // unit id -> render time of the player's last move/attack/cast order (animated path line, ~1 s)
+  const PATH_LIFE = 1.0, PATH_FADE = 0.4, ORDER_COL = { attack: '#ff6a58', cast: '#6adcff', move: '#5dff7a' };
   const texts = [];
   const DMG_COL = { physical: '#ff6a58', magical: '#5aaaff', pure: '#ffd84a' };
 
@@ -231,7 +233,8 @@
   }
 
   function onOrder(p) {
-    const w = R_.w, o = p.order;
+    const w = R_.w, o = p.order, u = w.byId.get(p.unit);
+    if (o && u && !u.dead && !o.queued && u.team === 0 && (u === w.hero || (u.kind === 'spirit' && o.player)) && ORDER_COL[o.type]) pathRec.set(u.id, R_.time);
     if (!w.hero || p.unit !== w.hero.id || !o) return;
     if (o.type === 'move' && o.x != null) addFx({ k: 'ping', x: o.x, y: o.y, dur: 0.55, color: '#5dff7a' });
     else if (o.type === 'attack' && o.target != null) {
@@ -261,6 +264,9 @@
     w.on('fx', onFx); w.on('damage', onDamage); w.on('order', onOrder); w.on('blink', onBlink);
     w.on('bolt', p => { if (p.phase === 'cancel' || p.phase === 'hit' || p.phase === 'blocked') tele.delete(p.unit); });
   }
+
+  // drop every one-shot / channel / telegraph / damage number / order path (scenario swap, restart)
+  function clear() { fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); }
 
   // ---------- per-frame update ----------
   function update(R, dt) {
@@ -332,19 +338,62 @@
     }
   }
 
+  // ---------- order path lines ----------
+  // Animated marching dashes from the unit along its nav path (sim `u.path`, else straight) to the order target; fades after ~1 s.
+  function drawOrderPaths(R) {
+    const w = R.w, cx = R.cx, t = R.time;
+    for (const [id, t0] of pathRec) {
+      const u = w.byId.get(id), hd = u && !u.dead ? u.orders[0] : null, age = t - t0;
+      if (!hd || age > PATH_LIFE || !ORDER_COL[hd.type]) { pathRec.delete(id); continue; }
+      if (hd.type === 'cast' && !u.path.length) continue;   // in-range cast: nothing to walk
+      const wp = IT.Orders && IT.Orders.waypoints ? IT.Orders.waypoints(u)[0] : null;
+      const tx = wp ? wp.x : hd.x, ty = wp ? wp.y : hd.y;
+      if (tx == null || ty == null) continue;
+      const a = age < PATH_LIFE - PATH_FADE ? 1 : Math.max(0, (PATH_LIFE - age) / PATH_FADE);
+      R.interp(u);
+      const pts = [pxs(R, R.ix), pys(R, R.iy)];
+      for (const q of u.path) pts.push(pxs(R, q.x), pys(R, q.y));
+      const ex = pxs(R, tx), ey = pys(R, ty), n = pts.length;
+      if (Math.hypot(ex - pts[n - 2], ey - pts[n - 1]) > 1.5) pts.push(ex, ey);
+      pathLine(R, pts, ORDER_COL[hd.type], a, t * 14);
+      const x = Math.round(ex), y = Math.round(ey);   // target cross
+      cx.fillStyle = '#000'; cx.fillRect(x - 2, y - 1, 5, 3); cx.fillRect(x - 1, y - 2, 3, 5);
+      cx.fillStyle = ORDER_COL[hd.type]; cx.fillRect(x - 1, y, 3, 1); cx.fillRect(x, y - 1, 1, 3);
+    }
+  }
+  function pathLine(R, pts, col, a, phase) {
+    const cx = R.cx;
+    let d = 0;
+    for (let i = 2; i < pts.length; i += 2) {
+      const x0 = pts[i - 2], y0 = pts[i - 1], dx = pts[i] - x0, dy = pts[i + 1] - y0, len = Math.hypot(dx, dy);
+      if (len < 0.5) continue;
+      const ux = dx / len, uy = dy / len;
+      for (let s = 0; s < len; s++, d++) {
+        if ((((d - phase) % 6) + 6) % 6 >= 3) continue;
+        const px = Math.round(x0 + ux * s), py = Math.round(y0 + uy * s);
+        if (px < 0 || py < 0 || px >= R.VW || py >= R.VH) continue;
+        if (a < 1 && PX.bayer(px + R.camX, py + R.camY) > a) continue;
+        cx.fillStyle = 'rgba(0,0,0,0.5)'; cx.fillRect(px, py + 1, 1, 1);
+        cx.fillStyle = col; cx.fillRect(px, py, 1, 1);
+      }
+    }
+  }
+
   // ---------- ground layer ----------
   function ground(R) {
     const w = R.w, cx = R.cx, t = R.time;
     // waypoints
     const h = w.hero;
+    drawOrderPaths(R);
     if (h && h.orders.length && IT.Orders && IT.Orders.waypoints) {
       R.interp(h);
       let px = pxs(R, R.ix), py = pys(R, R.iy);
       const wp = IT.Orders.waypoints(h);
       for (let i = 0; i < wp.length; i++) {
         const q = wp[i], qx = pxs(R, q.x), qy = pys(R, q.y);
-        const col = q.type === 'attack' ? '#ff6a58' : q.type === 'cast' ? '#6adcff' : '#5dff7a';
-        PX.dotted(cx, px, py, qx, qy, col, 4, -t * 10);
+        const col = ORDER_COL[q.type] || ORDER_COL.move;
+        if (i === 0) { if (wp.length === 1) break; }   // leg 0 is the animated fading path (drawOrderPaths); only queued legs stay as dotted lines
+        else PX.dotted(cx, px, py, qx, qy, col, 4, -t * 10);
         cx.fillStyle = '#000'; cx.fillRect(Math.round(qx) - 2, Math.round(qy) - 1, 5, 3); cx.fillRect(Math.round(qx) - 1, Math.round(qy) - 2, 3, 5);
         cx.fillStyle = col; cx.fillRect(Math.round(qx) - 1, Math.round(qy), 3, 1); cx.fillRect(Math.round(qx), Math.round(qy) - 1, 1, 3);
         px = qx; py = qy;
@@ -766,5 +815,5 @@
     }
   }
 
-  IT.FX = { init, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal };
+  IT.FX = { init, clear, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal };
 })(typeof window !== 'undefined' ? window : globalThis);

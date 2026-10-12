@@ -1,4 +1,4 @@
-// Fog of war (render side): explored set + smoothed per-tile fog level (0 unexplored, 1 explored, 2 visible).
+// Fog of war (render side, Dota style, no memory): smoothed per-tile fog level (1 = outside vision: dark, 2 = visible).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -6,20 +6,16 @@
   function create(map) {
     const N = map.w * map.h;
     const f = {
-      explored: new Uint8Array(N), cur: new Float32Array(N).fill(0), seenT: -1,
+      cur: new Float32Array(N).fill(1),   // level tracks real vision even when the shading setting is off (fx gating uses it)
       // call once per frame
       update(w, dt, camX, camY, VW, VH) {
         const vis = w.vis, off = w.fog === false || !vis;
-        if (!off && w._visT !== f.seenT) {
-          f.seenT = w._visT;
-          for (let i = 0; i < N; i++) if (vis[i]) f.explored[i] = 1;
-        }
         const T = 8, tx0 = Math.max(0, (camX / T | 0) - 3), ty0 = Math.max(0, (camY / T | 0) - 3);
         const tx1 = Math.min(map.w - 1, ((camX + VW) / T | 0) + 3), ty1 = Math.min(map.h - 1, ((camY + VH) / T | 0) + 3);
-        const k = Math.min(1, dt * 9), cur = f.cur, ex = f.explored;
+        const k = Math.min(1, dt * 9), cur = f.cur;
         for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
           const i = ty * map.w + tx;
-          const tg = off ? 2 : vis[i] ? 2 : ex[i] ? 1 : 0;
+          const tg = off || vis[i] ? 2 : 1;
           const d = tg - cur[i];
           cur[i] = Math.abs(d) < 0.02 ? tg : cur[i] + d * k;
         }

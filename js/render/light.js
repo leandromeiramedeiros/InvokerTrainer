@@ -6,7 +6,7 @@
   const PX = IT.Pixel;
   const CELL = 4, LW = 120, LH = 68, LEVELS = 9;
   const AMB = [0.30, 0.37, 0.60];
-  const EXPL = 0.42;      // explored-but-hidden brightness relative to ambient
+  const EXPL = 0.38;      // outside-vision brightness relative to ambient (very dark, terrain still readable)
   const DARK = 0.015;
 
   function create(VW, VH) {

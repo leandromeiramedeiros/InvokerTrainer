@@ -247,6 +247,7 @@
   D('set.camLock', 'Camera lock on hero', 'Câmera presa no herói');
   D('set.edgeScroll', 'Edge scroll', 'Rolagem pela borda');
   D('set.bloom', 'Bloom', 'Bloom');
+  D('set.fogShade', 'Fog of war shading (dark outside vision)', 'Névoa de guerra (escuro fora da visão)');
   D('set.sound', 'Sound', 'Som');
   D('set.hints', 'Recipe hints', 'Dicas de receita');
   D('set.keys', 'Keys', 'Teclas');

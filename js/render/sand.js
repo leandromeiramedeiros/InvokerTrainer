@@ -1078,14 +1078,17 @@
   // zoom: keep the simulated cells, only rebuild the view-sized buffers
   function resize(R) { VW = R.VW; VH = R.VH; buffers(); emAny = false; }
 
+  function clear() {   // drop all sand / flyers / timers (scenario swap, restart)
+    layerReset(gLayer); layerReset(aLayer); chans.length = 0; clearAll(); stamp.fill(0); fhead = 0; flive = 0; pk.fill(0); timers.length = 0; accm.clear(); walls.length = 0; hasCam = false; total = 0; gHad = aHad = false;
+  }
   function init(R) {
     R_ = R; VW = R.VW; VH = R.VH; P = R.P;
     buffers();
-    layerReset(gLayer); layerReset(aLayer); chans.length = 0; clearAll(); stamp.fill(0); fhead = 0; flive = 0; pk.fill(0); timers.length = 0; accm.clear(); walls.length = 0; hasCam = false; total = 0; gHad = aHad = false;
+    clear();
   }
 
   IT.Sand = {
-    init, resize, update, drawGround, drawAir, lights, event, blink, fly, dep, discDep, bolt, strike,
+    init, clear, resize, update, drawGround, drawAir, lights, event, blink, fly, dep, discDep, bolt, strike,
     get count() { return total + flive; }, get cells() { return total; }, get flyers() { return flive; },
     KIND: { FIRE: K_FIRE, SMOKE: K_SMOKE, EMBER: K_EMBER, SPARK: K_SPARK, DROP: K_DROP, GRAIN: K_GRAIN, SHARD: K_SHARD, MIST: K_MIST, MOTE: K_MOTE, ARC: K_ARC },
   };

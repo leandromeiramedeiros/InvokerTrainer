@@ -727,22 +727,22 @@
   In.previewId = previewId;
 
   const STY = {   // stroke, fill (in range), stroke/fill when the cursor is out of cast range
-    range: ['rgba(255,226,110,0.85)', 'rgba(255,226,110,0.05)'],
-    aoe: ['rgba(255,90,200,0.98)', 'rgba(255,90,200,0.17)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.07)'],
-    path: ['rgba(255,150,90,0.85)', 'rgba(255,120,60,0.10)', 'rgba(255,255,255,0.40)', 'rgba(255,255,255,0.05)'],
-    tgt: ['rgba(120,255,160,0.95)', 'rgba(120,255,160,0.10)'],
-    cata: ['rgba(255,140,40,0.9)', 'rgba(255,140,40,0.06)'],
-    aura: ['rgba(120,190,255,0.55)', 'rgba(120,190,255,0.02)'],
+    range: ['rgba(255,226,110,0.5)', 'rgba(255,226,110,0.025)'],
+    aoe: ['rgba(255,90,200,0.6)', 'rgba(255,90,200,0.085)', 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0.035)'],
+    path: ['rgba(255,150,90,0.5)', 'rgba(255,120,60,0.05)', 'rgba(255,255,255,0.25)', 'rgba(255,255,255,0.025)'],
+    tgt: ['rgba(120,255,160,0.6)', 'rgba(120,255,160,0.05)'],
+    cata: ['rgba(255,140,40,0.55)', 'rgba(255,140,40,0.03)'],
+    aura: ['rgba(120,190,255,0.35)', 'rgba(120,190,255,0.01)'],
   };
   function drawShapes(g, c, info, k) {
-    const cam = c.cam, lw = Math.max(1, 1.4 * k), pulse = 0.85 + 0.15 * Math.sin(In.now() / 160);
+    const cam = c.cam, lw = Math.max(1, 0.8 * k), pulse = 0.85 + 0.15 * Math.sin(In.now() / 160);
     const tp = (x, y) => cam.toScreen(x, y);
     const paint = (sh, trace) => {
       const sty = STY[sh.st] || STY.aoe, out = !info.inRange && sty.length > 2;
       const stroke = out ? sty[2] : sty[0], fill = out ? sty[3] : sty[1];
       g.setLineDash(sh.st === 'range' || sh.st === 'aura' || sh.st === 'cata' ? [4 * k, 3 * k] : []);
       g.beginPath(); trace();
-      g.lineWidth = lw + 1.6 * k; g.strokeStyle = 'rgba(0,0,0,0.45)'; g.stroke();   // dark underlay keeps it readable on any terrain
+      g.lineWidth = lw + 0.8 * k; g.strokeStyle = 'rgba(0,0,0,0.28)'; g.stroke();   // dark underlay keeps it readable on any terrain
       g.fillStyle = fill; g.globalAlpha = sh.st === 'aoe' ? pulse : 1; g.fill(); g.globalAlpha = 1;
       g.lineWidth = lw; g.strokeStyle = stroke; g.stroke();
     };
@@ -766,7 +766,7 @@
       g.lineWidth = lw; g.strokeStyle = 'rgba(90,255,110,' + a + ')'; g.stroke();
     };
     g.save();
-    if (In.sel.group !== 'hero') for (const e of selUnits()) ring(e, 0.95);
+    // selected units are ringed on the ground by render/units.js (selRing)
     if (r) {
       for (const e of boxCandidates(r)) ring(e, 0.6);
       const x = r.x0, y = r.y0, ww = r.x1 - r.x0, hh = r.y1 - r.y0;
@@ -790,7 +790,7 @@
     drawShapes(g, c, info, k);
     if (info.point && info.range > 0) {   // guide from Invoker to the aim point
       const hs = cam.toScreen(hero.x, hero.y), mx = Math.round(In.mouse.x), my = Math.round(In.mouse.y);
-      g.save(); g.globalAlpha = 0.4; g.lineWidth = Math.max(1, k); g.strokeStyle = info.inRange ? STY.aoe[0] : STY.aoe[2];
+      g.save(); g.globalAlpha = 0.25; g.lineWidth = Math.max(1, 0.7 * k); g.strokeStyle = info.inRange ? STY.aoe[0] : STY.aoe[2];
       g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(mx, my); g.stroke(); g.restore();
     }
   };

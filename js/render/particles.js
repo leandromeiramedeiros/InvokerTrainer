@@ -85,5 +85,8 @@
     R.cx.drawImage(L.cv, 0, 0);
   }
 
-  IT.Particles = { init, emit, update, draw, get live() { return live; }, CAP };
+  // drop every airborne / settled grain (scenario swap, restart)
+  function clear() { st.fill(0); head = 0; live = 0; if (layers) for (const L of layers) L.u.fill(0); }
+
+  IT.Particles = { init, clear, emit, update, draw, get live() { return live; }, CAP };
 })(typeof window !== 'undefined' ? window : globalThis);

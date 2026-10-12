@@ -239,6 +239,7 @@
     resetDummies() {
       if (!g || g.mode !== 'sandbox') return;
       if (g.run) { g.run.redo(); UI.toast(IT.t('toast.dummiesReset'), 'info'); return; }   // scenario sandbox: replay it
+      if (g.R && g.R.clearVfx) g.R.clearVfx();
       const ds = g.w.query(e => e.kind === 'dummy');
       ds.forEach((d, i) => {
         if (i >= g.nDummies) { g.w.remove(d); return; }

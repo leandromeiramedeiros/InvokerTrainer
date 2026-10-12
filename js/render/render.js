@@ -108,6 +108,10 @@
     };
     IT.FX.init(R);
     IT.Sand.init(R);
+    // VFX never carries over: a new world, a scenario swap / redo (scnStart) or a sandbox reset starts clean
+    R.clearVfx = () => { IT.Particles.clear(); IT.Sand.clear(); IT.FX.clear(); };
+    R.clearVfx();
+    w.on('scnStart', () => R.clearVfx());
     w.on('cast', p => { if (p.kind !== 'item') IT.UnitDraw.castFlash(R, p); });   // spells only; items have no pose
     w.on('attack', p => IT.UnitDraw.launched(R, p));                                // wind-up release pop
 
@@ -138,14 +142,14 @@
       const cx = mmCx;
       cx.fillStyle = '#000'; cx.fillRect(MMX - 1, MMY - 1, MM_W + 2, MM_H + 2);
       cx.drawImage(mmBase, MMX, MMY);
-      const fogOn = w.fog !== false, W = w.map.w;
+      const fogOn = w.fog !== false && fog.shade, W = w.map.w;
       if (fogOn) {
         if ((mmTick++ % 6) === 0) {
           const u = new Uint32Array(mmImg.data.buffer), cur = fog.cur;
           for (let y = 0; y < MM_H; y++) for (let x = 0; x < MM_W; x++) {
             const k = y * MM_W + x, x0 = mmIx0[x], x1 = mmIx1[x], y0 = mmIy0[y] * W, y1 = mmIy1[y] * W;
             const f = (cur[y0 + x0] + cur[y0 + x1] + cur[y1 + x0] + cur[y1 + x1]) * 0.25;
-            const a = f >= 2 ? 0 : f >= 1 ? (2 - f) * 90 : 90 + (1 - f) * 150;
+            const a = f >= 2 ? 0 : (2 - f) * 130;
             u[k] = (Math.round(a) << 24) | 0x100804;
           }
           mmFogC.putImageData(mmImg, 0, 0);
@@ -175,7 +179,9 @@
         sx = Math.round((Math.random() - 0.5) * 2 * a); sy = Math.round((Math.random() - 0.5) * 2 * a);
       }
       R.camX = Math.max(0, Math.min(ter.W - VW, cam.px + sx)); R.camY = Math.max(0, Math.min(ter.H - VH, cam.py + sy));
-      const fogOn = w.fog !== false, S = R.stats;
+      const shade = !(IT.Settings && IT.Settings.get) || IT.Settings.get().fogShade !== false;   // setting: dark outside vision
+      fog.shade = shade;
+      const fogOn = w.fog !== false && shade, S = R.stats;
       // GL needs a live context; a lost/failed one drops back to the 2D multiply path + CSS glow
       setGL(!!(comp && comp.ok));
       R.cx = cx = useGL ? sceneCx : gameCx;

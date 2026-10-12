@@ -15,7 +15,7 @@
     for (let i = 1; i <= 6; i++) legacy['item' + i] = String(i);
     return {
       castMode: 'quick', scheme: 'slots', autoAttack: true, camLock: false, edgeScroll: true,
-      bloom: true, sound: true, hints: true, lang: 'en',
+      bloom: true, fogShade: true, sound: true, hints: true, lang: 'en',
       camSpeed: 1,                 // 0.5..2 multiplier on camera scroll speed
       zoom: 1,                     // scroll-wheel zoom step (GAME.ZOOMS)
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
@@ -263,6 +263,7 @@
         return [
           sh(t('set.h.display')),
           list(chk(draft, 'bloom', t('set.bloom'), () => G.document.body.classList.toggle('nobloom', !draft.bloom)),
+            chk(draft, 'fogShade', t('set.fogShade')),
             row(t('set.fullscreen'), fs),
             chk(draft, 'pointerLock', t('set.pointerLock')),
             row(t('set.fpsCap'), rg('fpsCap', draft.fpsCap, [[30, '30'], [60, '60'], [120, '120'], [0, t('set.fpsDisplay')]], v => { draft.fpsCap = v; }))),

@@ -215,6 +215,27 @@
       }
     }
   }
+  // Dota-style selection circle on the ground: thin 1px ellipse (green = own units, red = inspected foe)
+  function selected(R, e) {
+    const In = IT.Input, c = In && In.ctx;
+    if (!c || c.w !== R.w || e.dead) return false;
+    if (In.selected != null) return In.selected === e.id;   // inspecting a foe replaces the unit selection
+    return !!(In.sel && In.sel.units && In.sel.units.indexOf(e.id) >= 0);
+  }
+  function selRing(R, x, y, rr, foe) {
+    const cx = R.cx, rx = rr + 3, ry = Math.max(2, Math.round(rx * 0.5)), n = Math.max(16, Math.round(TAU * rx * 1.3));
+    let lx = 1e9, ly = 1e9;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU, px = Math.round(x + Math.cos(a) * rx), py = Math.round(y + Math.sin(a) * ry);
+      if (px === lx && py === ly) continue;
+      lx = px; ly = py; pts.push(px, py);
+    }
+    cx.fillStyle = 'rgba(0,0,0,0.45)';
+    for (let i = 0; i < pts.length; i += 2) cx.fillRect(pts[i], pts[i + 1] + 1, 1, 1);
+    cx.fillStyle = foe ? '#ff5a4a' : '#5bff6e';
+    for (let i = 0; i < pts.length; i += 2) cx.fillRect(pts[i], pts[i + 1], 1, 1);
+  }
   function liftMarker(R, x, y, rr, eul) {
     // ground marker under a lifted unit: pulsing dotted ring + tether of rising dots so it reads as "up in the air"
     const cx = R.cx, t = R.time, pul = 0.5 + 0.5 * Math.sin(t * 6);
@@ -272,6 +293,7 @@
     if (!top) {
       const zs = Math.min(0.5, zv / 60);
       shadow(cx, sxp, syp, Math.round(rr * (e.kind === 'spirit' ? 1.0 : 1.25) * (1 - zs) * (sc === 1 ? 1 : 1.1)), Math.max(1, Math.round(rr * 0.45)), (0.38 - zs * 0.3) * Av / A0 * (A0 || 1));
+      if (selected(R, e)) { cx.globalAlpha = Av; selRing(R, sxp, syp, rr, isFoe(e)); cx.globalAlpha = A0; }
       if (L) { liftMarker(R, sxp, syp, rr, eul); tether(R, sxp, syp, sy, eul); }
       if (root) vines(R, sxp, syp, rr, true, rk);
       if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, false);
