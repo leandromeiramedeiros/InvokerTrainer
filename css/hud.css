@@ -13,7 +13,7 @@
 /* orbs float above the hero (centred over the portrait), status icons to their right */
 .hstat{position:absolute;left:calc(30% + 14.5em);bottom:18em;display:flex;align-items:flex-end;gap:.8em;pointer-events:none}
 .hstat .horbs{width:12.4em;justify-content:center;gap:.5em;margin:0;flex:none}
-.hstat .os{width:3.2em;height:3.2em}
+.hstat .os{width:3.2em;height:3.2em;pointer-events:auto}
 .hstat .hbuffs{position:static}
 .aimhint{bottom:24em}
 

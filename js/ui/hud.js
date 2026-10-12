@@ -268,6 +268,12 @@
     store[name] = txt; el.textContent = txt;
   }
 
+  // hover tooltip ([data-tip], shown by menus.js), only rewritten when the text changes
+  function setTip(el, txt, store, name) { if (store[name] === txt) return; store[name] = txt; el.setAttribute('data-tip', txt); }
+  const t = (k, o) => IT.t(k, o);
+  const nmOf = id => IT.hasT('spell.' + id) ? t('spell.' + id) : IT.hasT('item.' + id) ? t('item.' + id) : id;
+  const stOf = (cd, mc) => (cd > 0 ? t('hud.cd', { n: Math.ceil(cd) }) : t('hud.ready')) + (mc > 0 ? ' - ' + t('hud.mana', { n: Math.round(mc) }) : '');
+
   // sweep + number for a cooldown value
   function setCd(b, cd, total, store, nm) {
     const p = cd > 0 && total > 0 ? Math.min(1, cd / total) : 0;
@@ -496,19 +502,21 @@
     const ob = hero.inv.orbs.join('');
     if (ca.orbs !== ob) {
       ca.orbs = ob;
-      [...R.orbs.children].forEach((s, i) => { s.textContent = ''; const o = hero.inv.orbs[i]; s.className = 'os' + (o ? ' ' + ORBN[o] : ''); if (o) s.appendChild(IT.UI.icon(ORBN[o])); });
+      [...R.orbs.children].forEach((s, i) => { s.textContent = ''; const o = hero.inv.orbs[i]; s.className = 'os' + (o ? ' ' + ORBN[o] : ''); s.setAttribute('data-tip', o ? t('orb.' + ORBN[o]) : ''); if (o) s.appendChild(IT.UI.icon(ORBN[o])); });
     }
     const eff = hero.ctx.eff;
     for (const [b, k, a] of [[R.q, 'quas', 'orbQ'], [R.w, 'wex', 'orbW'], [R.e, 'exort', 'orbE']]) {
       setText(b.lvl, String(eff[k]), ca, 'l' + k);
       setText(b.key, S.label(S.keyOf(a)), ca, 'k' + k);
       b.el.classList.toggle('dim', eff[k] <= 0);
+      setTip(b.el, t('orb.' + k) + ' - ' + t('hud.lvl', { n: eff[k] }), ca, 'tp' + k);
     }
     // invoke
     const icd = hero.inv.invokeCd || 0;
     if (icd > (H.cdMax.invoke || 0)) H.cdMax.invoke = icd;
     if (icd <= 0) H.cdMax.invoke = 0;
     setCd(R.r, icd, H.cdMax.invoke, ca, 'r');
+    setTip(R.r.el, nmOf('invoke') + ' - ' + stOf(icd, 0), ca, 'tpr');
     setText(R.r.key, S.label(S.keyOf('invoke')), ca, 'kr');
     // slots
     const legacy = S.data.scheme === 'legacy';
@@ -520,6 +528,7 @@
       setCd(b, cd, id ? H.cdMax[id] : 0, ca, 's' + i);
       const low = !!(d && hero.mana < d.manaCost(w, hero));
       if (ca['low' + i] !== low) { ca['low' + i] = low; b.el.classList.toggle('lowmana', low); }
+      setTip(b.el, id ? nmOf(id) + ' - ' + stOf(cd, d ? d.manaCost(w, hero) : 0) : '', ca, 'tps' + i);
       setText(b.key, id && legacy ? S.label(S.data.keys.legacy[id]) : S.label(S.keyOf('slot' + (i + 1))), ca, 'ks' + i);
       setText(b.lvl, '', ca, 'ls' + i);
     });
@@ -534,6 +543,7 @@
       setCd(b, cd, H.cdMax[ck], ca, 'i' + i);
       const low = !!(d && d.manaCost && hero.mana < d.manaCost(w, hero));
       if (ca['il' + i] !== low) { ca['il' + i] = low; b.el.classList.toggle('lowmana', low); }
+      setTip(b.el, id ? nmOf(id) + ' - ' + stOf(cd, d && d.manaCost ? d.manaCost(w, hero) : 0) : '', ca, 'tpi' + i);
       setText(b.key, S.label(S.keyOf('item' + (i + 1))), ca, 'ki' + i);
       setText(b.ch, it && it.charges > 0 && id !== 'bkb' ? String(it.charges) : '', ca, 'ci' + i);
     });
