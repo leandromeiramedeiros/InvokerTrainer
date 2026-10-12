@@ -85,9 +85,9 @@ test('center key: select press then center press glides (glideTo), release keeps
   const r = rig({ autoAttack: false });
   const calls = []; r.cam.glideTo = (x, y) => calls.push([x, y]);
   r.In.selected = r.dummy.id;   // something else selected: 1st press only selects the hero
-  r.at(10); const e1 = r.down(' '); r.up(e1);
+  r.at(10); const e1 = r.down('F1'); r.up(e1);
   assert.equal(calls.length, 0);
-  r.at(300); const e2 = r.down(' ');
+  r.at(300); const e2 = r.down('F1');
   assert.deepEqual(calls[0], [r.h.x, r.h.y]); assert.equal(r.cam.follow, true);
   r.up(e2); assert.equal(calls.length, 2); assert.equal(r.cam.follow, false);
 });

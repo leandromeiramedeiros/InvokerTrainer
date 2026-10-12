@@ -6,6 +6,8 @@
 //   client.dll fills the About tooltip's assists_per_relic_level from kill_eater_score_types[1].in_game_display_interval). There are no tier tables.
 // dota: true = a real Dota relic: `step` = the game's per-level value, tiers I..V = Dota relic levels 1..5 (k x step).
 // dota: false = a trainer relic measuring the same kind of thing for our scenarios: tiers are trainer-scaled (no Dota source).
+// weight (v6 medal): relic score weight per level of progress -- 3 = spell-skill relics (multi-hero / Sun Strike / Tornado kills / Cataclysm),
+//   2 = setup kills (stun / blink / BKB), 1 = raw volume (damage, mana, kills, lifts, disable time). Used by StatsCollector.relicScore.
 // unit: 'n' count, 'dmg' damage / mana points, 's' seconds. Names live in js/data/i18n/relics.js ('relic.<id>', 'relic.<id>.d').
 (function (G) {
   'use strict';
@@ -15,25 +17,25 @@
   const D = (id, key, icon, unit, ev, step, extra) => R(id, true, key, icon, unit, [1, 2, 3, 4, 5].map(k => k * step), Object.assign({ event: ev, step }, extra || {}));
   const LIST = [
     // ---- Invoker hero relics (rare relics in Dota Plus)
-    D('sunstrike_kills', 'KillEaterEventType_Invoker_SunstrikeKills', 'sunstrike', 'n', 23, 15),
-    D('tornado_kills', 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', 32, 3),
-    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2 }),
-    D('three_emp', 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', 579, 5, { min: 3 }),
-    D('three_deafening', 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', 580, 5, { min: 3 }),
-    D('multi_meteor', 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', 581, 20, { min: 2 }),
-    D('alacrity_dmg', 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', 582, 25000),
+    D('sunstrike_kills', 'KillEaterEventType_Invoker_SunstrikeKills', 'sunstrike', 'n', 23, 15, { weight: 3 }),
+    D('tornado_kills', 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', 32, 3, { weight: 3 }),
+    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2, weight: 3 }),
+    D('three_emp', 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', 579, 5, { min: 3, weight: 3 }),
+    D('three_deafening', 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', 580, 5, { min: 3, weight: 3 }),
+    D('multi_meteor', 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', 581, 20, { min: 2, weight: 3 }),
+    D('alacrity_dmg', 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', 582, 25000, { weight: 1 }),
     // ---- generic relics every hero has (common relics)
-    D('kills', 'KillEaterEventType_Kills', 'invoke', 'n', 0, 75),
-    D('stun_kills', 'KillEaterEvent_StunsLeadingToKills', 'coldsnap', 'n', 5043, 50),
-    D('blink_kills', 'KillEaterEvent_KillsAfterBlink', 'blink', 'n', 5038, 100),
-    D('bkb_kills', 'KillEaterEvent_KillsDuringBKB', 'bkb', 'n', 5041, 15),
+    D('kills', 'KillEaterEventType_Kills', 'invoke', 'n', 0, 75, { weight: 1 }),
+    D('stun_kills', 'KillEaterEvent_StunsLeadingToKills', 'coldsnap', 'n', 5043, 50, { weight: 2 }),
+    D('blink_kills', 'KillEaterEvent_KillsAfterBlink', 'blink', 'n', 5038, 100, { weight: 2 }),
+    D('bkb_kills', 'KillEaterEvent_KillsDuringBKB', 'bkb', 'n', 5041, 15, { weight: 2 }),
     // ---- trainer relics (no Dota equivalent; same style, sim-measured; tiers trainer-scaled for 8-scenario runs)
-    R('meteor_dmg', false, null, 'chaosmeteor', 'dmg', [1500, 8000, 30000, 100000, 250000]),
-    R('emp_mana', false, null, 'emp', 'dmg', [800, 4000, 15000, 50000, 120000]),
-    R('tornado_lifts', false, null, 'tornado', 'n', [10, 40, 150, 400, 1000]),
-    R('disable_time', false, null, 'coldsnap', 's', [30, 150, 500, 1500, 4000]),
-    R('spirit_kills', false, null, 'forgespirit', 'n', [2, 8, 25, 70, 180]),
-    R('cataclysm_hits', false, null, 'scepter', 'n', [5, 25, 80, 220, 500]),
+    R('meteor_dmg', false, null, 'chaosmeteor', 'dmg', [1500, 8000, 30000, 100000, 250000], { weight: 1 }),
+    R('emp_mana', false, null, 'emp', 'dmg', [800, 4000, 15000, 50000, 120000], { weight: 1 }),
+    R('tornado_lifts', false, null, 'tornado', 'n', [10, 40, 150, 400, 1000], { weight: 1 }),
+    R('disable_time', false, null, 'coldsnap', 's', [30, 150, 500, 1500, 4000], { weight: 1 }),
+    R('spirit_kills', false, null, 'forgespirit', 'n', [2, 8, 25, 70, 180], { weight: 1 }),
+    R('cataclysm_hits', false, null, 'scepter', 'n', [5, 25, 80, 220, 500], { weight: 3 }),
   ];
   const BY = {};
   for (const r of LIST) BY[r.id] = r;

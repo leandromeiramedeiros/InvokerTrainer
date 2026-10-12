@@ -439,6 +439,7 @@
       return;
     }
     if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && !w.paused) In.cycleSel(); return; }
+    if (/^F\d+$/.test(ev.key) && (ev.key === 'F1' || IT.Settings.actionFor(ev.key))) ev.preventDefault();   // F1 never opens the browser help; any bound function key stays in the game (also while paused / frozen)
     { const sk = IT.Settings.keyName(ev); if (sk && !ev.repeat && IT.Settings.actionFor(sk) === 'stats') { ev.preventDefault(); press(sk, {}); return; } }   // live stats also work while paused
     const insp = w.paused && In.inspecting();
     if (w.paused && !insp) return;
@@ -455,7 +456,7 @@
       if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault();
       return;
     }
-    if (!press(k, { shift: ev.shiftKey, alt: ev.altKey })) { if (/^Arrow/.test(ev.key)) ev.preventDefault(); return; }
+    if (!press(k, { shift: ev.shiftKey, alt: ev.altKey })) { if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
     ev.preventDefault();
   };
   In.keyUp = function (ev) {

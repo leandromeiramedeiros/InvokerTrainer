@@ -118,12 +118,12 @@ test('CTRL unified orders: hero + all spirits; off with the setting', () => {
   }
 });
 
-test('stats key (rebindable, default K) holds live stats; Tab is reserved', () => {
+test('stats key (rebindable, default O) holds live stats; Tab is reserved', () => {
   const r = rig(); r.at(10);
   const calls = [];
   r.In.hooks.statsHold = v => calls.push(v);
-  assert.equal(r.IT.Settings.data.keys.common.stats, 'K');
-  const ev = r.down('k', { code: 'KeyK' }); r.up(ev);
+  assert.equal(r.IT.Settings.data.keys.common.stats, 'O');
+  const ev = r.down('o', { code: 'KeyO' }); r.up(ev);
   assert.deepEqual(calls, [true, false]);
   assert.ok(r.IT.Settings.RESERVED ? r.IT.Settings.RESERVED.includes('Tab') : true);
 });
@@ -132,7 +132,7 @@ test('settings defaults / merge: unifiedOrders; hudMode is gone (stored values s
   const { IT } = rig();
   const S = IT.Settings;
   const d = S.defaults();
-  assert.equal(d.unifiedOrders, true); assert.ok(!('hudMode' in d)); assert.equal(d.keys.common.stats, 'K');
+  assert.equal(d.unifiedOrders, true); assert.ok(!('hudMode' in d)); assert.equal(d.keys.common.stats, 'O');
   assert.ok(!('hudMode' in S.merge(S.defaults(), { hudMode: 'steps' })));
   assert.equal(S.merge(S.defaults(), { unifiedOrders: false }).unifiedOrders, false);
 });

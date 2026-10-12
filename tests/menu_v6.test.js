@@ -34,17 +34,28 @@ test('every t() literal of the new screens exists in the v6 pack or an older pac
   for (const f of ['js/ui/loadout.js', 'js/ui/menus.js', 'js/ui/endsplash.js']) {
     for (const m of rd(f).matchAll(/\bt\('((?:title|fp|sc|tag|end\.btn)\.[a-zA-Z.]+)'/g)) assert.ok(keys.has(m[1]), f + ' uses ' + m[1]);
   }
-  for (const k of ['title.free', 'title.scn', 'fp.add', 'fp.start', 'sc.start', 'end.btn.infinite.d']) assert.ok(pack.en[k], k);
+  for (const k of ['title.free', 'title.scn', 'fp.add', 'fp.start', 'title.ranked', 'title.ranked.d', 'title.nomedal', 'fp.combo.d', 'end.btn.infinite.d']) assert.ok(pack.en[k], k);
 });
 
-test('main menu: FREE PLAY + SCENARIOS primaries; no Training grounds, no Infinite Run', () => {
+test('main menu: RANKED (direct start) on top, FREE PLAY + SCENARIOS below; no Combo Sandbox, no Infinite Run', () => {
   const src = rd('js/ui/menus.js');
-  const title = src.slice(src.indexOf('function title'), src.indexOf('function title') + 2600);
+  const i = src.indexOf('function title');
+  const title = src.slice(i, src.indexOf('// ---- pause', i));
+  assert.match(title, /tbtn rk[^]*?A\.go\('ranked'\)/, 'RANKED starts the run directly');
   assert.match(title, /A\.go\('freeplay'\)/);
   assert.match(title, /A\.go\('scenarios'\)/);
-  assert.match(title, /A\.go\('sandbox'\)/, 'Combo Sandbox stays');
+  assert.match(title, /trow/);
+  assert.ok(title.indexOf("go('ranked')") < title.indexOf("go('freeplay')") && title.indexOf("go('freeplay')") < title.indexOf("go('scenarios')"));
+  assert.match(title, /bestMedal\(\)/);
+  assert.match(title, /go\('stats'\)/); assert.match(title, /go\('settings'\)/);
+  assert.doesNotMatch(title, /go\('sandbox'\)|go\('combo'\)|title\.sandbox/, 'no Combo Sandbox on the title');
   assert.doesNotMatch(title, /go\('infinite'\)|go\('grounds'\)|go\('practice'\)/);
   assert.doesNotMatch(title, /ui\.grounds|Training grounds/i);
+  assert.match(src, /title\.nomedal/, 'empty best medal label');
+  assert.match(src, /bestMedal/);
+  assert.match(rd('js/main.js'), /name === 'ranked'\) \{ abandon\(\); commitStats\(\); start\(\{ mode: 'ranked' \}\)/, 'App.go(ranked) starts the run');
+  assert.equal(pack.en['title.scn.d'], 'Practice any scenario, no rating');
+  assert.equal(pack.pt['title.scn.d'], 'Pratique qualquer cenário, sem ranking');
 });
 
 test('Free Play: no dummy panel, enemy rows (skin + difficulty + remove), max 5, grounds map hidden', () => {
@@ -55,7 +66,10 @@ test('Free Play: no dummy panel, enemy rows (skin + difficulty + remove), max 5,
   assert.match(src, /EC\.MAX/);
   assert.match(src, /HIDDEN_MAPS\s*=\s*\['grounds'\]/);
   assert.match(src, /buildScenarios/);
-  assert.match(src, /App\.go\('ranked'\)/, 'ranked start on the scenarios screen');
+  const sc = src.slice(src.indexOf('function buildScenarios'), src.indexOf('// the Free Play match'));
+  assert.doesNotMatch(sc, /go\('ranked'\)|sc\.ranked|sc\.start|rankBox/, 'no ranked block on the Scenarios screen');
+  const fp = src.slice(src.indexOf('const combo = !!st.combo'), src.indexOf('function buildScenarios'));
+  assert.match(fp, /combocard[^]*?go\('combo'\)[^]*?fp\.combo\.d/, 'Combo Sandbox card in the Free Play match column');
 });
 
 test('Scenarios: single-scenario start opts + Free Play start opts clamp the enemy count', () => {

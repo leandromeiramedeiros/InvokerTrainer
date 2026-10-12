@@ -137,21 +137,19 @@
     return h('div', { class: 'panel ' + (cls || '') }, title ? h('h2', { class: 'ph', text: title }) : null, body);
   }
 
-  // ---- title: two big primary buttons (FREE PLAY, SCENARIOS); every option lives on the screen after the click. Combo Sandbox / Stats / Settings are secondary.
+  // ---- title: RANKED (full width, starts the 8-scenario run), FREE PLAY + SCENARIOS (half width), Stats / Settings small. Combo Sandbox lives in Free Play.
   const FS_SVG = '<svg viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
-  // player's medal + rank name + rating under RANKED; nothing if ranked data or medal art is missing
-  function rankBox() {
-    let p = null;
-    try { p = IT.Ranked && IT.Ranked.profile ? IT.Ranked.profile() : null; } catch (e) { p = null; }
-    if (!p || !IT.Medals || !IT.Ranks) return null;
-    const r = IT.Ranks.fromRating(p.rating);
+  // best lifetime medal (medal canvas + name) under RANKED; "No medal yet" when there is none
+  function bestMedal() {
+    let best = null;
+    try { const L = IT.UI.Life && IT.UI.Life.load(); best = (L && L.bestMedal) || null; } catch (e) { best = null; }
     let cv = null;
-    try { cv = IT.Medals.canvas(r.tier, r.stars, 48); } catch (e) { cv = null; }
-    return h('div', { class: 'rankbox' },
+    if (best && IT.Medals) { try { cv = IT.Medals.canvas(best.tier, best.stars, 48); } catch (e) { cv = null; } }
+    return h('div', { class: 'tbest' + (best ? '' : ' none') },
       cv ? h('div', { class: 'rmed' }, cv) : null,
       h('div', { class: 'rtxt' },
-        h('b', { text: r.name + (r.stars ? ' ' + r.stars : '') }),
-        h('span', { text: IT.t('title.rating', { n: Math.round(Number(p.rating) || 0) }) })));
+        h('span', { text: IT.t('stats.bestMedal') }),
+        h('b', { text: best ? best.name + (best.stars ? ' ' + best.stars : '') : IT.t('title.nomedal') })));
   }
   function title() {
     const A = IT.App;
@@ -169,10 +167,12 @@
       h('div', { class: 'orbs-deco' }, icon('quas'), icon('wex'), icon('exort')),
       h('div', { class: 'tag', text: IT.t('app.tag') }),
       h('div', { class: 'tbig' },
-        h('button', { class: 'btn grn tbtn free', type: 'button', 'data-snd': 'start', onclick: () => A.go('freeplay') }, h('b', { text: IT.t('title.free') }), h('span', { text: IT.t('title.free.d') })),
-        h('button', { class: 'btn grn tbtn scn', type: 'button', 'data-snd': 'start', onclick: () => A.go('scenarios') }, h('b', { text: IT.t('title.scn') }), h('span', { text: IT.t('title.scn.d') }))),
+        h('button', { class: 'btn grn tbtn rk', type: 'button', 'data-snd': 'start', onclick: () => A.go('ranked') }, h('b', { text: IT.t('title.ranked') }), h('span', { text: IT.t('title.ranked.d') })),
+        bestMedal(),
+        h('div', { class: 'trow' },
+          h('button', { class: 'btn grn tbtn free', type: 'button', 'data-snd': 'start', onclick: () => A.go('freeplay') }, h('b', { text: IT.t('title.free') }), h('span', { text: IT.t('title.free.d') })),
+          h('button', { class: 'btn blu tbtn scn', type: 'button', 'data-snd': 'start', onclick: () => A.go('scenarios') }, h('b', { text: IT.t('title.scn') }), h('span', { text: IT.t('title.scn.d') })))),
       h('div', { class: 'tmore' },
-        btn('title.sandbox', () => A.go('sandbox'), 'slt sm'),
         btn('ui.stats', () => A.go('stats'), 'slt sm'),
         btn('ui.settings', () => A.go('settings'), 'slt sm')),
       h('div', { class: 'lang-row' }, langToggle()),
@@ -206,5 +206,5 @@
     A.back();
   });
 
-  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, rankBox, title, pause };
+  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, bestMedal, title, pause };
 })(typeof window !== 'undefined' ? window : globalThis);

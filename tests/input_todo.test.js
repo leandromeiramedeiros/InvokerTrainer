@@ -17,10 +17,10 @@ test('center: 1st press selects the hero (spirits/foe deselected), 2nd centers',
   const r = rig({ autoAttack: false });
   r.In.setSel([r.h.id, 9999], 'all', false);          // hero + a (dead/unknown) unit
   r.In.selected = r.dummy.id;
-  r.key(' ');
+  r.key('F1');
   assert.equal(r.In.selected, null); assert.deepEqual(r.In.sel.units, [r.h.id]); assert.equal(r.In.sel.group, 'hero');
   assert.equal(r.cam.c, null);
-  r.key(' ');
+  r.key('F1');
   assert.deepEqual(r.cam.c, [r.h.x, r.h.y]);
 });
 
@@ -39,7 +39,7 @@ test('instant casts: no rangefinder from a held key, only while the HUD icon is 
 
 test('countdown: camera / center / inspect do not skip', () => {
   const r = frozen();
-  r.key(' '); r.key(' ');
+  r.key('F1'); r.key('F1');
   assert.equal(r.skips, 0); assert.equal(r.w.paused, true);
   assert.deepEqual(r.cam.c, [r.h.x, r.h.y], 'center works while frozen');
   r.click(0); r.winUp(0);                               // LMB = inspect / select only

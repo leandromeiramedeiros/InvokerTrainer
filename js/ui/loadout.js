@@ -556,6 +556,8 @@
         IT.UI.langToggle()),
       h('div', { class: 'fp-body' },
         h('div', { class: 'fp-match' },
+          combo ? null : h('button', { type: 'button', class: 'combocard', 'data-snd': 'start', onclick: () => IT.App.go('combo') },
+            h('b', { text: t('fp.combo') }), h('span', { text: t('fp.combo.d') })),
           sec(t('lo.map'), mapBox),
           combo ? null : sec(t('fp.enemies'), eneBox),
           sec(t('fp.match'), optBox)),
@@ -575,7 +577,7 @@
     return el;
   }
 
-  // ---- Scenarios screen: ranked START (rating + medal) and a compact wrapped grid of small cards; a card starts that scenario alone (sandbox).
+  // ---- Scenarios screen (practice, no rating): a compact wrapped grid of small cards; a card starts that scenario alone (sandbox).
   function buildScenarios() {
     const { h } = IT.UI, t = IT.t, EC = IT.EnemyCard;
     const list = scenarios();
@@ -590,16 +592,11 @@
           h('b', { class: 'scn', text: scnName(s) }),
           h('span', { class: 'sctags' }, tags.map(g => h('i', { text: t('tag.' + g) })))));
     };
-    const rb = IT.UI.rankBox ? IT.UI.rankBox() : null;
     return h('div', { class: 'scr loadout sc' },
       h('div', { class: 'lo-head' },
         h('button', { type: 'button', class: 'btn sm dim', text: t('ui.back'), onclick: () => IT.App.go('title') }),
         h('h1', { text: t('sc.title') }),
         IT.UI.langToggle()),
-      h('div', { class: 'sc-ranked' },
-        rb,
-        h('div', { class: 'sc-rtxt' }, h('b', { text: t('sc.ranked') }), h('span', { text: t('sc.ranked.d') })),
-        h('button', { type: 'button', class: 'btn grn big sc-go', 'data-snd': 'start', text: t('sc.start'), onclick: () => IT.App.go('ranked') })),
       h('div', { class: 'sc-prac' },
         h('h3', { text: t('sc.practice') }), h('p', { class: 'fine', text: t('sc.practice.d') })),
       list.length ? h('div', { class: 'sc-grid' }, list.map(card)) : h('p', { class: 'fine', text: t('lo.noScenarios') }));

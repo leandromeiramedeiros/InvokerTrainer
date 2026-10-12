@@ -44,6 +44,11 @@
   const DMG_COL = { physical: '#e8643a', magical: '#7a6cf0', pure: '#f2c444' };
   const dmgLabel = k => IT.t(k === 'physical' ? 'end.sp.dmg.physical' : k === 'magical' ? 'end.sp.dmg.magical' : 'end.sp.dmg.pure');
 
+  // v6 medal: "Clear 740 + Relics 210 = 950" (ranked runs that carry the split; '' otherwise)
+  function breakdown(m) {
+    if (!m || m.mode === 'infinite' || m.clearScore == null) return '';
+    return IT.t('end.sp.breakdown', { clear: fmtN(m.clearScore), relic: fmtN(m.relicScore || 0), total: fmtN(m.score) });
+  }
   // everything the share card needs, resolved in the current language
   function shareData(m, cur) {
     const inf = m.mode === 'infinite', r = medalOf(m, cur), dm = cur.damage || { total: 0, bySpell: [] };
@@ -52,7 +57,7 @@
       rankName: inf ? '' : medalName(r), rating: null, delta: null,
       cleared: cur.cleared, best: m.best != null ? m.best : null, newBest: !!m.newBest, score: Math.round(m.score || 0),
       tiles: cur.tiles.map(fmtTile), diff: m.diff, level: m.level, seed: Math.round(m.score || 0) + cur.cleared * 977,
-      dmgTotal: dm.total || 0, topSpells: (dm.bySpell || []).slice(0, 3).map(x => ({ id: x.id, icon: srcIcon(x.id), label: srcName(x.id), v: x.v })),
+      breakdown: inf ? '' : breakdown(m), dmgTotal: dm.total || 0, topSpells: (dm.bySpell || []).slice(0, 3).map(x => ({ id: x.id, icon: srcIcon(x.id), label: srcName(x.id), v: x.v })),
     };
   }
 
@@ -167,6 +172,8 @@
       side.appendChild(h('div', { class: 'sp-kick', text: t('end.sp.medal') }));
       side.appendChild(h('div', { class: 'sp-rname', text: medalName(r) }));
       side.appendChild(h('div', { class: 'sp-score' }, h('span', { text: t('end.sp.score') + ' ' }), h('b', { text: fmtN(m.score) })));
+      const bd = breakdown(m);
+      if (bd) side.appendChild(h('div', { class: 'sp-on sp-break', 'data-tip': t('end.sp.breakdown.d'), text: bd }));
       if (newMedal) side.appendChild(h('div', { class: 'sp-best new', text: t('end.sp.newMedal') }));
       else if (prev) side.appendChild(h('div', { class: 'sp-best', text: t('end.sp.bestMedal', { name: medalName(prev) }) }));
     }
@@ -221,6 +228,6 @@
     return root;
   }
 
-  IT.UI.Splash = { fmtTile, shareData, PAL, BG, medalCanvas, srcName, srcIcon, DMG_COL, fmtN };
+  IT.UI.Splash = { fmtTile, shareData, breakdown, PAL, BG, medalCanvas, srcName, srcIcon, DMG_COL, fmtN };
   IT.UI.endSplash = splash;
 })(typeof window !== 'undefined' ? window : globalThis);

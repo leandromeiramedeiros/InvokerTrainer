@@ -7,6 +7,9 @@
   const LEG = ['Y', 'V', 'G', 'C', 'X', 'Z', 'T', 'F', 'D', 'B'];
   const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'stats', 'refresh', 'spawn', 'resetDummies'];
   const RESERVED = ['Escape', 'Tab'];
+  // keybind migration: stored bindings still equal to the pre-v6 default move to the new default (custom ones stay)
+  const KEYS_VERSION = 2;
+  const KEY_MIG = { center: ['Space', 'F1'], cheat: ['F1', 'I'], stats: ['K', 'O'], resetDummies: ['O', '['] };
 
   function defaults() {
     const slots = { slot1: 'D', slot2: 'F' }, legacy = {};
@@ -25,15 +28,33 @@
       rmbRepeat: false,            // hold right mouse = repeated move/attack clicks (~8/s)
       comboOrder: false,           // scenario panel shows the full ordered action list (spells + items + moves)
       dummyChat: true,             // dummies taunt on fumbles / slow play
+      keysVersion: KEYS_VERSION,   // bump = run the KEY_MIG table over stored binds once
       fpsCap: 60,                  // 0 = display rate; otherwise render cap (paced to a divisor of the display rate)
       audio: { master: 0.8, music: 0.5, sfx: 0.8, ui: 0.6, musicOn: true, muteUnfocused: true },
       keys: {
-        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'Space', camLock: 'L', cheat: 'F1', stats: 'K', refresh: 'Backspace', spawn: 'P', resetDummies: 'O' },
+        common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'F1', camLock: 'L', cheat: 'I', stats: 'O', refresh: 'Backspace', spawn: 'P', resetDummies: '[' },
         slots, legacy,
       },
     };
   }
   const clone = o => JSON.parse(JSON.stringify(o));
+
+  function migrateKeys(base, src) {
+    const sc = src.keys && src.keys.common; if (!sc) return;
+    const pend = new Set(Object.keys(KEY_MIG).filter(a => sc[a] === KEY_MIG[a][0]));
+    const holders = (key, except) => {   // [group, action] pairs currently holding `key` in any layout
+      const out = [];
+      for (const g in base.keys) for (const a in base.keys[g]) if (base.keys[g][a] === key && !(g === 'common' && a === except)) out.push([g, a]);
+      return out;
+    };
+    for (let pass = 0; pass < 6 && pend.size; pass++) {
+      for (const a of [...pend]) {
+        const hs = holders(KEY_MIG[a][1], a);
+        if (!hs.length) { base.keys.common[a] = KEY_MIG[a][1]; pend.delete(a); }
+        else if (!hs.every(([g, x]) => g === 'common' && pend.has(x))) pend.delete(a);   // new default already taken by a custom bind: keep the old key
+      }
+    }
+  }
 
   function merge(base, src) {
     if (!src || typeof src !== 'object') return base;
@@ -47,6 +68,8 @@
         if (src.audio && typeof src.audio === 'object') for (const a in base.audio) if (typeof src.audio[a] === typeof base.audio[a]) base.audio[a] = src.audio[a];
       } else if (typeof base[k] === typeof src[k]) base[k] = src[k];
     }
+    if ((Number(src.keysVersion) || 0) < KEYS_VERSION) migrateKeys(base, src);
+    base.keysVersion = KEYS_VERSION;
     if (base.castMode !== 'quick' && base.castMode !== 'normal') base.castMode = 'quick';
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
     if (!IT.I18N[base.lang]) base.lang = 'en';
@@ -79,7 +102,7 @@
     CapsLock: 'Caps', Mouse4: 'Mouse 4', Mouse5: 'Mouse 5', NumEnter: 'Num Ent' }[k] || (/^Num[0-9+\-*\/.]$/.test(k || '') ? 'Num ' + k.slice(3) : k) || '-');
 
   const S = {
-    data: defaults(), SPELLS, COMMON, RESERVED, keyName, isMod, label, defaults, merge,
+    data: defaults(), SPELLS, COMMON, RESERVED, KEY_MIG, KEYS_VERSION, keyName, isMod, label, defaults, merge,
     load() {
       let raw = null;
       try { raw = JSON.parse(G.localStorage.getItem(KEY)); } catch (e) { raw = null; }

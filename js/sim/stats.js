@@ -245,7 +245,25 @@
     return { tiles: t, cleared: solved, ornament: ornament(m), medal: inf ? null : medal(m), damage: damageOf(S), relics: Object.assign({}, S.relics || {}) };
   }
 
-  IT.StatsCollector = Object.assign(IT.StatsCollector || {}, { create, merge, blank, curated, ornament, medal, damageOf, medalKey });
+  // ---- v6 medal: the RELIC part of a run's score (pure). Each relic's run delta is normalized by its level step (Dota relics: the
+  // items_game per-level value; trainer relics: their tier I threshold), capped at RELIC_CAP levels per run, x its weight (js/data/relics.js) x RELIC_K.
+  // e.g. 25000 Alacrity damage = 1 level x1 = 100; 3 Sun Strike kills = 3/15 level x3 = 60; 3 Tornado kills = 1 level x3 = 300 (the cap).
+  const RELIC_K = 100, RELIC_CAP = 1;
+  function relicScore(rel) {
+    const Rd = IT.RELICS, parts = [];
+    let score = 0;
+    if (!Rd || !rel) return { score: 0, parts };
+    for (const r of Rd.LIST) {
+      const v = rel[r.id] || 0, unit = r.step || r.tiers[0];
+      if (!(v > 0) || !(unit > 0)) continue;
+      const lv = Math.min(RELIC_CAP, v / unit), pts = lv * (r.weight || 1) * RELIC_K;
+      score += pts; parts.push({ id: r.id, v, lv: round(lv), pts: Math.round(pts) });
+    }
+    parts.sort((a, b) => b.pts - a.pts);
+    return { score: Math.round(score), parts };
+  }
+
+  IT.StatsCollector = Object.assign(IT.StatsCollector || {}, { create, merge, blank, curated, ornament, medal, damageOf, medalKey, relicScore, RELIC_K, RELIC_CAP });
   IT.StatsCollector.hooks = IT.StatsCollector.hooks || {};
   IT.World.system('statsCollector', 90, (w, dt) => { if (w._stats) w._stats.sys(w, dt); });
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -33,6 +33,7 @@ test('streak multiplier and scenario score', () => {
   assert.equal(R.scenarioScore(1, 10, 20, 0), 100);   // twice par or slower: no bonus
   assert.ok(R.scenarioScore(1, 10, 15, 0) > 100 && R.scenarioScore(1, 10, 15, 0) < 150);
   assert.ok(R.scenarioScore(1.8, 10, 10, 0) > R.scenarioScore(0.6, 10, 10, 0));
+  assert.equal(R.scenarioScore(1.8, 10, 10, 0), R.scenarioScore(R.DIFF_BONUS_MAX, 10, 10, 0), 'v6 medal: difficulty bonus capped at +30 %');
   assert.ok(R.scenarioScore(1, 10, 10, 4) > R.scenarioScore(1, 10, 10, 0));
 });
 

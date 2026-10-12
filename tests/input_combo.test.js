@@ -172,12 +172,12 @@ test('left click selects a dummy; any action returns to the hero; ESC order', ()
 test('center: first tap selects hero, second tap centers, hold follows, release stops', () => {
   const r = rig({ autoAttack: false });
   r.In.selected = r.dummy.id;
-  r.at(10); const ev = r.down(' ');
+  r.at(10); const ev = r.down('F1');
   assert.equal(r.In.selected, null); assert.equal(r.cam.c, null);
-  r.up(ev); r.at(300); const ev2 = r.down(' ');
+  r.up(ev); r.at(300); const ev2 = r.down('F1');
   assert.deepEqual(r.cam.c, [r.h.x, r.h.y]); assert.equal(r.cam.follow, true);
   r.up(ev2); assert.equal(r.cam.follow, false);
-  r.cam.c = null; r.at(2000); r.key(' '); assert.deepEqual(r.cam.c, [r.h.x, r.h.y], 'hero already selected: every press centers');
+  r.cam.c = null; r.at(2000); r.key('F1'); assert.deepEqual(r.cam.c, [r.h.x, r.h.y], 'hero already selected: every press centers');
 });
 
 test('window-edge scroll flags + camSpeed multiplier', () => {

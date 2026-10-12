@@ -25,8 +25,10 @@ Values come from `SteamDatabase/GameTracking-Dota2` (`npc_dota_hero_invoker.txt`
 | A | Attack-move / attack ground |
 | S / H | Stop (cancels wind-up) / Hold (no attacks) |
 | D D (Sun Strike, scepter) | Cataclysm |
-| Space, L | Center camera, lock camera |
-| Tab, F1, Esc | Live stats, cheat sheet, pause |
+| F1, L | Select hero / center camera, lock camera |
+| Tab, Esc | Cycle selection, pause |
+| I, O (hold) | Recipe sheet, live stats |
+| P, [, Backspace | Spawn dummy, reset dummies, refresh cooldowns |
 
 Settings: normal-cast mode (aim with range/AoE preview), the legacy one-key-per-spell scheme, and full rebinding with conflict detection. UI in English or Portuguese.
 

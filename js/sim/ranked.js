@@ -19,10 +19,14 @@
 
   // ---------------------------------------------------------------- pure math
   const streakMult = s => Math.min(2, 1 + 0.1 * Math.max(0, s | 0));
-  // points for one solved scenario: difficulty x speed (par or faster = +50%) x streak
-  function scenarioScore(diffMult, par, time, streak) {
+  // v6 medal: the CLEAR part of a run's score. Points for one solved scenario: 100 x speed (par or faster = +50%) x streak x difficulty bonus.
+  // The bonus is normalized (diffBonus: ian x1 .. bambam x1.3), NOT df.mult (0.6..1.8): a clean clear is worth the same base at any
+  // difficulty, so bulkier foes / a harder ramp add at most +30 %. A number > DIFF_BONUS_MAX passed in (old callers: df.mult) is capped.
+  const DIFF_BONUS_MAX = 1.3;
+  const diffBonus = df => 1 + (DIFF_BONUS_MAX - 1) * clamp((df && df.idx != null ? df.idx : 2) / 4, 0, 1);
+  function scenarioScore(bonus, par, time, streak) {
     const f = clamp((2 * par - time) / par, 0, 1);
-    return Math.round(100 * diffMult * (1 + 0.5 * f) * streakMult(streak));
+    return Math.round(100 * clamp(bonus, 1, DIFF_BONUS_MAX) * (1 + 0.5 * f) * streakMult(streak));
   }
   const expected = rating => 350 + 0.45 * Math.max(0, rating);
   function ratingDelta(score, rating) {
@@ -550,7 +554,7 @@
       let pts = 0;
       if (ok) {
         run.solved++; run.streak++; run.bestStreak = Math.max(run.bestStreak, run.streak);
-        if (ranked || infinite) pts = scenarioScore(pr.df.mult, pr.par, time, run.streak - 1);
+        if (ranked || infinite) pts = scenarioScore(diffBonus(pr.df), pr.par, time, run.streak - 1);
         run.score += pts;
         w.emit('comboDone', { id: pr.sc.id, tier: TIER_NAME[pr.sc.tier - 1] || 'basic', score: pts, time });
       } else {
@@ -672,9 +676,12 @@
       run.ended = true;
       const w = run.w;
       if (w) w.paused = true;
-      const sum = { mode, combos: run.solved, solved: run.solved, fails: run.failed, bestStreak: run.bestStreak, score: ranked || infinite ? run.score : 0, reason: reason || 'time',
+      // v6 medal: score = clearScore (scenario points, run.score) + relicScore (this run's relic progress, StatsCollector.relicScore; ranked only)
+      const SC = IT.StatsCollector, rel = ranked && w && w._stats && SC && SC.relicScore ? SC.relicScore(w._stats.data.relics) : { score: 0, parts: [] };
+      const clearScore = ranked || infinite ? run.score : 0, relicScore = ranked ? rel.score : 0;
+      const sum = { mode, combos: run.solved, solved: run.solved, fails: run.failed, bestStreak: run.bestStreak, score: clearScore + relicScore, clearScore, relicScore, relicParts: rel.parts, reason: reason || 'time',
         turns: run.turns, diff: run.pr ? run.pr.df.id : null, level: run.maxLevel || null };
-      if (ranked && (run.n > 0 || run.solved + run.failed > 0)) sum.rank = record(run.score);
+      if (ranked && (run.n > 0 || run.solved + run.failed > 0)) sum.rank = record(sum.score);
       if (infinite) {
         const r = recordInfinite(run.solved), sc = run.failId ? IT.SCENARIOS.get(run.failId) : null;
         Object.assign(sum, { cleared: r.cleared, best: r.best, prevBest: r.prev, newBest: r.isNew && r.cleared > 0, failId: run.failId, failName: sc ? sc.name : null, failReason: run.result && !run.result.ok ? run.result.reason : null, failDetail: run.result && !run.result.ok ? run.result.detail : null, laps: run.lap() });
@@ -745,7 +752,7 @@
 
   IT.Ranked = {
     TURNS, COUNTDOWN, RESULT_HOLD,
-    streakMult, scenarioScore, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
+    streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     profile, record, reset, load, prepare, apply, create, hud, spot, arenas, TWISTS,
     comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, ATTACK_WINDOW,

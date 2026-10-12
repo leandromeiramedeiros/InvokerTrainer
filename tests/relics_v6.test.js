@@ -59,12 +59,12 @@ test('relics data: Dota relics level linearly by the items_game in_game_display_
 test('per-run medal: score tier capped by cleared turns, Immortal only on a perfect run, stars inside the band', () => {
   const F = IT.Ranks.fromRun;
   assert.equal(F({ score: 0, solved: 0, turns: 8 }).tier, 0);
-  const a = F({ score: 604, solved: 5, turns: 8 }); assert.equal(a.tier, 4); assert.equal(a.name, 'Legend'); assert.ok(a.stars >= 1 && a.stars <= 5);
+  const a = F({ score: 1800, solved: 5, turns: 8 }); assert.equal(a.tier, 4); assert.equal(a.name, 'Legend'); assert.ok(a.stars >= 1 && a.stars <= 5);
   const capped = F({ score: 5000, solved: 6, turns: 8 }); assert.equal(capped.tier, 5); assert.equal(capped.name, 'Ancient'); assert.equal(capped.stars, 5, 'capped by clears -> top of the band');
   const imm = F({ score: 5000, solved: 8, turns: 8 }); assert.equal(imm.tier, 7); assert.equal(imm.stars, 0);
   assert.equal(F({ score: 5000, solved: 7, turns: 8 }).tier, 6, '7/8 is at most Divine');
   assert.equal(F({ score: 50, solved: 8, turns: 8 }).tier, 0, 'a low score stays low');
-  const lo = F({ score: 121, solved: 4, turns: 8 }), hi = F({ score: 249, solved: 4, turns: 8 });
+  const lo = F({ score: 401, solved: 4, turns: 8 }), hi = F({ score: 799, solved: 4, turns: 8 });
   assert.equal(lo.tier, 1); assert.equal(hi.tier, 1); assert.ok(hi.stars > lo.stars);
   assert.ok(IT.Ranks.medalKey(imm) > IT.Ranks.medalKey(capped)); assert.equal(IT.Ranks.medalKey(null), -1);
   assert.doesNotThrow(() => F(null));
@@ -148,7 +148,7 @@ test('curated damage: total, physical / magical / pure split, damage by spell (o
   dmg(w, h, foes[1], 'chaosmeteor', 80, 'magical');
   dmg(w, h, foes[1], 'attack', 40, 'physical');
   dmg(w, h, foes[2], 'sunstrike', 100, 'pure');
-  const st = S.summary(), c = SC.curated(st, { mode: 'ranked', score: 604, solved: 5, turns: 8, bestStreak: 3 });
+  const st = S.summary(), c = SC.curated(st, { mode: 'ranked', score: 1800, solved: 5, turns: 8, bestStreak: 3 });
   const d = c.damage;
   assert.equal(d.total, Math.round(st.damage.dealt.total));
   assert.ok(d.bySpell.length >= 3);

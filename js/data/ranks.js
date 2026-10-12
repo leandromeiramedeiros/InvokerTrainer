@@ -17,8 +17,10 @@
   }
   // v6 WP6: the end-splash medal is PER RUN (no cumulative rating). One 8-turn ranked run -> tier from its score, capped by how many
   // scenarios it cleared (CAP[cleared]); Immortal needs 8/8 AND the top score band. Stars 1..5 = position inside the score band.
-  // A clean run at the lowest ramp (difficulties 0,0,0,1,1,1,2,2, all at/under par, streak x1..x1.7) scores ~1300; slow but perfect ~860.
-  const RUN_START = [0, 120, 250, 400, 560, 720, 900, 1200];   // score lower bound per tier
+  // v6 medal: score = CLEAR (scenario points, difficulty bonus <= +30 %) + RELIC (this run's relic levels x weight). Bands tuned on
+  // tools/score_sample.mjs (bot, 40 seeds, 8/8 projection; DECISIONS.md "v6 medal"): a clean run at the lowest ramp (ian/easy/common)
+  // ~2220 (Ancient 1-2, p10 Legend 5), a perfect hard-ramp run p50 ~2680 (Divine 2), Immortal = p95 of perfect hard / bambam runs.
+  const RUN_START = [0, 400, 800, 1250, 1700, 2150, 2600, 2850];   // score lower bound per tier
   const RUN_CAP = [0, 1, 1, 2, 3, 4, 5, 6, 7];                  // max tier by scenarios cleared (index = cleared, 8+ = 7)
   function fromRun(m) {
     m = m || {};

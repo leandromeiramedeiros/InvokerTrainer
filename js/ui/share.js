@@ -90,6 +90,7 @@
       } catch (e) { /* medal art optional */ }
       txt(c, t('share.medal'), cx, cy + 172, 20, '#9aa6b4', 'center', true, 440);
       txt(c, d.rankName, cx, cy + 214, 40, p.hi, 'center', true, 440);
+      if (d.breakdown) txt(c, d.breakdown, cx, cy + 250, 20, '#cfd6dc', 'center', false, 520);   // v6 medal: Clear + Relics = score
     }
     // title + stat tiles + damage on the right
     const x0 = 640, cw = 260, ch = 92;

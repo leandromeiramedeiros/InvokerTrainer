@@ -137,6 +137,37 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 - End splash: medal + score, tiles (score, cleared, streak, APM, fastest), total damage, physical (#e8643a) / magical (#7a6cf0) / pure (#f2c444) stacked bar, damage by source (only sources that hit, desc, Forge Spirit attacks booked as Forge Spirit), RELICS PROGRESS panel (this run's delta, lifetime, next tier). Sun Strike / Meteor accuracy tiles removed. Share PNG: medal, score / cleared, total damage, top 3 sources with icons.
 - Stats screen: relic collection (tier pips, progress to next tier, lifetime value), runs, best medal, best score, lifetime damage; combo stats removed. The relic grid scrolls inside the panel at 1280x720.
 
+## v6 medal - clear + relic score, retuned bands (2026-10-12)
+- Run score = CLEAR + RELIC (`modeEnd` summary carries `score`, `clearScore`, `relicScore`, `relicParts`; `score` is what the medal, the rating fold, the profile best score and the HUD read). Supersedes the WP6 RUN_START.
+- CLEAR (js/sim/ranked.js `scenarioScore`): per solved scenario 100 x speed (1 + 0.5 x clamp((2 par - t) / par, 0, 1)) x streak (1 + 0.1 / clear in a row, max x2) x difficulty bonus. The bonus is `diffBonus(df)` = 1 + 0.3 x idx / 4 (ian 1, easy 1.075, common 1.15, hard 1.225, bambam 1.3), no longer df.mult (0.6..1.8): bulkier foes do not inflate it, a clean clear is worth the same base anywhere, difficulty adds at most +30 % (also caps infinite laps). A clean 8/8 at par = 1620 x bonus (ian-ramp 1740, hard-ramp 2070).
+- RELIC (js/sim/stats.js `relicScore`, weights in js/data/relics.js `weight`): sum over relics of min(RELIC_CAP 1, run delta / step) x weight x RELIC_K 100. step = the Dota per-level value (items_game in_game_display_interval) or, for trainer relics, the tier I threshold. Weights: 3 = Sun Strike kills, Tornado kills, Multi-Hero Ice Wall, Three Hero EMP, Three Hero Deafening Blast, Multi-Hero Chaos Meteor, Cataclysm hits; 2 = stun / blink / BKB kills; 1 = kills, Alacrity damage, Meteor damage, EMP mana, lifts, disable time, Forge Spirit kills. 25000 Alacrity damage = 100, 3 Sun Strike kills = 60, a full Tornado-kill level (3) = 300 (the cap). Ranked only (infinite: relicScore 0). Mean per run over 720 sampled runs: Tornado kills 128, Meteor damage 46, Sun Strike kills 42, Cataclysm 41, disable 35, lifts 35, everything else < 15.
+- Sampling: `node tools/score_sample.mjs --seeds 40` (147 s): the scenarios_v5 scripted bot plays full 8-turn ranked runs in one world (scenario swaps, stats collector attached), 40 seeds per group; `ramp` = real rampDiff from the rating band, `fixed` = diffIndex forced; `clean` = bot as scripted, `sloppy` = 0.4..2.5 s hesitation per step + 15 % dropped steps. The bot cannot clear most hard / bambam scenarios, so `proj` projects each run to 8/8 (every turn at the run's mean clear speed and difficulty bonus, relics = its solved scenarios' mean x 8) = the near-perfect player estimate. Run score (actual), then the 8/8 projection:
+
+| group | 8/8 runs | solved p50 | total p10 / p50 / p90 / p95 | clear p50 | relic p10 / p50 / p90 | 8/8 proj p10 / p50 / p95 (clear + relic p50) |
+|---|---|---|---|---|---|---|
+| ramp ian clean | 38/40 | 8 | 2025 / 2192 / 2366 / 2420 | 1736 | 304 / 473 / 625 | 2049 / 2215 / 2420 (1738 + 473) |
+| ramp ian sloppy | 0/40 | 5 | 777 / 1128 / 1656 / 1709 | 905 | 144 / 242 / 399 | - |
+| ramp easy clean | 2/40 | 6 | 1484 / 1872 / 2228 / 2292 | 1256 | 383 / 577 / 819 | 2183 / 2418 / 2597 (1861 + 565) |
+| ramp easy sloppy | 0/40 | 4 | 531 / 928 / 1376 / 1414 | 610 | 133 / 253 / 565 | - |
+| ramp common clean | 0/40 | 5 | 972 / 1542 / 1890 / 1936 | 1003 | 272 / 580 / 672 | 2292 / 2580 / 2792 (1984 + 596) |
+| ramp common sloppy | 0/40 | 2 | 211 / 505 / 859 / 947 | 345 | 63 / 158 / 338 | - |
+| ramp hard clean | 0/40 | 3 | 479 / 1035 / 1381 / 1427 | 581 | 243 / 475 / 652 | 2566 / 2726 / 2891 (2071 + 655) |
+| ramp hard sloppy | 0/40 | 0 | 19 / 195 / 504 / 527 | 0 | 19 / 81 / 298 | - |
+| fixed ian clean | 23/40 | 8 | 1652 / 1939 / 2269 / 2414 | 1608 | 277 / 470 / 659 | 1826 / 2101 / 2415 (1616 + 486) |
+| fixed ian sloppy | 5/40 | 6 | 1016 / 1418 / 1951 / 2029 | 981 | 176 / 358 / 651 | - |
+| fixed easy clean | 14/40 | 7 | 1785 / 2073 / 2415 / 2544 | 1468 | 405 / 606 / 838 | 2153 / 2298 / 2633 (1742 + 569) |
+| fixed easy sloppy | 0/40 | 4 | 875 / 1278 / 1674 / 1806 | 729 | 266 / 480 / 731 | - |
+| fixed common clean | 0/40 | 6 | 1525 / 1832 / 2174 / 2234 | 1206 | 366 / 622 / 775 | 2276 / 2482 / 2699 (1861 + 625) |
+| fixed common sloppy | 0/40 | 2 | 376 / 745 / 1188 / 1403 | 353 | 135 / 337 / 525 | - |
+| fixed hard clean | 0/40 | 3 | 933 / 1174 / 1651 / 1698 | 570 | 428 / 605 / 754 | 2556 / 2688 / 2916 (1986 + 712) |
+| fixed hard sloppy | 0/40 | 1 | 30 / 297 / 532 / 553 | 184 | 30 / 127 / 322 | - |
+| fixed bambam clean | 0/40 | 2 | 461 / 737 / 1044 / 1143 | 410 | 130 / 233 / 398 | 2265 / 2600 / 2749 (2108 + 492) |
+| fixed bambam sloppy | 0/40 | 0 | 7 / 79 / 312 / 352 | 0 | 7 / 59 / 157 | - |
+
+- Bands (js/data/ranks.js RUN_START, score lower bound per tier): Herald 0, Guardian 400, Crusader 800, Archon 1250, Legend 1700, Ancient 2150, Divine 2600, Immortal 2850. RUN_CAP by clears unchanged [0,1,1,2,3,4,5,6,7]; Immortal needs 8/8 AND >= 2850. Anchors: clean lowest-ramp 8/8 p10 / p50 / p95 = Legend 5 / Ancient 1 / Ancient 4 (never Immortal: max ~2450); perfect hard-ramp p50 2726 = Divine 3, fixed hard p50 2688 = Divine 2; Immortal 2850 ~ p95 of the near-perfect hard / bambam projections (2891 / 2916 / 2749); common / easy perfect runs sit in Ancient 3-5, their real (failed-turn) runs in Archon / Legend; sloppy runs Guardian .. Archon (also clear-capped).
+- Splash: a line under the score "Clear 740 + Relics 210 = 950" (`end.sp.breakdown`, PT "Cenários .. + Relíquias .. = ..", tooltip `end.sp.breakdown.d`; css class `sp-on sp-break`, reuses the existing `sp-on` style). Share PNG: the same line under the medal name. Old summaries without `clearScore` show no line.
+- Assumptions: the projection treats failed turns as if cleared at the same speed (a real player who clears hard 8/8 is probably slower, so hard / bambam bands are optimistic, i.e. Immortal stays rare). Relic K / cap / weights are the tuning knobs (StatsCollector.RELIC_K / RELIC_CAP, relics.js `weight`); retune RUN_START by re-running the sampler.
+
 ## v6 local-install audit - relic levels, KV cross-check (2026-10-12)
 - Local build: `game/dota/steam.inf` ClientVersion 6957, ServerVersion 6957, SourceRevision 11114317, VersionDate Oct 09 2026. Read with a pure-python VPK v2 dir reader (scratchpad tool, not in the repo) from `game/dota/pak01_dir.vpk` (388112 entries, CRC-checked).
 - Relic levels are LINEAR, no tier tables: `panorama/scripts/post_game_progress/post_game_progress_hero_relics.vjs_c` does `level = floor(value / value_per_level)` (value_per_level comes in the GC post-game data); `dota_english.txt` `DOTA_HeroRelics_ProgressToNextLevel` = `{relic_level_progress} / {relic_progress_per_level}`, `DOTA_HeroRelics_About_LevelUpDescription` = "levels up every {assists_per_relic_level} Assists". client.dll fills `assists_per_relic_level` (string file off 0x04ea93f0; code RVA 0x030057ec) from the kill-eater score type #1 definition field +0x14, and the items_game parser (RVA 0x033055a7 / 0x0330595a) stores `in_game_display_interval` exactly there (value +0x14, default 1). So the per-level step = `scripts/items/items_game.txt` `kill_eater_score_types.<event>.in_game_display_interval`.

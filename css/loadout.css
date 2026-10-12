@@ -108,12 +108,6 @@
 .fp .opts .tog{margin:.2em 1em .2em 0}.fp .opts .fine{margin:.2em 0 0}
 .mapsel{background:#0b0618;color:var(--ink);border:2px solid var(--line);padding:.25em .4em;font-size:.85em}
 /* scenarios */
-.sc-ranked{display:flex;align-items:center;gap:1em;padding:.7em 1em;margin-bottom:.6em;background:var(--panel);border:3px solid var(--gold);box-shadow:0 0 0 2px #000,0 0 1em rgba(242,196,68,.2)}
-.sc-ranked .rankbox{margin:0}
-.sc-rtxt{flex:1;display:flex;flex-direction:column;gap:.2em;min-width:0}
-.sc-rtxt b{color:var(--gold);font-size:1.2em;letter-spacing:.12em;text-transform:uppercase}
-.sc-rtxt span{color:var(--dim);font-weight:normal;font-size:.85em}
-.sc-go{flex:none;font-size:1.5em;padding:.5em 1.6em}
 .sc-prac{display:flex;align-items:baseline;gap:1em}
 .sc-prac h3{margin:0 0 .4em}.sc-prac .fine{margin:0 0 .4em}
 .sc-grid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(13em,1fr));grid-auto-rows:min-content;gap:.4em;align-content:start;padding:.1em .2em .4em 0}
@@ -124,6 +118,10 @@
 .scard .scn{font-size:.8em;line-height:1.15;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .scard .sctags{display:flex;flex-wrap:wrap;gap:.25em}
 .scard .sctags i{font-style:normal;font-weight:normal;font-size:.62em;padding:0 .4em;border:1px solid var(--line);color:var(--dim);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.combocard{flex:none;display:flex;flex-direction:column;gap:.3em;align-items:flex-start;text-align:left;padding:.8em 1.2em;background:linear-gradient(#3a2a63,#241544);border:3px solid var(--gold);box-shadow:0 0 0 2px #000,0 0 .8em rgba(242,196,68,.25);color:var(--ink)}
+.combocard b{color:var(--gold);font-size:1.05em;letter-spacing:.12em;text-transform:uppercase}
+.combocard span{color:var(--dim);font-weight:normal;font-size:.75em;line-height:1.25}
+.combocard:hover{background:linear-gradient(#4a3680,#2e1a58);box-shadow:0 0 0 2px #000,0 0 1.1em rgba(242,196,68,.5)}
 /* items: slots in 2 rows of 3 (Dota layout) beside a compact catalogue; drag and drop between them */
 .sec>.items{display:flex;gap:.8em;align-items:flex-start}
 .islotbox{flex:none}
@@ -143,9 +141,9 @@
 
 /* ---- v6 WP9 ornaments (borders reset border-image, re-apply) */
 .lo-head h1{margin-left:calc(14*var(--fs));margin-right:calc(14*var(--fs))}
-.sc-ranked{border-image:var(--orn-frame-gold) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
 .scard,.tabb,.fp-foot .btn.go{image-rendering:pixelated}
 .scard{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round}
 .scard:hover{border-image-source:var(--orn-mini-gold)}
-.sc-go,.fp-foot .btn.go{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round}
+.fp-foot .btn.go{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round}
+.combocard{border-image:var(--orn-frame-gold) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
 .islot,.iopt{image-rendering:pixelated}
