@@ -37,6 +37,15 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [ ] #30 Gameplay/balance/mechanics quality pass (director-led; fixes with tests + docs/GAMEPLAY-REVIEW-v6.md top-10 suggestions).
 - [ ] #16 UI/UX review (docs/UX-REVIEW-v6.md, every screen at 1280x720 + 1920x1080, EN/PT) + animation pass (120-250 ms, reduced-motion).
 
+## Playtest 5 (CEO, queued at 98% usage — do BEFORE #30/#16)
+- [ ] #44 Enemy flair lines for new situations, per skin: got juked; Invoker escaped invisible; reactions to skills in general (EN+PT, flair.js table).
+- [ ] #45 Scenario intro rework: (1) NO pan yet — text first; each important text animates in independently, start big -> settle small: title, then VICTORY, then DEFEAT, then every combo step one by one, fast and cool. Hold time computed from reading length; direct the eye to each. (2) THEN pan to enemy, 4 s on enemy max, pan back to hero. (3) Reveal = only a tiny ring of vision (no VFX), with the lingering direction readable afterwards. (4) If the player cancels the intro with an action, do NOT re-center the camera (disorienting).
+- [ ] #46 Enemy move speed: fixed per hero base 285-320 (small jitter) + boots/travel/Euls bonuses applied correctly. Bug: a Boots of Travel enemy had 232 MS — must never go below base.
+- [ ] #47 Invisible enemies hidden on the minimap unless detected (gem/dust/tower/true sight).
+- [ ] #48 Detected invisible enemies render half-transparent (not fully visible).
+- [ ] #49 Awareness indicators (CEO likes them: faint ghost = general idea, "!" = excellent): show the predicted-heading arrow more often/clearly; add a "?" above the head when they search a spot and don't find you.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
+- Ogre two-headed enemy portrait: v2 preview in session scratchpad (ogre/v2, 48x32 wide recommended). CEO: "don't replace yet" — awaiting approve/v3; name TBD (Ian?).
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
