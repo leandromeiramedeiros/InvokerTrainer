@@ -28,6 +28,7 @@
     return null;
   }
   const isFoe = e => !!e && (e.kind === 'dummy' || e.kind === 'enemy');   // any target unit the player fights
+  const looksEnemy = e => !!e && (e.kind === 'enemy' || (e.kind === 'dummy' && !e.scarecrow));   // hero skin + name tag + dummychat
   const dummies = w => w.query(e => e.kind === 'dummy');
   const enemies = w => w.query(e => e.kind === 'enemy');
   const foes = w => w.query(isFoe);
@@ -116,7 +117,7 @@
     e.ai = newAI(behavior, o.x, o.y, w.t);
     e.ai.useBkb = !!o.useBkb;   // activates its BKB (if carried + ready) `reaction` s after the hero starts casting a disable at it
     e.behavior = behavior;
-    if (!hasAI) e.noHpBar = true;
+    if (!hasAI) { e.noHpBar = true; e.scarecrow = true; }   // plain target: scarecrow look, no name/speech
     return w.add(e);
   }
 
@@ -619,6 +620,6 @@
   });
 
   IT.Units = {
-    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, dummies, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, looksEnemy, reactionOf, dummies, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

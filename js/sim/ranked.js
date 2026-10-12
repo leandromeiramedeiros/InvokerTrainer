@@ -106,6 +106,7 @@
         scenario: { stunBolt: df.stunBolt, dummyEscape: mot ? 'none' : df.escape, blinkAfter: df.blinkAfter },
         useBkb: !!(df.useBkb || d.useBkb), items,
       });
+      e.scarecrow = false; e.noHpBar = false;   // scenario foes look like enemies (skin, name, hp bar, dummychat)
       e.reaction = mot === 'still' ? 99 : df.reaction; e.hpRegen = 0; e.base.hpRegen = 0;
       if (mot === 'flee' || mot === 'chase') { const ms = mot === 'flee' ? 330 * df.flee : 380 * df.chase; e.ms = ms; e.base.ms = ms; }
       if (d.hp != null && d.hp < 1) e.hp = e.maxHp * Math.min(1, 0.25 + (d.hp - 0.25) * (df.hpMul || df.hp || 1));

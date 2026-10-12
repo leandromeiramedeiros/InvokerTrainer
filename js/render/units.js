@@ -66,7 +66,7 @@
   function sheetOf(e) {
     if (e.kind === 'hero') return IT.Art.heroSheet ? IT.Art.heroSheet() : 'invoker';
     if (e.kind === 'spirit') return 'forge';
-    if (e.kind === 'dummy' && IT.Art.sheets.scarecrow) return 'scarecrow';
+    if (e.kind === 'dummy' && e.scarecrow && IT.Art.sheets.scarecrow) return 'scarecrow';
     return IT.Art.sheets[e.skin] ? e.skin : 'pedro';
   }
   function isUnit(e) { return e.kind === 'hero' || e.kind === 'dummy' || e.kind === 'enemy' || e.kind === 'spirit'; }
@@ -337,7 +337,7 @@
     S.sx = sxp; S.sy = sy; S.top = ay; S.cvImg = sp.cv; S.cvAx = sp.ax; S.cvAy = sp.ay; S.sc = sc;
     if (L && Math.random() < 0.5) IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 40, y: e.y + (Math.random() - 0.5) * 20, z: Math.max(0, zp * 6 * 0.2), n: 1, ramp: 'white', speed: 25, up: 10, spread: 10, life: 0.4, rest: 0.6 });
     forceTrail(R, e, S);
-    if (al) alacSigil(R, S, sxp, sy - (e.kind === 'hero' ? S.top + 14 : e.kind === 'dummy' ? 42 : S.top + 10), al);
+    if (al) alacSigil(R, S, sxp, sy - (e.kind === 'hero' ? S.top + 14 : e.scarecrow ? 42 : S.top + 10), al);
   }
 
   // lifted units are re-drawn on top of the dust/funnel layers so their lower half never disappears into the plume
@@ -549,13 +549,11 @@
     if (e.kind === 'enemy' && e.tele) telegraph(R, e, x, top - (e.maxHp ? 30 : 20));
     if (has(e, 'hex') || !e.maxHp) return;
     let y;
-    if (e.kind === 'dummy') {
-      if (e.name) PX.text(cx, e.name, x, top - 6, '#f0e8ff', 'c');
+    if (e.kind === 'dummy' && e.scarecrow) {
+      return;   // scarecrow: no name tag, no bars
+    } else if (isFoe(e)) {
+      if (e.name) PX.text(cx, e.name, x, top - 14, '#f0e8ff', 'c');
       if (e.noHpBar) return;
-      y = top - 5;
-      bar(cx, x - 9, y, 18, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
-      if (e.maxMana) bar(cx, x - 9, y + 2, 18, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
-    } else if (e.kind === 'enemy') {
       y = top - 6;
       bar(cx, x - 10, y, 20, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
       if (e.maxMana) bar(cx, x - 10, y + 2, 20, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
