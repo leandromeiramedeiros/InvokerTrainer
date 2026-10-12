@@ -77,9 +77,19 @@
     timeout: ['Spell never landed', 'A magia não acertou'], blinked: ['The dummy blinked away', 'O alvo deu blink'],
     early: ['Too early: wait {s} s more', 'Cedo demais: espere mais {s} s'], late: ['Too late: {s} s past the window', 'Tarde demais: {s} s fora da janela'] };
   for (const k in cf) D('cfail.' + k, cf[k][0], cf[k][1]);
-  D('chint.order', 'Wrong order: {got} now, the combo wants {exp}', 'Ordem errada: o combo pede {exp}, n�o {got}');
+  // scenario fail reasons (IT.Ranked conclude -> comboFail { reason, s }); s = the localized detail (cfail.method.*)
+  const sf = { caught: ['Caught: a chaser saw you and reached you', 'Pego: um perseguidor te viu e te alcançou'], cross: ['A foe crossed the line', 'Um inimigo cruzou a linha'],
+    seen: ['Spotted before your first hit', 'Visto antes do primeiro golpe'], method: ['Wrong method: {s}', 'Método errado: {s}'],
+    escaped: ['The target got away', 'O alvo fugiu'], tower: ['You stepped into the enemy tower range', 'Você entrou no alcance da torre inimiga'],
+    died: ['You went down', 'Você caiu'], time: ['Time is up', 'Acabou o tempo'],
+    'method.attack': ['killed with auto-attacks, the scenario wanted {spells}', 'matou com ataques automáticos, o cenário pedia {spells}'],
+    'method.missing': ['{spells} never hit a foe', '{spells} não acertou nenhum inimigo'],
+    'method.burst': ['the kills did not come from one cast', 'as mortes não vieram de um só lançamento'],
+    'method.other': ['the kill did not meet the objective', 'a morte não cumpriu o objetivo'] };
+  for (const k in sf) D('cfail.' + k, sf[k][0], sf[k][1]);
+  D('chint.order', 'Wrong order: {got} now, the combo wants {exp}', 'Ordem errada: o combo pede {exp}, n�o {got}');
   D('chint.target', 'Wrong target for {got}', 'Alvo errado para {got}');
-  D('chint.extra', '{got} is not part of this combo', '{got} n�o faz parte deste combo');
+  D('chint.extra', '{got} is not part of this combo', '{got} n�o faz parte deste combo');
   D('toast.combo', 'COMBO! +{score}', 'COMBO! +{score}');
   D('toast.perfect', 'PERFECT! +{score}', 'PERFEITO! +{score}');
   D('toast.comboFail', 'FAILED: {why}', 'FALHOU: {why}');

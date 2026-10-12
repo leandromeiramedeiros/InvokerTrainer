@@ -88,3 +88,10 @@ test('loseKeys', () => {
   eq(HS.loseKeys({ obj: { type: 'kill' } }, false), []);
   assert.strictEqual(HS.fmtN(1.25), '1.3');
 });
+test('derive + tracker: stop / hold steps', () => {
+  const d = HS.derive({ steps: [{ a: 'stop' }, { a: 'hold' }, { a: 'attack' }] });
+  eq(d.map(s => s.k), ['stop', 'hold', 'attack']);
+  const tr = HS.tracker(HS.plan(d, { orbs: [], slots: [null, null] }));
+  tr.feed({ type: 'stop' }); eq(tr.states().slice(0, 2), ['done', 'now']);
+  tr.feed({ type: 'hold' }); eq(tr.states().slice(0, 2), ['done', 'done']);
+});

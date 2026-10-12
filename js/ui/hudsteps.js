@@ -5,9 +5,9 @@
   const SPELL_ORBS = () => (IT.GAME && IT.GAME.SPELL_ORBS) || {};
   const WINDOW = 3;   // a step may be skipped by up to this many steps ahead of the current one
 
-  // one action id -> { k:'spell'|'item'|'attack'|'move'|'pos', id? }
+  // one action id -> { k:'spell'|'item'|'attack'|'move'|'stop'|'hold'|'pos', id? }
   function kindOf(a) {
-    if (a === 'attack' || a === 'move') return { k: a };
+    if (a === 'attack' || a === 'move' || a === 'stop' || a === 'hold') return { k: a };
     if (a === 'pos' || a === 'position') return { k: 'pos' };
     if (typeof a !== 'string' || !a) return null;
     return SPELL_ORBS()[a] ? { k: 'spell', id: a } : { k: 'item', id: a };
@@ -47,7 +47,7 @@
   }
 
   // expand steps into key presses. state: { orbs:['Q'..], slots:[spell,spell], items:[id|null x6], preinvoked:[spell] }
-  // press: { t:'orb', o:'Q'|'W'|'E' } | { t:'inv' } | { t:'cast', slot:0|1 } | { t:'item', slot:-1..5 } | { t:'atk' } | { t:'move' } | { t:'pos' }
+  // press: { t:'orb', o:'Q'|'W'|'E' } | { t:'inv' } | { t:'cast', slot:0|1 } | { t:'item', slot:-1..5 } | { t:'atk' } | { t:'move' } | { t:'stop' } | { t:'hold' } | { t:'pos' }
   function plan(steps, state) {
     state = state || {};
     let orbs = (state.orbs || []).slice(-3), slots = (state.slots || [null, null]).slice(0, 2);
@@ -66,13 +66,13 @@
         }
         presses.push({ t: 'cast', slot: at });
       } else if (st.k === 'item') presses.push({ t: 'item', slot: items.indexOf(st.id) });
-      else presses.push({ t: st.k === 'attack' ? 'atk' : st.k === 'move' ? 'move' : 'pos' });
+      else presses.push({ t: st.k === 'attack' ? 'atk' : st.k === 'move' || st.k === 'stop' || st.k === 'hold' ? st.k : 'pos' });
       return Object.assign({}, st, { presses: presses.map(p => Object.assign({ done: false }, p)), done: false });
     });
   }
 
   // progress tracker over a planned step list. feed() takes the already hero-filtered events:
-  //   { type:'orb', orb:'Q' } | { type:'invoke', spell } | { type:'cast', ability } | { type:'attack' } | { type:'move' }
+  //   { type:'orb', orb:'Q' } | { type:'invoke', spell } | { type:'cast', ability } | { type:'attack' } | { type:'move' } | { type:'stop' } | { type:'hold' }
   function tracker(steps) {
     const T = { steps, feed, idx, states, pressStates, finished };
     function idx() { const i = steps.findIndex(s => !s.done); return i < 0 ? steps.length : i; }
@@ -96,6 +96,8 @@
         const j = find(s => s.k === 'attack'); if (j >= 0) finishStep(j);
       } else if (ev.type === 'move') {
         const j = find(s => s.k === 'move' || s.k === 'pos'); if (j >= 0) finishStep(j);
+      } else if (ev.type === 'stop' || ev.type === 'hold') {
+        const j = find(s => s.k === ev.type); if (j >= 0) finishStep(j);
       }
     }
     // 'done' | 'now' | 'todo' per step

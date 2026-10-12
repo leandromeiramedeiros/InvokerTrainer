@@ -54,8 +54,9 @@ test('scenario foes are real enemies: kind enemy, name/hp bar, distinct skins + 
 
 test('foe hp = the scenario damage-to-kill x tier hpMul (every value, also > 1); it empties exactly on the kill and the foe really dies', () => {
   for (const df of DF.order) {
-    const m = mk('sun_snipe', df);                         // hp 0.38 -> 0.13 x 2200 to kill
-    const e = m.run.dummies[0], want = Math.round(0.13 * E.hp * DF.get(df).hpMul);
+    const m = mk('sun_snipe', df);                         // v6: hp = HP_SHARE x the steps' KV damage (Ranked.foeHp) x hpMul
+    const e = m.run.dummies[0], want = IT.Ranked.foeHp(m.run.pr.sc, DF.get(df), m.run.pr.lo)[0];
+    for (const a of m.run.pr.need) m.run.st.used.add(a);   // the steps landed (a kill only counts once they all hit)
     assert.equal(e.maxHp, want, df); assert.equal(e.hp, want, df);
     assert.equal(e.hpRegen, 0);
     thaw(m.run);

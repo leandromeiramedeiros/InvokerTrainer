@@ -766,9 +766,38 @@
     R.glow(x, by, gold ? 14 : 11, gold ? '#ffc840' : '#6a50d0', gold ? 0.65 : 0.5);
   }
 
+  // ---------- gate line: the 'cross' ring a scenario foe must not reach (w.gate = { x, y, r }) ----------
+  // animated marching dashes on the ground in the scenario accent (HUD magenta), drawn in the unlit HUD pass so fog never hides it
+  const GATE_COL = '#ff3fd0';
+  function gateLine(R) {
+    const g = R.w.gate; if (!g || !(g.r > 0)) return;
+    const cx = R.cx, t = R.time, VW = R.VW, VH = R.VH;
+    const x = pxs(R, g.x), y = pys(R, g.y), r = g.r / R.P;
+    if (x + r < 0 || y + r < 0 || x - r >= VW || y - r >= VH) return;
+    const col = g.color || GATE_COL, n = Math.max(24, Math.round(TAU * r * 1.1)), dash = 7, phase = t * 9;
+    const ry = r;   // true circle: it is the exact trigger radius (top-down map)
+    let lx = 1e9, ly = 1e9;
+    for (let i = 0; i < n; i++) {
+      const ang = i / n * TAU, px = Math.round(x + Math.cos(ang) * r), py = Math.round(y + Math.sin(ang) * ry);
+      if (px === lx && py === ly) continue;
+      lx = px; ly = py;
+      if (px < 0 || py < 0 || px >= VW || py >= VH) continue;
+      const d = i / n * TAU * r - phase;
+      const on = (((d % dash) + dash) % dash) < 4;
+      if (on) {
+        cx.fillStyle = 'rgba(0,0,0,0.55)'; cx.fillRect(px, py + 1, 1, 1);
+        cx.fillStyle = col; cx.fillRect(px, py, 1, 1);
+        if (px + 1 < VW) { cx.fillStyle = col; cx.fillRect(px + 1, py, 1, 1); }   // 2 px thick horizontally keeps it readable at any zoom
+      } else if (PX.bayer(px + R.camX, py + R.camY) < 0.22) { cx.fillStyle = col; cx.fillRect(px, py, 1, 1); }   // faint dither between dashes
+    }
+    // faint inner dither ring so the area it guards reads as a zone
+    dring(R, x, y, r * 0.94, col, 0.16, Math.max(24, Math.round(TAU * r * 0.5)));
+  }
+
   // ---------- HUD pass (after lighting) ----------
   function hud(R) {
     const w = R.w, cx = R.cx, t = R.time, VW = R.VW, VH = R.VH;
+    gateLine(R);
     // damage numbers
     for (const q of texts) {
       const age = (t - q.t0) / 1.0, e = w.byId.get(q.target);

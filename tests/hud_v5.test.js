@@ -99,12 +99,10 @@ test('map name line: hud.map key + every map name exist in en and pt; sandbox pa
   assert.ok(/txt\(rk\.mapName\)/.test(hud), 'scenario line keeps Lv | map | Twist');
 });
 
-test('F1 chips: spell/item icons are >= 20px with a light backplate (specificity beats .ico.mini)', () => {
+test('step chips: icons are >= 20px with a light backplate (specificity beats .ico.mini)', () => {
   const css = read('css/hud.css');
-  const m = /\.tk canvas\.ico\{([^}]*)\}/.exec(css);
-  assert.ok(m, '.tk canvas.ico rule');
+  const m = /\.rkc canvas\.ico\{([^}]*)\}/.exec(css);
+  assert.ok(m, '.rkc canvas.ico rule');
   assert.ok(/clamp\(2[0-9]px/.test(m[1]));
   assert.ok(/background:rgba\(255,255,255,\.08\)/.test(m[1]) && /border:1px solid rgba\(255,255,255,/.test(m[1]));
-  assert.ok(/\.rkcombo \.rka canvas\{[^}]*rgba\(255,255,255,\.08\)/.test(css));
-  assert.ok(/\.rkcombo \.rkc>canvas\{[^}]*rgba\(255,255,255,\.08\)/.test(css));
 });

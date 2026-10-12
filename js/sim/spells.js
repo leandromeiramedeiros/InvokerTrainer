@@ -37,8 +37,11 @@
     };
   }
 
+  // v6: KV SpellImmunityType ENEMIES_YES (only Sun Strike / Cataclysm) pierces BKB: full damage to a hero BKB and to an enemy-NPC BKB
+  // (whose spell_reduce cut only applies to magic damage that does not pierce). Sun Strike is pure as well, which never reads magicImmune.
+  const pierces = ab => { const a = D[ab] && IT.DOTA && IT.DOTA.abilities && IT.DOTA.abilities[D[ab]]; return !!a && a.spellImmunity === 'ENEMIES_YES'; };
   function dmg(w, c, u, ability, type, amount) {
-    return IT.Combat ? IT.Combat.damage(w, { src: c.id, target: u, ability, type, amount }) : 0;
+    return IT.Combat ? IT.Combat.damage(w, { src: c.id, target: u, ability, type, amount, flags: pierces(ability) ? { pierce: true } : undefined }) : 0;
   }
 
   // Applies a move slow without weakening a stronger, longer one already present.

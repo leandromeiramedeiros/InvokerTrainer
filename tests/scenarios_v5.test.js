@@ -218,7 +218,8 @@ test('ranked twists: 1-2 per stage of 3 turns, compatible with the scenario, app
 
 // ---------------------------------------------------------------- check(): objectives + fails
 function play(id, diff) { const m = build(id, diff); thaw(m.run); assert.equal(m.run.phase, 'play', id); return m; }
-const kill = (m, i, o) => { const d = m.run.dummies[i]; d.dead = true; m.run.st.kills.push(Object.assign({ id: d.id, ability: 'sunstrike', by: 'hero', heroElev: 1, foeElev: 1, inv: false, t: m.w.t }, o || {})); };
+// (v6: the step spells are marked as landed; the missing-hit fail is covered in ceo_v6_core.test.js)
+const kill = (m, i, o) => { const d = m.run.dummies[i]; d.dead = true; for (const a of m.run.pr.need) m.run.st.used.add(a); m.run.st.kills.push(Object.assign({ id: d.id, ability: 'sunstrike', by: 'hero', heroElev: 1, foeElev: 1, inv: false, t: m.w.t }, o || {})); };
 const res = m => (m.run.tick(0), m.run.result);
 
 test('check: kill / kill_with / killN one-cast / method', () => {
@@ -284,41 +285,76 @@ function prep(w, h, ab) {
   IT.Invoke.invoke(w, h);
 }
 function bot(id, diff, seed, trace) {
-  const m = build(id, diff, seed); thaw(m.run);
+  const m = build(id, diff, seed);
+  // v6: nothing is pre-invoked; the countdown is for invoking the opening spells (orbs + Invoke do not start the round)
+  const open = m.pr.sc.steps.map(s => s.a).filter((a, i, l) => IT.GAME.SPELL_ORBS[a] && l.indexOf(a) === i).slice(0, 2).reverse();
+  for (let i = 0; i < 600 && m.run.frozen(); i++) { for (const a of open) prep(m.w, m.h, a); m.run.tick(1 / 30); }
   const { w, h, run } = m, live = () => run.phase === 'play';
   const trail = [];
   const step = n => { for (let i = 0; i < (n || 1) && live(); i++) { const s0 = Math.floor(w.t); w.step(); if (trace && Math.floor(w.t) > s0) w.emit('trace1s', {}); trail.push(run.dummies.map(d => ({ x: d.x, y: d.y }))); if (trail.length > 10) trail.shift(); } };
   const al = () => run.dummies.filter(d => !d.dead);
   if (trace) { for (const n of ['kill', 'damage', 'cast', 'heroDown', 'towerDown', 'scnResult']) w.on(n, p => console.log(w.t.toFixed(2), n, JSON.stringify(p).slice(0, 140))); console.log('hero', h.x | 0, h.y | 0, run.dummies.map(d => [d.x | 0, d.y | 0, d.hp | 0].join(':')).join(' '), w.gate ? 'gate ' + (w.gate.x | 0) + ':' + (w.gate.y | 0) + ':' + w.gate.r : ''); w.on('trace1s', () => { console.log(w.t.toFixed(1), 'pos', run.dummies.map(d => d.dead ? '-' : (d.x | 0) + ':' + (d.y | 0) + '@' + (Math.hypot(d.x - h.x, d.y - h.y) | 0)).join(' ')); }); }
-  let casts = 0; w.on('cast', p => { if (p.unit === h.id) casts++; });
+  let casts = 0, tornT = null; w.on('cast', p => { if (p.unit === h.id) { casts++; if (p.ability === 'tornado') tornT = w.t; } });
   if (m.pr.sc.fail.includes('method')) h.autoAttack = false;   // a player going for a specific kill keeps auto-attack off (or holds Stop)
   for (const s of m.pr.sc.steps) {
     if (!live()) break;
     const until = w.t + (s.w || 0);
     while (live() && w.t < until - 1e-6) { prep(w, h, s.a); step(); }
     // Sun Strike on a Tornado-lifted foe: cast so the beam lands just after the drop (lift time left <= the 1.7 s delay)
+    // (a Tornado still on its way: wait for the lift first)
+    if (s.a === 'sunstrike' && tornT != null && w.t - tornT < 3) for (let k = 0; k < 30 * 3 && live() && !al().some(q => IT.Status.find(q, 'lift')); k++) { prep(w, h, s.a); step(); }
     if (s.a === 'sunstrike') for (let k = 0; k < 30 * 5 && live(); k++) { const f = al().find(q => IT.Status.find(q, 'lift')); if (!f || IT.Status.find(f, 'lift').until - w.t <= 1.62) break; prep(w, h, s.a); step(); }
     for (let k = 0; k < 400 && IT.GAME.SPELL_ORBS[s.a] && !h.inv.slots.includes(s.a) && live(); k++) { prep(w, h, s.a); step(); }
     // near: hold until the target walks within that range (a defender waits for marchers to come to him)
     const pickT = () => { const f = al().filter(q => !IT.Status.find(q, 'lift')), d = f.length ? f : al(); return s.at === 'd1' ? (d[1] || d[0]) : (d[0] || al()[0]); };
     if (s.near) for (let k = 0; k < 30 * 10 && live(); k++) { const q = pickT(); if (!q || Math.hypot(q.x - h.x, q.y - h.y) <= s.near) break; prep(w, h, s.a); step(); }
-    const d = al(), t0 = pickT();
-    let t = t0 ? { x: t0.x, y: t0.y, id: t0.id } : null;
-    if (s.at === 'self') t = { x: h.x, y: h.y, id: h.id };
-    else if (s.at === 'mid' && d.length) t = { x: d.reduce((a, q) => a + q.x, 0) / d.length, y: d.reduce((a, q) => a + q.y, 0) / d.length };
-    else if (s.at === 'gate' && w.gate) t = { x: w.gate.x, y: w.gate.y };
-    else if (s.at === 'tower') { const tw = w.ents.filter(q => q.kind === 'tower' && q.team === 1 && !q.dead).sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0]; t = tw ? { x: tw.x, y: tw.y, id: tw.id } : null; }
-    else if (s.at === 'lead' && t0) {
-      const o = trail[0] && trail[0][run.dummies.indexOf(t0)] || t0, T = Math.max(1, trail.length - 1) / 30;
-      t = { x: t0.x + (t0.x - o.x) / T * 1.75, y: t0.y + (t0.y - o.y) / T * 1.75 };
+    // a foe under BKB: wait it out before a magic spell (Sun Strike is pure and goes through)
+    if (s.a !== 'sunstrike' && s.a !== 'move' && s.a !== 'attack') for (let k = 0; k < 30 * 10 && live(); k++) { const q = pickT(); if (!q || !IT.Status.has(q, 'magicImmune')) break; prep(w, h, s.a); step(); }
+    // Sun Strike on a running foe: give it up to 3 s to stop (it flees to a spot, then stands), then lead what is left
+    if (s.a === 'sunstrike' && s.at === 'd0') for (let k = 0; k < 90 && live(); k++) {
+      const q = pickT(), o = q && trail[0] && trail[0][run.dummies.indexOf(q)];
+      if (!q || !o || Math.hypot(q.x - o.x, q.y - o.y) / Math.max(1, trail.length - 1) * 30 < 40) break;
+      step();
     }
+    // v6 fog is always on: a foe out of sight cannot be targeted, so walk toward it until it shows (a player scouts the same way)
+    const unitT = (IT.Abilities.get(s.a) || {}).target === 'unit';   // point spells go into the fog fine
+    if (unitT && (s.at === 'd0' || s.at === 'd1')) for (let k = 0; k < 30 * 8 && live(); k++) {
+      const q = pickT(); if (!q || q.visible) break;
+      if (k % 6 === 0) IT.Orders.issue(w, h, { type: 'move', x: q.x, y: q.y });
+      prep(w, h, s.a); step();
+    }
+    const aim = () => {
+      const d = al(), t0 = pickT();
+      let t = t0 ? { x: t0.x, y: t0.y, id: t0.id } : null;
+      if (s.at === 'self') t = { x: h.x, y: h.y, id: h.id };
+      else if (s.at === 'mid' && d.length) t = { x: d.reduce((a, q) => a + q.x, 0) / d.length, y: d.reduce((a, q) => a + q.y, 0) / d.length };
+      else if (s.at === 'gate' && w.gate) t = { x: w.gate.x, y: w.gate.y };
+      else if (s.at === 'tower') { const tw = w.ents.filter(q => q.kind === 'tower' && q.team === 1 && !q.dead).sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0]; t = tw ? { x: tw.x, y: tw.y, id: tw.id } : null; }
+      else if (s.at === 'lead' && t0) {
+        const o = trail[0] && trail[0][run.dummies.indexOf(t0)] || t0, T = Math.max(1, trail.length - 1) / 30;
+        t = { x: t0.x + (t0.x - o.x) / T * 1.75, y: t0.y + (t0.y - o.y) / T * 1.75 };
+      }
+      return t;
+    };
+    const t = aim();
     if (!t) break;
     if (s.a === 'move') { IT.Orders.issue(w, h, { type: 'move', x: t.x, y: t.y }); for (let k = 0; k < 30 * 8 && live() && Math.hypot(h.x - t.x, h.y - t.y) > 450; k++) step(); continue; }
     if (s.a === 'attack') { IT.Orders.issue(w, h, { type: 'attack', target: t.id }); continue; }
+    const c0 = casts;   // before the order: an instant item cast fires inside issue()
     IT.Orders.issue(w, h, { type: 'cast', ability: s.a, x: t.x, y: t.y, target: t.id });
-    const c0 = casts;
-    for (let k = 0; k < 30 * 8 && live() && casts === c0; k++) step();   // orders walk into range by themselves
+    // orders walk into range by themselves; a point cast on moving foes is re-aimed while the hero walks (v6: nothing pre-placed)
+    const moving = s.at === 'mid' || s.at === 'd0' || s.at === 'd1' || s.at === 'lead';
+    for (let k = 0; k < 30 * 8 && live() && casts === c0; k++) {
+      step();
+      if (moving && k % 6 === 5 && casts === c0 && h.orders[0] && h.orders[0].type === 'cast' && !h.orders[0]._ph) { const q = aim(); if (q) IT.Orders.issue(w, h, { type: 'cast', ability: s.a, x: q.x, y: q.y, target: q.id }); }
+    }
     step(4);
+  }
+  // v6: the hero does not auto-acquire in a combo kill; after the steps a player right-clicks what is left (plain kill objectives)
+  if (m.pr.sc.obj.type === 'kill' && !m.pr.sc.obj.how) for (let k = 0; k < 30 * 20 && live(); k += 15) {
+    const f = al().sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0];
+    if (f && f.visible && !(h.orders[0] && h.orders[0].type === 'attack' && h.orders[0].target === f.id)) IT.Orders.issue(w, h, { type: 'attack', target: f.id });
+    step(15);
   }
   // escape: keep walking away from the nearest foe
   if (m.pr.sc.obj.type === 'escape') for (let k = 0; k < 30 * 20 && live(); k += 10) {

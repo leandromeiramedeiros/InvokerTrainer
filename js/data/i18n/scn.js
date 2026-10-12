@@ -3,7 +3,7 @@
 (function (G) { 'use strict'; const IT = G.IT; IT.i18nAdd({
   en: {
     'f1.lose.method': 'you get the kill the wrong way', 'f1.lose.tower': 'you step into the tower range',
-    'scn.fail.cross': 'A foe crossed the line', 'scn.fail.seen': 'You were spotted', 'scn.fail.method': 'Wrong way to kill', 'scn.fail.method.attack': 'Finished by an auto-attack, not the required ability', 'scn.fail.tower': 'Inside tower range',
+    'scn.fail.cross': 'A foe crossed the line', 'scn.fail.seen': 'You were spotted', 'scn.fail.method': 'Wrong way to kill', 'scn.fail.method.attack': 'Finished by an auto-attack, not the required ability', 'scn.fail.method.missing': 'A required spell never hit a foe', 'scn.fail.method.burst': 'The kills did not come from one cast', 'scn.fail.tower': 'Inside tower range',
     'hud.rkTwist': 'Twist:', 'hud.rkLevel': 'Lv {n}',
 
     'scn.sleepy_target.name': 'Sleeping scout', 'scn.sleepy_target.flair': 'A scout dozed off by the lotus pool, far from his friends.',
@@ -70,7 +70,7 @@
   },
   pt: {
     'f1.lose.method': 'você mata do jeito errado', 'f1.lose.tower': 'você entra no alcance da torre',
-    'scn.fail.cross': 'Um inimigo cruzou a linha', 'scn.fail.seen': 'Você foi visto', 'scn.fail.method': 'Jeito errado de matar', 'scn.fail.method.attack': 'Finalizou com ataque automático, não com a habilidade exigida', 'scn.fail.tower': 'Dentro do alcance da torre',
+    'scn.fail.cross': 'Um inimigo cruzou a linha', 'scn.fail.seen': 'Você foi visto', 'scn.fail.method': 'Jeito errado de matar', 'scn.fail.method.attack': 'Finalizou com ataque automático, não com a habilidade exigida', 'scn.fail.method.missing': 'Uma magia exigida não acertou nenhum inimigo', 'scn.fail.method.burst': 'As mortes não vieram de um só lançamento', 'scn.fail.tower': 'Dentro do alcance da torre',
     'hud.rkTwist': 'Variação:', 'hud.rkLevel': 'Nv {n}',
 
     'scn.sleepy_target.name': 'Batedor dorminhoco', 'scn.sleepy_target.flair': 'Um batedor cochilou perto do lago de lótus, longe dos amigos.',

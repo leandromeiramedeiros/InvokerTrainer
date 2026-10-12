@@ -63,7 +63,7 @@ test('BAD-1: an auto-attack kill with no ability involved still fails; a wrong a
   assert.equal(a.run.result.reason, 'method'); assert.equal(a.run.result.detail, 'attack');
   const b = build(KW);
   hit(b.w, b.h, b.run.dummies[0], 'sunstrike', 1e6); step(b.w, 2);   // wrong spell
-  assert.equal(b.run.result.reason, 'method'); assert.equal(b.run.result.detail, null);
+  assert.equal(b.run.result.reason, 'method'); assert.equal(b.run.result.detail, 'other');   // v6: 'other' = the kill did not meet the objective
 });
 
 test('BAD-1: the hero does not auto-acquire during a kill_with scenario, but an explicit attack order works', () => {
@@ -84,7 +84,8 @@ test('BAD-1: the hero does not auto-acquire during a kill_with scenario, but an 
 });
 
 test('BAD-1: other objectives keep the hero auto-attack', () => {
-  const sc = SC.find(s => s.obj.type === 'kill');
+  // v6: every kill scenario with spell steps turns auto-acquire off too (all steps must hit); non-kill objectives keep it
+  const sc = SC.find(s => s.obj.type === 'destroyTower' || s.obj.type === 'push');
   const { h } = build(sc.id);
   assert.notEqual(h.autoAttack, false);
 });

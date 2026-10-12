@@ -128,14 +128,12 @@ test('stats key (rebindable, default K) holds live stats; Tab is reserved', () =
   assert.ok(r.IT.Settings.RESERVED ? r.IT.Settings.RESERVED.includes('Tab') : true);
 });
 
-test('settings defaults / merge: unifiedOrders, hudMode', () => {
+test('settings defaults / merge: unifiedOrders; hudMode is gone (stored values silently dropped)', () => {
   const { IT } = rig();
   const S = IT.Settings;
   const d = S.defaults();
-  assert.equal(d.unifiedOrders, true); assert.equal(d.hudMode, 'default'); assert.equal(d.keys.common.stats, 'K');
-  assert.equal(S.merge(S.defaults(), { hudMode: 'steps' }).hudMode, 'steps');
-  assert.equal(S.merge(S.defaults(), { hudMode: 'minimal' }).hudMode, 'minimal');
-  assert.equal(S.merge(S.defaults(), { hudMode: 'bogus' }).hudMode, 'default');
+  assert.equal(d.unifiedOrders, true); assert.ok(!('hudMode' in d)); assert.equal(d.keys.common.stats, 'K');
+  assert.ok(!('hudMode' in S.merge(S.defaults(), { hudMode: 'steps' })));
   assert.equal(S.merge(S.defaults(), { unifiedOrders: false }).unifiedOrders, false);
 });
 

@@ -20,6 +20,7 @@ function mk(id, diff, o) {
   const h = IT.Hero.create(w, pr.lo, sp.x, sp.y);
   if (IT.StatsCollector) IT.StatsCollector.create(w);
   run.attach(w);
+  w.fog = o.fog != null ? o.fog : false;   // v6 fog is always on, but this bare test map has no arenas: the 'seen' spot rule cannot place the dummy in sight
   return { run, w, h, pr };
 }
 // real-time part: countdown / result
@@ -94,7 +95,7 @@ test('difficulty table covers every id', () => {
     assert.ok(IT.GAME.DUMMY_PRESETS[d.preset] && ['stationary', 'wander', 'evasive'].includes(d.behavior), id);
     assert.ok(d.timer > 0 && d.mult > 0 && d.reaction >= 0, id);
   }
-  assert.ok(D.ian.hints && !D.hard.hints && D.bambam.fog && D.bambam.useBkb && D.hard.stunBolt && D.common.reaction === 0.6 && D.bambam.reaction === 0.25);
+  assert.ok(D.ian.hints && !D.hard.hints && D.bambam.fog === undefined && D.bambam.useBkb && D.hard.stunBolt && D.common.reaction === 0.6 && D.bambam.reaction === 0.25);
   assert.ok(D.ian.timer >= 2);
 });
 

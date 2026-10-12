@@ -101,14 +101,20 @@
     return true;
   }
 
+  // anchored right above the speaker's head: percent of the live internal view (VIEW_W/H change with the scroll zoom, so no --u units);
+  // the bubble is kept inside the viewport and the tail slides sideways to keep pointing at the unit
   function place() {
     const b = D.bub; if (!b) return;
-    const P = IT.GAME.UNIT_PX, cam = D.g.cam, VW = IT.GAME.VIEW_W;
-    const e = b.who;
-    const sx = Math.max(34, Math.min(VW - 34, e.x / P - cam.px));
-    const sy = Math.max(22, e.y / P - cam.py - HEAD - (e.z || 0) / P);
-    b.el.style.left = 'calc(var(--u) * ' + sx.toFixed(1) + ')';
-    b.el.style.top = 'calc(var(--u) * ' + sy.toFixed(1) + ')';
+    const GM = IT.GAME, P = GM.UNIT_PX, cam = D.g.cam, e = b.who, el = b.el, root = D.root;
+    const ux = e.x / P - cam.px, uy = e.y / P - cam.py - HEAD - (e.z || 0) / P;   // unit head, view px
+    const rw = (root && root.clientWidth) || 1, rh = (root && root.clientHeight) || 1;
+    const bw = el.offsetWidth || 0, bh = el.offsetHeight || 0, M = 6;
+    let px = ux / GM.VIEW_W * rw, py = uy / GM.VIEW_H * rh;   // head in root px
+    const ax = Math.max(bw / 2 + M, Math.min(rw - bw / 2 - M, px)), ay = Math.max(bh + M + 8, Math.min(rh - M, py));
+    el.style.left = (ax / rw * 100).toFixed(2) + '%'; el.style.top = (ay / rh * 100).toFixed(2) + '%';
+    const tx = Math.max(12, Math.min(bw - 12, bw / 2 + (px - ax)));
+    el.style.setProperty('--tx', (bw ? tx : 0) + 'px');
+    el.classList.toggle('below', py < bh + M + 8);   // head too close to the top edge: the clamped bubble overlaps the unit, hide the tail
   }
 
   function update(dt) {

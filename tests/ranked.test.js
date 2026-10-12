@@ -21,7 +21,8 @@ function mk(o) {
   return { run, w, h, events };
 }
 const thaw = (run, max) => { for (let i = 0; i < (max || 600) && run.frozen() && !run.ended; i++) run.tick(1 / 30); };
-const killAll = (m) => { for (const d of m.run.dummies.slice()) if (!d.dead) IT.Combat.damage(m.w, { src: m.h.id, target: d, amount: 1e6, type: 'pure' }); };
+// v6: a kill only counts once every step spell hit, so the shortcut marks the steps as landed first
+const killAll = (m) => { for (const a of m.run.pr.need || []) m.run.st.used.add(a); for (const d of m.run.dummies.slice()) if (!d.dead) IT.Combat.damage(m.w, { src: m.h.id, target: d, amount: 1e6, type: 'pure' }); };
 
 test('streak multiplier and scenario score', () => {
   assert.equal(R.streakMult(0), 1);
@@ -164,6 +165,9 @@ test('practice: difficulty fixed, endless, no score; sandbox scenario: no countd
   assert.equal(hp.score, null); assert.equal(hp.runLeft, null); assert.equal(hp.phase, 'countdown'); assert.equal(hp.countdown, 3);
   const s = mk({ mode: 'sandbox', scenario: 'sun_snipe' });
   assert.equal(s.run.pr.sc.id, 'sun_snipe');
+  // v6: nothing is pre-invoked, so a fixed sandbox scenario gets the full 10 s countdown to invoke (no time limit after it)
+  assert.equal(s.run.phase, 'countdown'); assert.equal(R.hud(s.w).countdown, 10);
+  thaw(s.run);
   assert.equal(s.run.phase, 'play'); assert.equal(s.w.paused, false);
   assert.equal(R.hud(s.w).timeLeft, null);
   s.w.t += 500; s.w.step(); s.w.step();

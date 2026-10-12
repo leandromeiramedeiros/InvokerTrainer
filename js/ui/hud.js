@@ -201,27 +201,29 @@
     cx.globalAlpha = 1;
   }
 
-  // top-centre ranked run panel (hidden unless IT.Ranked.hud(w) returns an object):
-  // countdown digit, flair scenario name, one objective line, combo icons (+ order), compact timer / score
+  // top-centre scenario HUD (hidden unless IT.Ranked.hud(w) returns an object). ONE compact design, two states:
+  //   countdown: centred panel (<= ~20 % of the viewport): countdown number + hint, title + difficulty, objective, win / lose, step chips, timer / score / turn
+  //   play:      the same panel collapses (animated) into one slim strip: objective, small step chips, timer, turn
   function rankedPanel(R) {
     const { h } = IT.UI, t = IT.t;
-    R.rkNum = h('div', { class: 'rknum' });
-    R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
-    R.rkBadge = h('span', { class: 'rkdiff' }); R.rkTip = h('span', { class: 'rktip' }); R.rkMeta = h('span', { class: 'rkmeta' });
-    R.rkGo = h('div', { class: 'rkhint', text: t('hud.rkHint') });   // countdown ends on the first gameplay action (no button)
-    R.rkCombo = h('div', { class: 'rkcombo' });
-    R.rkTl = h('div', { class: 'rktl', style: { display: 'none' } });   // F1 step-by-step timeline
-    R.rkWin = h('span', { class: 'rkwin' }); R.rkLoseL = h('span', { class: 'rklose' });   // F1 win + lose lines (all modes)
+    R.rkNum = h('div', { class: 'rknum' }); R.rkHint = h('div', { class: 'rkcdh' });
+    R.rkName = h('b', { class: 'rkname' }); R.rkBadge = h('span', { class: 'rkdiff' }); R.rkMeta = h('span', { class: 'rkmeta' });
+    R.rkObj = h('span', { class: 'rkobj' });
+    R.rkCombo = h('div', { class: 'rkcombo' }); R.rkChips = [];
+    R.rkWin = h('span', { class: 'rkwin' }); R.rkLoseL = h('span', { class: 'rklose' });   // win + lose lines
     R.rkInfo = h('div', { class: 'rkinfo' }, R.rkWin, R.rkLoseL);
     R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
     R.rkTm = h('div', { class: 'rkt tm' }, h('span', { text: t('hud.rkTime') }), R.rkTv);
     R.rkRl = h('span', { text: t('hud.rkRun') });
-    R.rkRn = h('div', { class: 'rkt' }, R.rkRl, R.rkRv);
+    R.rkRn = h('div', { class: 'rkt rn' }, R.rkRl, R.rkRv);
     R.rkSc = h('div', { class: 'rkt sc' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed);
     R.rkRow = h('div', { class: 'rkrow' }, R.rkTm, R.rkSc, R.rkRn);
-    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkGo, h('div', { class: 'rkscen' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkMeta, R.rkObj, R.rkTip), R.rkInfo, R.rkCombo, R.rkTl, R.rkRow);
+    return h('div', { class: 'rkp cd', style: { display: 'none' } },
+      h('div', { class: 'rkcd' }, R.rkNum, R.rkHint),
+      h('div', { class: 'rkmain' }, h('div', { class: 'rkhd' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkMeta), R.rkObj, R.rkInfo, R.rkCombo),
+      R.rkRow);
   }
-  // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id }]
+  // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'stop'|'hold'|'pos', id }]
   function rkActions(rk) {
     const w = H.c.w, GM = IT.GAME, out = [];
     const def = w.combo && w.combo.def;
@@ -237,95 +239,74 @@
     const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null;
     return IT.HudSteps.derive(sc);   // F1: sc.steps, else the solver script / spell list
   }
-  function rkBuildCombo(R, rk, ord, hints) {
-    const { h, icon } = IT.UI, t = IT.t;
-    R.rkCombo.textContent = '';
-    let acts = rkActions(rk);
-    if (!ord) { const seen = new Set(); acts = acts.filter(a => (a.k === 'spell' || a.k === 'item') && !seen.has(a.id) && seen.add(a.id)); }
-    acts.forEach((a, i) => {
-      if (ord && i) R.rkCombo.appendChild(h('i', { class: 'rkar' }));
-      let box;
-      if (a.k === 'spell' || a.k === 'item') {
-        box = h('div', { class: 'rka ' + a.k }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }));
-        if (hints && a.k === 'spell') box.appendChild(h('em', { class: 'rkrec', text: IT.GAME.SPELL_ORBS[a.id] || '' }));
-      } else box = h('div', { class: 'rka badge ' + a.k }, h('b', { text: t(a.k === 'attack' ? 'hud.rkAtk' : a.k === 'move' ? 'hud.rkMov' : 'hud.rkPos') }));
-      R.rkCombo.appendChild(box);
-    });
-    R.rkCombo.style.display = acts.length ? '' : 'none';
-  }
-  // ---------------------------------------------------------------- F1: scenario HUD modes (minimal | default | steps)
-  const hudMode = () => { const m = IT.Settings && IT.Settings.get ? IT.Settings.get().hudMode : null; return m === 'minimal' || m === 'steps' ? m : 'default'; };
   const keyLab = a => IT.Settings.label(IT.Settings.keyOf(a));
   const locT = v => v == null ? '' : typeof v === 'object' ? (v[IT.lang] || v.en || '') : String(v);
   const dedupeActs = acts => { const seen = new Set(); return acts.filter(a => (a.k === 'spell' || a.k === 'item') && !seen.has(a.id) && seen.add(a.id)); };
-  const stepName = a => a.k === 'spell' || a.k === 'item' ? nmOf(a.id) : t('f1.' + a.k);
-  function orbChip(ch) { const { h, icon } = IT.UI; return h('span', { class: 'tk orb ' + ORBN[ch] }, icon(ORBN[ch], 'mini'), h('b', { text: keyLab('orb' + ch) })); }
-  const invChip = () => { const { h, icon } = IT.UI; return h('span', { class: 'tk inv' }, icon('invoke', 'mini'), h('b', { text: keyLab('invoke') })); };
+  const KIND_ICON = { attack: 'ui_atk', move: 'ui_move', stop: 'ui_stop', hold: 'ui_hold', pos: 'ui_pos' };
+  const KIND_KEY = { attack: 'attack', stop: 'stop', hold: 'hold' };   // move = right-click, position = walk there: icon only
+  const stepName = a => a.k === 'spell' || a.k === 'item' ? nmOf(a.id) : t('f1.' + (a.k === 'attack' ? 'attack' : a.k));
   function itemKey(id, hero) { const i = hero.items.findIndex(x => x && x.id === id); return i >= 0 ? keyLab('item' + (i + 1)) : '?'; }
-  function badgeBox(kind) { const { h } = IT.UI; return h('div', { class: 'rka badge ' + kind }, h('b', { text: t(kind === 'attack' ? 'hud.rkAtk' : kind === 'move' ? 'hud.rkMov' : 'hud.rkPos') })); }
-  // default / steps: skill cards (big icon, bigger name, orb keys + invoke / item key)
-  function rkBuildCards(R, rk, ord, hints) {
-    const { h, icon } = IT.UI, hero = H.c.hero;
-    R.rkCombo.textContent = '';
+  const recKeys = rec => rec.split('').map(ch => keyLab('orb' + ch)).join('');
+  // everything a chip label depends on besides the scenario: bound keys, item slots, key scheme (the chips are rebuilt when it changes)
+  function chipSig(hero) {
+    const S = IT.Settings;
+    return hero.items.map(x => x ? x.id : '-').join(',') + '|' + ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6'].map(a => S.label(S.keyOf(a))).join('') + S.data.scheme;
+  }
+  // one chip per step: pixel icon + the bound key on its lower edge (spell: recipe in the bound orb keys; item: its item slot key;
+  // attack / stop / hold: their key; move / position: icon only). The tooltip spells it all out.
+  function rkBuildChips(R, rk, ord, hints) {
+    const { h, icon } = IT.UI, S = IT.Settings, hero = H.c.hero, legacy = S.data.scheme === 'legacy';
+    R.rkCombo.textContent = ''; R.rkChips = [];
     let acts = rkActions(rk);
     if (!ord) acts = dedupeActs(acts);
     acts.forEach((a, i) => {
       if (ord && i) R.rkCombo.appendChild(h('i', { class: 'rkar' }));
-      let card;
+      let ic, key = null, tip = stepName(a);
       if (a.k === 'spell') {
         const rec = IT.GAME.SPELL_ORBS[a.id] || '';
-        card = h('div', { class: 'rkc spell' }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }),
-          h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: nmOf(a.id) }),
-            hints ? h('span', { class: 'rkok' }, rec.split('').map(orbChip), invChip()) : null));
+        ic = hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() });
+        if (legacy) { const lk = S.label(S.data.keys.legacy[a.id]); key = h('span', { class: 'rkk' }, lk); tip += ' - ' + lk; }
+        else if (rec) {
+          tip += ' - ' + recKeys(rec) + ' + ' + keyLab('invoke');
+          if (hints) key = h('span', { class: 'rkk rec' }, rec.split('').map(ch => h('i', { class: 'o ' + ORBN[ch], text: keyLab('orb' + ch) })));
+        }
       } else if (a.k === 'item') {
-        card = h('div', { class: 'rkc item' }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }),
-          h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: nmOf(a.id) }), h('span', { class: 'rkok' }, h('span', { class: 'tk key' }, h('b', { text: itemKey(a.id, hero) })))));
-      } else card = h('div', { class: 'rkc badge' }, badgeBox(a.k), h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: stepName(a) })));
-      R.rkCombo.appendChild(card);
+        ic = hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() });
+        const ik = itemKey(a.id, hero); key = h('span', { class: 'rkk' }, ik); tip += ' - ' + ik;
+      } else {
+        ic = icon(KIND_ICON[a.k] || 'ui_pos');
+        if (KIND_KEY[a.k]) { const kk = keyLab(KIND_KEY[a.k]); key = h('span', { class: 'rkk' }, kk); tip += ' - ' + kk; }
+        else if (a.k === 'move') tip += ' - ' + t('f1.rmb');
+      }
+      const chip = h('div', { class: 'rkc ' + a.k, 'data-tip': tip }, ic, key);
+      R.rkCombo.appendChild(chip); R.rkChips.push(chip);
     });
     R.rkCombo.style.display = acts.length ? '' : 'none';
   }
-  // step-by-step timeline: one box per planned step (orb presses, invoke, cast / item / attack / move); the tracker flags them
-  function rkBuildTimeline(R, hints) {
-    const { h, icon } = IT.UI, S = IT.Settings, hero = H.c.hero, tr = H.trk && H.trk.tr;
-    R.rkTl.textContent = ''; R.rkTls = [];
-    if (!tr || !tr.steps.length) { R.rkTl.style.display = 'none'; return; }
-    const legacy = S.data.scheme === 'legacy';
-    tr.steps.forEach((s, i) => {
-      const toks = [];
-      s.presses.forEach(p => {
-        let el = null;
-        if (p.t === 'orb') { if (hints) el = orbChip(p.o); }
-        else if (p.t === 'inv') { if (hints) el = invChip(); }
-        else if (p.t === 'cast') el = h('span', { class: 'tk cast' }, hasIcon(s.id) ? icon(s.id, 'mini') : null, h('b', { text: legacy ? S.label(S.data.keys.legacy[s.id]) : keyLab('slot' + (p.slot + 1)) }));
-        else if (p.t === 'item') el = h('span', { class: 'tk item' }, hasIcon(s.id) ? icon(s.id, 'mini') : null, h('b', { text: p.slot >= 0 ? keyLab('item' + (p.slot + 1)) : itemKey(s.id, hero) }));
-        else el = h('span', { class: 'tk badge ' + s.k }, h('b', { text: t(s.k === 'attack' ? 'hud.rkAtk' : s.k === 'move' ? 'hud.rkMov' : 'hud.rkPos') }));
-        if (el) { el._p = p; toks.push(el); }
-      });
-      const lab = s.label ? locT(s.label) : '';
-      const box = h('div', { class: 'tls todo', 'data-tip': t('f1.stepN', { n: i + 1 }) + ' - ' + stepName(s) },
-        h('em', { class: 'tln', text: String(i + 1) }), h('div', { class: 'tlk' }, toks), lab ? h('span', { class: 'tll', text: lab }) : null);
-      box._toks = toks;
-      box.addEventListener('animationend', ev => { if (ev.animationName === 'tlfall') box.classList.add('gone'); });
-      R.rkTl.appendChild(box); R.rkTls.push(box);
-    });
-    R.rkTl.style.display = '';
-  }
-  // flash the current step, fade + drop the finished ones
-  function updTimeline(R) {
+  // ordered mode: flag the current step, dim the finished ones
+  function updChips(R) {
     const tr = H.trk && H.trk.tr;
-    if (!tr || !R.rkTls || !R.rkTls.length) return;
-    const st = tr.states(), cur = st.indexOf('now');
-    const key = st.join('') + '|' + (cur >= 0 ? tr.pressStates(cur).join('') : '');
-    if (R.rkTlKey === key) return;
-    R.rkTlKey = key;
-    R.rkTls.forEach((el, i) => {
-      if (st[i] === 'done') { if (!el._done) { el._done = true; el.className = 'tls done'; } }
-      else if (!el._done) {
-        el.className = 'tls ' + st[i];
-        if (st[i] === 'now') { const ps = tr.pressStates(i); el._toks.forEach(k => { const s = ps[tr.steps[i].presses.indexOf(k._p)]; k.classList.toggle('pd', s === 'done'); k.classList.toggle('pn', s === 'now'); }); }
-      }
-    });
+    if (!tr || !R.rkChips.length || R.rkChips.length !== tr.steps.length) return;
+    const st = tr.states(), key = st.join('');
+    if (R.rkStKey === key) return;
+    R.rkStKey = key;
+    R.rkChips.forEach((c, i) => { c.classList.toggle('done', st[i] === 'done'); c.classList.toggle('now', st[i] === 'now'); });
+  }
+  // countdown panel -> slim strip: the panel height animates between the two layouts (cd -> play only; everything else switches instantly)
+  function rkMode(R, ca, play) {
+    const el = R.rk, m = play ? 'play' : 'cd';
+    if (ca.rkMode === m) return;
+    const first = ca.rkMode == null, h0 = el.offsetHeight;
+    ca.rkMode = m;
+    clearTimeout(ca.rkAnim); el.classList.remove('anim'); el.style.height = '';
+    el.classList.toggle('play', play); el.classList.toggle('cd', !play);
+    if (first || !play || !h0) return;
+    const h1 = el.offsetHeight;
+    if (h1 >= h0) return;
+    el.style.height = h0 + 'px'; el.classList.add('anim', 'collapsing');
+    void el.offsetHeight;
+    el.style.height = h1 + 'px';
+    ca.rkAnim = setTimeout(() => { el.classList.remove('anim', 'collapsing'); el.style.height = ''; }, 520);
   }
   // (re)start step progress for the current scenario: plan the presses from the hero's present orbs / slots / items
   function rkStartTracker(rk, key) {
@@ -362,6 +343,22 @@
     setText(b.cdn, cd > 0 ? (cd >= 10 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '', store, nm + 'n');
   }
 
+  // 3 mini orb icons for a recipe string ('QWE'), tooltip = bound keys
+  function recipeOrbs(rec, cls) {
+    const { h, icon } = IT.UI;
+    return rec.split('').map(ch => h('i', { class: 'ro ' + ORBN[ch] + (cls ? ' ' + cls : '') }, icon(ORBN[ch])));
+  }
+  // always-on recipe strip: one cell per spell (tiny icon + the 3 orb dots), lit while that spell sits in an invoked slot
+  function recipeStrip() {
+    const { h, icon } = IT.UI;
+    const cells = SPELLS.map(id => {
+      const rec = IT.GAME.SPELL_ORBS[id] || '';
+      const el = h('div', { class: 'rcell' }, icon(id), h('span', { class: 'rd3' }, rec.split('').map(ch => h('i', { class: ORBN[ch] }))));
+      return { id, rec, el };
+    });
+    return { cells, el: h('div', { class: 'recs' }, cells.map(c => c.el)) };
+  }
+
   H.bind = function (ctx) {
     H.unbind();
     const { h, portrait, icon, btn } = IT.UI, t = IT.t;
@@ -387,13 +384,18 @@
     R.items.forEach((b, i) => hov(b.el, () => { const it = ctx.hero.items[i]; return it ? it.id : null; }));
     setIcon(R.q, 'quas'); setIcon(R.w, 'wex'); setIcon(R.e, 'exort'); setIcon(R.r, 'invoke');
     R.hood = hoodEl();   // Scepter/Shard hood emblem: between abilities and items (Dota)
+    // recipe hints, always on: 3 mini orbs under each invoked-spell slot + a compact 10-spell recipe strip above the bar
+    R.rec1 = h('div', { class: 'abrec' }); R.rec2 = h('div', { class: 'abrec' });
+    R.recs = recipeStrip();
     R.bar = h('div', { class: 'hudp hbar' },
       R.por,
       h('div', { class: 'hmid' },
         h('div', { class: 'bars' }, R.hp, R.mp),
-        h('div', { class: 'abrow' }, R.q.el, R.w.el, R.e.el, R.r.el, h('i', { class: 'sep' }), R.s1.el, R.s2.el)),
+        h('div', { class: 'abrow' }, R.q.el, R.w.el, R.e.el, R.r.el, h('i', { class: 'sep' }),
+          h('div', { class: 'abcol' }, R.s1.el, R.rec1), h('div', { class: 'abcol' }, R.s2.el, R.rec2))),
       R.hood,
-      h('div', { class: 'hitems' }, R.items.map(b => b.el)));
+      h('div', { class: 'hitems' }, R.items.map(b => b.el)),
+      R.recs.el);
     R.ubar = unitBar(R);
     R.buffs = h('div', { class: 'hbuffs' });
     R.orbcol = h('div', { class: 'horbcol' }, R.orbs);
@@ -439,7 +441,7 @@
     H.off.push(ctx.w.on('invoke', p => { if (p.unit === hid) trkFeed({ type: 'invoke', spell: p.spell }); }));
     H.off.push(ctx.w.on('cast', p => { if (p.unit === hid) trkFeed({ type: 'cast', ability: p.ability }); }));
     H.off.push(ctx.w.on('attack', p => { if (p.src === hid) trkFeed({ type: 'attack' }); }));
-    H.off.push(ctx.w.on('order', p => { if (p.unit === hid && p.order && p.order.type === 'move') trkFeed({ type: 'move' }); }));
+    H.off.push(ctx.w.on('order', p => { const ty = p.unit === hid && p.order && p.order.type; if (ty === 'move' || ty === 'stop' || ty === 'hold') trkFeed({ type: ty }); }));
     H.off.push(ctx.w.on('scnStart', () => { H.scnSeq = (H.scnSeq || 0) + 1; }));
     H.lastLang = IT.lang;
     H.update(0);
@@ -552,10 +554,10 @@
     });
   };
 
-  // ranked run panel: countdown / flair title / combo icons / timers / score + medal. Hidden when IT.Ranked.hud(w) is null.
+  // scenario HUD: countdown panel -> slim strip. Hidden when IT.Ranked.hud(w) is null.
   H.updRanked = function (R, ca, dt) {
     const rk = IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(H.c.w) : null;
-    if (!rk) { if (ca.rk !== 0) { ca.rk = 0; R.rk.style.display = 'none'; R.top.classList.remove('rk'); } return; }
+    if (!rk) { if (ca.rk !== 0) { ca.rk = 0; ca.rkMode = null; R.rk.style.display = 'none'; R.top.classList.remove('rk'); } return; }
     if (ca.rk !== 1) { ca.rk = 1; R.rk.style.display = ''; R.top.classList.add('rk'); }
     const txt = v => v == null ? '' : typeof v === 'object' ? (v[IT.lang] || v.en || '') : String(v);
     if (ca.rkPh !== rk.phase) {   // medal from the persistent rating; refreshed on phase change
@@ -566,14 +568,14 @@
       }
     }
     const cd = rk.phase === 'countdown', S = IT.Settings.get();
-    R.rkNum.style.display = cd ? '' : 'none';
-    R.rkRow.style.display = cd ? 'none' : '';
-    if (cd) setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
+    rkMode(R, ca, !cd);
+    if (cd) {
+      setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
+      setText(R.rkHint, IT.hasT('rk.countdown.hint') ? IT.t('rk.countdown.hint') : IT.t('rk.countdown.hint.fb'), ca, 'rkhint');
+    }
     setText(R.rkTv, fmtS(rk.timeLeft), ca, 'rkt'); R.rkTv.classList.toggle('low', rk.timeLeft != null && rk.timeLeft < 5);
     setText(R.rkRv, rk.cleared != null ? String(rk.cleared) : rk.turns != null ? rk.turn + '/' + rk.turns : fmtM(rk.runLeft), ca, 'rkr');
     setText(R.rkRl, IT.t(rk.cleared != null ? 'hud.rkCleared' : rk.turns != null ? 'hud.rkTurn' : 'hud.rkRun'), ca, 'rkrl');
-    R.rkGo.style.display = cd ? '' : 'none'; R.rkTip.style.display = cd ? '' : 'none';
-    setText(R.rkTip, cd ? txt(rk.tip) : '', ca, 'rktip');
     R.rkBadge.className = 'rkdiff d-' + rk.diff; R.rkBadge.title = rk.diffDesc || '';
     setText(R.rkBadge, IT.hasT('dtier.' + rk.diff) ? IT.t('dtier.' + rk.diff) : rk.diff, ca, 'rkdf');
     setText(R.rkSv, String(Math.round(rk.score || 0)), ca, 'rks');
@@ -581,19 +583,24 @@
     R.rkRn.style.display = rk.runLeft == null && rk.turns == null && rk.cleared == null ? 'none' : '';
     R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
     setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
+    // the strip drops the title: hovering the objective names the scenario (and gives the scenario tip)
+    setTip(R.rkObj, [txt(rk.scenario), txt(rk.objective), txt(rk.tip)].filter(Boolean).join(' - '), ca, 'rktp');
     // scenario level, v5 map name, ranked twist (when present)
     const meta = [rk.level ? IT.t('hud.rkLevel', { n: rk.level }) : '', txt(rk.mapName), rk.twistName ? IT.t('hud.rkTwist') + ' ' + txt(rk.twistName) : ''].filter(Boolean).join('  |  ');
     setText(R.rkMeta, meta, ca, 'rkmeta'); R.rkMeta.style.display = meta ? '' : 'none';
-    const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def, hm = hudMode();
+    const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def;
     const tk = rk.id + '|' + rk.n + '|' + (H.scnSeq || 0) + '|' + (def ? def.id : '');
     if (!H.trk || H.trk.key !== tk) { rkStartTracker(rk, tk); ca.rkCk = null; }   // new scenario / redo: restart step progress
-    const ck = tk + '|' + IT.lang + '|' + (ord ? 1 : 0) + (hints ? 1 : 0) + '|' + hm;
+    const ck = tk + '|' + IT.lang + '|' + (ord ? 1 : 0) + (hints ? 1 : 0) + '|' + chipSig(H.c.hero);
     if (ca.rkCk !== ck) {
-      ca.rkCk = ck; R.rk.className = 'rkp m-' + hm;
-      if (hm === 'minimal') rkBuildCombo(R, rk, ord, hints); else rkBuildCards(R, rk, ord, hints);
+      ca.rkCk = ck; ca.rkWl = null; R.rkStKey = null;
+      rkBuildChips(R, rk, ord, hints);
       R.rkCombo.classList.toggle('ord', ord);
-      if (hm === 'steps') { rkBuildTimeline(R, hints); R.rkTlKey = null; } else { R.rkTl.textContent = ''; R.rkTls = []; R.rkTl.style.display = 'none'; }
-      // all modes: win (scenario `win` text; the objective line already states the goal) + lose conditions
+    }
+    // win + lose lines: built once per scenario / language (not per frame; the key scheme does not touch them)
+    const wk = tk + '|' + IT.lang;
+    if (ca.rkWl !== wk) {
+      ca.rkWl = wk;
       const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null, HS = IT.HudSteps;
       // lose: the scenario's own line (the 'method' rule in words) + the generic fail keys
       const gen = HS.loseKeys(sc, rk.timeLeft != null).filter(k => !(sc && sc.lose && k === 'method') && IT.hasT('f1.lose.' + k)).map(k => t('f1.lose.' + k));
@@ -603,7 +610,7 @@
       R.rkWin.style.display = win ? '' : 'none'; R.rkLoseL.style.display = lose ? '' : 'none';
       R.rkInfo.style.display = win || lose ? '' : 'none';
     }
-    if (hm === 'steps') updTimeline(R);
+    if (ord) updChips(R);
   };
 
   // localized name of a map object (i18n 'map.<id>' first, then its own name table); '' when unknown
@@ -653,7 +660,21 @@
       setTip(b.el, id ? nmOf(id) + ' - ' + stOf(cd, d ? d.manaCost(w, hero) : 0) : '', ca, 'tps' + i);
       setText(b.key, id && legacy ? S.label(S.data.keys.legacy[id]) : S.label(S.keyOf('slot' + (i + 1))), ca, 'ks' + i);
       setText(b.lvl, '', ca, 'ls' + i);
+      const rr = i ? R.rec2 : R.rec1;   // recipe orbs under the slot icon (rebuilt only when the spell in the slot changes)
+      if (ca['rs' + i] !== id) {
+        ca['rs' + i] = id; rr.textContent = '';
+        const rec = id && IT.GAME.SPELL_ORBS[id];
+        if (rec) for (const o of recipeOrbs(rec)) rr.appendChild(o);
+      }
     });
+    // recipe strip: tips (names + bound keys) refreshed on language / rebinding, 'on' = currently invoked
+    const rsig = IT.lang + '|' + ['orbQ', 'orbW', 'orbE', 'invoke'].map(a => S.label(S.keyOf(a))).join('');
+    if (ca.recs !== rsig) {
+      ca.recs = rsig;
+      for (const c of R.recs.cells) c.el.setAttribute('data-tip', nmOf(c.id) + ' - ' + recKeys(c.rec) + ' + ' + keyLab('invoke'));
+    }
+    const rin = hero.inv.slots.join(',');
+    if (ca.recIn !== rin) { ca.recIn = rin; for (const c of R.recs.cells) c.el.classList.toggle('on', hero.inv.slots.includes(c.id)); }
     // items
     R.items.forEach((b, i) => {
       const it = hero.items[i], id = it ? it.id : null;

@@ -2,8 +2,9 @@
 // Every scenario plays on a real v5 map (js/data/maps.js) with that map's towers; spots are relative (arena tags / towers / structures /
 // other units), never absolute coordinates. Texts of the v5 set live in the i18n pack js/data/i18n/scn.js ('scn.<id>.name|flair|desc|win|lose').
 //   { id, level 1..10 (ranked ramp; tier 1..3 derives from it), tags, map, name, flair, desc, win, lose?, par (s, a clean run),
-//     hero, units, obj, fail, steps, rand, fog?, gate?, towerHp? }
-//   hero   = { lvl, style 'qe'|'qw', items:[ids], scepter:orb, shard:spell, preinvoked:[spell, spell], at:<spot> (default: the map spawn) }
+//     hero, units, obj, fail, steps, rand, gate?, towerHp?, limit? (s, overrides par x tier timer) }
+//   hero   = { lvl, style 'qe'|'qw', items:[ids], scepter:orb, shard:spell, at:<spot> (default: the map spawn) }
+//            v6: nothing is pre-invoked (the 10 s countdown is for invoking), fog of war is always on, every hero carries boots (see BOOTS below)
 //   spot   = { dx, dy } offset | { where:[tags], not:[tags], d:[min,max], clear, has:{spot}, beyond:'gate', i, ox, oy, towers }
 //            | { tower:{team,i}, ahead, side } | { struct:{kind,team,i}, ahead, side } | { gate:true, ahead, side } | { of:k, dx, dy, ahead, side }
 //            map arena tags: open highground lowground river tower choke fog pit; relative: high low level hidden seen dtower rtower
@@ -47,8 +48,7 @@
         'Ele está longe, na névoa. Dê Blink, depois Chaos Meteor e Deafening Blast antes de ele reagir.'),
       L('Blink, Meteor, Blast: kill it', 'Blink, Meteor, Blast: mate o alvo'), 12,
       { lvl: 25, items: ['blink'] }, [D(1000, 150, { hp: 0.40 })], { type: 'kill' },
-      [{ a: 'blink', at: 'mid' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }],
-      { fog: true }),
+      [{ a: 'blink', at: 'mid' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }]),
     S('atos_vyse_lock', 3, L('Atos / Hex lockdown', 'Lockdown com Atos / Hex'),
       L('Root it with Rod of Atos or Hex it with the Scythe, then Sun Strike and Chaos Meteor before it breaks free.',
         'Prenda com o Rod of Atos ou transforme com a Scythe, depois Sun Strike e Chaos Meteor antes que se solte.'),
@@ -116,124 +116,127 @@
 
   const V5 = [
     // ---------------------------------------------------------------- level 1: one target, one idea
-    V('sleepy_target', 1, 'lotus_rad', ['basics', 'burst'], 8, { preinvoked: ['sunstrike', 'coldsnap'] },
+    V('sleepy_target', 1, 'lotus_rad', ['basics', 'burst'], 8, {},
       [U(SEEN([650, 900]), { hp: 0.4, mot: 'still', aware: 0 })], KILL, ['time'],
       [{ a: 'sunstrike', at: 'd0' }], { rand: { pick: 3, jit: 140 } }),
-    V('cold_start', 1, 'roshan_pit_top',['basics', 'movement'], 14, { preinvoked: ['coldsnap', 'forgespirit'] },
+    V('cold_start', 1, 'roshan_pit_top',['basics', 'movement'], 14, {},
       [U(SEEN([950, 1250]), { hp: 0.5, mot: 'still', aware: 0 })], KILL, ['time'],
       [{ a: 'coldsnap', at: 'd0' }, { a: 'forgespirit', at: 'self' }, { a: 'attack', at: 'd0' }], { rand: { pick: 3, jit: 160 } }),
-    V('spirit_pack', 1, 'rad_off_t1', ['basics', 'burst'], 14, { preinvoked: ['forgespirit', 'alacrity'] },
+    V('spirit_pack', 1, 'rad_off_t1', ['basics', 'burst'], 14, {},
       [U(SEEN([500, 750]), { hp: 0.5, mot: 'still', aware: 0 })], KILL, ['time'],
       [{ a: 'forgespirit', at: 'self' }, { a: 'alacrity', at: 'self' }, { a: 'attack', at: 'd0' }], { rand: { pick: 3, jit: 120 } }),
     // ---------------------------------------------------------------- level 2
     V('river_rune', 2, 'river_top', ['river', 'basics'], 10,
-      { preinvoked: ['chaosmeteor', 'sunstrike'], at: W(['river'], { d: [0, 2500], has: { where: ['river', 'level', 'seen'], d: [500, 700] } }) },
+      { at: W(['river'], { d: [0, 2500], has: { where: ['river', 'level', 'seen'], d: [500, 700] } }) },
       [U(W(['river', 'level', 'seen'], { d: [500, 700] }), { hp: 0.36, mot: 'still', aware: 0.2 })],
       { type: 'kill_with', how: { ability: ['chaosmeteor'] } }, ['method', 'time'], [{ a: 'chaosmeteor', at: 'd0' }], { rand: { pick: 3, jit: 100 } }),
     // ---------------------------------------------------------------- level 3
-    V('two_birds', 3, 'dire_triangle', ['multi', 'burst'], 10, { preinvoked: ['sunstrike', 'chaosmeteor'] },
+    V('two_birds', 3, 'dire_triangle', ['multi', 'burst'], 10, {},
       [U(SEEN([820, 1100], { clear: 3 }), { hp: 0.35, mot: 'still', aware: 0.2 }), U({ of: 0, side: 120 }, { hp: 0.35, mot: 'still', aware: 0.2 })],
       { type: 'killN', n: 2, one: true }, ['method', 'time'], [{ a: 'sunstrike', at: 'mid' }], { rand: { pick: 3, jit: 120 } }),
-    V('river_guard', 3, 'mid_river', ['river', 'multi', 'reaction'], 12, { preinvoked: ['sunstrike', 'deafeningblast'] },
+    V('river_guard', 3, 'mid_river', ['river', 'multi', 'reaction'], 12, {},
       [U(W([], { beyond: 'gate', d: [1500, 2200] }), { hp: 0.35, mot: 'march' }), U({ of: 0, side: 340 }, { hp: 0.35, mot: 'march' })],
       KILL, ['cross', 'time'], [{ a: 'sunstrike', at: 'lead', w: 0.3 }, { a: 'move', at: 'gate' }, { a: 'deafeningblast', at: 'd1', near: 1000 }],
       { gate: W(['river'], { d: [500, 1000], r: 260 }), rand: { jit: 120 } }),
     // ---------------------------------------------------------------- level 4
     V('uphill_snipe', 4, 'river_top', ['highground', 'vision'], 10,
-      { preinvoked: ['sunstrike', 'chaosmeteor'], at: W(['lowground'], { d: [0, 3000], has: { where: ['high', 'hidden'], d: [500, 800] } }) },
+      { at: W(['lowground'], { d: [0, 3000], has: { where: ['high', 'hidden'], d: [500, 800] } }) },
       [U(W(['high', 'hidden'], { d: [500, 800] }), { hp: 0.42, mot: 'still', aware: 0.3 })],
       { type: 'kill', how: { low: true } }, ['method', 'time'], [{ a: 'sunstrike', at: 'd0' }], { rand: { pick: 2, jit: 90 } }),
     V('sun_flee', 4, 'river_bot', ['river', 'prediction'], 8,
-      { preinvoked: ['sunstrike', 'tornado'], at: W(['river'], { d: [0, 3000], has: { where: ['river', 'seen'], d: [500, 700] } }) },
+      { at: W(['river'], { d: [0, 3000], has: { where: ['river', 'seen'], d: [500, 700] } }) },
       [U(W(['river', 'seen'], { d: [500, 700] }), { hp: 0.38, mot: 'flee' })],
       { type: 'kill_with', how: { ability: ['sunstrike'] } }, ['method', 'escaped', 'time'], [{ a: 'sunstrike', at: 'lead', w: 1 }]),
     // new in the hold / escape set (BAD-7): survive the clock instead of killing
-    V('bridge_hold', 4, 'mid_river', ['river', 'multi', 'hold'], 12, { preinvoked: ['sunstrike', 'deafeningblast'] },
+    V('bridge_hold', 4, 'mid_river', ['river', 'multi', 'hold'], 12, {},
       [U(W([], { beyond: 'gate', d: [1900, 2400] }), { hp: 0.35, mot: 'march' }), U({ of: 0, side: 300 }, { hp: 0.35, mot: 'march' })],
       { type: 'hold', time: 14 }, ['cross', 'died'], [{ a: 'sunstrike', at: 'lead', w: 0.3 }, { a: 'move', at: 'gate' }, { a: 'deafeningblast', at: 'd1', near: 1000 }],
       { gate: W(['river'], { d: [500, 1000], r: 260 }), rand: { jit: 100 } }),
     // ---------------------------------------------------------------- level 5
-    V('blast_push', 5, 'rad_triangle', ['multi', 'positioning'], 8, { preinvoked: ['deafeningblast', 'tornado'] },
+    V('blast_push', 5, 'rad_triangle', ['multi', 'positioning'], 8, {},
       [U(SEEN([550, 700], { clear: 3 }), { hp: 1, mot: 'still' }), U({ of: 0, side: -120, ahead: 60 }, { hp: 1, mot: 'still' }), U({ of: 0, side: 120, ahead: -40 }, { hp: 1, mot: 'still' })],
       { type: 'push', n: 2 }, ['time'], [{ a: 'deafeningblast', at: 'mid' }], { rand: { pick: 3 } }),
     V('tower_dive', 5, 'dire_mid_t1', ['towers', 'blink'], 14,
-      { items: ['blink'], preinvoked: ['chaosmeteor', 'deafeningblast'], at: { tower: { team: 1 }, ahead: -900 } },
+      { items: ['blink'], at: { tower: { team: 1 }, ahead: -900 } },
       [U({ tower: { team: 1 }, ahead: 300, side: 60 }, { hp: 0.45, mot: 'still', aware: 0.3 })], KILL, ['died', 'time'],
       [{ a: 'blink', at: 'd0' }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 0.6 }]),
     V('pit_trap', 5, 'roshan_pit', ['pit', 'burst'], 14,
-      { preinvoked: ['coldsnap', 'chaosmeteor'], at: W([], { d: [0, 3000], has: { where: ['pit'], d: [600, 900] } }) },
+      { at: W([], { d: [0, 3000], has: { where: ['pit'], d: [600, 900] } }) },
       [U(W(['pit'], { d: [600, 900] }), { hp: 0.5, behavior: 'wander', aware: 0.5 })], KILL, ['time'],
       [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 0.4 }]),
-    V('ghost_slip', 5, 'rad_ancients', ['escape', 'invisible', 'basics'], 12, { preinvoked: ['ghostwalk', 'tornado'] },
+    V('ghost_slip', 5, 'rad_ancients', ['escape', 'invisible', 'basics'], 12, {},
       [U(SEEN([800, 1050]), { mot: 'chase', hp: 1 }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1 })],
       { type: 'escape', time: 12 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 120 } }),
     // ---------------------------------------------------------------- level 6
-    V('force_chase', 6, 'dire_safe_t1', ['movement', 'escape', 'items'], 14, { items: ['forcestaff'], preinvoked: ['tornado', 'sunstrike'] },
+    V('force_chase', 6, 'dire_safe_t1', ['movement', 'escape', 'items'], 14, { items: ['forcestaff'] },
       [U(SEEN([900, 1100], { not: ['dtower'] }), { hp: 0.42, behavior: 'escape', aware: 1 })], KILL, ['escaped', 'time'],
       [{ a: 'forcestaff', at: 'self' }, { a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.4 }]),
-    V('ghost_finish', 6, 'lotus_dire', ['invisible', 'awareness'], 22, { preinvoked: ['forgespirit', 'ghostwalk'] },
+    V('ghost_finish', 6, 'lotus_dire', ['invisible', 'awareness'], 22, {},
       [U(SEEN([600, 800]), { hp: 0.4, mot: 'still', aware: 0.3 })],
       { type: 'kill', how: { by: 'spirit', inv: true } }, ['method', 'time'],
       [{ a: 'forgespirit', at: 'self' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0' }]),
-    V('tower_siege', 6, 'dire_off_t1', ['towers', 'items'], 28,
-      { items: ['meteorhammer'], preinvoked: ['forgespirit', 'alacrity'], at: { tower: { team: 1 }, ahead: -950 } },
+    // tower_siege timer (v6, Ranked.towerMath; tests/ceo_v6_core.test.js recomputes it): tower 650 hp (gate x0.5 hero / x0.6 spirit, armor 12),
+    // walk 0.75 s; auto-attacks only: tAttack = 16.05 s (16.25 at bambam); Forge + Alacrity (+ the 2 s hammer channel): tCombo = 7.51 s (8.09).
+    // limit 14 s: tCombo x 1.25 = 9.4 (10.1) <= 14 < tAttack, at every tier -- the combo is required, plain hitting runs out of time.
+    V('tower_siege', 6, 'dire_off_t1', ['towers', 'items'], 10,
+      { items: ['meteorhammer'], at: { tower: { team: 1 }, ahead: -950 } },
       [], { type: 'destroyTower' }, ['died', 'time'],
-      [{ a: 'forgespirit', at: 'self' }, { a: 'alacrity', at: 'self' }, { a: 'meteorhammer', at: 'tower' }, { a: 'attack', at: 'tower' }], { towerHp: 650 }),
+      [{ a: 'forgespirit', at: 'self' }, { a: 'alacrity', at: 'self' }, { a: 'meteorhammer', at: 'tower' }, { a: 'attack', at: 'tower' }], { towerHp: 650, limit: 14 }),
     // ---------------------------------------------------------------- level 7
-    V('fog_ambush', 7, 'outpost_rad', ['vision', 'awareness', 'fog'], 10, { preinvoked: ['tornado', 'sunstrike'] },
+    V('fog_ambush', 7, 'outpost_rad', ['vision', 'awareness', 'fog'], 10, {},
       [U(SEEN([1000, 1300]), { hp: 0.45, mot: 'still', aware: 0.15 })], KILL, ['seen', 'time'],
-      [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1 }], { fog: true, rand: { pick: 3 } }),
-    V('bkb_bait', 7, 'outpost_dire', ['reaction', 'items'], 20, { preinvoked: ['coldsnap', 'sunstrike'] },
+      [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1 }], { rand: { pick: 3 } }),
+    V('bkb_bait', 7, 'outpost_dire', ['reaction', 'items'], 20, {},
       [U(SEEN([650, 900], { not: ['dtower'] }), { hp: 0.5, behavior: 'defend', items: ['bkb'], useBkb: true, aware: 1 })], KILL, ['died', 'time'],
       [{ a: 'coldsnap', at: 'd0' }, { a: 'tornado', at: 'd0', w: 6 }, { a: 'sunstrike', at: 'd0', w: 0.3 }, { a: 'chaosmeteor', at: 'd0', w: 0.3 }]),
-    V('dust_hunt', 7, 'lotus_rad', ['invisible', 'escape', 'items'], 14, { items: ['dust'], preinvoked: ['coldsnap', 'sunstrike'] },
+    V('dust_hunt', 7, 'lotus_rad', ['invisible', 'escape', 'items'], 14, { items: ['dust'] },
       [U(SEEN([700, 900]), { hp: 0.4, behavior: 'escape', items: ['shadowblade'], aware: 1 })], KILL, ['escaped', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'dust', at: 'self', w: 1.4 }, { a: 'sunstrike', at: 'd0' }]),
-    V('jungle_hold', 7, 'dire_triangle', ['multi', 'hold', 'positioning'], 16, { lvl: 27, preinvoked: ['chaosmeteor', 'deafeningblast'] },
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'dust', at: 'self', w: 1.4 }, { a: 'sunstrike', at: 'd0', w: 1.2 }]),
+    V('jungle_hold', 7, 'dire_triangle', ['multi', 'hold', 'positioning'], 16, { lvl: 27 },
       [U(W([], { beyond: 'gate', d: [2500, 3000] }), { hp: 0.3, mot: 'march' }), U({ of: 0, side: 240 }, { hp: 0.3, mot: 'march' }), U({ of: 0, side: -240 }, { hp: 0.3, mot: 'march' })],
       { type: 'hold', time: 20 }, ['cross', 'died'],
       [{ a: 'move', at: 'gate' }, { a: 'chaosmeteor', at: 'mid', near: 1000 }, { a: 'deafeningblast', at: 'mid', near: 800 }, { a: 'sunstrike', at: 'd0' }],
       { gate: W(['open'], { d: [500, 1000], r: 300 }), rand: { jit: 100 } }),
     // ---------------------------------------------------------------- level 8
-    V('river_guard_2', 8, 'gate_bot', ['river', 'multi', 'reaction', 'items'], 14, { lvl: 27, preinvoked: ['tornado', 'chaosmeteor'] },
+    V('river_guard_2', 8, 'gate_bot', ['river', 'multi', 'reaction', 'items'], 14, { lvl: 27 },
       [U(W([], { beyond: 'gate', d: [1900, 2400] }), { hp: 0.33, mot: 'march' }), U({ of: 0, side: -220 }, { hp: 0.33, mot: 'march' }),
         U({ of: 0, side: 220 }, { hp: 0.33, mot: 'march', items: ['bkb'], useBkb: true })],
       KILL, ['cross', 'time'],
-      [{ a: 'move', at: 'gate' }, { a: 'tornado', at: 'mid', near: 1800 }, { a: 'chaosmeteor', at: 'd0', near: 900 }, { a: 'sunstrike', at: 'lead' }, { a: 'deafeningblast', at: 'd0', near: 900 }],
+      [{ a: 'move', at: 'gate' }, { a: 'tornado', at: 'mid', near: 1800 }, { a: 'sunstrike', at: 'lead' }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0' }],
       { gate: W(['river'], { d: [500, 1000], r: 260 }) }),
     V('cliff_blink', 8, 'dire_ancients', ['highground', 'blink', 'escape'], 12,
-      { lvl: 27, items: ['blink'], preinvoked: ['tornado', 'sunstrike'], at: W(['lowground'], { d: [0, 3000], has: { where: ['high'], d: [600, 900] } }) },
+      { lvl: 27, items: ['blink'], at: W(['lowground'], { d: [0, 3000], has: { where: ['high'], d: [600, 900] } }) },
       [U(W(['high'], { d: [600, 900] }), { hp: 0.42, behavior: 'escape', aware: 0.6 })], KILL, ['escaped', 'time'],
       [{ a: 'blink', at: 'd0' }, { a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.5 }]),
     V('highground_hold', 8, 'rad_highground', ['highground', 'multi', 'towers'], 16,
-      { lvl: 27, preinvoked: ['chaosmeteor', 'deafeningblast'], at: W(['highground'], { d: [0, 1500], has: { where: ['low'], d: [1100, 1700] } }) },
+      { lvl: 27, at: W(['highground'], { d: [0, 1500], has: { where: ['low'], d: [1100, 1700] } }) },
       [U(W(['low'], { d: [1100, 1700] }), { hp: 0.35, mot: 'march' }), U({ of: 0, side: 200 }, { hp: 0.35, mot: 'march' }), U({ of: 0, side: -200 }, { hp: 0.35, mot: 'march' })],
       KILL, ['cross', 'time'],
-      [{ a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.4 }, { a: 'sunstrike', at: 'd0' }, { a: 'tornado', at: 'd0' }],
+      [{ a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.4 }, { a: 'tornado', at: 'd0', w: 1.2 }, { a: 'sunstrike', at: 'd0' }],
       { gate: { struct: { kind: 'barracks', team: 0 }, r: 300 } }),
     // ---------------------------------------------------------------- level 9
-    V('triple_kill', 9, 'outpost_dire', ['multi', 'burst'], 8, { lvl: 30, scepter: 'exort', preinvoked: ['sunstrike'] },
+    V('triple_kill', 9, 'outpost_dire', ['multi', 'burst'], 8, { lvl: 30, scepter: 'exort' },
       [U(SEEN([500, 700], { clear: 3, not: ['dtower'] }), { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, side: 180 }, { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, ahead: 200 }, { hp: 0.4, mot: 'still', aware: 0.3 })],
       { type: 'killN', n: 3, one: true, span: 1.2 }, ['method', 'time'], [{ a: 'sunstrike', at: 'self' }], { rand: { pick: 3 } }),
-    V('blast_push_3', 9, 'dire_off_t1', ['multi', 'positioning'], 10, { lvl: 30, preinvoked: ['deafeningblast'] },
+    V('blast_push_3', 9, 'dire_off_t1', ['multi', 'positioning'], 10, { lvl: 30 },
       [U(SEEN([500, 650], { clear: 3, not: ['dtower'] }), { hp: 1, mot: 'still' }), U({ of: 0, ahead: 170, side: 40 }, { hp: 1, mot: 'still' }), U({ of: 0, ahead: 340, side: -30 }, { hp: 1, mot: 'still' })],
       { type: 'push', n: 3 }, ['time'], [{ a: 'deafeningblast', at: 'd0' }], { rand: { pick: 3 } }),
-    V('tower_tornado', 9, 'gate_top', ['towers', 'combo'], 10, { lvl: 30, preinvoked: ['tornado', 'sunstrike'], at: { tower: { team: 1 }, ahead: -1250 } },
+    V('tower_tornado', 9, 'gate_top', ['towers', 'combo'], 10, { lvl: 30, at: { tower: { team: 1 }, ahead: -1250 } },
       [U({ tower: { team: 1 }, ahead: -200, side: 120 }, { hp: 0.47, mot: 'still', aware: 0.3 })], KILL, ['tower', 'time'],
       [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1.2 }]),
     V('plateau_escape', 9, 'dire_highground', ['highground', 'escape', 'invisible'], 14,
-      { lvl: 30, preinvoked: ['ghostwalk', 'tornado'], at: W(['highground'], { d: [0, 3500], not: ['dtower'], has: { where: ['low'], d: [800, 1200] } }) },
+      { lvl: 30, at: W(['highground'], { d: [0, 3500], not: ['dtower'], has: { where: ['low'], d: [800, 1200] } }) },
       [U(W(['low'], { d: [800, 1200] }), { mot: 'chase', hp: 1 }), U({ of: 0, side: 250 }, { mot: 'chase', hp: 1 }), U({ of: 0, side: -250 }, { mot: 'chase', hp: 1 })],
       { type: 'escape', time: 14 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3 } }),
     // ---------------------------------------------------------------- level 10
     V('gauntlet', 10, 'dire_mid_t1', ['towers', 'escape', 'invisible', 'items'], 16,
-      { lvl: 30, items: ['blink', 'dust'], preinvoked: ['coldsnap', 'sunstrike'], at: { tower: { team: 1 }, ahead: -1700 } },
+      { lvl: 30, items: ['blink', 'dust'], at: { tower: { team: 1 }, ahead: -1700 } },
       [U({ tower: { team: 1 }, ahead: -950 }, { hp: 0.45, behavior: 'escape', items: ['shadowblade', 'blink'], aware: 1 })], KILL, ['escaped', 'died', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }]),
-    V('blink_denial', 10, 'rad_triangle', ['reaction', 'escape', 'items'], 14, { lvl: 30, items: ['atos', 'blink'], preinvoked: ['sunstrike', 'chaosmeteor'] },
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }]),
+    V('blink_denial', 10, 'rad_triangle', ['reaction', 'escape', 'items'], 14, { lvl: 30, items: ['atos', 'blink'] },
       [U(SEEN([750, 950]), { hp: 0.5, behavior: 'disable_escape', items: ['blink', 'forcestaff'], aware: 1 })], KILL, ['escaped', 'time'],
       [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }]),
-    V('shadow_strike', 10, 'dire_triangle', ['invisible', 'awareness', 'multi'], 16, { lvl: 30, items: ['blink'], preinvoked: ['ghostwalk', 'tornado'] },
+    V('shadow_strike', 10, 'dire_triangle', ['invisible', 'awareness', 'multi'], 16, { lvl: 30, items: ['blink'] },
       [U(SEEN([1000, 1250], { clear: 2, not: ['dtower'] }), { hp: 0.4, behavior: 'wander', aware: 0.3 }), U({ of: 0, side: 250 }, { hp: 0.4, behavior: 'wander', aware: 0.3 })],
       KILL, ['seen', 'time'],
       [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0' }, { a: 'tornado', at: 'mid' }, { a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.8 }]),
@@ -270,6 +273,13 @@
   }
   const all = LEGACY.concat(V5);
   for (const s of all) s.tier = s.level <= 3 ? 1 : s.level <= 7 ? 2 : 3;
+  // ---- v6 boots everywhere: Boots of Travel where the plan needs > ~1200 u of running within par (hold / gate / escape / tower scenarios),
+  //      Boots of Speed elsewhere. Max 6 items (no scenario carries more than 2 others).
+  const TRAVELS = s => s.obj.type === 'escape' || s.obj.type === 'hold' || s.obj.type === 'destroyTower' || !!s.gate || (s.tags || []).indexOf('towers') >= 0;
+  for (const s of all) {
+    const it = (s.hero.items || []).filter(x => x !== 'boots' && x !== 'travels');
+    s.hero = Object.assign({}, s.hero, { items: it.concat(TRAVELS(s) ? 'travels' : 'boots').slice(-6) });
+  }
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)
   IT.SCENARIOS.get = id => IT.SCENARIOS.find(s => s.id === id) || null;

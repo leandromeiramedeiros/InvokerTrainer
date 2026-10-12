@@ -63,6 +63,9 @@
   const isSeq = a => /^orb[QWE]$/.test(a) || a === 'invoke' || isAbilityAction(a);
   const isSkipAction = a => isSeq(a) || /^(attack|stop|hold)$/.test(a);   // first of these during the pre-scenario countdown starts the run and is executed
   const isFrozenOk = a => a === 'center' || a === 'camLock' || a === 'cheat';   // usable during the countdown without ending it
+  // v6: orbs + Invoke run during the scenario countdown WITHOUT starting the round (build your spells); move / cast / item / attack / stop / hold start it
+  const isWarmup = a => /^orb[QWE]$/.test(a) || a === 'invoke';
+  const countingDown = () => { const r = In.ctx && In.ctx.w && In.ctx.w.ranked; return !!(r && r.phase === 'countdown'); };
 
   // Is a different cast still on its way (turning / walking / cast point)? Then a new cast must queue behind it, not drop it.
   function pendingCast(id) {
@@ -273,9 +276,10 @@
     if (!In.ctx) return;
     opts = Object.assign({}, opts);
     const { w } = In.ctx;
-    if (w.paused) {   // frozen ranked countdown: camera / select / sheet keys work; the first real action (orb, invoke, cast, item, attack, stop, hold) ends it AND runs
+    if (w.paused) {   // frozen ranked countdown: camera / select / sheet keys work; orbs + invoke run without ending it; the first real action (cast, item, attack, stop, hold, move) ends it AND runs
       if (!In.inspecting()) return;
       if (isFrozenOk(action)) { /* handled below without skipping */ }
+      else if (isWarmup(action) && countingDown()) { exec(action, opts, null); return; }
       else if (!isSkipAction(action) || !In.hooks.skip || !In.hooks.skip()) return;
     }
     if (action !== 'center') In.selected = null;     // any player action returns the HUD to the hero ('center' decides itself: 1st press selects the hero)

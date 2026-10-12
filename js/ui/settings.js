@@ -22,7 +22,6 @@
       pointerLock: false,          // confine the mouse to the game while playing
       heroSkin: 'default',         // 'default'|'kid'|'dark' -> IT.Art.heroSheet()
       unifiedOrders: true,         // CTRL held: move / attack / stop / hold go to Invoker + all forge spirits together
-      hudMode: 'default',          // scenario top HUD: 'minimal' | 'default' | 'steps'
       rmbRepeat: false,            // hold right mouse = repeated move/attack clicks (~8/s)
       comboOrder: false,           // scenario panel shows the full ordered action list (spells + items + moves)
       dummyChat: true,             // dummies taunt on fumbles / slow play
@@ -51,7 +50,6 @@
     if (base.castMode !== 'quick' && base.castMode !== 'normal') base.castMode = 'quick';
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
     if (!IT.I18N[base.lang]) base.lang = 'en';
-    if (base.hudMode !== 'minimal' && base.hudMode !== 'steps') base.hudMode = 'default';
     if (base.heroSkin !== 'kid' && base.heroSkin !== 'dark') base.heroSkin = 'default';
     if (!(IT.GAME.ZOOMS || [1]).includes(base.zoom)) base.zoom = 1;
     base.camSpeed = Math.max(0.5, Math.min(2, Number(base.camSpeed) || 1));
@@ -173,6 +171,7 @@
     const chkv = (on, label, fn) => h('label', { class: 'set-r sc' },
       h('input', { type: 'checkbox', checked: on ? true : null, onchange: ev => fn(ev.target.checked) }),
       h('span', { class: 'bx' }), h('span', { class: 'set-rn', text: label }));
+    const tipped = (el, tip) => { el.setAttribute('data-tip', tip); return el; };
     const chk = (obj, f, label, after) => chkv(obj[f], label, v => { obj[f] = v; if (after) after(); });
     const rg = (name, cur, opts, fn) => h('div', { class: 'set-rg' }, opts.map(o => h('label', { class: 'rd' },
       h('input', { type: 'radio', name, value: o[0], checked: cur === o[0] ? true : null, onchange: () => fn(o[0]) }),
@@ -228,9 +227,7 @@
       iface: ['set.nav.iface', () => [
         grid(kRow('common', 'cheat'), kRow('common', 'stats')),
         sh(t('set.h.options')),
-        list(row(t('set.hudMode'), rg('hudMode', draft.hudMode, [['minimal', t('set.hud.minimal')], ['default', t('set.hud.default')], ['steps', t('set.hud.steps')]], v => { draft.hudMode = v; })),
-          h('p', { class: 'fine', text: t('set.hud.' + draft.hudMode + '.d') }),
-          chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat'))),
+        list(chk(draft, 'comboOrder', t('set.comboOrder')), chk(draft, 'dummyChat', t('set.dummyChat'))),
         sh(t('set.h.sandbox')),
         grid(kRow('common', 'refresh'), kRow('common', 'spawn'), kRow('common', 'resetDummies')),
         sh(t('set.h.fixed')),
@@ -244,7 +241,7 @@
           chk(draft, 'unifiedOrders', t('set.unifiedOrders')),
           chk(draft, 'rmbRepeat', t('set.rmbRepeat'))),
         sh(t('set.h.options')),
-        list(chk(draft, 'hints', t('set.hints'))),
+        list(tipped(chk(draft, 'hints', t('set.hints')), t('set.hints.d')), h('p', { class: 'fine', text: t('set.hints.d') })),
       ]],
       audio: ['set.nav.audio', () => {
         const A = draft.audio;

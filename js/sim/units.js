@@ -344,6 +344,7 @@
     if (b.active) {
       if (disabled(d)) return cancelBolt(w, d, 'disabled');
       if (!h || U.dist(d, h) > B.range + 200) return cancelBolt(w, d, 'range');
+      if (!canSee(w, d, h)) return cancelBolt(w, d, 'lost');   // v6: a hero that turns invisible (or leaves sight) mid-cast is never targeted
       d.facing = U.angle(d, h);
       if (w.t >= b.castEnd - 1e-9) {
         b.active = false; b.readyAt = w.t + B.cooldown;
@@ -498,12 +499,14 @@
     let sees = false;
     if (h && !h.dead) {
       sees = IT.Vision && IT.Vision.teamSees && w.map ? IT.Vision.teamSees(w, e.team, h) : canSee(w, e, h);
+      a.seesHero = sees;   // v6: raw sight (before the notice delay): only then may the AI read the hero's real position
+      if (sees) a.heroAt = { x: h.x, y: h.y, t: w.t };
       const need = noticeDelay(e);
       if (sees) {
         a.notice = Math.min(need, (a.notice || 0) + dt * (U.dist(e, h) <= E.noticeNear ? E.noticeNearMul : 1));
         if (a.notice < need - 1e-9) sees = false;   // in sight but not registered yet
       } else a.notice = Math.max(0, (a.notice || 0) - dt * E.noticeDecay);
-    } else a.notice = 0;
+    } else { a.notice = 0; a.seesHero = false; }
     if (w.t - e.lastHit < E.hitAwareFor) a.notice = noticeDelay(e);   // being hit makes it notice at once
     const was = e.aware;
     e.aware = sees || (w.t - e.lastHit) < E.hitAwareFor;
@@ -615,13 +618,15 @@
       if (defend(w, e, ['euls', 'blink', 'forcestaff', 'bkb'], away(t.danger, e))) return;
     }
     if (!h) return;
+    // v6: an unseen hero (Ghost Walk, fog, high ground) is never located: the AI runs from where it last saw it
+    const hp = a.seesHero ? h : a.heroAt || h;
     const escaping = a.behavior === 'escape' || a.escaping;
-    if (escaping && e.aware && a.awareSince != null && w.t - a.awareSince >= reactionOf(e) - 1e-9 && U.dist(e, h) < E.flee.range) {
-      const d = U.dist(e, h), ang = away(h, e);
+    if (escaping && e.aware && a.awareSince != null && w.t - a.awareSince >= reactionOf(e) - 1e-9 && U.dist(e, hp) < E.flee.range) {
+      const d = U.dist(e, hp), ang = away(hp, e);
       if (d < E.shadowRange && !hasS(e, 'invisible') && useItem(w, e, 'shadowblade', {})) return;
       if ((a.escaping || d < 600) && useItem(w, e, 'blink', blinkTo(e, ang))) return;   // disable_escape: out of reach at once
       if (d < 500 && useItem(w, e, 'forcestaff', { face: ang })) return;
-      if (flee(w, e, h, E)) return;
+      if (flee(w, e, hp, E)) return;
       a.cornered = w.t + 1.5;   // rooted / boxed in: fights back (below) instead of standing idle
     }
     if (a.behavior === 'defend' && e.aware && e.hp < e.maxHp * 0.5 && !hasS(e, 'invisible') && useItem(w, e, 'shadowblade', {})) return;

@@ -20,6 +20,7 @@
     let dealt = raw;
     if (Sx.has(t, 'lift') && !flags.allowLifted) dealt = 0;
     else if (type === 'physical') dealt = raw * armorMult(t.armor || 0);
+    // pure damage (Sun Strike / Cataclysm) ignores armor, magic resistance and BKB (magicImmune) alike: dealt = raw
     else if (type === 'magical') {
       const mi = Sx.has(t, 'magicImmune') && !flags.pierce ? Sx.find(t, 'magicImmune') : null;
       // BKB: full immunity, except an enemy-NPC BKB (status data.reduce) which only cuts the magic damage by that fraction
