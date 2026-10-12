@@ -212,7 +212,7 @@
       IT.Sand.update(R, dtReal);
       let tSand = performance.now() - tf1, tFx = tf1 - tf0;
       gx.globalCompositeOperation = 'source-over'; gx.clearRect(0, 0, VW, VH); gx.globalCompositeOperation = 'lighter';
-      light.begin();
+      light.begin(IT.DayNight ? IT.DayNight.factor(w) : 0);   // v6: night tint + falloff
 
       IT.Terrain.draw(R, ter);
       let tm = performance.now();

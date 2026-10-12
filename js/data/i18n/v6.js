@@ -29,6 +29,10 @@
       'sbx.search': 'Search combos', 'sbx.all': 'All', 'sbx.none': 'No combo matches.', 'sbx.peak': 'peak {n}',
       'sbx.t.basic': 'BAS', 'sbx.t.intermediate': 'MID', 'sbx.t.advanced': 'ADV', 'sbx.t.items': 'ITM',
       'cb.win': 'window', 'cb.next': 'Next:',
+      'dn.tip': 'Day: vision {d} / Night: vision {n}', 'dn.day': 'Day', 'dn.night': 'Night', 'dn.toNight': 'nightfall in {t}', 'dn.toDay': 'sunrise in {t}',
+      'lo.tod': 'Time of day', 'lo.tod.day': 'Day', 'lo.tod.night': 'Night', 'lo.tod.cycle': 'Cycle (5 min)',
+      'lo.tod.d': 'Night: vision 800 for heroes and enemies (1800 by day). Cycle alternates every 5 minutes, as in Dota.',
+      'status.revealed': 'Revealed (Dust)',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -58,5 +62,9 @@
       'sbx.search': 'Buscar combos', 'sbx.all': 'Todos', 'sbx.none': 'Nenhum combo encontrado.', 'sbx.peak': 'pico {n}',
       'sbx.t.basic': 'BÁS', 'sbx.t.intermediate': 'MÉD', 'sbx.t.advanced': 'AVA', 'sbx.t.items': 'ITN',
       'cb.win': 'janela', 'cb.next': 'Próximo:',
+      'dn.tip': 'Dia: visão {d} / Noite: visão {n}', 'dn.day': 'Dia', 'dn.night': 'Noite', 'dn.toNight': 'anoitece em {t}', 'dn.toDay': 'amanhece em {t}',
+      'lo.tod': 'Hora do dia', 'lo.tod.day': 'Dia', 'lo.tod.night': 'Noite', 'lo.tod.cycle': 'Ciclo (5 min)',
+      'lo.tod.d': 'Noite: visão 800 para heróis e inimigos (1800 de dia). Ciclo alterna a cada 5 minutos, como no Dota.',
+      'status.revealed': 'Revelado (Dust)',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

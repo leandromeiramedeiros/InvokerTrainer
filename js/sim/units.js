@@ -82,7 +82,10 @@
     return e;
   }
 
-  const isNight = w => !!(w && (w.night || (w.map && w.map.night)));   // night: enemy hero vision 800 instead of 1800
+  // v6 day / night: enemy hero vision 1800 by day, 800 by night, ramped through sunset / sunrise (IT.DayNight; the 'daynight' system keeps
+  // e.vision current every tick, so notice / awareness / chase all use the same radius). Without daynight.js: the legacy w.night flag.
+  const isNight = w => !!(w && (w.night || (w.map && w.map.night)));
+  const enemyVision = w => { const E = GM().ENEMY; return IT.DayNight ? IT.DayNight.lerp(w, E.vision, E.visionNight) : isNight(w) ? E.visionNight : E.vision; };
 
   // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, mana, behavior, items, awareness, reaction, telegraph, preset,
   // scenario ({stunBolt, ...} hooks), useBkb, refill. Dies at 0 hp (combat.js emits 'kill') unless opts.refill (training dummy: refills
@@ -95,7 +98,7 @@
     const items = Array.isArray(o.items) ? o.items.filter(id => G_.ENEMY_ITEMS.includes(id)) : undefined;
     const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
       hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
-      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : isNight(w) ? E.visionNight : E.vision,
+      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
     });
     e.ai = newAI(behavior, o.x, o.y, w.t);
     e.ai.useBkb = !!o.useBkb;
@@ -143,7 +146,7 @@
     const g = k => V.get(A, k, ctx);
     const hp = g('spirit_hp'), dmg = g('spirit_damage'), armor = g('spirit_armor'), range = g('spirit_attack_range');
     const e = {
-      kind: 'spirit', team: 0, owner: owner.id, x, y, radius: u.HullRadius || 16, vision: u.VisionDaytimeRange || 1200, visible: true,
+      kind: 'spirit', team: 0, owner: owner.id, x, y, radius: u.HullRadius || 16, vision: IT.DayNight ? IT.DayNight.lerp(w, u.VisionDaytimeRange || 1200, u.VisionNighttimeRange || 800) : u.VisionDaytimeRange || 1200, visible: true,
       hp, maxHp: hp, mana: g('spirit_mana'), maxMana: g('spirit_mana'), hpRegen: u.StatusHealthRegen, manaRegen: u.StatusManaRegen,
       armor, magicRes: u.MagicalResistance || 0, ms: u.MovementSpeed, turnRate: 10,
       base: { ms: u.MovementSpeed, armor, magicRes: u.MagicalResistance || 0, hpRegen: u.StatusHealthRegen, manaRegen: u.StatusManaRegen, as: 100, dmgMin: dmg, dmgMax: dmg, bat: u.AttackRate, attackRange: range, point: u.AttackAnimationPoint, projSpeed: u.ProjectileSpeed },

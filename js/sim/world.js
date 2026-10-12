@@ -22,6 +22,7 @@
       ents: [], byId: new Map(), hero: null,
       map: opts.map || null, loadout: opts.loadout || null, ctx: null,
       fog: opts.fog !== false, log: [], paused: false, opts,
+      tod: IT.DayNight ? IT.DayNight.make(opts.tod) : null,   // v6 time of day { night, t, len, ... } (js/data/daynight.js)
       add(e) {
         e.id = nextId++;
         e.statuses = e.statuses || [];
@@ -72,6 +73,9 @@
     };
     return w;
   }
+
+  // v6 day / night: advance w.tod, then every unit's vision radius follows it (before stats 15 and vision 70)
+  system('daynight', 1, (w, dt) => { if (IT.DayNight) IT.DayNight.tick(w, dt); });
 
   // Thinkers/projectiles: def.upd(w, ent, dt) -> true when finished.
   system('thinkers', 40, (w, dt) => {

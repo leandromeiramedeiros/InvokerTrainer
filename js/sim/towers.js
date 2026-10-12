@@ -10,7 +10,11 @@
     3: { hp: 2500, armor: 16, min: 170, max: 174, protArmor: 5, protRegen: 3 },
     4: { hp: 2600, armor: 21, min: 170, max: 174, protArmor: 5, protRegen: 3 },
   };
-  const RANGE = 700, BAT = 0.9, PROJ = 750, VISION = 1900, TRUE_SIGHT = 860, PROT_R = 900, AGGRO_R = 500, RADIUS = 72, LAUNCH_Z = 260;
+  const RANGE = 700, BAT = 0.9, POINT = 0.6, AS = 110, PROJ = 750, VISION = 1900, TRUE_SIGHT = 860, PROT_R = 900, AGGRO_R = 500, RADIUS = 72, LAUNCH_Z = 260;
+  // npc_units.txt (bake cache 217732b = local build 6957), all 20 npc_dota_{good,bad}guys_tower*: AttackRange 700, AttackRate 0.9,
+  // AttackAnimationPoint 0.6, BaseAttackSpeed 110, ProjectileSpeed 750, VisionDaytimeRange 1900. Dota scales both by attack speed
+  // (as hero.js does): attack interval = AttackRate / (AS / 100) = 0.818 s, windup = AttackAnimationPoint / (AS / 100) = 0.545 s.
+  const WINDUP = POINT * 100 / AS, INTERVAL = BAT * 100 / AS;
   // TRUE_SIGHT: not in the KV; server.dll build 6957 CDOTA_Modifier_Tower_Truesight_Aura aura-radius getter (vtable slot 68, RVA 0x01644020) returns 860.0f
   // (same slot returns 1200 for CDOTA_Modifier_Fountain_Truesight_Aura = the known fountain value). See DECISIONS.md "v6 local-install audit".
   const RECENT = 1.5;        // s an attack order counts as "attacking the tower / an ally"
@@ -25,7 +29,7 @@
     return w.add({
       kind: 'tower', name: 'Tower', building: true, team: o.team | 0, tier, x: o.x, y: o.y, radius: RADIUS,
       hp: T.hp, maxHp: T.hp, armor: T.armor, magicRes: 0, ms: 0, vision: VISION, trueSight: TRUE_SIGHT, visible: true,
-      attack: { min: T.min, max: T.max, bat: BAT, point: 0, range: RANGE, projSpeed: PROJ, next: 0, target: null },
+      attack: { min: T.min, max: T.max, bat: BAT, point: POINT, as: AS, range: RANGE, projSpeed: PROJ, next: 0, readyAt: 0, target: null, wind: null },
       statuses: [], _atkBy: {}, _lastRepick: -9, destroyed: false,
     });
   }
@@ -140,16 +144,27 @@
     for (const tw of w.ents) {
       if (tw.dead || tw.kind !== 'tower') continue;
       if (!tw.destroyed && tw.hp <= 0) {
-        tw.destroyed = true; tw.hp = 0; tw.attack.target = null; tw.vision = 0; tw.trueSight = 0;
+        tw.destroyed = true; tw.hp = 0; tw.attack.target = null; tw.attack.wind = null; tw.vision = 0; tw.trueSight = 0;
         w.emit('towerDown', { unit: tw.id, team: tw.team, tier: tw.tier, by: tw._lastBy });
       }
       if (tw.destroyed) continue;
       const a = tw.attack;
-      if (a.next > 0) a.next = Math.max(0, a.next - dt);
       let t = a.target != null ? w.get(a.target) : null;
       if (t && !valid(w, tw, t)) t = null;
       if (!t) { t = pick(w, tw); a.target = t ? t.id : null; }
-      if (t && a.next <= 1e-9) { a.next = a.bat; launch(w, tw, t); }
+      // attack = acquire (instant: towers do not turn) -> windup (AttackAnimationPoint / AS) -> launch a tracking projectile.
+      // The windup is cancelled (no shot, cooldown refunded) when its target dies, is lifted, leaves range / vision, or the tower switches target.
+      // Cadence lives in a.readyAt (a world time), not a.next: orders.js 'attacks' also ticks a.next of every unit with an attack, which made
+      // towers fire every BAT / 2 = 0.45 s before.
+      if (a.wind && (!t || t.id !== a.wind.target)) { w.emit('towerCancel', { unit: tw.id, target: a.wind.target }); a.wind = null; a.readyAt = w.t; }
+      if (a.wind) {
+        if (w.t >= a.wind.at - 1e-9) { a.wind = null; launch(w, tw, t); }
+      } else if (t && w.t >= (a.readyAt || 0) - 1e-9) {
+        const k = 100 / (a.as || 100), r0 = a.readyAt || 0;
+        a.readyAt = (w.t - r0 < dt - 1e-9 ? r0 : w.t) + a.bat * k;   // back-to-back attacks keep the exact cadence (no per-tick rounding drift)
+        a.wind = { target: t.id, t0: w.t, at: w.t + a.point * k };
+        w.emit('towerWindup', { unit: tw.id, target: t.id, windup: a.wind.at - w.t });
+      }
     }
   });
 
@@ -220,5 +235,5 @@
     return best;
   }
 
-  IT.Towers = { TIERS, RANGE, PROT_R, TRUE_SIGHT, spawn, spawnAll, gate, STRUCT_KV, structSub, structCard, buildingAt };
+  IT.Towers = { TIERS, RANGE, BAT, POINT, AS, PROJ, WINDUP, INTERVAL, PROT_R, TRUE_SIGHT, spawn, spawnAll, gate, STRUCT_KV, structSub, structCard, buildingAt };
 })(typeof window !== 'undefined' ? window : globalThis);

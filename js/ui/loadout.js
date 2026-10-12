@@ -9,7 +9,8 @@
 
   const DEF_MAP = 'dota';   // Free Play default (the old 'grounds' training clearing is gone from the picker)
   const HIDDEN_MAPS = ['grounds'];
-  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, map: DEF_MAP, diff: 'common', enemy: { count: 0, items: [], list: [] }, tab: 'hero' };
+  const st = { lo: null, count: 1, fog: true, tod: 'day', grant: true, scenario: null, map: DEF_MAP, diff: 'common', enemy: { count: 0, items: [], list: [] }, tab: 'hero' };
+  const TOD = ['day', 'night', 'cycle'];   // v6 Free Play time of day (js/data/daynight.js)
   const normEnemy = e => IT.EnemyCard.normalize(e);   // Free Play enemy card (count, item set, one row per enemy): js/sim/enemycard.js
   const diffOk = d => IT.DIFFICULTY.order.indexOf(IT.DIFFICULTY.migrate(d)) >= 0;
 
@@ -29,7 +30,7 @@
   }
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.map = DEF_MAP; st.diff = 'common'; st.enemy = fixEnemy(normEnemy());
+    st.count = 1; st.fog = true; st.tod = 'day'; st.grant = true; st.scenario = null; st.map = DEF_MAP; st.diff = 'common'; st.enemy = fixEnemy(normEnemy());
   }
   function load() {
     fresh();
@@ -41,13 +42,14 @@
     st.lo = lo;
     st.count = 1;   // one scarecrow at the start; more are placed in the match (P / HUD)
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
+    st.tod = TOD.indexOf(raw.tod) >= 0 ? raw.tod : 'day';   // v6 Free Play time of day
     st.enemy = fixEnemy(normEnemy(raw.enemy));
     st.diff = diffOk(raw.diff) ? IT.DIFFICULTY.migrate(raw.diff) : 'common';
     st.map = mapOk(raw.map) ? raw.map : DEF_MAP;
   }
   function save() {
     st.lo.mode = 'sandbox';
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, fog: st.fog, grant: st.grant, map: st.map, diff: st.diff, enemy: st.enemy })); } catch (e) { /* ignore */ }
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, fog: st.fog, tod: st.tod, grant: st.grant, map: st.map, diff: st.diff, enemy: st.enemy })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -480,6 +482,10 @@
       optBox.appendChild(h('div', { class: 'row wrap' },
         h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: st.grant ? true : null, onchange: ev => { st.grant = ev.target.checked; changed(); } }), h('span', { class: 'box' }), h('span', { text: t('lo.grant') })),
         h('label', { class: 'tog' }, h('input', { type: 'checkbox', checked: st.fog ? true : null, onchange: ev => { st.fog = ev.target.checked; changed(); } }), h('span', { class: 'box' }), h('span', { text: t('lo.fog') }))));
+      // v6 time of day: Day / Night / Cycle (real Dota 5 min alternation, IT.DayNight)
+      optBox.appendChild(h('div', { class: 'row wrap', 'data-tip': t('lo.tod.d') }, h('span', { text: t('lo.tod') }),
+        h('select', { class: 'mapsel todsel', onchange: ev => { st.tod = ev.target.value; changed(); } },
+          TOD.map(k => h('option', { value: k, selected: st.tod === k ? true : null, text: t('lo.tod.' + k) })))));
       const n = avail();
       if (n >= 0) optBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
     }
@@ -604,7 +610,7 @@
     save();
     const en = normEnemy(st.enemy);
     if (st.combo) en.count = 0;
-    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: 1, fog: st.fog, grant: st.grant, scenario: null, map: mapOk(st.map) ? st.map : DEF_MAP, diff: diffOk(st.diff) ? IT.DIFFICULTY.migrate(st.diff) : 'common', enemy: en };
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: 1, fog: st.fog, tod: st.tod, grant: st.grant, scenario: null, map: mapOk(st.map) ? st.map : DEF_MAP, diff: diffOk(st.diff) ? IT.DIFFICULTY.migrate(st.diff) : 'common', enemy: en };
   }
   // one scenario played alone (no rating): the tier follows the scenario's level
   function scenarioOpts(id) {

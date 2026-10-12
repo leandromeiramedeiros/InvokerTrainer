@@ -208,6 +208,56 @@
     cx.globalAlpha = 1;
   }
 
+  // v6 day / night clock: pixel sun / moon in a ring whose arc fills through the phase (full ring when the time of day is fixed), drawn on a
+  // 24x24 canvas left of the top strip. Tooltip: day / night vision of the hero (IT.DayNight.pair) + the current phase.
+  const CLK = 24;
+  function clockEl() {
+    const c = document.createElement('canvas'); c.width = CLK; c.height = CLK; c.className = 'hclock';
+    Object.assign(c.style, { position: 'absolute', top: '.8em', left: 'calc(17.5% - 4.1em)', width: '3.4em', height: '3.4em', imageRendering: 'pixelated', pointerEvents: 'auto', cursor: 'help' });
+    return c;
+  }
+  function paintClock(cv, night, prog, fixed) {
+    const cx = cv.getContext('2d'), C = (CLK - 1) / 2, px = (x, y, col) => { cx.fillStyle = col; cx.fillRect(x, y, 1, 1); };
+    cx.clearRect(0, 0, CLK, CLK);
+    const arcOn = night ? '#7fa6ff' : '#f2c444', arcOff = '#3a2f55', ang = (fixed ? 1 : prog) * Math.PI * 2;
+    for (let y = 0; y < CLK; y++) for (let x = 0; x < CLK; x++) {
+      const dx = x - C, dy = y - C, d = Math.hypot(dx, dy);
+      if (d > 11.6) continue;
+      if (d > 10.6) { px(x, y, '#000'); continue; }                      // outline
+      if (d > 8.4) {                                                      // progress ring, clockwise from 12 o'clock
+        let a = Math.atan2(dx, -dy); if (a < 0) a += Math.PI * 2;
+        px(x, y, a <= ang + 1e-6 ? arcOn : arcOff); continue;
+      }
+      if (d > 7.6) { px(x, y, '#000'); continue; }
+      px(x, y, night ? '#121a3a' : '#2c5a8c');                            // sky
+    }
+    if (!night) {   // sun: disk + 8 rays
+      for (let y = 0; y < CLK; y++) for (let x = 0; x < CLK; x++) {
+        const d = Math.hypot(x - C, y - C);
+        if (d <= 3.6) px(x, y, d <= 1.8 && x <= C && y <= C ? '#fff3b0' : '#ffd23a');
+        else if (d <= 4.4) px(x, y, '#e08a1e');
+      }
+      for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; px(Math.round(C + Math.cos(a) * 6), Math.round(C + Math.sin(a) * 6), '#ffd23a'); }
+    } else {        // moon: crescent + two stars
+      for (let y = 0; y < CLK; y++) for (let x = 0; x < CLK; x++) {
+        const d = Math.hypot(x - C, y - C), e = Math.hypot(x - C - 2.2, y - C + 1.6);
+        if (d <= 5 && e > 3.9) px(x, y, d > 4.2 ? '#9fb2e8' : '#e6edff');
+      }
+      px(Math.round(C + 4), Math.round(C - 4), '#fff'); px(Math.round(C + 5), Math.round(C + 2), '#c9d6ff');
+    }
+  }
+  H.updClock = function (R, ca) {
+    const DN = IT.DayNight, w = H.c.w;
+    if (!DN || !R.clock) return;
+    const night = DN.isNight(w), fixed = !w.tod || !isFinite(w.tod.len), prog = DN.progress(w);
+    const k = (night ? 'n' : 'd') + (fixed ? 'f' : Math.floor(prog * 64));
+    if (ca.clk !== k) { ca.clk = k; paintClock(R.clock, night, prog, fixed); }
+    const p = DN.pair(H.c.hero) || [1800, 800], left = DN.left(w);
+    const tip = t('dn.tip', { d: p[0], n: p[1] }) + '\n' + t(night ? 'dn.night' : 'dn.day') +
+      (isFinite(left) ? ' - ' + t(night ? 'dn.toDay' : 'dn.toNight', { t: fmtM(left) }) : '');
+    setTip(R.clock, tip, ca, 'clktp');
+  };
+
   // top-centre scenario HUD (hidden unless IT.Ranked.hud(w) returns an object). ONE compact design, two states:
   //   countdown: centred panel (<= ~20 % of the viewport): countdown number + hint, title + difficulty, objective, win / lose, step chips, timer / score / turn
   //   play:      the same panel collapses (animated) into one slim strip: objective, small step chips, timer, turn
@@ -415,6 +465,8 @@
     if (ctx.mode === 'sandbox') { R.top.classList.add('sbx'); H.buildSide(ctx, root); }
     R.cheat = h('div', { class: 'hudp cheat', style: { display: 'none' } });
     R.live = h('div', { class: 'hudp live', style: { display: 'none' } });
+    R.clock = IT.DayNight ? clockEl() : null;   // v6 day / night clock (left of the top strip)
+    if (R.clock) root.appendChild(R.clock);
     root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim); root.appendChild(R.cheat); root.appendChild(R.live);
     if (IT.ComboBar) IT.ComboBar.bind(ctx, R.top);
     const wm = ev => itemMove(ev), wu = ev => itemUp(ev);
@@ -917,6 +969,7 @@
     if (R.mapLine) { const mn = H.mapLabel(w.map); setText(R.mapLine, mn ? t('hud.map') + ': ' + mn : '', ca, 'mapl'); R.mapLine.style.display = mn ? '' : 'none'; }
     // ranked panel
     H.updRanked(R, ca, dt);
+    H.updClock(R, ca);
     H.updHood(R, ca, w.loadout || {}, dt);
     // orbs (a status) sit centred over the ability row; other statuses take slots to their right
     const lk = innerWidth + 'x' + innerHeight + ':' + (U ? 1 : 0);

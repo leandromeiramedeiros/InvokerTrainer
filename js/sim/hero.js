@@ -52,7 +52,7 @@
       kind: 'hero', team: 0, x, y, z: 0, facing: Math.PI / 2, radius: IT.GAME.HERO.radius,
       hp: b.maxHp, maxHp: b.maxHp, mana: b.maxMana, maxMana: b.maxMana,
       hpRegen: bs.hpRegen, manaRegen: bs.manaRegen, armor: bs.armor, magicRes: bs.magicRes, ms: bs.ms,
-      turnRate: h.MovementTurnRate, vision: h.VisionDaytimeRange, visible: true, lastSeen: { x, y, t: w.t },
+      turnRate: h.MovementTurnRate, vision: IT.DayNight ? IT.DayNight.lerp(w, h.VisionDaytimeRange, h.VisionNighttimeRange) : h.VisionDaytimeRange, visible: true, lastSeen: { x, y, t: w.t },
       attack: { min: bs.dmgMin, max: bs.dmgMax, bat: bs.bat, point: bs.point, range: bs.attackRange, projSpeed: bs.projSpeed, as: bs.as, acq: bs.acq, next: 0, target: null },
       base: bs, attr: b.attr,
       inv: { orbs: [], slots: [null, null], invokeCd: 0 }, cd: {}, items, ctx,

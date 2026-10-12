@@ -295,6 +295,7 @@
       shadow(cx, sxp, syp, Math.round(rr * (e.kind === 'spirit' ? 1.0 : 1.25) * (1 - zs) * (sc === 1 ? 1 : 1.1)), Math.max(1, Math.round(rr * 0.45)), (0.38 - zs * 0.3) * Av / A0 * (A0 || 1));
       if (selected(R, e)) { cx.globalAlpha = Av; selRing(R, sxp, syp, rr, isFoe(e)); cx.globalAlpha = A0; }
       if (L) { liftMarker(R, sxp, syp, rr, eul); tether(R, sxp, syp, sy, eul); }
+      if (has(e, 'revealed')) dustRing(R, e, sxp, syp, rr, Av);
       if (root) vines(R, sxp, syp, rr, true, rk);
       if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, false);
       if (L) { cx.globalAlpha = Av; if (eul) funnel(R, sxp, syp - 2, Math.max(26, syp - sy + img.height), false); swirl(R, sxp, sy + 2, img.height, 9, false, eul ? 5 : 4, eul); }
@@ -360,6 +361,22 @@
     if (L && Math.random() < 0.5) IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 40, y: e.y + (Math.random() - 0.5) * 20, z: Math.max(0, zp * 6 * 0.2), n: 1, ramp: 'white', speed: 25, up: 10, spread: 10, life: 0.4, rest: 0.6 });
     forceTrail(R, e, S);
     if (al) alacSigil(R, S, sxp, sy - (e.kind === 'hero' ? S.top + 14 : e.scarecrow ? 42 : S.top + 10), al);
+  }
+
+  // Dust of Appearance debuff ('revealed'): a slowly turning ring of gold dust motes at the feet + a few drifting up; it thins out in the last 1.5 s.
+  function dustRing(R, e, sx, sy, rr, Av) {
+    const cx = R.cx, s = find(e, 'revealed'), left = s && isFinite(s.until) ? s.until - R.w.t : 99, f = clamp(left / 1.5, 0, 1);
+    if (f <= 0) return;
+    const n = 16, rx = rr + 7, ry = Math.max(3, (rr + 7) * 0.45);
+    for (let i = 0; i < n; i++) {
+      const a = R.time * 1.4 + i / n * TAU, px = Math.round(sx + Math.cos(a) * rx), py = Math.round(sy + Math.sin(a) * ry);
+      if (f < 1 && PX.bayer(px + R.camX, py + R.camY) > f) continue;
+      cx.globalAlpha = (0.55 + 0.35 * Math.sin(R.time * 5 + i)) * Av;
+      cx.fillStyle = i & 1 ? '#f0e2b0' : '#e8c060';
+      cx.fillRect(px, py, 1, 1); if (!(i & 3)) cx.fillRect(px, py - 1, 1, 1);
+    }
+    cx.globalAlpha = Av;
+    if (Math.random() < 0.18) IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 50, y: e.y + (Math.random() - 0.5) * 30, z: 4, n: 1, ramp: 'gold', speed: 6, up: 30, spread: 6, life: 0.9, rest: 1 });
   }
 
   // lifted units are re-drawn on top of the dust/funnel layers so their lower half never disappears into the plume

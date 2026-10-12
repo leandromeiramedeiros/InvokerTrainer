@@ -10,6 +10,10 @@
   const OUTV = [0.114, 0.141, 0.228];   // explored but not in vision (= old AMB * 0.38): very dark, terrain still readable
   const DARK = 0.015;
   const LK = 0.55;        // point lights scaled down over the brighter ambient so glows read without blowing the area out
+  // v6 night (IT.DayNight factor 1): lit area ~72 % with a blue cast (CEO: keep it bright and readable), point lights x1.6 so torches /
+  // spells carry more, and a steeper fade at the vision edge. Fog outside vision (OUTV / DARK) is the same by day and night.
+  const NAMB = [0.57, 0.63, 0.80];   // luma 0.63 vs day 0.88 = ~72 %
+  const NLK = 1.6;
 
   function create(VW, VH) {
     const LW = Math.ceil(VW / CELL), LH = Math.ceil(VH / CELL);   // grid follows the view size (zoom)
@@ -22,21 +26,27 @@
       const g = (x + 0.5) / CELL - 0.5, i = Math.floor(g);
       xi0[x] = Math.max(0, i); xi1[x] = Math.min(LW - 1, i + 1); xw[x] = Math.max(0, g - i);
     }
-    let lights = 0;
+    let lights = 0, nf = 0, lk = LK;
     const L = {
       canvas: cv,
       buf: { lr, lg, lb, w: LW, h: LH },   // raw light grid (sand.js adds emissive cells)
-      begin() {
-        for (let i = 0; i < LW * LH; i++) { lr[i] = AMB[0]; lg[i] = AMB[1]; lb[i] = AMB[2]; }
+      // night: 0 = day .. 1 = full night (IT.DayNight.factor, smoothed)
+      begin(night) {
+        nf = night > 0 ? Math.min(1, night) : 0;
+        const s = nf * nf * (3 - 2 * nf);   // smoothstep: the sunset eases in and out
+        const a0 = AMB[0] + (NAMB[0] - AMB[0]) * s, a1 = AMB[1] + (NAMB[1] - AMB[1]) * s, a2 = AMB[2] + (NAMB[2] - AMB[2]) * s;
+        lk = LK * (1 + (NLK - 1) * s); nf = s;
+        for (let i = 0; i < LW * LH; i++) { lr[i] = a0; lg[i] = a1; lb[i] = a2; }
         lights = 0;
       },
+      get night() { return nf; },
       // screen-space light: sx,sy px, radius px, rgb 0..255 array, intensity
       add(sx, sy, r, rgb, inten) {
         if (sx + r < 0 || sy + r < 0 || sx - r > VW || sy - r > VH) return;
         lights++;
         const x0 = Math.max(0, Math.floor((sx - r) / CELL)), x1 = Math.min(LW - 1, Math.floor((sx + r) / CELL));
         const y0 = Math.max(0, Math.floor((sy - r) / CELL)), y1 = Math.min(LH - 1, Math.floor((sy + r) / CELL));
-        const r2 = r * r, ir = 1 / r, R = rgb[0] / 255 * inten * LK, Gc = rgb[1] / 255 * inten * LK, B = rgb[2] / 255 * inten * LK;
+        const r2 = r * r, ir = 1 / r, R = rgb[0] / 255 * inten * lk, Gc = rgb[1] / 255 * inten * lk, B = rgb[2] / 255 * inten * lk;
         for (let cy = y0; cy <= y1; cy++) {
           const dy = cy * CELL + 2 - sy;
           for (let cxx = x0; cxx <= x1; cxx++) {
@@ -58,7 +68,8 @@
             const f = fog.sample(camX + cxx * CELL + 2, camY + cy * CELL + 2);
             if (f < 2) {
               if (f >= 1) {
-                const t = f - 1;
+                let t = f - 1;
+                if (nf > 0) t = Math.pow(t, 1 + nf);   // night: steeper light falloff toward the vision edge
                 r = OUTV[0] + (r - OUTV[0]) * t; g = OUTV[1] + (g - OUTV[1]) * t; b = OUTV[2] + (b - OUTV[2]) * t;
               } else {
                 r = DARK + (OUTV[0] - DARK) * f; g = DARK + (OUTV[1] - DARK) * f; b = DARK * 1.4 + (OUTV[2] - DARK * 1.4) * f;
@@ -104,5 +115,5 @@
     return L;
   }
 
-  IT.Light = { create, AMB, OUTV, LW, LH, LEVELS, SCALE: 1.25 };
+  IT.Light = { create, AMB, NAMB, OUTV, LW, LH, LEVELS, SCALE: 1.25 };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -202,10 +202,15 @@
       case 'dustBlast': {   // Dust of Appearance (player or enemy): a sparkling cloud bursts out to the reveal radius and hangs there a moment
         const r = p.r || 1050;
         addFx({ k: 'wave', x, y, r0: r * 0.08, r1: r, dur: 0.7, color: '#f0e2b0' });
-        addFx({ k: 'cloud', x, y, r, dur: 1.8, color: '#e8d49a' });
+        addFx({ k: 'cloud', x, y, r, dur: p.linger > 0 ? p.linger : 1.8, hold: p.linger > 0, color: '#e8d49a' });   // linger_duration: the area stays (and re-applies to newcomers) that long
         addFx({ k: 'flash', x, y, r: 160, dur: 0.4, color: '#fff2c0' });
         burst(x, y, 'gold', 60, { spread: Math.min(r * 0.3, 240), speed: 45, up: 90, life: 1.1, rest: 3 });
         burst(x, y, 'dirt', 26, { spread: 70, speed: 40, up: 70, rest: 2 });
+        break;
+      }
+      case 'dustReveal': {  // the debuff lands on a unit: a gold puff + a ring that closes in on it
+        addFx({ k: 'wave', x, y, r0: 46, r1: 12, dur: 0.45, color: '#f0e2b0' });
+        burst(x, y, 'gold', 16, { spread: 14, speed: 35, up: 70, life: 0.9, rest: 2 });
         break;
       }
       case 'cataclysm': addFx({ k: 'wave', x, y, r0: 20, r1: 300, dur: 0.6, color: '#ffd070' }); break;
@@ -471,8 +476,12 @@
         const r = (f.r0 + (f.r1 - f.r0) * Math.sqrt(age)) / R.P;
         dring(R, x, y, r, f.color, 1 - age); dring(R, x, y, r - 1, f.color, (1 - age) * 0.5);
       } else if (f.k === 'cloud') {   // dust cloud edge: the reveal radius, dithered, fading
-        const r = f.r / R.P;
-        dring(R, x, y, r, f.color, 0.85 * (1 - age)); dring(R, x, y, r * 0.66, f.color, 0.3 * (1 - age)); dring(R, x, y, r * 0.33, f.color, 0.2 * (1 - age));
+        const r = f.r / R.P, fa = f.hold ? (age < 0.85 ? 1 : (1 - age) / 0.15) * (0.75 + 0.1 * Math.sin(t * 2.5)) : 1 - age;   // hold: lingers at near-full strength, fades in the last 15 %
+        dring(R, x, y, r, f.color, 0.85 * fa); dring(R, x, y, r * 0.66, f.color, 0.3 * fa); dring(R, x, y, r * 0.33, f.color, 0.2 * fa);
+        if (f.hold && fa > 0.3 && Math.random() < 0.5) {   // drifting motes inside the cloud
+          const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * f.r;
+          IT.Particles.emit({ x: f.x + Math.cos(a) * d, y: f.y + Math.sin(a) * d, z: 10, n: 1, ramp: 'gold', speed: 8, up: 18, spread: 6, life: 1.4, rest: 2 });
+        }
       } else if (f.k === 'pillar' && age < 0.5) {
         ddisc(R, x, y, f.r / R.P * (0.5 + age), '#ff9a30', 0.5 * (1 - age * 2));
       } else if (f.k === 'ping') {

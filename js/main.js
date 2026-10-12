@@ -62,7 +62,9 @@
     }
     const lo = IT.Loadout.normalize(scn ? pr.lo : opts.loadout);
     const map = IT.Maps.get((scn ? pr.sc.map : opts.map) || 'grounds');
-    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: IT.Ranked.worldFog(opts, scn ? pr : null), autoAttack: set.autoAttack });
+    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: IT.Ranked.worldFog(opts, scn ? pr : null), autoAttack: set.autoAttack, tod: scn ? 'day' : opts.tod });
+    // v6 day / night: Free Play takes opts.tod (Day / Night / Cycle); scenario runs read IT.DayNight.SCENARIO at every scenario start
+    if (IT.DayNight) IT.DayNight.attach(w, { tod: scn ? 'day' : opts.tod });
     const sp = map.spawns.hero;
     const hero = IT.Hero.create(w, lo, sp.x, sp.y);
     g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv, run, menu: false, quiet: false, failAt: {} };

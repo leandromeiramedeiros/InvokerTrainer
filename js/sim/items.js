@@ -307,18 +307,40 @@
     },
   });
 
-  // ---- Dust of Appearance: reveals (and slows) every enemy in `radius` for `duration` -> Status.revealed(e); invisible units become visible.
+  // ---- Dust of Appearance (KV 6957: radius 1050, duration 12, movespeed -20, damage 25, linger_duration 8; DLL has a separate
+  // modifier_item_dustofappearance_thinker = the area, and modifier_item_dustofappearance = the per-unit debuff).
+  // Cast: every enemy within `radius` gets the debuff (`revealed` + slow, `duration` s from application, once). A dust-cloud thinker then
+  // stays at the cast point for `linger_duration` s: an enemy that ENTERS the radius while it lives (and was not hit yet) gets the debuff too
+  // (its own full `duration` from entry); after that the area is gone and a late arrival is untouched. `damage` (25 magical) is dealt once per
+  // unit per cast on application, only to a unit that was invisible (Shadow Blade / Ghost Walk, not already revealed) at that moment.
+  function dustApply(w, c, u, dur, slow, dmg) {
+    const wasHidden = S.hidden(u);
+    S.add(w, u, 'revealed', dur, { src: c.id, ability: 'dust', pierce: true });
+    if (slow > 0) S.add(w, u, 'slow', dur, { src: c.id, ability: 'dust', pierce: true, data: { pct: slow } });
+    w.emit('hit', { src: c.id, target: u.id, ability: 'dust' });
+    if (wasHidden && dmg > 0) IT.Combat.damage(w, { src: c.id, target: u, ability: 'dust', type: 'magical', amount: dmg });
+    w.emit('fx', { name: 'dustReveal', x: u.x, y: u.y, unit: u.id, dur });
+  }
   item('dust', {
     target: 'none',
     cast(w, c) {
-      const R = iv('dust', 'radius'), dur = iv('dust', 'duration'), slow = -iv('dust', 'movespeed') / 100;
-      const hit = enemies(w, c, u => dist(c, u) <= R + (u.radius || 0));
-      w.emit('fx', { name: 'dustBlast', x: c.x, y: c.y, r: R, unit: c.id, dur });
-      for (const u of hit) {
-        S.add(w, u, 'revealed', dur, { src: c.id, ability: 'dust', pierce: true });
-        if (slow > 0) S.add(w, u, 'slow', dur, { src: c.id, ability: 'dust', pierce: true, data: { pct: slow } });
-        w.emit('hit', { src: c.id, target: u.id, ability: 'dust' });
-      }
+      const R = iv('dust', 'radius'), dur = iv('dust', 'duration'), lin = iv('dust', 'linger_duration'), slow = -iv('dust', 'movespeed') / 100, dmg = iv('dust', 'damage');
+      const cx = c.x, cy = c.y, team = c.team, id = c.id, done = new Set();
+      const inR = u => Math.hypot(u.x - cx, u.y - cy) <= R + (u.radius || 0);
+      w.emit('fx', { name: 'dustBlast', x: cx, y: cy, r: R, unit: id, dur, linger: lin });
+      for (const u of enemies(w, c, inR)) { done.add(u.id); dustApply(w, c, u, dur, slow, dmg); }
+      if (!(lin > 0)) return;
+      w.thinker({
+        x: cx, y: cy, team, ability: 'dust', radius: R,
+        upd(w2, e) {
+          if (e.age >= lin) return true;
+          const src = w2.get(id) || { id, team, x: cx, y: cy };
+          for (const u of w2.query(q => UNITS[q.kind] && q.team !== team && !done.has(q.id) && inR(q))) {
+            done.add(u.id); dustApply(w2, src, u, dur, slow, dmg);
+          }
+          return false;
+        },
+      });
     },
   });
 
