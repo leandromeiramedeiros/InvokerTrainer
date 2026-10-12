@@ -41,7 +41,7 @@ test('defs: range / mana / cooldown come from item KV', () => {
   assert.equal(IT.Abilities.get('bkb').cooldown(w, h), 95);
 });
 
-test('refresher resets spells, items (not itself) and invoke; double sun strike', () => {
+test('refresher resets spells + invoke only (v6 #35: never items); double sun strike', () => {
   const { w, h, dummy, run, evs, orbs } = mk(['refresher', 'bkb']);
   const d = dummy(300, 0);
   orbs('EEE'); h.mana = h.maxMana;
@@ -52,7 +52,7 @@ test('refresher resets spells, items (not itself) and invoke; double sun strike'
   h.cd.bkb = 50; h.items[1].cd = 50;
   assert.ok(cast(w, h, 'refresher'));
   run(2);
-  assert.equal(h.cd.sunstrike, 0); assert.equal(h.cd.bkb, 0); assert.equal(h.items[1].cd, 0); assert.equal(h.inv.invokeCd, 0);
+  assert.equal(h.cd.sunstrike, 0); assert.ok(h.cd.bkb > 49 && h.items[1].cd > 49); assert.equal(h.inv.invokeCd, 0);   // item cooldowns untouched
   assert.ok(h.cd.refresher > 170);
   assert.equal(evs('fx', e => e.name === 'refresh').length, 1);
   assert.ok(cast(w, h, 'sunstrike', { x: d.x, y: d.y }), 'second cast works');

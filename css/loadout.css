@@ -137,7 +137,7 @@
 .fp .ipool{grid-template-columns:repeat(auto-fill,minmax(7.4em,1fr));gap:.3em}
 .fp .iopt{padding:.2em .35em;gap:.35em;font-size:.7em;line-height:1.1}
 .fp .iopt .ico{flex:none;width:1.9em;height:1.9em}
-.fp .iopt[draggable=true]{cursor:grab}
+.fp .iopt:not(.on):not(.dis){cursor:grab}
 
 /* ---- v6 WP9 ornaments (borders reset border-image, re-apply) */
 .lo-head h1{margin-left:calc(14*var(--fs));margin-right:calc(14*var(--fs))}
@@ -147,3 +147,16 @@
 .fp-foot .btn.go{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round}
 .combocard{border-image:var(--orn-frame-gold) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
 .islot,.iopt{image-rendering:pixelated}
+
+/* orb rows: same pip style as the HUD (shared js/ui/orbpips.js); locked = level gate not reached yet */
+.orbrow .pips{display:flex;gap:2px;flex:1;min-width:0}
+.orbrow .pips .op{flex:1;max-width:none;min-width:0;height:.9em;border-width:2px}
+.orbrow .pips .op.lock{opacity:.4}
+
+/* pointer drag ghost for the items tab (follows the mouse; never receives events) */
+.idrag{position:fixed;z-index:60;width:3.4em;height:3.4em;margin:-1.7em 0 0 -1.7em;pointer-events:none;background:#0b0618;border:2px solid var(--gold);box-shadow:0 0 .9em var(--gold);image-rendering:pixelated}
+.idrag canvas,.idrag .ico{width:100%;height:100%;display:block}
+.items.dragging{cursor:grabbing;user-select:none}
+.items.rm .icat,.items.rm .islotbox{outline:0}
+.items.rm.dragging .icat{border-color:var(--bad);background:rgba(255,90,106,.08)}
+.fp .iopt{user-select:none}

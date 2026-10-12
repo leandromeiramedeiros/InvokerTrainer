@@ -84,15 +84,15 @@ test('persistence: profile, record, rank up/down, floor at 0, history cap', () =
   R.reset();
 });
 
-test('run: 10 s countdown freezes the world, then play; solving moves on to the next scenario', () => {
+test('run: 12 s countdown freezes the world, then play; solving moves on to the next scenario', () => {
   R.reset();
   const m = mk(), { run, w } = m;
   assert.equal(run.phase, 'countdown'); assert.equal(w.paused, true);
   let hud = R.hud(w);
-  assert.equal(hud.phase, 'countdown'); assert.equal(hud.countdown, 10); assert.equal(hud.score, 0);
+  assert.equal(hud.phase, 'countdown'); assert.equal(hud.countdown, 12); assert.equal(hud.score, 0);
   const t0 = w.t; w.step(); assert.equal(w.t, t0);
   for (let i = 0; i < 31; i++) run.tick(1 / 30);
-  assert.equal(R.hud(w).countdown, 9);
+  assert.equal(R.hud(w).countdown, 11);
   assert.equal(run.runLeft, null);   // ranked is turn-based (8 scenarios), no run clock
   thaw(run);
   assert.equal(run.phase, 'play'); assert.equal(w.paused, false);
@@ -166,8 +166,8 @@ test('practice: difficulty fixed, endless, no score; sandbox scenario: no countd
   assert.equal(hp.score, null); assert.equal(hp.runLeft, null); assert.equal(hp.phase, 'countdown'); assert.equal(hp.countdown, 3);
   const s = mk({ mode: 'sandbox', scenario: 'sun_snipe' });
   assert.equal(s.run.pr.sc.id, 'sun_snipe');
-  // v6: nothing is pre-invoked, so a fixed sandbox scenario gets the full 10 s countdown to invoke (no time limit after it)
-  assert.equal(s.run.phase, 'countdown'); assert.equal(R.hud(s.w).countdown, 10);
+  // v6: nothing is pre-invoked, so a fixed sandbox scenario gets the full 12 s countdown (v6 intro) to invoke (no time limit after it)
+  assert.equal(s.run.phase, 'countdown'); assert.equal(R.hud(s.w).countdown, 12);
   thaw(s.run);
   assert.equal(s.run.phase, 'play'); assert.equal(s.w.paused, false);
   assert.equal(R.hud(s.w).timeLeft, null);

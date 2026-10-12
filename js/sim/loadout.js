@@ -3,7 +3,7 @@
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  const BOOTS = ['boots', 'travels'];
+  const BOOTS = ['travels', 'boots'];   // priority order: Travel replaces Speed (they never stack)
   const MAX_ITEMS = 6;
   const SHARD_SPELLS = ['ghostwalk', 'emp', 'sunstrike'];   // Aghanim's Shard: pick ONE upgraded spell
 
@@ -23,6 +23,13 @@
   // Auto-fixes anything illegal (plan G2-G4): orbs clamped to the gate (orb level N needs hero level >= 2N-1 until lvl 13) and
   // to the single point pool (unspent points just bank), max 7 per orb; talents limited to what the level allows AND to the pool
   // points the orbs left over (1 point each). A loadout without a talents list gets all 8 at level 30.
+  // v6 #37: boots do not stack -- Boots of Travel present => Boots of Speed is dropped (keeps the first of any extra boots).
+  function fixItems(items) {
+    const a = Array.isArray(items) ? items.filter(x => typeof x === 'string') : [];
+    const keep = BOOTS.find(b => a.includes(b));
+    let seen = false;
+    return a.filter(x => { if (!BOOTS.includes(x)) return true; if (x !== keep || seen) return false; seen = true; return true; }).slice(0, MAX_ITEMS);
+  }
   function normalize(l) {
     l = l || {};
     const lvl = Math.max(1, Math.min(IT.RULES.maxHeroLevel, Math.round(Number(l.heroLevel != null ? l.heroLevel : l.lvl != null ? l.lvl : IT.RULES.maxHeroLevel)) || 1));
@@ -38,7 +45,7 @@
       scepter, scepterOrb: scepter ? scepterOrb : null,
       shard: !!l.shard || SHARD_SPELLS.includes(l.shard),
       shardSpell: (l.shard || l.shardSpell) ? (SHARD_SPELLS.includes(l.shardSpell) ? l.shardSpell : SHARD_SPELLS.includes(l.shard) ? l.shard : null) : null,
-      items: Array.isArray(l.items) ? l.items.filter(x => typeof x === 'string').slice(0, MAX_ITEMS) : [],
+      items: fixItems(l.items),
       skin: l.skin || IT.GAME.SKINS[0],
       preset: l.preset || 'standard',
       mode: l.mode || 'free',
@@ -69,5 +76,5 @@
     return { ok: errors.length === 0, errors };
   }
 
-  IT.Loadout = { default: def, normalize, validate, fixPreinvoked, ctx: l => IT.Values.ctx(l), MAX_ITEMS, BOOTS, SHARD_SPELLS };
+  IT.Loadout = { default: def, normalize, fixItems, validate, fixPreinvoked, ctx: l => IT.Values.ctx(l), MAX_ITEMS, BOOTS, SHARD_SPELLS };
 })(typeof window !== 'undefined' ? window : globalThis);

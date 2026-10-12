@@ -166,11 +166,8 @@
       let beadNew = null;
       for (const k of ORBS) {
         const v = lo.orbs[k], why = whyNotPlus(k), hasSc = scNow === k;
-        const pips = h('div', { class: 'pips' });
-        for (let n = 1; n <= R.orbMax; n++) {
-          const g = R.orbGate(n);
-          pips.appendChild(h('i', { class: 'pip ' + k + (n <= v ? ' on' : '') + (g > lo.heroLevel ? ' lock' : ''), 'data-tip': t('tip.gate', { n, lvl: g }) }));
-        }
+        const pips = IT.UI.orbPips.el(h, k, IT.UI.orbPips.model(v, 0, R.orbMax), (i, p) => { i.setAttribute('data-tip', t('tip.gate', { n: p.n, lvl: R.orbGate(p.n) })); if (R.orbGate(p.n) > lo.heroLevel) i.classList.add('lock'); });
+        pips.classList.add('pips');
         const bead = h('i', { class: 'bead ' + k + (hasSc ? ' on' : ''), 'data-tip': t('lo.bead') });
         if (hasSc && prevScOrb !== k) beadNew = bead;
         orbBox.appendChild(h('div', { class: 'orbrow ' + k },
@@ -357,46 +354,75 @@
       if (rest.length > 6) { flash(t('tip.itemsFull')); return false; }
       lo.items = rest; return true;
     }
-    let dragging = null;   // { from: slot index } | { id: catalogue item }
-    const endDrag = () => { dragging = null; itemBox.classList.remove('dragging'); for (const e of itemBox.querySelectorAll('.over,.dragsrc')) e.classList.remove('over', 'dragsrc'); };
-    const dragStart = (ev, info, srcEl) => {
-      dragging = info; itemBox.classList.add('dragging'); srcEl.classList.add('dragsrc');
-      try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', info.id || ('slot' + info.from)); } catch (e) { /* ignore */ }
+    // Pointer drag via the shared state machine (IT.UI.ItemDrag, mode 'loadout'): slot -> slot reorders, catalogue -> slot adds, slot -> pane (not a slot) removes.
+    // Catalogue entries are only sources (never targets) so the list can never be reordered. HTML5 drag-and-drop is not used (the app blocks dragstart).
+    const ID = IT.UI.ItemDrag;
+    let ghost = null;
+    const dragClear = () => {
+      if (ghost) { ghost.remove(); ghost = null; }
+      itemBox.classList.remove('dragging');
+      for (const e of itemBox.querySelectorAll('.over,.dragsrc')) e.classList.remove('over', 'dragsrc');
     };
-    function dropRemove(ev) {   // a slot item dropped on anything that is not a slot removes it
-      const d = dragging; if (!d || d.from == null) return;
-      ev.preventDefault(); endDrag();
-      if (d.from < lo.items.length) { lo.items.splice(d.from, 1); changed(); }
-    }
+    const hitItem = (x, y) => {
+      const e = document.elementFromPoint(x, y), sl = e && e.closest ? e.closest('.islot') : null;
+      if (sl) return { kind: 'slot', i: +sl.getAttribute('data-i') };
+      const pane = itemBox.closest('.pane');
+      return pane && e && pane.contains(e) ? { kind: 'bin' } : null;
+    };
+    const dm = ID.create({
+      canDrag: src => src.kind === 'slot' ? src.i < lo.items.length : !lo.items.includes(src.id),
+      onStart: src => {
+        const id = src.kind === 'slot' ? lo.items[src.i] : src.id;
+        itemBox.classList.add('dragging');
+        const q = src.kind === 'slot' ? itemBox.querySelector('.islot[data-i="' + src.i + '"]') : itemBox.querySelector('.iopt[data-id="' + id + '"]');
+        if (q) q.classList.add('dragsrc');
+        ghost = h('div', { class: 'idrag' }, icon(id)); document.body.appendChild(ghost);
+      },
+      onOver: tg => {
+        for (const e of itemBox.querySelectorAll('.over')) e.classList.remove('over');
+        if (tg && tg.kind === 'slot') { const q = itemBox.querySelector('.islot[data-i="' + tg.i + '"]'); if (q) q.classList.add('over'); }
+        itemBox.classList.toggle('rm', !!tg && tg.kind === 'bin' && dm.src && dm.src.kind === 'slot');
+      },
+      onClick: src => {
+        if (src.kind === 'slot') { if (src.i < lo.items.length) { lo.items.splice(src.i, 1); changed(); } return; }
+        if (lo.items.includes(src.id)) lo.items = lo.items.filter(x => x !== src.id); else if (!addItem(src.id)) return;
+        changed();
+      },
+      onDrop: (src, tg, act) => {
+        dragClear();
+        if (act.type === 'swap') moveSlot(act.from, act.to);
+        else if (act.type === 'remove') { if (act.from < lo.items.length) lo.items.splice(act.from, 1); else return; }
+        else if (act.type === 'add') { if (!addItem(act.id, act.at)) return; }
+        else return;
+        changed();
+      },
+      onCancel: dragClear,
+    }, 'loadout');
+    const dbegin = ID.bind(dm, {
+      win: window, doc: document, hit: hitItem, locked: () => false, end: dragClear,
+      moved: (x, y) => { if (ghost) { ghost.style.left = x + 'px'; ghost.style.top = y + 'px'; } },
+    });
+    const press = (src, ev) => { if (ev.button === 0) { ev.preventDefault(); dbegin(src, ev); } };
     function renderItems() {
       itemBox.textContent = '';
       const slots = h('div', { class: 'islots' });
       for (let i = 0; i < 6; i++) {
         const id = lo.items[i], key = slotKey(i);
         slots.appendChild(h('div', {
-          class: 'islot' + (id ? ' full' : ''), role: 'button', tabindex: '0', draggable: id ? 'true' : null,
+          class: 'islot' + (id ? ' full' : ''), role: 'button', tabindex: '0', 'data-i': String(i),
           'data-tip': id ? t('item.' + id) + ' (' + key + '). ' + t('lo.itemDrag') : t('lo.itemSlotKey', { n: i + 1, key }),
-          onclick: () => { if (id) { lo.items.splice(i, 1); changed(); } },
+          onmousedown: ev => { if (id) press({ kind: 'slot', i }, ev); },
           onkeydown: ev => { if (id && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Delete')) { ev.preventDefault(); lo.items.splice(i, 1); changed(); } },
-          ondragstart: ev => { if (id) dragStart(ev, { from: i }, ev.currentTarget); },
-          ondragend: endDrag,
-          ondragover: ev => { if (dragging) { ev.preventDefault(); ev.currentTarget.classList.add('over'); } },
-          ondragleave: ev => ev.currentTarget.classList.remove('over'),
-          ondrop: ev => {
-            ev.preventDefault(); ev.stopPropagation();
-            const d = dragging; endDrag(); if (!d) return;
-            if (d.from != null) moveSlot(d.from, i); else if (!addItem(d.id, i)) return;
-            changed();
-          },
         }, id ? icon(id) : null, h('span', { class: 'skey', text: key })));
       }
       const pool = h('div', { class: 'ipool' });
       for (const id of GM.ITEMS_MAIN.concat(GM.ITEMS_EXTRA)) {
         const on = lo.items.includes(id), full = !on && lo.items.length >= 6;
         pool.appendChild(h('button', {
-          type: 'button', class: 'iopt' + (on ? ' on' : '') + (full ? ' dis' : ''), 'data-tip': full ? t('tip.itemsFull') : t('item.' + id), draggable: on ? null : 'true',
-          ondragstart: ev => dragStart(ev, { id }, ev.currentTarget), ondragend: endDrag,
-          onclick: () => {
+          type: 'button', class: 'iopt' + (on ? ' on' : '') + (full ? ' dis' : ''), 'data-id': id, 'data-tip': full ? t('tip.itemsFull') : t('item.' + id),
+          onmousedown: ev => press({ kind: 'cat', id }, ev),
+          onclick: ev => {   // keyboard activation only (a mouse click is handled by the drag machine on release)
+            if (ev.detail) return;
             if (on) lo.items = lo.items.filter(x => x !== id);
             else if (!addItem(id)) return;
             changed();
@@ -404,13 +430,7 @@
         }, icon(id), h('span', { text: t('item.' + id) })));
       }
       itemBox.appendChild(h('div', { class: 'islotbox' }, slots));
-      itemBox.appendChild(h('div', { class: 'icat', ondragover: ev => { if (dragging && dragging.from != null) ev.preventDefault(); }, ondrop: dropRemove }, pool));
-      const pane = itemBox.closest('.pane');
-      if (pane && !pane._dnd) {
-        pane._dnd = true;
-        pane.addEventListener('dragover', ev => { if (dragging && dragging.from != null) ev.preventDefault(); });
-        pane.addEventListener('drop', dropRemove);
-      }
+      itemBox.appendChild(h('div', { class: 'icat' }, pool));
     }
 
     // ---- enemies (Free Play): one row per enemy = skin picker + difficulty + remove; max EnemyCard.MAX. They are on the map at the start.

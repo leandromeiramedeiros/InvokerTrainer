@@ -153,3 +153,12 @@
 .sti i{position:absolute;left:0;bottom:-.14em;height:.12em;max-width:100%;background:#e8e8f0}
 .hunit .hmid{min-height:16.65em}
 .hunit .hstrip{width:auto;align-self:flex-start;margin-top:.5em}
+
+/* orb level pips (Dota style) along the bottom edge of the Q/W/E icons: lit = orb colour, unlit dim, Scepter = extra gold-ringed pip */
+.hbtn .opips{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;gap:.15em;padding:.2em .25em;background:#000b;z-index:2;pointer-events:none}
+.op{flex:1;max-width:.62em;height:.5em;background:#0b0618;border:1px solid #4a3a78;box-sizing:border-box}
+.opips.quas .op.on{background:var(--q);border-color:var(--q);box-shadow:0 0 .3em var(--q)}
+.opips.wex .op.on{background:var(--w);border-color:var(--w);box-shadow:0 0 .3em var(--w)}
+.opips.exort .op.on{background:var(--e);border-color:var(--e);box-shadow:0 0 .3em var(--e)}
+.op.sc{border-color:var(--gold)!important;margin-left:.2em;flex:none;width:.5em;transform:rotate(45deg)}
+.op.sc.on{background:var(--gold)!important;box-shadow:0 0 .35em var(--gold)!important}

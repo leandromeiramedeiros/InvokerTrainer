@@ -4,7 +4,7 @@
 //   { id, level 1..10 (ranked ramp; tier 1..3 derives from it), tags, map, name, flair, desc, win, lose?, par (s, a clean run),
 //     hero, units, obj, fail, steps, rand, gate?, towerHp?, limit? (s, overrides par x tier timer) }
 //   hero   = { lvl, style 'qe'|'qw', items:[ids], scepter:orb, shard:spell, at:<spot> (default: the map spawn) }
-//            v6: nothing is pre-invoked (the 10 s countdown is for invoking), fog of war is always on, every hero carries boots (see BOOTS below)
+//            v6: nothing is pre-invoked (the 12 s intro countdown is for invoking), fog of war is always on, every hero carries boots (see BOOTS below)
 //   spot   = { dx, dy } offset | { where:[tags], not:[tags], d:[min,max], clear, has:{spot}, beyond:'gate', i, ox, oy, towers }
 //            | { tower:{team,i}, ahead, side } | { struct:{kind,team,i}, ahead, side } | { gate:true, ahead, side } | { of:k, dx, dy, ahead, side }
 //            map arena tags: open highground lowground river tower choke fog pit; relative: high low level hidden seen dtower rtower
@@ -18,6 +18,7 @@
 //   fail   = subset of: time died cross (a foe reaches the gate) seen (an enemy notices you before your first hit) method escaped caught tower
 //   steps  = [{ a: spell|item|'attack'|'move', at: 'd0'|'d1'|'mid'|'self'|'lead'|'tower', w: wait s }]  the STEP-BY-STEP HUD + the test bot script
 //   rand   = { pick: seeded choice among the best n arenas, jit: +-units of seeded jitter }
+//   focus  = [areas the intro camera tour shows: 'pit' | 'gate' | 'tower'];  reveal (set below) = start reveal at hard / bambam too
 // Legacy 13 (S(...) below, inline texts) keep their ids, hp and solver scripts; they get a level, a map and arena-relative spots.
 (function (G) {
   'use strict';
@@ -306,6 +307,11 @@
     const it = (s.hero.items || []).filter(x => x !== 'boots' && x !== 'travels');
     s.hero = Object.assign({}, s.hero, { items: it.concat(TRAVELS(s) ? 'travels' : 'boots').slice(-6) });
   }
+
+  // ---- v6 item 39: reveal = the start reveal (a Sun-Strike-shaped vision circle on each foe unseen at the start) also at hard / bambam.
+  //      ian / easy / common always reveal; at hard / bambam only these snipe / prediction scenarios do (Ranked.revealOn).
+  const REVEAL = ['sun_flee', 'uphill_snipe', 'sun_snipe', 'fog_ambush', 'blink_fog'];
+  for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)
   IT.SCENARIOS.get = id => IT.SCENARIOS.find(s => s.id === id) || null;

@@ -1,6 +1,6 @@
 // Ranked / Combo Practice / scenario sandbox: scoring, rating, run state machine, scenario swap + objectives. Owner: S3.
 // Pure (no DOM). Persistent rating lives in localStorage 'it2.rank' (guarded; in-memory fallback).
-// Flow of a scenario run: countdown (world frozen) -> play (sim time) -> result (frozen) -> next scenario.
+// Flow of a scenario run: countdown (world frozen; v6 item 13: the 12 s intro = briefing + camera tour) -> play (sim time) -> result (frozen) -> next scenario.
 // main.js drives tick(realDt) while frozen; the 'ranked' sim system drives it per step while playing.
 (function (G) {
   'use strict';
@@ -8,7 +8,7 @@
   const KEY = 'it2.rank', IKEY = 'it2.inf';
   // playtest 2: the result card holds >= RESULT_MIN s, then any key / click continues (run.cont), else it auto-continues RESULT_AUTO s later
   const RESULT_MIN = 1.0, RESULT_AUTO = 3.0;
-  const TURNS = 8, COUNTDOWN = 10, SOLO_COUNTDOWN = 3, RESULT_HOLD = RESULT_MIN + RESULT_AUTO, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
+  const TURNS = 8, COUNTDOWN = 12, SOLO_COUNTDOWN = 3, RESULT_HOLD = RESULT_MIN + RESULT_AUTO, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
   // v6: tags of the "fun" scenarios (fog, invisibility, river, prediction, vision); a ranked run gives at least FUN_TURNS of its turns to them
   const FUN_TAGS = ['fog', 'invisible', 'river', 'prediction', 'vision'], FUN_TURNS = 4;
   const isFun = sc => (sc.tags || []).some(t => FUN_TAGS.indexOf(t) >= 0);
@@ -514,6 +514,52 @@
   const heroSeen = w => { const h = w.hero; if (!h) return false; return IT.Vision && IT.Vision.teamSees && w.map ? IT.Vision.teamSees(w, 1, h) : !IT.Status.has(h, 'ghost'); };
   const SEARCH_R0 = 150, SEARCH_GROW = 110, SEARCH_MAX = 900;   // chaser search ring around the last seen spot: radius 150 + 110/s, max 900
 
+  // ---------------------------------------------------------------- v6 items 13 + 39: the pre-round intro (pure data + world reads)
+  // Countdowns >= INTRO_MIN s get a camera tour (stops on a timeline scaled to the countdown, 12 s nominal): hero (hold) -> each foe group
+  // the player may see (centroid, nearest first) -> the gate -> sc.focus areas -> back to the hero, arriving before the round starts.
+  // Item 39: every foe UNSEEN at enter() gets a Sun-Strike-shaped vision reveal (a team-0 thinker, fx 'startReveal') when the tour reaches
+  // it; it lingers REVEAL_LINGER s of play. Mandatory at ian / easy / common; at hard / bambam only when sc.reveal is true. An unseen foe
+  // without a reveal is never toured (the camera would give its spot away).
+  const INTRO_MIN = 5, GROUP_R = 900, TOUR_MAX = 4, REVEAL_LINGER = 1.0, REVEAL_R = 175, REVEAL_VIS = 400;
+  const revealOn = (sc, df) => (df && df.idx != null ? df.idx : 2) <= 2 || sc.reveal === true;
+  function focusSpot(w, f, base) {
+    if (f === 'pit') { const p = pitRegion(w.map); return p ? { x: p.x, y: p.y, r: 380 } : null; }
+    if (f === 'gate') return w.gate ? { x: w.gate.x, y: w.gate.y, r: w.gate.r } : null;
+    if (f === 'tower') { const t = towerOf(w.map, base, { team: 1 }); return t ? { x: t.x, y: t.y, r: 700 } : null; }
+    return null;
+  }
+  // -> { T, t, stops:[{ kind:'hero'|'foes'|'gate'|'focus', x, y, r, ids, t (start), glide (s) }], reveals:[{ id, x, y, at, done }], unseen:[ids], cur, tour }
+  function buildIntro(w, pr, foes, T) {
+    const h = w.hero, sc = pr.sc, k = T / 12, live = foes.filter(e => !e.dead);
+    const unseen = live.filter(e => !e.visible), rev = revealOn(sc, pr.df);
+    const reveals = rev ? unseen.map(e => ({ id: e.id, x: e.x, y: e.y, at: 0, done: false })) : [];
+    const shown = live.filter(e => e.visible || reveals.some(r => r.id === e.id));
+    const groups = [];
+    for (const e of byDist(h, shown)) {
+      const g = groups.find(q => Math.hypot(q.x - e.x, q.y - e.y) < GROUP_R);
+      if (g) { g.ids.push(e.id); g.sx += e.x; g.sy += e.y; g.x = g.sx / g.ids.length; g.y = g.sy / g.ids.length; }
+      else groups.push({ x: e.x, y: e.y, sx: e.x, sy: e.y, ids: [e.id] });
+    }
+    let mid = groups.map(g => ({ kind: 'foes', x: g.x, y: g.y, r: 160, ids: g.ids }));
+    if (w.gate) mid.push({ kind: 'gate', x: w.gate.x, y: w.gate.y, r: w.gate.r, ids: [] });
+    for (const f of sc.focus || []) { const p = focusSpot(w, f, h); if (p) mid.push({ kind: 'focus', focus: f, x: p.x, y: p.y, r: p.r, ids: [] }); }
+    mid = mid.filter((s, i) => !mid.slice(0, i).some(q => Math.hypot(q.x - s.x, q.y - s.y) < 150)).slice(0, TOUR_MAX);
+    const H0 = 1.5 * k, back = T - 2.5 * k, slot = mid.length ? (back - H0) / mid.length : 0, gl = Math.min(1.1 * k, 0.45 * slot);
+    const stops = [{ kind: 'hero', x: h.x, y: h.y, r: 0, ids: [], t: 0, glide: 0 }];
+    mid.forEach((s, i) => stops.push(Object.assign(s, { t: H0 + i * slot, glide: gl })));
+    stops.push({ kind: 'hero', x: h.x, y: h.y, r: 0, ids: [], t: back, glide: 1.2 * k });
+    for (const r of reveals) { const s = stops.find(q => q.ids.indexOf(r.id) >= 0); r.at = s ? s.t + s.glide : H0; }
+    return { T, t: 0, stops, reveals, unseen: unseen.map(e => e.id), cur: -1, tour: true };
+  }
+  // the Sun-Strike-shaped start reveal: team-0 vision at the foe's spot; it ages only in play (the world is frozen in the countdown)
+  function spawnReveal(w, r) {
+    r.done = true;
+    const e = w.get(r.id), x = e && !e.dead ? e.x : r.x, y = e && !e.dead ? e.y : r.y;
+    w.thinker({ x, y, r: REVEAL_R, team: 0, fx: 'startReveal', color: '#ffd24a', vision: REVEAL_VIS, foe: r.id, upd: (w2, t) => t.age >= REVEAL_LINGER - 1e-9 });
+    w.emit('fx', { name: 'startReveal', x, y, r: REVEAL_R });
+    if (IT.Vision && IT.Vision.update && w.map) { IT.Vision.update(w); w._visT = w.t; }
+  }
+
   // ---------------------------------------------------------------- run
   // opts: { mode:'ranked'|'sandbox'|'infinite' (default 'sandbox'; any other name is a neutral untimed-by-turns run, SOLO_COUNTDOWN s), diff:id, scenario:id (sandbox, fixed), rating, seed, skin, runSeconds }
   // 'infinite': bambam scenarios from the hard end of the pool in a seeded shuffled order (a fresh shuffle each lap, harder each lap, twists from the 3rd),
@@ -527,9 +573,9 @@
     const run = {
       mode, ranked, infinite, fixed, rating, rng, lvRng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
       runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
-      pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
+      pr: null, dummies: [], intro: null, result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
-      // v6: a fixed sandbox scenario also gets the full countdown (nothing is pre-invoked: it is the time to invoke)
+      // v6: a fixed sandbox scenario also gets the full countdown (nothing is pre-invoked: it is the time to invoke); item 13: the 12 s intro
       countdown: ranked ? COUNTDOWN : infinite ? INF_COUNTDOWN : fixed && mode === 'sandbox' ? COUNTDOWN : SOLO_COUNTDOWN,
     };
     const DF = () => IT.DIFFICULTY;
@@ -621,7 +667,20 @@
       run.maxLevel = Math.max(run.maxLevel, run.pr.sc.level || 0);
       run.phase = run.countdown > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
       w.paused = run.phase !== 'play';
+      run.intro = run.phase === 'countdown' && run.countdown >= INTRO_MIN ? buildIntro(w, run.pr, run.dummies, run.countdown) : null;
       w.emit('scnStart', { id: run.pr.sc.id, n: run.n, diff: run.pr.df.id });
+      introStep(w);
+    }
+    // advance the intro to the countdown clock: 'tourFocus' for each stop reached (main.js glides the camera, fx.js pulses the focused
+    // foes / gate ring), then the start reveals the tour has reached (all of them once the tour is over / skipped)
+    function introStep(w) {
+      const I = run.intro; if (!I) return;
+      I.t = Math.max(0, run.countdown - run.cd);
+      while (I.tour && I.cur + 1 < I.stops.length && I.stops[I.cur + 1].t <= I.t + 1e-9) {
+        const i = ++I.cur, s = I.stops[i], nx = I.stops[i + 1];
+        w.emit('tourFocus', { i, kind: s.kind, focus: s.focus || null, x: s.x, y: s.y, r: s.r, ids: s.ids.slice(), glide: s.glide, hold: (nx ? nx.t : I.T) - s.t - s.glide, last: !nx });
+      }
+      for (const r of I.reveals) if (!r.done && (!I.tour || r.at <= I.t + 1e-9)) spawnReveal(w, r);
     }
 
     run.frozen = () => run.phase !== 'play';
@@ -839,9 +898,22 @@
 
     run.redo = () => { if (run.w && !run.ended) { enter(run.w); if (run.onSwap) run.onSwap(run); } };   // replay the current scenario
 
-    function go() { const w = run.w; run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', {}); }
+    // round start: the tour ends, pending start reveals appear now (they linger REVEAL_LINGER s of play); main.js snaps the camera onto the hero on 'scnGo'
+    function go() {
+      const w = run.w, I = run.intro;
+      if (I) { I.tour = false; introStep(w); }
+      run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', {});
+    }
     // skip the pre-scenario countdown (any action key / Start button); false if not counting down
     run.skip = () => { if (run.ended || !run.w || run.phase !== 'countdown') return false; go(); return true; };
+    // v6 item 13: end only the camera tour (F1 / center): the camera goes back to the hero, the briefing + countdown keep running
+    run.skipTour = () => {
+      const I = run.intro;
+      if (run.ended || !run.w || run.phase !== 'countdown' || !I || !I.tour) return false;
+      I.tour = false; introStep(run.w); run.w.emit('tourEnd', { skipped: true });
+      return true;
+    };
+    run.touring = () => !!(run.intro && run.intro.tour && run.phase === 'countdown' && !run.ended);
     // playtest 2: leave the result card (any key / click). false while not in 'result' or before RESULT_MIN s have shown it
     run.cont = () => { if (run.ended || !run.w || run.phase !== 'result' || (run.held || 0) < RESULT_MIN) return false; nextScenario(); return true; };
 
@@ -857,7 +929,7 @@
       if (run.phase === 'countdown') {
         const inv = w.hero && w.hero.inv;   // v6: Invoke works during the countdown, so its cooldown ticks too (the world is frozen)
         if (inv && inv.invokeCd > 0) { inv.invokeCd -= dt; if (inv.invokeCd < 1e-9) inv.invokeCd = 0; }
-        run.cd -= dt; if (run.cd <= 0) go();
+        run.cd -= dt; introStep(w); if (run.cd <= 0) go();
       }
       else if (run.phase === 'result') { run.held = (run.held || 0) + dt; run.hold -= dt; if (run.hold <= 0) nextScenario(); }
       else if (run.phase === 'play') { script(w); check(w); }
@@ -892,7 +964,7 @@
   }
 
   IT.Ranked = {
-    TURNS, COUNTDOWN, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
+    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, buildIntro, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     profile, record, reset, load, prepare, pitRegion, inPit, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS,

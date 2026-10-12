@@ -125,6 +125,8 @@
   function selfCast(id, queued) {
     const { w, hero } = In.ctx;
     if (id === 'alacrity') { In.armed = null; issueCast({ type: 'cast', ability: id, target: hero.id, queued: !!queued }); return true; }
+    const idef = IT.Abilities.get(id);
+    if (idef && idef.kind === 'item' && idef.selfCast) { In.armed = null; issueCast({ type: 'cast', ability: id, target: hero.id, queued: !!queued }); return true; }   // Force Staff on yourself
     if (id === 'sunstrike' && cataReady()) { In.armed = null; In._cat = null; issueCast(cataOrder(queued)); return true; }
     if (id === 'blink') {
       const m = w.map, ty = m && m.H ? m.H : hero.y;
@@ -356,7 +358,8 @@
         return;
       }
     }
-    if (isAbilityAction(action) && !opts.hud) {   // double-tap (same key twice within the timeout) = self-cast
+    if (opts.hud && /^item[1-6]$/.test(action) && In.keys.has('Alt')) opts.self = true;   // Alt+click on an item slot = self-cast (self-castable items only)
+    if (isAbilityAction(action) && (!opts.hud || /^item[1-6]$/.test(action))) {   // double-tap (same key / same item slot clicked twice within the timeout) = self-cast
       const now = In.now(), s = S(), prev = In._tap[action];
       if (s.doubleTap && prev && now - prev <= s.doubleTapTimeout * 1000) { opts.self = true; In._tap[action] = 0; } else In._tap[action] = now;
     }

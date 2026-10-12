@@ -335,3 +335,8 @@ bonus_movement_speed 45; dota_english: AGI = 1 AS + armor, INT = 0.1% MR.
 - js/ui/dummychat.js (not owned): the telegraph handler speaks p.say when it is set (a one-line change).
 - tests/scenarios_v5.test.js: the old "foe in the pit" spot assertion now checks the bank spawn plus the juke target in the pit.
 - Bot: pit_trap clears at easy and common on seeds 1-6. hard/bambam sometimes lose (stun bolt), and ian mostly times out.
+
+## v6 items 34/35/37 (items fixes)
+- #34 Force Staff self-cast: `selfCast: true` on the item def (forcestaff only; Eul's is already target 'none'). input.js `selfCast(id)` casts it on the hero (push along facing) for double-tap within `doubleTapTimeout`, Alt+key, HUD slot double-click and Alt(held)+HUD click (`In.keys.has('Alt')`; hud.js untouched). Single press keeps the normal unit-target cast.
+- #35 Refresher = ABILITIES ONLY (CEO rule): clears every spell cd in `hero.cd` + `inv.invokeCd`; item cds (BKB, Blink... and Refresher itself) are never touched. DOTA DISCREPANCY for the CEO: in real Dota 2 item_refresher resets ability AND item cooldowns (all items except itself, Refresher Shard/Orb, a few exceptions), so this is intentionally weaker than Dota (combo `t_refresher_full` etc. still work since they only reuse spells).
+- #37 Boots never stack: `IT.Loadout.fixItems` (inside `normalize`) drops Boots of Speed when Boots of Travel is present (and any duplicate boots); `Loadout.BOOTS` is now priority-ordered ['travels','boots']. `validate` still rejects two boots. Scenario kits already carry exactly one boots (scenarios.js v6 pass); sim `itemStats` counts one (travels > boots).

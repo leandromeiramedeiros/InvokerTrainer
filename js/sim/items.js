@@ -22,13 +22,13 @@
   });
   function item(id, d) { return A.def(id, Object.assign(base(id), d)); }
 
-  // ---- Refresher: reset every spell cd, every item cd except itself, and Invoke.
+  // ---- Refresher (CEO v6 #35): resets ABILITIES only -- every spell cd + Invoke cd. Item cooldowns (incl. itself) are never touched
+  // (real Dota also refreshes items; the CEO rule is abilities only, see DECISIONS.md). `c.cd` mixes spell and item keys: only spell keys clear.
   item('refresher', {
     target: 'none',
     cast(w, c) {
-      for (const k in c.cd) if (k !== 'refresher') c.cd[k] = 0;
+      for (const k in c.cd) { const d = A.get(k); if (d && d.kind === 'spell') c.cd[k] = 0; }
       if (c.inv) c.inv.invokeCd = 0;
-      for (const s of c.items) if (s && s.id !== 'refresher') s.cd = 0;
       w.emit('fx', { name: 'refresh', x: c.x, y: c.y, unit: c.id });
     },
   });
@@ -292,7 +292,7 @@
   // ---- Force Staff: pushes the target `push_length` along its facing over `push_time` (self or any visible unit). The unit can
   // still cast; the push stops at walls (nav slide). Not blocked by BKB (displacement, no src status).
   item('forcestaff', {
-    target: 'unit',
+    target: 'unit', selfCast: true,   // double-tap / Alt+key / Alt+click casts on the hero (input.js selfCast)
     filter(w, c, t) {
       return !!t && !t.dead && !t.building && t.kind !== 'thinker' && t.kind !== 'proj' && !S.has(t, 'lift') &&
         (t.team === c.team || c.team !== 0 || !w.fog || t.visible);

@@ -52,6 +52,26 @@
   // round start (first round, every swap / redo): hard-snap the camera onto the hero's NEW spot; cam.lock is left as is
   function snapCam() { g.cam.setMap(g.w.map); g.cam.snap(g.hero.x, g.hero.y); }
 
+  // v6 item 13: the intro camera tour. Ranked emits 'tourFocus' per stop: a timed glide there (foe / gate / focus stops sit right of
+  // centre, clear of the briefing card on the left; the last stop is the hero, exactly centred). 'tourEnd' (F1 skipped it) glides back
+  // to the hero; 'scnGo' (round start: timer, move / cast / attack skip) snaps onto him.
+  const TOUR_SHIFT = 0.14;   // x view width: a toured spot shows at ~64 % of the screen width
+  function tourWire(w) {
+    w.on('tourFocus', p => {
+      if (!g || g.w !== w || !(p.i > 0)) return;
+      const off = p.kind === 'hero' ? 0 : TOUR_SHIFT * GM.VIEW_W * GM.UNIT_PX;
+      g.cam.glideTo(p.x - off, p.y, Math.max(0.05, p.glide));
+    });
+    w.on('tourEnd', () => { if (g && g.w === w) { g.cam.script = false; g.cam.glideTo(g.hero.x, g.hero.y, 0.5); } });
+    w.on('scnGo', () => { if (g && g.w === w) { g.cam.script = false; g.cam.snap(g.hero.x, g.hero.y); } });
+  }
+  // per frame while frozen / playing: the tour owns the camera (lock / follow ignored); F1 (center: cam.follow) ends only the tour
+  function tourSync() {
+    const r = g && g.run; if (!r || !r.touring) { if (g) g.cam.script = false; return; }
+    if (r.touring() && g.cam.follow && !g.menu) r.skipTour();
+    g.cam.script = r.touring();
+  }
+
   function start(opts) {
     teardown();
     UI.clear(); UI.clearToasts();
@@ -100,6 +120,7 @@
     // scnResult: the between-round result card (js/ui/combobar.js) shows it; no extra toast here (playtest 2)
     const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant, free: !run };
     if (run) {
+      tourWire(w);
       run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout
         g.lo = run.pr.lo; g.nDummies = run.dummies.length;
         IT.Input.cancel(true); aimG.clearRect(0, 0, aimCv.width, aimCv.height);
@@ -130,6 +151,7 @@
     if (!g) return;
     IT.Music && IT.Music.intensity(0);
     IT.Input.unbind(); IT.HUD.unbind();
+    if (IT.Briefing) IT.Briefing.hide();
     if (g.w._stats) g.w._stats.destroy();
     IT.Sfx && IT.Sfx.detach();
     IT.DummyChat && IT.DummyChat.detach();
@@ -316,16 +338,17 @@
         acc += dt;
         while (acc >= w.dt && !w.paused) { g.R.snapshot(); w.step(); acc -= w.dt; }
         if (g.run && (g.run.turns != null ? g.run.turns - g.run.n <= 1 : g.run.infinite && g.run.solved >= 4) && IT.Music) IT.Music.intensity(1);
-        if (!g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
+        if (!g.ended) { tourSync(); g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero); }
       } else if (g.run && !g.menu && !g.ended) {   // countdown / result: sim frozen, camera + inspect stay live
         acc = 0;
         g.run.tick(dt);
-        if (g && !g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
+        if (g && !g.ended) { tourSync(); g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero); }
       }
       if (g && !g.ended && IT.Music) { try { IT.Music.sync(w); } catch (e) { /* audio is optional */ } }   // situation track: countdown / play / escape / lowtime / result
       g.R.render(w.paused ? 1 : acc / w.dt, dt);
       IT.Input.drawAim(aimG);
       if (g) IT.HUD.update(dt);
+      if (g && IT.Briefing) IT.Briefing.update(g.w, dt, !!(g.menu || g.ended));
       dbgT += dt;
       if (g && dbgT > 0.25) { dbgT = 0; dbg.textContent = g.R.showDebug ? debugText() : ''; g.R.stats.max *= 0.5; }
     }
@@ -337,6 +360,7 @@
     for (let i = 0; i < (n || 0); i++) { R.snapshot(); w.step(); }
     R.fogSnap = (n || 0) > 5; R.render(1, 1 / 60); R.fogSnap = false;
     IT.Input.drawAim(aimG); IT.HUD.update(0);
+    if (IT.Briefing) IT.Briefing.update(w, 0, false);
   }
 
   UI.initTip();

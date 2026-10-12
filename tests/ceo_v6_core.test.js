@@ -169,8 +169,8 @@ test('6: nothing is pre-invoked; the hero starts with empty slots', () => {
   assert.deepEqual(m.h.inv.slots.filter(Boolean), []);
 });
 
-test('6: 10 s countdown (ranked + fixed sandbox); invoking does not start it; invokeCd ticks', () => {
-  assert.equal(R.COUNTDOWN, 10);
+test('6: 12 s countdown (ranked + fixed sandbox); invoking does not start it; invokeCd ticks', () => {
+  assert.equal(R.COUNTDOWN, 12);
   for (const mode of ['sandbox', 'ranked']) {
     const m = mode === 'ranked' ? (() => {
       const run = R.create({ mode: 'ranked', diff: 'easy', seed: 3, rating: 1000 }), pr = run.next(), m0 = IT.Maps.get('grounds');
@@ -180,7 +180,7 @@ test('6: 10 s countdown (ranked + fixed sandbox); invoking does not start it; in
     const { run, w, h } = m;
     run.tick(0);
     assert.equal(run.phase, 'countdown', mode);
-    assert.ok(Math.abs(run.cd - 10) < 1e-6, mode + ' cd ' + run.cd);
+    assert.ok(Math.abs(run.cd - 12) < 1e-6, mode + ' cd ' + run.cd);
     for (const ch of IT.GAME.SPELL_ORBS.sunstrike) IT.Invoke.orb(w, h, ch);
     IT.Invoke.invoke(w, h);
     assert.ok(h.inv.slots.includes('sunstrike'), mode + ' invoked during the countdown');

@@ -1,5 +1,5 @@
 'use strict';
-// Modes v4: ranked = fixed 8 scenarios; 10 s pre-scenario countdown that an action can skip.
+// Modes v4: ranked = fixed 8 scenarios; 10 s (v6: 12 s) pre-scenario countdown that an action can skip.
 const test = require('node:test');
 const assert = require('node:assert');
 const load = require('./_load.js');
@@ -21,8 +21,8 @@ function mk(o) {
   return { run, w, ends };
 }
 
-test('countdown is 10 s, frozen, and skip() starts play at once', () => {
-  assert.equal(R.COUNTDOWN, 10);
+test('countdown is 12 s (v6 intro), frozen, and skip() starts play at once', () => {
+  assert.equal(R.COUNTDOWN, 12);
   const { run, w } = mk();
   assert.equal(run.phase, 'countdown'); assert.equal(w.paused, true);
   run.tick(3); assert.equal(run.phase, 'countdown');   // no input = no skip
@@ -32,7 +32,7 @@ test('countdown is 10 s, frozen, and skip() starts play at once', () => {
 });
 
 test('skip() does nothing once ended; ticking alone still finishes the countdown', () => {
-  const a = mk(); a.run.tick(10.1); assert.equal(a.run.phase, 'play');
+  const a = mk(); a.run.tick(12.1); assert.equal(a.run.phase, 'play');
   const b = mk(); b.run.finish('quit'); assert.equal(b.run.skip(), false);
 });
 

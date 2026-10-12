@@ -1,6 +1,8 @@
 // Camera: world-unit top-left (x,y). Edge scroll (window edge via mouse.edge, or canvas edge via mouse.in), arrow keys,
 // optional lock-to-hero, `follow` (center key held), speed scaled by the camSpeed setting.
 // Centering never snaps except centerOn(): glideTo / follow / lock ease with a frame-rate independent exponential (tau ~0.16 s).
+// v6 item 13 (intro tour): glideTo(x, y, dur) = a timed ease-in-out glide over dur s; while cam.script is set (main.js: the tour is
+// running) lock / follow do not pull the view back to the hero.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -37,13 +39,17 @@
     const cy = v => { const m = margins(), lo = -m.t; return IT.U.clamp(v, lo, Math.max(lo, map.H - GM.VIEW_H * P + m.b)); };
     const cam = {
       setMap(m) { map = m; cam.glide = null; cam.hold = false; cam.clamp(); },   // map swap: new bounds
-      x: 0, y: 0, lock: false, follow: false, speed: 2200, edge: 3, glide: null, hold: false, tau: TAU,
+      x: 0, y: 0, lock: false, follow: false, speed: 2200, edge: 3, glide: null, hold: false, tau: TAU, script: false,
       clamp() { cam.x = cx(cam.x); cam.y = cy(cam.y); },
       margins,
       centerOn(x, y) { const m = margins(); cam.glide = null; cam.x = x - m.fx; cam.y = y - m.fy; cam.clamp(); },   // instant (minimap, start): onto the visible-area centre
       // round start / scenario swap: hard snap onto the hero; the next update() keeps it there (no lerp, no edge / arrow pan on that frame), lock / follow untouched
       snap(x, y) { cam.centerOn(x, y); cam.hold = true; },
-      glideTo(x, y) { const m = margins(); cam.glide = { x: cx(x - m.fx), y: cy(y - m.fy) }; },                       // eased
+      glideTo(x, y, dur) {                                                                                              // eased (dur: timed ease-in-out)
+        const m = margins();
+        cam.glide = { x: cx(x - m.fx), y: cy(y - m.fy) };
+        if (dur > 0) Object.assign(cam.glide, { dur, t: 0, x0: cam.x, y0: cam.y });
+      },
       // integer pixel offset of the view in map-pixel space
       get px() { return Math.round(cam.x / P); },
       get py() { return Math.round(cam.y / P); },
@@ -56,7 +62,14 @@
           return false;
         }
         let goal = null;
-        if (hero && (cam.follow || cam.lock)) { const m = margins(); goal = { x: cx(hero.x - m.fx), y: cy(hero.y - m.fy) }; }
+        const tg = cam.glide && cam.glide.dur > 0 ? cam.glide : null;
+        if (tg && (cam.script || !(hero && (cam.follow || cam.lock)))) {   // timed glide: smoothstep-cubic ease from its start point
+          tg.t += dt;
+          const f = Math.min(1, tg.t / tg.dur), e = f < 0.5 ? 4 * f * f * f : 1 - Math.pow(-2 * f + 2, 3) / 2;
+          cam.x = tg.x0 + (tg.x - tg.x0) * e; cam.y = tg.y0 + (tg.y - tg.y0) * e;
+          if (f >= 1) cam.glide = null;
+        }
+        else if (hero && !cam.script && (cam.follow || cam.lock)) { const m = margins(); goal = { x: cx(hero.x - m.fx), y: cy(hero.y - m.fy) }; }
         else if (cam.glide) goal = cam.glide;
         if (goal) {
           const dx = goal.x - cam.x, dy = goal.y - cam.y, d = Math.hypot(dx, dy);

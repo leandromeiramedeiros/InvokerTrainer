@@ -182,10 +182,10 @@ test('splash formatting + share data/filename (pure parts, no DOM)', () => {
   assert.match(IT.UI.Share.filename(), /^invoker-trainer-\d{4}-\d{2}-\d{2}\.png$/);
 });
 
-test('ranked is unaffected: 8 turns, 10 s countdown, rating recorded, no infinite fields', () => {
+test('ranked is unaffected: 8 turns, 12 s countdown, rating recorded, no infinite fields', () => {
   R.reset(); R.resetInfinite();
   const m = mk({ mode: 'ranked' }), { run, w, ends } = m;
-  assert.equal(run.turns, 8); assert.equal(run.infinite, false); assert.equal(R.COUNTDOWN, 10); assert.equal(R.hud(w).countdown, 10);
+  assert.equal(run.turns, 8); assert.equal(run.infinite, false); assert.equal(R.COUNTDOWN, 12); assert.equal(R.hud(w).countdown, 12);
   assert.equal(R.hud(w).cleared, null); assert.equal(R.hud(w).turns, 8);
   for (let i = 0; i < 8; i++) {
     assert.equal(run.ended, false, 'turn ' + i);

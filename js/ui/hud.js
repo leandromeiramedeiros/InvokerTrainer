@@ -18,45 +18,45 @@
     const el = h('div', { class: 'hbtn ' + cls, onmousedown: ev => { ev.preventDefault(); ev.stopPropagation(); if (ev.button === 0 && onclick) onclick(ev); } }, ic, mana, cd, cdn, key, lvl, ch);
     return { el, ic, key, lvl, cdn, cd, mana, ch, id: null };
   }
-  // hero item slot drag: press -> move >5px = drag (swap on release), else click = cast on release
-  function itemDown(i, ev) {
-    if (ev.button !== 0 || !H.c) return;
-    H.drag = { i, x: ev.clientX, y: ev.clientY, go: false, queued: ev.shiftKey, over: null };
-  }
-  function slotAt(ev) {
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    const s = el && el.closest ? el.closest('.hitems [data-slot]') : null;
+  // hero item slot drag: press -> move >5px = drag (swap on release), else click = cast on release. The state machine + its window listeners
+  // (Esc / blur / lost release cancel; nothing is left behind) live in js/ui/itemdrag.js; this is only the HUD glue. It never pauses the sim.
+  function slotAt(x, y) {
+    const el = document.elementFromPoint(x, y), s = el && el.closest ? el.closest('.hitems [data-slot]') : null;
     return s ? +s.getAttribute('data-slot') : null;
   }
-  function itemMove(ev) {
-    const d = H.drag; if (!d || !H.c) return;
-    if (!d.go) {
-      if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 5) return;
-      const it = H.c.hero.items[d.i]; if (!it) return;   // empty slot: stays a click
-      d.go = true;
-      H.refs.items[d.i].el.classList.add('dragsrc');
-      d.ghost = IT.UI.h('div', { class: 'hdrag' }, IT.UI.icon(it.id));
-      H.el.appendChild(d.ghost);
-    }
-    const r = H.el.getBoundingClientRect();
-    d.ghost.style.left = (ev.clientX - r.left) + 'px'; d.ghost.style.top = (ev.clientY - r.top) + 'px';
-    const j = slotAt(ev);
-    if (j !== d.over) {
-      if (d.over != null) H.refs.items[d.over].el.classList.remove('drop');
-      d.over = j;
-      if (j != null && j !== d.i) H.refs.items[j].el.classList.add('drop');
-    }
+  function dragClear() {
+    const d = H.drag; H.drag = null;
+    if (d && d.ghost) d.ghost.remove();
+    for (const g of document.querySelectorAll('.hdrag')) g.remove();
+    if (H.refs && H.refs.items) H.refs.items.forEach(b => b.el.classList.remove('drop', 'dragsrc'));
   }
-  function itemUp(ev) {
-    const d = H.drag; if (!d || ev.button !== 0) return;
-    H.drag = null;
-    const c = H.c; if (!c) return;
-    if (!d.go) { IT.Input.doAction('item' + (d.i + 1), { hud: true, queued: d.queued }); return; }
-    if (d.ghost) d.ghost.remove();
-    if (H.refs.items) H.refs.items.forEach(b => b.el.classList.remove('drop', 'dragsrc'));
-    const j = slotAt(ev);
-    if (j != null && j !== d.i) IT.Items.swap(c.w, c.hero, d.i, j);
+  function dragMachine() {
+    const ID = IT.UI.ItemDrag;
+    H.dm = ID.create({
+      canDrag: src => !!(H.c && H.c.hero.items[src.i]),
+      onStart: src => {
+        const it = H.c.hero.items[src.i];
+        H.refs.items[src.i].el.classList.add('dragsrc');
+        H.drag = { i: src.i, ghost: IT.UI.h('div', { class: 'hdrag' }, IT.UI.icon(it.id)) };
+        H.el.appendChild(H.drag.ghost);
+      },
+      onOver: t => {
+        H.refs.items.forEach(b => b.el.classList.remove('drop'));
+        if (t && t.kind === 'slot' && H.dm.src && t.i !== H.dm.src.i) H.refs.items[t.i].el.classList.add('drop');
+      },
+      onClick: (src, meta) => { if (H.c) IT.Input.doAction('item' + (src.i + 1), { hud: true, queued: !!(meta && meta.shift) }); },
+      onDrop: (src, t, act) => { dragClear(); if (act.type === 'swap' && H.c) IT.Items.swap(H.c.w, H.c.hero, act.from, act.to); },
+      onCancel: dragClear,
+    }, 'game');
+    H.dbegin = ID.bind(H.dm, {
+      win: window, doc: document,
+      hit: (x, y) => { const j = slotAt(x, y); return j == null ? null : { kind: 'slot', i: j }; },
+      locked: () => !!(IT.Input && IT.Input.locked),
+      moved: (x, y) => { const g = H.drag && H.drag.ghost; if (g) { const r = H.el.getBoundingClientRect(); g.style.left = (x - r.left) + 'px'; g.style.top = (y - r.top) + 'px'; } },
+      end: dragClear,
+    });
   }
+  function itemDown(i, ev) { if (H.c && H.dbegin) H.dbegin({ kind: 'slot', i }, ev); }
 
   const ul = (en, pt) => (IT.lang === 'pt' ? pt : en);
 
@@ -569,7 +569,7 @@
     R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
 
     // --- sandbox panel (v6 WP7: fixed-height pane, see H.buildSide)
-    if (ctx.mode === 'sandbox') { R.top.classList.add('sbx'); H.buildSide(ctx, root); }
+    if (H.hasSide(ctx)) { R.top.classList.add('sbx'); H.buildSide(ctx, root); }   // Free Play / Combo Sandbox only: scenarios (ranked / practice) have no side pane
     R.clock = IT.DayNight ? clockEl() : null;   // v6 day / night clock (left of the top strip)
     if (R.clock) root.appendChild(R.clock);
     root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim);
@@ -584,9 +584,8 @@
     if (H.cheatOn) H.buildCheat();
     if (H.statsOn) H.buildLive();
     if (IT.ComboBar) IT.ComboBar.bind(ctx, R.top);
-    const wm = ev => itemMove(ev), wu = ev => itemUp(ev);
-    window.addEventListener('mousemove', wm); window.addEventListener('mouseup', wu);
-    H.off.push(() => { window.removeEventListener('mousemove', wm); window.removeEventListener('mouseup', wu); H.drag = null; });
+    dragMachine();
+    H.off.push(() => { if (H.dbegin) H.dbegin.abort('unbind'); dragClear(); H.dm = H.dbegin = null; });
 
     H.off.push(ctx.w.on('damage', p => {
       const w = ctx.w, s = p.src != null ? w.get(p.src) : null, tg = w.get(p.target);
@@ -620,6 +619,9 @@
   };
   const sbIcon = k => { const s = IT.UI.h('span', { class: 'sbi' }); s.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + SBI[k] + '</svg>'; return s; };
   const SB_FILTERS = ['all', 'basic', 'intermediate', 'advanced', 'items'];
+
+  // pure: the side pane exists only in Free Play (ctx.free = no scenario run); never in ranked / practice scenarios
+  H.hasSide = ctx => !!ctx && ctx.mode === 'sandbox' && !!ctx.free;
 
   H.buildSide = function (ctx, root) {
     const { h } = IT.UI, t = IT.t, In = IT.Input, R = H.refs, S = IT.Settings;
@@ -1002,7 +1004,9 @@
     }
     const eff = hero.ctx.eff;
     for (const [b, k, a] of [[R.q, 'quas', 'orbQ'], [R.w, 'wex', 'orbW'], [R.e, 'exort', 'orbE']]) {
-      setText(b.lvl, String(eff[k]), ca, 'l' + k);
+      setText(b.lvl, '', ca, 'l' + k);   // no corner number: the level is the pip row under the icon
+      const bonus = eff[k] - hero.ctx.orbs[k], pk = hero.ctx.orbs[k] + ':' + bonus;
+      if (ca['pp' + k] !== pk) { ca['pp' + k] = pk; if (b.pips) b.pips.remove(); b.pips = IT.UI.orbPips.el(IT.UI.h, k, IT.UI.orbPips.model(hero.ctx.orbs[k], bonus)); b.el.appendChild(b.pips); }
       setText(b.key, S.label(S.keyOf(a)), ca, 'k' + k);
       b.el.classList.toggle('dim', eff[k] <= 0);
       setTip(b.el, t('orb.' + k) + ' - ' + t('hud.lvl', { n: eff[k] }), ca, 'tp' + k);

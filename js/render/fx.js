@@ -85,6 +85,13 @@
       }
       case 'meteorCancel': endChan(x, y); break;
       case 'sunstrikeBeam': break;
+      case 'startReveal': {   // v6 item 39: Sun-Strike-shaped start reveal (gold beam drop, no damage / shake)
+        const r = p.r || 175;
+        addFx({ k: 'pillar', x, y, r: r * 0.8, dur: 0.5, ramp: 'gold' });
+        addFx({ k: 'wave', x, y, r0: 0.2 * r, r1: 1.2 * r, dur: 0.45, color: '#ffe27a' });
+        burst(x, y, 'gold', 50, { spread: r * 0.7, speed: 50, up: 110, life: 0.8, rest: 3 });
+        break;
+      }
       case 'sunstrikeHit': {
         const r = p.r || 175;
         addFx({ k: 'pillar', x, y, r, dur: 0.55, ramp: 'fire' });
@@ -294,10 +301,15 @@
     const w = R.w;
     w.on('fx', onFx); w.on('damage', onDamage); w.on('order', onOrder); w.on('blink', onBlink); w.on('invoke', onInvoke);
     w.on('bolt', p => { if (p.phase === 'cancel' || p.phase === 'hit' || p.phase === 'blocked') tele.delete(p.unit); });
+    // v6 item 13: the intro camera tour focuses a foe group / the gate / a focus area -> pulse its markers while the camera is on it
+    w.on('tourFocus', p => { tour = p.kind === 'hero' ? null : Object.assign({}, p, { t0: R_.time, w }); });
+    w.on('tourEnd', () => { tour = null; }); w.on('scnGo', () => { tour = null; });
   }
+  let tour = null;                 // the focused tour stop { kind, x, y, r, ids, glide, hold, t0 }
+  const revT = new Map();          // start-reveal thinker id -> render time first drawn (the world is frozen in the countdown, so it animates on render time)
 
   // drop every one-shot / channel / telegraph / damage number / order path (scenario swap, restart)
-  function clear() { fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); }
+  function clear() { tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); }
 
   // ---------- per-frame update ----------
   function update(R, dt) {
@@ -343,6 +355,7 @@
       const c = spellRgb(e), key = e.fx || e.ability;
       let r = Math.min(80, Math.max(26, (e.r || e.radius || 60) / R.P * 1.1)), inten = 0.55;
       if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; inten = 0.25 + 0.5 * clamp(1 - rem, 0, 1); }
+      else if (key === 'startReveal') { r = 80; inten = 0.85 * (1 - clamp((e.age - 0.6) / 0.4, 0, 1)); c[0] = 255; c[1] = 210; c[2] = 90; }
       else if (key === 'bolt') { r = 30; inten = 0.8; }
       else if (key === 'attack') { const g = orbPal(w.byId.get(e.src)).rgb; r = 30; inten = 0.75; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
       else if (key === 'tower') { r = 30; inten = 0.75; const g = e.team === 1 ? [255, 120, 50] : [140, 255, 110]; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
@@ -485,6 +498,22 @@
         }
         case 'chaosmeteor': {
           if (!e.landed) PX.ring(cx, x, y, Math.max(rr, 8), '#ff8a1c', t * 0.2, 3);
+          break;
+        }
+        case 'startReveal': {   // Sun Strike-shaped gold ring + dithered fill + tick marks; fades over the last 40 % of its linger
+          if (!revT.has(e.id)) revT.set(e.id, t);
+          const rt = t - revT.get(e.id), grow = clamp(rt / 0.35, 0, 1), fa = 1 - clamp((e.age - 0.6) / 0.4, 0, 1), pul = 0.5 + 0.5 * Math.sin(t * 6);
+          if (fa <= 0) break;
+          const rg = rr * (1 - (1 - grow) * (1 - grow));
+          cx.globalAlpha = fa; PX.ring(cx, x, y, rg, '#ffe27a', t * 0.15, 3); cx.globalAlpha = 1;
+          dring(R, x, y, rg * 0.98, '#ffb040', 0.55 * fa);
+          dring(R, x, y, rg * (0.55 + 0.1 * pul), '#ffd24a', 0.7 * fa);
+          ddisc(R, x, y, rg, '#ffd24a', (0.1 + 0.06 * pul) * fa);
+          const tk = 3 + pul * 3;
+          cx.fillStyle = '#fff0a0'; cx.globalAlpha = fa;
+          cx.fillRect(Math.round(x) - 1, Math.round(y - rg - tk), 1, tk); cx.fillRect(Math.round(x) - 1, Math.round(y + rg + 1), 1, tk);
+          cx.fillRect(Math.round(x - rg - tk), Math.round(y) - 1, tk, 1); cx.fillRect(Math.round(x + rg + 1), Math.round(y) - 1, tk, 1);
+          cx.globalAlpha = 1;
           break;
         }
         case 'bolt': case 'atos': case 'gleipnir': case 'tornado': case 'deafeningblast': case 'icewall': case 'meteorhammer': case 'stunbolt': break;
@@ -647,6 +676,15 @@
             cx.fillStyle = f > 0.8 ? '#fff6c0' : '#ffb040';
             for (let yy = y - 1; yy > -4; yy -= 2) if (PX.bayer(x + R.camX, yy + R.camY) < f) cx.fillRect(x - (wd >> 1), yy, wd, 1);
           }
+          break;
+        }
+        case 'startReveal': {   // the sky beam: a bright column that thins to a steady shimmer, fading with the ring
+          const rt = revT.has(e.id) ? t - revT.get(e.id) : 0, fa = 1 - clamp((e.age - 0.6) / 0.4, 0, 1);
+          if (fa <= 0) break;
+          const f = rt < 0.4 ? 1 : 0.35 + 0.1 * Math.sin(t * 5), wd = rt < 0.4 ? 3 : 1;
+          cx.fillStyle = rt < 0.25 ? '#fff6c0' : '#ffd24a';
+          for (let yy = y - 1; yy > -4; yy -= rt < 0.4 ? 1 : 2) if (PX.bayer(x + R.camX, yy + R.camY) < f * fa) cx.fillRect(x - (wd >> 1), yy, wd, 1);
+          R.glow(x, y - 4, 16, '#ffd24a', 0.5 * fa);
           break;
         }
         case 'bolt': {
@@ -830,10 +868,36 @@
     dring(R, x, y, r * 0.94, col, 0.16, Math.max(24, Math.round(TAU * r * 0.5)));
   }
 
+  // ---------- intro tour focus pulse (v6 item 13): gate ring / focus area / each focused foe, while the camera is on it ----------
+  function tourPulse(R) {
+    if (!tour || tour.w !== R.w) return;
+    const t = R.time, age = t - tour.t0, dur = Math.max(0.3, tour.glide + tour.hold);
+    if (age > dur + 0.2) return;
+    const fa = clamp(age / 0.3, 0, 1) * (1 - clamp((age - dur) / 0.2, 0, 1)), pul = 0.5 + 0.5 * Math.sin(age * 9);
+    if (tour.kind === 'gate' || tour.kind === 'focus') {
+      const g = tour.kind === 'gate' ? R.w.gate || tour : tour, x = pxs(R, g.x), y = pys(R, g.y), r = (g.r || 200) / R.P;
+      const col = tour.kind === 'gate' ? (g.color || GATE_COL) : '#ffd24a';
+      dring(R, x, y, r + 1 + pul * 3, col, 0.9 * fa); dring(R, x, y, r * (1 - 0.25 * ((age * 0.8) % 1)), col, 0.45 * fa);
+      return;
+    }
+    for (const id of tour.ids || []) {
+      const e = R.w.byId.get(id); if (!e || e.dead || !UD().visible(R, e)) continue;
+      R.interp(e);
+      const x = pxs(R, R.ix), y = pys(R, R.iy) - 6, r = 11 + pul * 4, k = Math.round(r * 0.45);
+      dring(R, x, y, r, '#ff4a6a', 0.85 * fa); dring(R, x, y, r + 3 + pul * 2, '#ffd24a', 0.4 * fa);
+      R.cx.globalAlpha = fa; R.cx.fillStyle = '#ff4a6a';   // corner brackets
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) { const bx = Math.round(x + sx * (r + 4)), by = Math.round(y + sy * (r + 4)); R.cx.fillRect(Math.min(bx, bx - sx * k), by, k, 1); R.cx.fillRect(bx, Math.min(by, by - sy * k), 1, k); }
+      R.cx.globalAlpha = 1;
+      const sx = pxs(R, R.ix), sy = pys(R, R.iy);
+      if (sx < 0 || sy < 0 || sx >= R.VW || sy >= R.VH) R.edgeArrow(sx, sy, '#ff4a6a', '!');
+    }
+  }
+
   // ---------- HUD pass (after lighting) ----------
   function hud(R) {
     const w = R.w, cx = R.cx, t = R.time, VW = R.VW, VH = R.VH;
     gateLine(R);
+    tourPulse(R);
     // damage numbers
     for (const q of texts) {
       const age = (t - q.t0) / 1.0, e = w.byId.get(q.target);

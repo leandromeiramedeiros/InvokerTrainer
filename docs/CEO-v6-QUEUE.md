@@ -5,13 +5,14 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 ## Status legend: [ ] pending  [~] in progress  [x] done (commit)
 
-### P0 (next batch)
-- [ ] #31 Item drag/drop: in-game drag FREEZES the game; loadout drag glitches. + #36 loadout: reorder the 6 slots, drag from the list into slots and out to remove; the list itself is not reorderable. State machine + tests. (sonnet; hud.js item drag, loadout.js items widget, input.js guards)
-- [ ] #34 Force Staff self-cast: double-click the item / Alt+click = self-cast. (sim items.js + input.js)
-- [ ] #35 Refresher refreshes ONLY abilities (all), NOT items. (items.js + test)
-- [ ] #37 Boots don't stack: Travel replaces brown boots (loadout, scenario kits, sim stats). (loadout.js/sim loadout.js/items.js/scenarios kits)
-- [ ] #38 Scenarios have NO side pane; side pane is Free Play only. (hud.js buildSide gate)
-- [ ] #13 Intro tour + animated briefing (12 s, camera glides to enemies/gate/focus, cancel rules, F1 skips tour) + #39 Sun-Strike-shaped start reveal on unseen enemies (lingers ~1 s after start; mandatory at Ian/Easy/Normal, per scenario at Hard/Bambam; crowded tree pathing at harder tiers). (opus; ranked.js phase, camera.js, new ui/briefing.js, fx)
+### P0 (done in 2nd P0 commit unless marked pending)
+- [x] #43 orb level pips under Q/W/E + loadout (same commit)
+- [x] #31 Item drag/drop: in-game drag FREEZES the game; loadout drag glitches. + #36 loadout: reorder the 6 slots, drag from the list into slots and out to remove; the list itself is not reorderable. State machine + tests. (sonnet; hud.js item drag, loadout.js items widget, input.js guards)
+- [x] #34 Force Staff self-cast: double-click the item / Alt+click = self-cast. (sim items.js + input.js)
+- [x] #35 Refresher refreshes ONLY abilities (all), NOT items. (items.js + test)
+- [x] #37 Boots don't stack: Travel replaces brown boots (loadout, scenario kits, sim stats). (loadout.js/sim loadout.js/items.js/scenarios kits)
+- [x] #38 Scenarios have NO side pane; side pane is Free Play only. (hud.js buildSide gate)
+- [x] #13 Intro tour + animated briefing (12 s, camera glides to enemies/gate/focus, cancel rules, F1 skips tour) + #39 Sun-Strike-shaped start reveal on unseen enemies (lingers ~1 s after start; mandatory at Ian/Easy/Normal, per scenario at Hard/Bambam; crowded tree pathing at harder tiers). (opus; ranked.js phase, camera.js, new ui/briefing.js, fx)
 - [ ] #40 Per-play variation: enemy start pos / HP / movement (seeded in ranked), enemy boots where sensible; keep feasibility. (ranked.js apply/prepare)
 
 ### P1
