@@ -17,7 +17,7 @@
   const scenarios = () => IT.SCENARIOS || [];
   const scnOf = id => (id == null ? null : scenarios().find(s => s.id === id) || null);
   const scnName = s => (s.name && typeof s.name === 'object' ? (s.name[IT.lang] || s.name.en) : s.name) || IT.t(s.nameKey || ('scn.' + s.id));
-  const scnTip = s => (s.descKey ? IT.t(s.descKey) : '');
+  const scnTip = s => (s.descKey ? IT.t(s.descKey) : ((s.desc || s.tip) && (s.desc || s.tip)[IT.lang || 'en'] || (s.desc || s.tip || {}).en || ''));
 
   const mapOk = id => !!(id && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
   function fresh() {

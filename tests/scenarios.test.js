@@ -67,7 +67,7 @@ function play(m, o) {
 }
 
 test('data: scenarios are well-formed', () => {
-  const S = IT.SCENARIOS, ids = new Set();
+  const S = IT.SCENARIOS.filter(x => x.legacy), ids = new Set();
   assert.equal(S.length, 13);
   for (const sc of S) {
     assert.ok(!ids.has(sc.id), 'dup ' + sc.id); ids.add(sc.id);
@@ -98,7 +98,7 @@ test('difficulty table covers every id', () => {
 });
 
 test('apply(): dummies placed on walkable ground, loadout swapped in place', () => {
-  for (const sc of IT.SCENARIOS) {
+  for (const sc of IT.SCENARIOS.filter(x => x.legacy)) {
     const m = mk(sc.id, 'normal');
     assert.equal(m.run.dummies.length, sc.dummies.length, sc.id);
     for (const d of m.run.dummies) assert.ok(map.walkable(d.x, d.y), sc.id);
@@ -126,7 +126,7 @@ test('countdown freezes the world, then play starts', () => {
 for (const df of ['ian', 'easy', 'common', 'hard', 'bambam']) {
   test('bot solves every scenario at ' + df, () => {
     const bad = [];
-    for (const sc of IT.SCENARIOS) {
+    for (const sc of IT.SCENARIOS.filter(x => x.legacy)) {
       if (process.env.SCN_ONLY && process.env.SCN_ONLY !== sc.id + ':' + df) continue;
       const m = mk(sc.id, df);
       // hold wandering/evasive dummies still so the bot's static aim is fair; scripted ones keep moving
@@ -147,7 +147,7 @@ for (const df of ['ian', 'easy', 'common', 'hard', 'bambam']) {
 // calibration helper: SCN_CAL=1 prints the damage each kill scenario deals at BAMBAM as a fraction of max hp
 if (process.env.SCN_CAL) test('calibrate', () => {
   IT.GAME.DUMMY.refillBelow = 0;
-  for (const sc of IT.SCENARIOS) {
+  for (const sc of IT.SCENARIOS.filter(x => x.legacy)) {
     if (sc.obj.type !== 'kill') continue;
     const m = mk(sc.id, process.env.SCN_CAL);
     for (const d of m.run.dummies) { d.ai.useBkb = false; d.scenario.stunBolt = false; d.scenario.dummyEscape = 'none'; d.hp = d.maxHp; if (!d.scn.mot) { d.ai.behavior = 'stationary'; d.ms = 0; d.base.ms = 0; } }

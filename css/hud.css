@@ -86,7 +86,7 @@
 .rkok{display:flex;align-items:center;gap:calc(var(--g)*.3)}
 .tk{display:inline-flex;align-items:center;gap:calc(var(--g)*.2);padding:.05em calc(var(--g)*.3) .05em .1em;background:#150d27;border:.15em solid var(--line);color:var(--gold);font-size:max(calc(var(--g)*1.05),10px)}
 .tk b{font-weight:bold;min-width:.8em;text-align:center}
-.tk canvas{width:calc(var(--g)*1.6);height:calc(var(--g)*1.6);image-rendering:pixelated}
+.tk canvas,.tk canvas.ico{width:calc(var(--g)*1.6);height:calc(var(--g)*1.6);image-rendering:pixelated}
 .tk.orb.quas{border-color:var(--q)}.tk.orb.wex{border-color:var(--w)}.tk.orb.exort{border-color:var(--e)}
 .tk.inv{border-color:var(--mag)}
 .tk.cast,.tk.item{border-color:var(--gold)}

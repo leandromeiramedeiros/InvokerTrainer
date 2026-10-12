@@ -110,7 +110,7 @@
         if (IT.HUD.resetMeter) IT.HUD.resetMeter();
         IT.HUD.bind(ctx);
       });
-      g.nDummies = run.dummies.length;
+      g.nDummies = run.dummies.length; g.cam.centerOn(hero.x, hero.y);   // the first scenario may start the hero away from the map spawn
     }
     if (IT.Combo) IT.Combo.mode(w, scn ? 'sandbox' : opts.mode, { loadout: lo, grantMissing: !scn && !!opts.grant, seconds: GM.TIMED_SECONDS });
 

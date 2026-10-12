@@ -164,7 +164,7 @@ h3{margin:0 0 .5em;color:var(--mag);font-size:.9em;text-transform:uppercase;lett
 .tog input:checked+.box{background:var(--gold);border-color:var(--gold);box-shadow:inset 0 0 0 2px #0b0618}
 .tog input:focus-visible+.box{outline:2px solid var(--mag)}
 .ico{width:1.6em;height:1.6em;image-rendering:pixelated;vertical-align:middle}
-.ico.mini{width:1.3em;height:1.3em}
+.ico.mini{width:1.3em;height:1.3em;padding:0;border:0;background:none;display:inline-block}
 .por{width:3em;height:3em;image-rendering:pixelated;display:block}
 .chip{display:inline-block;padding:.15em .6em;border:2px solid var(--line);margin-right:.4em;font-size:.8em;color:var(--dim)}
 .chip.gold{border-color:var(--gold);color:var(--gold)}.chip.ok{border-color:var(--good);color:var(--good)}
