@@ -7,14 +7,15 @@
   const MM_W = 135, MM_H = 75;
 
   function create(w, cv, glowCv, cam) {
-    const GM = IT.GAME, P = GM.UNIT_PX, VW = GM.VIEW_W, VH = GM.VIEW_H;
+    const GM = IT.GAME, P = GM.UNIT_PX;
+    let VW = GM.VIEW_W, VH = GM.VIEW_H;   // live: R.resize() follows scroll-wheel zoom
     const gameCx = cv.getContext('2d'), gx = glowCv.getContext('2d');
     gameCx.imageSmoothingEnabled = false;
     // GL path: the lit scene is drawn to an offscreen canvas, the unlit HUD to #game (transparent overlay), GL composites underneath
     let comp = null, sceneCx = null, useGL = false;
     try {
       const litCv = document.getElementById('lit');
-      if (litCv && IT.GL && IT.Light) comp = IT.GL.create(litCv, VW, VH, IT.Light.LW, IT.Light.LH);
+      if (litCv && IT.GL && IT.Light) comp = IT.GL.create(litCv, VW, VH, Math.ceil(VW / 4), Math.ceil(VH / 4));
     } catch (e) { comp = null; }
     if (comp) {
       const sc = document.createElement('canvas'); sc.width = VW; sc.height = VH;
@@ -29,10 +30,15 @@
     let cx = gameCx;
     const ter = IT.Terrain.build(w.map);
     const fog = IT.Fog.create(w.map);
-    const light = IT.Light.create(VW, VH);
+    let light = IT.Light.create(VW, VH);
     IT.Particles.init(VW, VH);
     const prev = new Map();
-    const MMX = 3, MMY = VH - MM_H - 3;
+    // minimap: own canvas (#mm) at a fixed screen size, independent of the zoomed view resolution
+    const MMX = 1, MMY = 1, MM_BX = 3, MM_BY = GM.VIEW_H_BASE - MM_H - 3;   // MM_B*: top-left in base (480x270) screen px
+    let mmCv = document.getElementById('mm');
+    if (!mmCv) { mmCv = document.createElement('canvas'); mmCv.id = 'mm'; const st = cv.parentNode; st.insertBefore(mmCv, document.getElementById('hud')); }
+    mmCv.width = MM_W + 2; mmCv.height = MM_H + 2;
+    const mmCx = mmCv.getContext('2d'); mmCx.imageSmoothingEnabled = false;
 
     // minimap layers
     const mmBase = document.createElement('canvas'); mmBase.width = MM_W; mmBase.height = MM_H;
@@ -85,8 +91,19 @@
         if (label) PX.text(cx, label, ex - Math.cos(a) * 9, ey - Math.sin(a) * 9 - 2, color, 'c');
       },
       mmHit(mx, my) {
+        mx = mx * GM.VIEW_W_BASE / VW - MM_BX + MMX; my = my * GM.VIEW_H_BASE / VH - MM_BY + MMY;   // view px -> minimap canvas px
         if (mx < MMX || my < MMY || mx >= MMX + MM_W || my >= MMY + MM_H) return null;
         return { x: (mx - MMX) / MM_W * w.map.W, y: (my - MMY) / MM_H * w.map.H };
+      },
+      // scroll-wheel zoom: GM.VIEW_W/VIEW_H changed -> rebuild every view-sized buffer in place (world listeners untouched)
+      resize() {
+        VW = R.VW = GM.VIEW_W; VH = R.VH = GM.VIEW_H;
+        cv.width = glowCv.width = VW; cv.height = glowCv.height = VH;
+        gameCx.imageSmoothingEnabled = false;
+        if (comp) { comp.scene.width = VW; comp.scene.height = VH; sceneCx.imageSmoothingEnabled = false; comp.resize(VW, VH, Math.ceil(VW / 4), Math.ceil(VH / 4)); }
+        light = R.lightmap = IT.Light.create(VW, VH);
+        IT.Particles.init(VW, VH);
+        IT.Sand.resize(R);
       },
     };
     IT.FX.init(R);
@@ -118,6 +135,7 @@
     }
 
     function minimap() {
+      const cx = mmCx;
       cx.fillStyle = '#000'; cx.fillRect(MMX - 1, MMY - 1, MM_W + 2, MM_H + 2);
       cx.drawImage(mmBase, MMX, MMY);
       const fogOn = w.fog !== false, W = w.map.w;

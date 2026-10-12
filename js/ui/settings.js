@@ -17,6 +17,7 @@
       castMode: 'quick', scheme: 'slots', autoAttack: true, camLock: false, edgeScroll: true,
       bloom: true, sound: true, hints: true, lang: 'en',
       camSpeed: 1,                 // 0.5..2 multiplier on camera scroll speed
+      zoom: 1,                     // scroll-wheel zoom step (GAME.ZOOMS)
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
       pointerLock: false,          // confine the mouse to the game while playing
       heroSkin: 'default',         // 'default'|'kid'|'dark' -> IT.Art.heroSheet()
@@ -49,6 +50,7 @@
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
     if (!IT.I18N[base.lang]) base.lang = 'en';
     if (base.heroSkin !== 'kid' && base.heroSkin !== 'dark') base.heroSkin = 'default';
+    if (!(IT.GAME.ZOOMS || [1]).includes(base.zoom)) base.zoom = 1;
     base.camSpeed = Math.max(0.5, Math.min(2, Number(base.camSpeed) || 1));
     base.doubleTapTimeout = Math.max(0.2, Math.min(1, Number(base.doubleTapTimeout) || 0.6));
     if (base.fpsCap !== 0 && base.fpsCap !== 30 && base.fpsCap !== 60 && base.fpsCap !== 120) base.fpsCap = 60;

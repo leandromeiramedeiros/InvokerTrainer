@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
   const IT = G.IT;
-  const GM = IT.GAME, VW = GM.VIEW_W, VH = GM.VIEW_H;
+  const GM = IT.GAME, VW = GM.VIEW_W_BASE, VH = GM.VIEW_H_BASE;   // base 480x270: stage size + HUD units (--u)
   const cv = document.getElementById('game'), glowCv = document.getElementById('glow'), aimCv = document.getElementById('aim');
   const stage = document.getElementById('stage'), dbg = document.getElementById('dbg');
   const aimG = aimCv.getContext('2d');
@@ -23,6 +23,26 @@
     document.documentElement.style.setProperty('--g', gs.toFixed(2) + 'px');
   }
   addEventListener('resize', fit); fit();
+
+  // scroll-wheel zoom: the stage keeps its on-screen size, the internal view resolution changes (zoom 1.2 = 400x225, 0.7 = 686x386)
+  function applyView(z) {
+    const vw = 2 * Math.round(VW / 2 / z), vh = Math.round(vw * VH / VW);
+    GM.VIEW_W = vw; GM.VIEW_H = vh;
+    for (const c of [cv, glowCv, aimCv]) if (c.width !== vw || c.height !== vh) { c.width = vw; c.height = vh; }
+    cv.getContext('2d').imageSmoothingEnabled = false;
+  }
+  function zoomStep(dir) {
+    const Z = GM.ZOOMS, cur = S.get().zoom || 1;
+    let i = Z.indexOf(cur); if (i < 0) i = Z.indexOf(1);
+    const z = Z[Math.max(0, Math.min(Z.length - 1, i + dir))];
+    if (z === cur) return;
+    S.get().zoom = z; S.save();
+    if (!g) { applyView(z); return; }
+    const P = GM.UNIT_PX, mx = g.cam.x + GM.VIEW_W * P / 2, my = g.cam.y + GM.VIEW_H * P / 2;   // keep the view centre
+    applyView(z);
+    g.R.resize();
+    g.cam.x = mx - GM.VIEW_W * P / 2; g.cam.y = my - GM.VIEW_H * P / 2; g.cam.glide = null; g.cam.clamp();
+  }
 
   // ---------------------------------------------------------------- game session
   function spawnDummyAt(i, lo) {
@@ -54,6 +74,8 @@
     if (IT.StatsCollector) IT.StatsCollector.create(w);
     IT.Sfx && IT.Sfx.attach(w);
     IT.DummyChat && IT.DummyChat.attach(w, g);
+    applyView(set.zoom || 1);
+    g.cam.centerOn(hero.x, hero.y);
     g.R = IT.Render.create(w, cv, glowCv, g.cam);
     g.R.showDebug = !!(IT.dev && IT.dev.debug);
     w.on('fail', p => {
@@ -74,7 +96,7 @@
     if (run) {
       run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout
         g.lo = run.pr.lo; g.nDummies = run.dummies.length;
-        IT.Input.cancel(true); aimG.clearRect(0, 0, VW, VH);
+        IT.Input.cancel(true); aimG.clearRect(0, 0, aimCv.width, aimCv.height);
         g.cam.centerOn(hero.x, hero.y); acc = 0;
         if (IT.HUD.resetMeter) IT.HUD.resetMeter();
         IT.HUD.bind(ctx);
@@ -104,7 +126,7 @@
     if (g.w._stats) g.w._stats.destroy();
     IT.Sfx && IT.Sfx.detach();
     IT.DummyChat && IT.DummyChat.detach();
-    aimG.clearRect(0, 0, VW, VH);
+    aimG.clearRect(0, 0, aimCv.width, aimCv.height);
     stage.classList.remove('on');
     UI.clearToasts();
     g = null;
@@ -123,7 +145,7 @@
     g.ended = true;
     const st = commitStats() || (IT.StatsCollector ? IT.StatsCollector.blank() : null);
     g.w.paused = true; IT.Input.enabled = false; g.menu = false;
-    aimG.clearRect(0, 0, VW, VH);
+    aimG.clearRect(0, 0, aimCv.width, aimCv.height);
     if (IT.Music) { IT.Music.intensity(0); music('menu'); }
     state = 'end';
     const info = { stats: st, mode: modeInfo };
@@ -178,6 +200,7 @@
   };
 
   const hooks = {
+    zoom: zoomStep,
     pause() {
       if (!g || g.ended) return;
       if (settingsOver) { IT.UI.settingsCancel(); return; }

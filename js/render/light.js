@@ -10,6 +10,7 @@
   const DARK = 0.015;
 
   function create(VW, VH) {
+    const LW = Math.ceil(VW / CELL), LH = Math.ceil(VH / CELL);   // grid follows the view size (zoom)
     const cv = document.createElement('canvas'); cv.width = VW; cv.height = VH;
     const cx = cv.getContext('2d'), img = cx.createImageData(VW, VH), u32 = new Uint32Array(img.data.buffer);
     const lr = new Float32Array(LW * LH), lg = new Float32Array(LW * LH), lb = new Float32Array(LW * LH);
@@ -45,7 +46,7 @@
         }
       },
       get count() { return lights; },
-      // clamp + fold fog into the 120x68 grid (shared by the CPU compose and the GL compositor)
+      // clamp + fold fog into the LWxLH grid (120x68 at zoom 1) (shared by the CPU compose and the GL compositor)
       fold(camX, camY, fog, fogOn) {
         for (let cy = 0; cy < LH; cy++) for (let cxx = 0; cxx < LW; cxx++) {
           const i = cy * LW + cxx;

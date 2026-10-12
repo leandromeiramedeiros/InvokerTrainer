@@ -356,8 +356,8 @@
   };
 
   // ---------------------------------------------------------------- render buffers / emissive accumulation
-  const LWn = 120, LHn = 68;
-  const er = new Float32Array(LWn * LHn), eg = new Float32Array(LWn * LHn), eb = new Float32Array(LWn * LHn);
+  let LWn = 120, LHn = 68;   // emissive grid (4 px cells) = view size / 4, rebuilt by init() on zoom
+  let er = new Float32Array(LWn * LHn), eg = new Float32Array(LWn * LHn), eb = new Float32Array(LWn * LHn);
   let gLayer = null, aLayer = null, glowCv = null, glowC = null, glowImg = null, glowU = null, emAny = false;
   // layer = offscreen canvas + ImageData. uLo/uHi: rows of the pixel buffer that may be non-zero; cLo/cHi: rows of the canvas that may be non-zero.
   // Only the dirty rows are cleared / uploaded / blitted each frame.
@@ -1068,17 +1068,24 @@
     if (tickAcc > 0.05) tickAcc = 0;
   }
 
+  function buffers() {   // view-sized layers + emissive grid; (re)built when the view size changes
+    if (gLayer && gLayer.cv.width === VW && gLayer.cv.height === VH) return;
+    gLayer = mk(VW, VH); aLayer = mk(VW, VH);
+    LWn = Math.ceil(VW / 4); LHn = Math.ceil(VH / 4);
+    er = new Float32Array(LWn * LHn); eg = new Float32Array(LWn * LHn); eb = new Float32Array(LWn * LHn);
+    const g = mk(LWn, LHn); glowCv = g.cv; glowC = g.c; glowImg = g.img; glowU = g.u;
+  }
+  // zoom: keep the simulated cells, only rebuild the view-sized buffers
+  function resize(R) { VW = R.VW; VH = R.VH; buffers(); emAny = false; }
+
   function init(R) {
     R_ = R; VW = R.VW; VH = R.VH; P = R.P;
-    if (!gLayer) {
-      gLayer = mk(VW, VH); aLayer = mk(VW, VH);
-      const g = mk(LWn, LHn); glowCv = g.cv; glowC = g.c; glowImg = g.img; glowU = g.u;
-    }
+    buffers();
     layerReset(gLayer); layerReset(aLayer); chans.length = 0; clearAll(); stamp.fill(0); fhead = 0; flive = 0; pk.fill(0); timers.length = 0; accm.clear(); walls.length = 0; hasCam = false; total = 0; gHad = aHad = false;
   }
 
   IT.Sand = {
-    init, update, drawGround, drawAir, lights, event, blink, fly, dep, discDep, bolt, strike,
+    init, resize, update, drawGround, drawAir, lights, event, blink, fly, dep, discDep, bolt, strike,
     get count() { return total + flive; }, get cells() { return total; }, get flyers() { return flive; },
     KIND: { FIRE: K_FIRE, SMOKE: K_SMOKE, EMBER: K_EMBER, SPARK: K_SPARK, DROP: K_DROP, GRAIN: K_GRAIN, SHARD: K_SHARD, MIST: K_MIST, MOTE: K_MOTE, ARC: K_ARC },
   };

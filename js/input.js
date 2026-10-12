@@ -3,7 +3,7 @@
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  const GM = IT.GAME, P = GM.UNIT_PX, VW = GM.VIEW_W, VH = GM.VIEW_H;
+  const GM = IT.GAME, P = GM.UNIT_PX;   // view size: GM.VIEW_W/VIEW_H (live, scroll-wheel zoom)
   const sfx = n => { if (typeof G.SFX !== 'undefined' && G.SFX.enabled && G.SFX.play) { try { G.SFX.play(n); } catch (e) { /* ignore */ } } };
   const HOVER = 70;          // extra pick radius (world units) around a unit's hull: quick-cast must forgive sloppy aim
   const EDGE_PX = 3;         // window-edge scroll band (CSS px)
@@ -327,7 +327,7 @@
     const pos = ev => (In.locked && ev.isTrusted !== false ? { x: In.vx, y: In.vy } : { x: ev.clientX, y: ev.clientY });
     const setMouse = ev => {
       const r = cv.getBoundingClientRect(), p = pos(ev);
-      In.mouse.x = (p.x - r.left) / r.width * VW; In.mouse.y = (p.y - r.top) / r.height * VH;
+      In.mouse.x = (p.x - r.left) / r.width * GM.VIEW_W; In.mouse.y = (p.y - r.top) / r.height * GM.VIEW_H;
       In.win.x = p.x; In.win.y = p.y;
     };
     const miniMove = () => {
@@ -450,11 +450,21 @@
     };
     const onBlur = () => { In.keys.clear(); mmDrag = false; In._rmb = null; resolveCat(); In.win.in = false; ctx.cam.follow = false; if (In.hooks.statsHold) In.hooks.statsHold(false); };
     const onKeyD = ev => In.keyDown(ev), onKeyU = ev => In.keyUp(ev);
+    let wheelAcc = 0;
+    const onWheel = ev => {   // scroll wheel zooms in fixed steps (one notch ~100 delta; trackpads accumulate)
+      if (isUi(ev.target)) return;
+      ev.preventDefault();
+      wheelAcc += ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaY;
+      if (Math.abs(wheelAcc) < 50) return;
+      const dir = wheelAcc < 0 ? 1 : -1; wheelAcc = 0;
+      if (In.hooks.zoom) In.hooks.zoom(dir);
+    };
     const offOrder = ctx.w.on('orderDone', p => { In._done = p.order; try { flush(); } finally { In._done = null; } });
 
     cv.addEventListener('mouseleave', onLeave);
     cv.addEventListener('contextmenu', onCtx);
     cv.addEventListener('mousedown', onDown);
+    cv.addEventListener('wheel', onWheel, { passive: false });
     G.addEventListener('mousemove', onWinMove);
     G.addEventListener('mouseup', onUp);
     G.addEventListener('mousedown', onAuxDown);
@@ -465,7 +475,7 @@
     G.addEventListener('blur', onBlur);
     if (doc) { doc.addEventListener('pointerlockchange', onLockChange); doc.documentElement.addEventListener('mouseleave', onDocLeave); }
     In._off = () => {
-      cv.removeEventListener('mouseleave', onLeave); cv.removeEventListener('contextmenu', onCtx); cv.removeEventListener('mousedown', onDown);
+      cv.removeEventListener('mouseleave', onLeave); cv.removeEventListener('contextmenu', onCtx); cv.removeEventListener('mousedown', onDown); cv.removeEventListener('wheel', onWheel);
       G.removeEventListener('mousemove', onWinMove); G.removeEventListener('mouseup', onUp);
       G.removeEventListener('mousedown', onAuxDown); G.removeEventListener('mouseup', onAuxUp); G.removeEventListener('auxclick', onAuxUp);
       G.removeEventListener('keydown', onKeyD); G.removeEventListener('keyup', onKeyU); G.removeEventListener('blur', onBlur);
@@ -517,7 +527,7 @@
     return 0;
   }
   In.drawAim = function (g) {
-    g.clearRect(0, 0, VW, VH);
+    g.clearRect(0, 0, GM.VIEW_W, GM.VIEW_H);
     frame();
     const c = In.ctx;
     if (!c || !In.armed || c.w.paused) return;

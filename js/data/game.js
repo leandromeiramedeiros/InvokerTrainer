@@ -4,7 +4,8 @@
   const IT = G.IT = G.IT || {};
   IT.GAME = {
     UNIT_PX: 6,                 // Dota units per screen pixel
-    VIEW_W: 480, VIEW_H: 270,   // internal canvas
+    VIEW_W: 480, VIEW_H: 270,   // internal canvas (live: scroll-wheel zoom rescales it)
+    VIEW_W_BASE: 480, VIEW_H_BASE: 270, ZOOMS: [0.7, 0.8, 0.9, 1, 1.1, 1.2],
     TICK: 1 / 30,
     VISION_HZ: 10,
     ORB_KEYS: { Q: 'quas', W: 'wex', E: 'exort' },

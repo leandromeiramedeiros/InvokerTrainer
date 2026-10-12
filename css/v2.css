@@ -19,6 +19,7 @@ body.nobloom #glow{display:none}
 body.gl #lit{display:block}
 body.gl #glow{display:none}
 #aim{pointer-events:none}
+#stage>#mm{left:calc(var(--u)*2);top:calc(var(--u)*191);width:calc(var(--u)*137);height:calc(var(--u)*77);pointer-events:none}
 #dbg{position:absolute;left:6px;top:6px;color:#9fe;font:11px monospace;white-space:pre;pointer-events:none;text-shadow:0 1px #000;z-index:5}
 
 #hud{position:absolute;inset:0;pointer-events:none;font-size:calc(var(--u)*3.3333);line-height:1.15;user-select:none;-webkit-font-smoothing:none}

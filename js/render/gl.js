@@ -43,7 +43,7 @@
     if (!gl) return null;
     if (cv._itComp) cv._itComp.release();          // a new session reuses the canvas/context: free the previous resources first
     const C = { ok: false, canvas: cv, kind: (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) ? 'webgl2' : 'webgl', frames: 0, err: '' };
-    const light8 = new Uint8ClampedArray(LW * LH * 4);
+    let light8 = new Uint8ClampedArray(LW * LH * 4);
     let progMain, progH, progV, vbo, texScene, texLight, texGlow, texA, texB, fboA, fboB, uM, uH, uV, curW = 0, curH = 0;
 
     function shader(type, src) {
@@ -82,6 +82,10 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE); gl.disable(gl.DITHER);
+      textures();
+      if (gl.getError() !== gl.NO_ERROR) throw new Error('gl error at init');
+    }
+    function textures() {   // view-sized targets (rebuilt on zoom)
       bindTex(0, texScene = tex(VW, VH, gl.NEAREST));
       bindTex(1, texLight = tex(LW, LH, gl.LINEAR));
       bindTex(2, texGlow = tex(VW, VH, gl.NEAREST));
@@ -90,7 +94,6 @@
       fboA = fbo(texA); fboB = fbo(texB);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       curW = curH = 0;
-      if (gl.getError() !== gl.NO_ERROR) throw new Error('gl error at init');
     }
     function fail(e) { C.ok = false; C.err = String((e && e.message) || e); try { console.warn('[GL] disabled:', C.err); } catch (x) { /* ignore */ } }
     try { build(); C.ok = true; } catch (e) { fail(e); return null; }
@@ -107,6 +110,14 @@
       if (cv._itComp === C) cv._itComp = null;
     };
     cv._itComp = C;
+    C.resize = function (w, h, lw, lh) {
+      VW = w; VH = h; LW = lw; LH = lh; light8 = new Uint8ClampedArray(LW * LH * 4);
+      if (!C.ok) return;
+      try {
+        [texScene, texLight, texGlow, texA, texB].forEach(t => gl.deleteTexture(t)); [fboA, fboB].forEach(b => gl.deleteFramebuffer(b));
+        textures();
+      } catch (e) { fail(e); }
+    };
 
     function size() {
       let w = want.w || VW * 2, h = want.h || VH * 2;
