@@ -80,6 +80,11 @@ W1 launched (Sonnet, background), ids in session transcript:
 ## Session 2026-10-12 (fresh window)
 - DONE all USER TODO 1-10: c090f38 (10), 6b179ef (4 Cataclysm hits fogged foes + vision), f9a49df (2/3/6/7/8), 420047e (1/5/9). Tests 298/298, browser smoke OK.
 
+- 2974ecb F1 HUD modes (minimal/default/steps; 'wind' read as WIN conditions). 59b39f3 MAPS: 21 maps from reference/dota_map.jpg + grounds, towers, ramps, map picker.
+- F6 icons regenerated from reference/dota (tools/icons_from_ref.py, TUNE dict per icon). Weak at 20px: refresher, shiva, gleipnir, deafeningblast.
+- BUG open: F1 orb/invoke chips (.tk canvas.ico.mini in top HUD cards/timeline) show as black squares although the canvas has pixels — investigate (CSS/compositing?).
+- Remaining: scenario content B3/C1/H (use new maps + towers, win/lose/steps fields), end splash/stats/PNG + infinite run C5/C6, F3 Aghs picker.
+
 ## NEXT SESSION (start here)
 Stash work is also on branch `wip/v4-stash` (origin) — use `git checkout origin/wip/v4-stash -- <files>` instead of stash@{0} if the stash is missing.
 Rules: BE TERSE; no Claude co-author in commits; Opus orchestrates, max 1 Sonnet/Haiku agent at a time; tests green + browser smoke
@@ -89,5 +94,5 @@ Rules: BE TERSE; no Claude co-author in commits; Opus orchestrates, max 1 Sonnet
 2. Render agent: TODO 2, 3, 6, 7, 8.
 3. Input/ranked agent: TODO 1, 5, 9.
 4. TODO 4 (Cataclysm vision), small, do directly.
-5. If budget: HUD F1 modes -> MAPS + towers (from stash) -> scenario content B3/C1/H -> end splash/stats/PNG + infinite run C5/C6 -> F3 Aghs picker -> F6 icons.
+5. If budget: fix F1 chip bug -> scenario content B3/C1/H -> end splash/stats/PNG + infinite run C5/C6 -> F3 Aghs picker -> F6 icons.
 6. Mark done items here, short status, commit, push.
