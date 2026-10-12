@@ -31,7 +31,7 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 ### P3 (content)
 - [x] #27 JUKE scenarios + enemy belief model (last-seen/velocity/prediction/search, difficulty-scaled, detection items telegraphed, high-ground vision rule verified, belief indicators toggle: ghost marker, "?" confused, prediction arrow, "!" reacquire), >= 6 juke scenarios tagged juke+fun, bot clears at easy, tests.
-- [ ] #28 Research-driven FUN scenarios (sonnet research agent -> ~30 candidates with sources -> director picks 10-12; docs/SCENARIO-RESEARCH.md) + #29 map-EDGE scenarios (4-6 across the four edge strips of images/20.png, tag edge+fun).
+- [~] #28 Research-driven (research done; 12 picked: tp_snipe, tornado_tp_cancel, rune_contest, pit_fight_blast, bkb_tower_hitter, ghost_ambush, emp_tornado_trap, tornado_icewall_landing, smoke_gank_escape, icewall_ramp_defense, save_the_ally, aegis_snatch) + [x] #29 edge scenarios (5) FUN scenarios (sonnet research agent -> ~30 candidates with sources -> director picks 10-12; docs/SCENARIO-RESEARCH.md) + #29 map-EDGE scenarios (4-6 across the four edge strips of images/20.png, tag edge+fun).
 
 ### LAST
 - [ ] #30 Gameplay/balance/mechanics quality pass (director-led; fixes with tests + docs/GAMEPLAY-REVIEW-v6.md top-10 suggestions).

@@ -301,6 +301,32 @@
       { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] }))),
     V('no_invis_juke', 10, 'rad_off_t1', ['juke', 'fun'], 20, { lvl: 24, at: JH(['choke'], 0) }, JC(3, null, [{ recatch: true }, { recatch: true }]),
       { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, JX(JSP(3, ['level'], 0, 0, { strict: true }))),
+    // ---------------------------------------------------------------- v6 item 29: EDGE (the minimap's four border strips; texts: js/data/i18n/scn.js)
+    // Arena tags (js/data/maps.js): edge = within 1900 u of the world border, edgeN / edgeS / edgeW / edgeE = which one, rim = within 900 u of
+    // this map window's own border. The border cuts off one direction: a foe pinned against it, a fleeing foe running out of lane, a hold
+    // line with the wall at your back, an ambush out of the dark corner. N: edge_gank; W: offlane_survival;
+    // E: pinned_escape; S: long_lane_snipe, river_mouth_ambush. The tour (focus) shows the border area; every spot is inside the map.
+    V('edge_gank', 7, 'dire_safe_t1', ['edge', 'fun', 'blink', 'burst', 'fog'], 14,
+      { lvl: 20, items: ['blink'], at: W(['edgeN', 'rimN', 'level'], { d: [0, 5000], not: ['river'], has: { where: ['edgeN', 'rimN', 'level', 'hidden'], d: [900, 1150], not: ['dtower'] } }) },
+      [U(W(['edgeN', 'rimN', 'level', 'hidden'], { d: [900, 1150], not: ['dtower'] }), { hp: 0.42, mot: 'still', aware: 0.2 })], KILL, ['died', 'time'],
+      [{ a: 'blink', at: 'd0' }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { rand: { pick: 3 } }),
+    V('long_lane_snipe', 5, 'rad_safe_t1', ['edge', 'fun', 'prediction', 'vision'], 8,
+      { lvl: 12, at: W(['edgeS', 'rimS', 'level'], { d: [0, 5000], not: ['river'], has: { where: ['edgeS', 'rimS', 'level', 'seen'], d: [600, 900] } }) },
+      [U(W(['edgeS', 'rimS', 'level', 'seen'], { d: [600, 900] }), { hp: 0.34, mot: 'flee' })],
+      { type: 'kill_with', how: { ability: ['sunstrike'] } }, ['method', 'escaped', 'time'], [{ a: 'sunstrike', at: 'lead', w: 1 }], { rand: { pick: 2 } }),
+    V('river_mouth_ambush', 6, 'gate_bot', ['edge', 'fun', 'river', 'fog', 'vision', 'awareness'], 10,
+      { lvl: 14, at: W(['edgeS'], { d: [0, 5000], not: ['river'], has: { where: ['edgeS', 'river', 'rimS', 'seen'], d: [1000, 1300] } }) },
+      [U(W(['edgeS', 'river', 'rimS', 'seen'], { d: [1000, 1300] }), { hp: 0.45, mot: 'still', aware: 0.15 })], KILL, ['seen', 'time'],
+      [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1 }], { rand: { pick: 3 } }),
+    V('offlane_survival', 6, 'rad_off_t1', ['edge', 'fun', 'multi', 'hold', 'positioning'], 16,
+      { lvl: 16, at: W(['edgeW', 'rimW'], { d: [0, 6000] }) },
+      [U(W([], { beyond: 'gate', d: [1900, 2400] }), { hp: 0.38, mot: 'march' }), U({ of: 0, side: 300 }, { hp: 0.38, mot: 'march' })],
+      { type: 'hold', time: 16 }, ['cross', 'died'], [{ a: 'sunstrike', at: 'lead', w: 0.3 }, { a: 'move', at: 'gate' }, { a: 'deafeningblast', at: 'd1', near: 1000 }],
+      { gate: W(['level'], { d: [500, 1000], r: 280 }), rand: { jit: 100 } }),
+    V('pinned_escape', 5, 'dire_off_t1', ['edge', 'fun', 'escape', 'invisible', 'reaction'], 12,
+      { lvl: 12, at: W(['edgeE', 'rimE'], { d: [0, 6000], not: ['rimS', 'rimN'] }) },
+      [U(W([], { d: [600, 800], not: ['rimE'] }), { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 })],
+      { type: 'escape', time: 12, caught: 180, bump: 80 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 120 } }),
   ];
 
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as
@@ -358,7 +384,8 @@
   // ---- v6 item 39: reveal = the start reveal (a Sun-Strike-shaped vision circle on each foe unseen at the start) also at hard / bambam.
   //      ian / easy / common always reveal; at hard / bambam only these snipe / prediction scenarios do (Ranked.revealOn).
   const REVEAL = ['sun_flee', 'uphill_snipe', 'sun_snipe', 'fog_ambush', 'blink_fog',
-    'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke'];   // + v6 item 27 juke set
+    'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke',
+    'edge_gank', 'long_lane_snipe', 'river_mouth_ambush', 'offlane_survival', 'pinned_escape'];   // + v6 item 27 juke set, v6 item 29 edge set
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)

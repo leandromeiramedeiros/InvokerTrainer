@@ -563,12 +563,12 @@
   // ---- Scenarios filter (pure, headless-testable): IT.UI.ScnFilter. Tabs are categories derived from the scenario tags (a scenario can sit in several),
   // tag chips narrow further (OR = any selected tag, AND = all of them), then text search, then a stable sort. Last choice kept in localStorage 'it2.scnfilter'.
   const SCN_KEY = 'it2.scnfilter';
-  const SCN_CATS = ['all', 'basics', 'combo', 'escape', 'multi', 'items', 'terrain', 'vision', 'juke'];
+  const SCN_CATS = ['all', 'basics', 'combo', 'escape', 'multi', 'items', 'terrain', 'vision', 'juke', 'fun'];
   const SCN_CAT_TAGS = {
     basics: ['basics', 'movement'], combo: ['combo', 'burst'], escape: ['escape', 'invisible', 'blink'], multi: ['multi', 'hold', 'positioning'], items: ['items'],
-    terrain: ['river', 'highground', 'pit', 'towers', 'edge'], vision: ['fog', 'vision', 'awareness', 'prediction', 'reaction'], juke: ['juke'],
+    terrain: ['river', 'highground', 'pit', 'towers', 'edge'], vision: ['fog', 'vision', 'awareness', 'prediction', 'reaction'], juke: ['juke'], fun: ['fun'],
   };
-  const SCN_PRIMARY = ['juke', 'escape', 'terrain', 'vision', 'multi', 'items', 'combo', 'basics'];   // category() picks the first of these a scenario belongs to
+  const SCN_PRIMARY = ['juke', 'fun', 'escape', 'terrain', 'vision', 'multi', 'items', 'combo', 'basics'];   // category() picks the first of these a scenario belongs to
   const SCN_SORTS = ['level', 'levelDesc', 'name', 'todo'];
   const scnCats = tags => { const a = tags || []; return SCN_CATS.slice(1).filter(c => SCN_CAT_TAGS[c].some(g => a.indexOf(g) >= 0)); };
   const scnFold = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

@@ -23,8 +23,7 @@ test('every tag used in scenarios.js maps to a category; category() / categories
   const used = new Set();
   LIST.forEach(s => (s.tags || []).forEach(g => used.add(g)));
   const mapped = new Set([].concat(...Object.values(F.CAT_TAGS)));
-  const META = new Set(['fun']);   // v6 item 27: 'fun' marks the juke set for fun mode, not a tab
-  for (const g of used) if (!META.has(g)) assert.ok(mapped.has(g), 'tag without a category: ' + g);
+  for (const g of used) assert.ok(mapped.has(g), 'tag without a category: ' + g);
   for (const s of LIST) {
     assert.ok(F.categories(s.tags).length >= 1, s.id);
     assert.ok(F.categories(s.tags).indexOf(F.category(s.tags)) >= 0, s.id);

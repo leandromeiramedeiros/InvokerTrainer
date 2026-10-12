@@ -43,7 +43,7 @@
       'sc.cat.all': 'ALL', 'sc.cat.basics': 'BASICS', 'sc.cat.combo': 'COMBO', 'sc.cat.escape': 'ESCAPE & INVISIBLE', 'sc.cat.multi': 'MULTI', 'sc.cat.items': 'ITEMS', 'sc.cat.terrain': 'TERRAIN', 'sc.cat.vision': 'VISION & AWARENESS', 'sc.cat.juke': 'JUKE',
       'sc.search': 'Search scenarios', 'sc.sort': 'Sort', 'sc.sort.level': 'Level, easy first', 'sc.sort.levelDesc': 'Level, hard first', 'sc.sort.name': 'Name A-Z', 'sc.sort.todo': 'Not cleared first',
       'sc.count': '{n} / {total}', 'sc.modeOr': 'ANY tag', 'sc.modeAnd': 'ALL tags', 'sc.mode.d': 'Tag filter: match any selected tag, or all of them', 'sc.clear': 'Clear', 'sc.clear.d': 'Reset tabs, tags and search',
-      'sc.none': 'No scenario matches these filters.', 'sc.cleared': 'Cleared {n}x', 'sc.best': 'Best {time}s', 'tag.edge': 'edge', 'tag.juke': 'juke',
+      'sc.none': 'No scenario matches these filters.', 'sc.cleared': 'Cleared {n}x', 'sc.best': 'Best {time}s', 'tag.edge': 'edge', 'tag.juke': 'juke', 'tag.fun': 'fun',
       // v6 item 22: aria labels of the flair bubble icons (the lines themselves live in js/data/flair.js)
       'dc.icon.muted': 'muted mic', 'dc.icon.camera': 'camera', 'dc.icon.monkey': 'monkey', 'dc.icon.star': 'star', 'dc.icon.goiaba': 'guava',
       // v6 items 21 / 23 / 33: Free Play rework (side panel roster, time of day, difficulty bar, combo guide strip)
@@ -61,7 +61,7 @@
       'sbx.grant.d': 'Unlocks the combos that need items or Aghanim upgrades you did not pick.', 'sbx.pane': 'Sandbox panel', 'sbx.pane.d': 'Show the sandbox panel',
       'gd.pin': 'Click to follow this combo (a guide strip pins at the top).', 'gd.unpin': 'Click again to remove the guide strip.', 'gd.done': 'Done', 'gd.count': '{n}x',
       'set.beliefUI': 'Enemy belief markers',
-      'sbx.reset': 'Reset targets', 'sbx.grant': 'Grant items', 'sbx.open': 'Open the sandbox panel', 'ros.row.diff': 'Difficulty: reaction and capabilities only', 'ros.home': 'Back to the placed spot',
+      'sbx.reset': 'Reset targets', 'sbx.grant': 'Grant items', 'sbx.open': 'Open the sandbox panel', 'ros.row.diff': 'Difficulty: reaction and capabilities only', 'ros.home': 'Back to the placed spot', 'sc.cat.fun': 'FUN',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -105,7 +105,7 @@
       'sc.cat.all': 'TODOS', 'sc.cat.basics': 'BÁSICO', 'sc.cat.combo': 'COMBO', 'sc.cat.escape': 'FUGA E INVISÍVEL', 'sc.cat.multi': 'MULTI', 'sc.cat.items': 'ITENS', 'sc.cat.terrain': 'TERRENO', 'sc.cat.vision': 'VISÃO E ATENÇÃO', 'sc.cat.juke': 'JUKE',
       'sc.search': 'Buscar cenários', 'sc.sort': 'Ordem', 'sc.sort.level': 'Nível, fácil primeiro', 'sc.sort.levelDesc': 'Nível, difícil primeiro', 'sc.sort.name': 'Nome A-Z', 'sc.sort.todo': 'Não concluídos primeiro',
       'sc.count': '{n} / {total}', 'sc.modeOr': 'QUALQUER tag', 'sc.modeAnd': 'TODAS as tags', 'sc.mode.d': 'Filtro de tags: qualquer tag marcada, ou todas elas', 'sc.clear': 'Limpar', 'sc.clear.d': 'Zera abas, tags e busca',
-      'sc.none': 'Nenhum cenário combina com esses filtros.', 'sc.cleared': 'Concluído {n}x', 'sc.best': 'Melhor {time}s', 'tag.edge': 'borda', 'tag.juke': 'juke',
+      'sc.none': 'Nenhum cenário combina com esses filtros.', 'sc.cleared': 'Concluído {n}x', 'sc.best': 'Melhor {time}s', 'tag.edge': 'borda', 'tag.juke': 'juke', 'tag.fun': 'diversão',
       'dc.icon.muted': 'microfone mutado', 'dc.icon.camera': 'camera', 'dc.icon.monkey': 'macaco', 'dc.icon.star': 'estrela', 'dc.icon.goiaba': 'goiaba',
       // v6 itens 21 / 23 / 33: Free Play refeito (lista no painel lateral, hora do dia, barra de dificuldade, faixa guia de combo)
       'db.title': 'Dificuldade', 'db.react': 'Reage em {n}s', 'db.items': 'Aviso de item {n}s', 'db.items0': 'Sem aviso de item', 'db.aware': 'Atenção {n}%',
@@ -122,6 +122,6 @@
       'sbx.grant.d': 'Libera os combos que pedem itens ou melhorias do Aghanim que você não escolheu.', 'sbx.pane': 'Painel do sandbox', 'sbx.pane.d': 'Mostrar o painel do sandbox',
       'gd.pin': 'Clique para seguir este combo (uma faixa guia fixa no topo).', 'gd.unpin': 'Clique de novo para remover a faixa guia.', 'gd.done': 'Feito', 'gd.count': '{n}x',
       'set.beliefUI': 'Marcadores de percepção inimiga',
-      'sbx.reset': 'Reiniciar alvos', 'sbx.grant': 'Liberar itens', 'sbx.open': 'Abrir o painel do sandbox', 'ros.row.diff': 'Dificuldade: só reação e capacidades', 'ros.home': 'Volta ao lugar colocado',
+      'sbx.reset': 'Reiniciar alvos', 'sbx.grant': 'Liberar itens', 'sbx.open': 'Abrir o painel do sandbox', 'ros.row.diff': 'Dificuldade: só reação e capacidades', 'ros.home': 'Volta ao lugar colocado', 'sc.cat.fun': 'DIVERSÃO',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

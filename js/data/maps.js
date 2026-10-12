@@ -7,6 +7,8 @@
   const IT = G.IT = G.IT || {};
   const TILE = 48, CH = '.T#~,rS';
   const HERO_SIGHT = 1800, TOWER_R = 15;   // tiles (tower range 700 u = 14.6 tiles)
+  const EDGE_R = 1900;                     // arena tag 'edge': within this many u of the world border (v6 item 29): the minimap's four ~10% strips
+  const RIM_R = 900;                       // arena tags 'rim' + 'rimN' / 'rimS' / 'rimW' / 'rimE': within this many u of that side of the map (window) border
   const DW = 144, DH = 80;                 // default window (tiles): 6912 x 3840 u, about 2.4 x 2.4 screens at 6 u/px
 
   // ------------------------------------------------------------------ the real world, decoded once
@@ -192,6 +194,14 @@
       let hidden = Math.hypot(c.x - hero.x, c.y - hero.y) > HERO_SIGHT;
       if (!hidden && V) hidden = map.elevAt(c.x, c.y) > map.elevAt(hero.x, hero.y) || !V.los(map, hero.x, hero.y, c.x, c.y);
       if (hidden) tags.push('fog');
+      // v6 item 29: the real map's four edge strips (world border <= EDGE_R u away): 'edge' + 'edgeN' (north) / 'edgeS' / 'edgeW' / 'edgeE'
+      if (map.world && IT.DOTAWORLD) {
+        const D = IT.DOTAWORLD, wx = (map.world.gx0 * D.tile) + c.x, wy = (map.world.gy0 * D.tile) + c.y;
+        const e = [['edgeN', wy], ['edgeS', D.h * D.tile - wy], ['edgeW', wx], ['edgeE', D.w * D.tile - wx]].filter(q => q[1] <= EDGE_R);
+        if (e.length) { tags.push('edge'); for (const q of e) tags.push(q[0]); }
+      }
+      const rm = [['rimN', c.y], ['rimS', map.H - c.y], ['rimW', c.x], ['rimE', map.W - c.x]].filter(q => q[1] <= RIM_R);   // within RIM_R u of this map's own border (a window cut can sit away from the world border: pair rimX with edgeX)
+      if (rm.length) { tags.push('rim'); for (const q of rm) tags.push(q[0]); }
       for (const z of zones || []) if (x >= z.x0 && x <= z.x1 && y >= z.y0 && y <= z.y1) tags.push(z.tag);
       const a = { x: c.x, y: c.y, tags };
       if (tw >= 0) a.tw = tw;
