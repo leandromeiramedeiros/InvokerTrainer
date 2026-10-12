@@ -72,14 +72,83 @@ METEOR = ([('line', 2 + i * 0.0, 2 + i * 0.0, 9, 9, (255, 150, 40)) for i in ran
           ('line', 3, 3, 9, 9, (255, 214, 90)), ('disc', 12, 12, 6.2, ((20, 8, 12),) * 3), ('disc', 12, 12, 5.4, ((255, 176, 70), (226, 92, 24), (140, 36, 14))),
           ('px', 10, 10, (255, 236, 150)), ('px', 11, 10, (255, 236, 150)), ('px', 10, 11, (255, 236, 150)),
           ('px', 13, 13, (70, 14, 10)), ('px', 14, 12, (70, 14, 10)), ('px', 12, 14, (70, 14, 10)), ('px', 14, 14, (70, 14, 10))])
+
+def FLAT(c): return ('disc', 10, 10, 30, (c, c, c))
+# --- Rod of Atos: crimson rod, diagonal, pale-blue glowing crystal tip
+A_O, A_L, A_M, A_D = (44, 6, 20), (255, 112, 112), (206, 28, 52), (124, 12, 40)
+A_C, A_W, A_B, A_BD = (212, 248, 255), (255, 255, 255), (86, 190, 255), (28, 96, 196)
+A_G, A_GD = (255, 222, 110), (170, 110, 26)
+ATOS = [FLAT((50, 14, 30)), ('disc', 13, 6, 7.5, ((88, 30, 66),) * 3), ('disc', 13, 6, 5, ((64, 66, 146),) * 3),
+        ('band', 1, 18, 11, 10, 4, 4, (A_O, A_L, A_M, A_D)),
+        ('art', 10, 2, ['   O   ',
+                        '  OCO  ',
+                        ' OCWBO ',
+                        'OCWBBBO',
+                        'OCBBBDO',
+                        'OBBBDDO',
+                        ' OBBDO ',
+                        '  ODO  '], {'O': A_O, 'C': A_C, 'W': A_W, 'B': A_B, 'D': A_BD}),
+        ('art', 10, 10, ['OOOOOOO',
+                         'OGGGGAO',
+                         ' OOOOO '], {'O': A_O, 'G': A_G, 'A': A_GD}),
+        ('px', 16, 2, A_C), ('px', 8, 3, A_B), ('px', 17, 8, A_C)]
+# --- Orchid Malevolence: purple/black bloom, red-pink glowing gem at the centre, dark stem
+O_O = (20, 6, 30)
+O_RAMP = ((220, 140, 255), (152, 64, 210), (86, 28, 134))
+def _petals(r, c, ramp):
+    return [('disc', c[0] + dx, c[1] + dy, r, ramp) for dx, dy in ((0, -3.7), (3.5, -1.1), (2.2, 3.0), (-2.2, 3.0), (-3.5, -1.1))]
+ORCHID = ([FLAT((24, 14, 44)), ('disc', 10, 8, 8.5, ((54, 24, 80),) * 3),
+           ('band', 10, 12, 9, 18, 2, 2, (O_O, (110, 176, 120), (50, 110, 76), (26, 62, 46))),
+           ('art', 5, 13, ['  OO ', ' OGGO', 'OGGO ', ' OO  '], {'O': O_O, 'G': (60, 130, 88)}),
+           ] + [('disc', x, y, 3.4, ((O_O,) * 3)) for _, x, y, _, _ in _petals(0, (10, 8.5), 0)]
+          + [('disc', 10, 8.5, 3.5, ((O_O,) * 3))]
+          + _petals(2.5, (10, 8.5), O_RAMP)
+          + [('disc', 10, 8.5, 2.7, ((255, 200, 210), (255, 56, 108), (168, 12, 62))), ('px', 9, 7, WHITE), ('px', 10, 7, (255, 230, 236)), ('px', 9, 8, (255, 230, 236)),
+             ('px', 4, 3, (255, 150, 190)), ('px', 16, 12, (255, 150, 190))])
+# --- Scythe of Vyse: cream sheep head, blue-violet glow, scythe blade
+V_O, V_FO = (24, 14, 56), (84, 56, 78)
+V_WOOL, V_FACE = ((255, 255, 255), (232, 226, 248), (170, 158, 214)), ((255, 242, 226), (244, 214, 196), (200, 160, 156))
+V_BL = (A_O, (212, 244, 255), (110, 180, 244), (52, 92, 190))
+VYSE = [FLAT((26, 20, 78)), ('disc', 9, 10, 9.5, ((48, 38, 134),) * 3), ('disc', 9, 10, 6.5, ((74, 58, 178),) * 3),
+        ('rect', 15, 6, 15, 17, V_O), ('rect', 16, 6, 16, 17, (178, 128, 74)), ('rect', 17, 6, 17, 17, (96, 62, 40)),
+        ('art', 8, 2, ['   OOOOOO ',
+                       ' OOKKKKKKO',
+                       'OKkkkkkkdO',
+                       'OkOdddddO ',
+                       ' O OOOOO  '], {'O': V_BL[0], 'K': V_BL[1], 'k': V_BL[2], 'd': V_BL[3]}),
+        ('disc', 3.4, 12.4, 2.4, ((V_O,) * 3)), ('disc', 12.6, 12.4, 2.4, ((V_O,) * 3)),
+        ('disc', 3.4, 12.4, 1.6, V_FACE), ('disc', 12.6, 12.4, 1.6, V_FACE),
+        ('disc', 8, 12.6, 3.6, ((V_O,) * 3)), ('disc', 8, 14.4, 2.9, ((V_O,) * 3)),
+        ('disc', 5.5, 8.5, 3.5, ((V_O,) * 3)), ('disc', 10.5, 8.5, 3.5, ((V_O,) * 3)), ('disc', 8, 7.2, 3.7, ((V_O,) * 3)),
+        ('disc', 8, 12.6, 2.8, V_FACE), ('disc', 8, 14.4, 2.1, V_FACE),
+        ('disc', 5.5, 8.5, 2.6, V_WOOL), ('disc', 10.5, 8.5, 2.6, V_WOOL), ('disc', 8, 7.2, 2.8, V_WOOL),
+        ('rect', 6, 12, 6, 13, V_O), ('rect', 10, 12, 10, 13, V_O), ('px', 5, 12, (255, 255, 255)), ('px', 11, 12, (255, 255, 255)),
+        ('px', 7, 15, V_O), ('px', 9, 15, V_O), ('px', 8, 16, (226, 130, 150)),
+        ('px', 3, 12, (236, 140, 160)), ('px', 13, 12, (236, 140, 160)), ('px', 5, 3, (170, 160, 255)), ('px', 3, 7, (170, 160, 255))]
+# --- Blink Dagger: short pale-cyan dagger, dark hilt, purple blink streak behind it
+B_P, B_PL, B_PD = (176, 96, 244), (236, 186, 255), (94, 48, 170)
+def THICK(x0, y0, x1, y1, body, hi, out):
+    """2-px wide diagonal stroke ('\' or '/'), 1-px outline, lit upper-left edge."""
+    ops = [('line', x0 + a, y0 + b, x1 + a, y1 + b, out) for a, b in ((-1, 0), (2, 0), (0, -1), (1, -1), (0, 1), (1, 1), (-1, 1), (2, -1), (-1, -1), (2, 1))]
+    return ops + [('line', x0, y0, x1, y1, hi), ('line', x0 + 1, y0, x1 + 1, y1, body)]
+BLINK = ([FLAT((34, 18, 76)), ('disc', 11, 8, 8.5, ((66, 36, 138),) * 3),
+          ('band', 1, 18, 11, 8, 1, 9, (None, (240, 190, 255), (172, 96, 244), (104, 48, 200))),
+          ('line', 2, 7, 6, 3, B_PD), ('line', 2, 8, 5, 5, B_P), ('line', 13, 17, 17, 13, B_PD), ('line', 14, 17, 17, 14, B_P)]
+         + THICK(9, 11, 5, 15, (62, 40, 110), (130, 100, 200), O_O)
+         + THICK(8, 7, 12, 11, (62, 40, 110), (170, 136, 240), O_O)
+         + [('band', 17, 3, 11, 9, 2, 5, ((14, 44, 76), (240, 255, 255), (130, 224, 244), (56, 150, 200))),
+            ('px', 4, 16, (255, 120, 190)), ('px', 5, 15, (255, 120, 190)), ('px', 17, 3, WHITE), ('px', 16, 4, WHITE)])
 TUNE = {
+  'orchid': dict(draw=ORCHID, dim=0.3, maxc=20, K=8, bgw=1.0, clean=3, sharp=0, med=7),
+  'vyse': dict(draw=VYSE, dim=0.3, maxc=20, K=8, bgw=1.0, clean=3, sharp=0, med=7),
+  'blink': dict(draw=BLINK, dim=0.3, maxc=20, K=8, bgw=1.0, clean=3, sharp=0, med=7),
+  'atos': dict(draw=ATOS, dim=0.3, maxc=18, K=8, bgw=1.0, clean=3, sharp=0, med=7),
   'deafeningblast': dict(K=8, bgw=0.8, clean=3, con=1.3, psat=1.4, med=5, draw=DEAF, dim=0.85, maxc=16),
   'gleipnir': dict(draw=GLEIPNIR, dim=0.45, maxc=16, K=7, bgw=1.0, clean=3, sharp=0, med=7, gamma=0.85),
   'shiva': dict(draw=SHIVA, dim=0.4, maxc=18, K=8, bgw=1.0, clean=3, sharp=0, med=7, gamma=0.85),
   'chaosmeteor': dict(draw=METEOR, dim=0.6, maxc=16, K=8),
   'boots': dict(gamma=0.7, bgmax=6, K=9, med=5),
   'travels': dict(gamma=0.8, med=5),
-  'blink': dict(gamma=0.85, med=5),
   'quas': dict(spark=ORB_SPARK), 'wex': dict(spark=ORB_SPARK), 'exort': dict(spark=ORB_SPARK),
 }
 
@@ -152,7 +221,9 @@ def _line(px, x0, y0, x1, y1, c):
 
 def overlay(px, ops):
     """Hand-drawn motif ops for icons too complex to read when downsampled (drawn over the dimmed posterized base).
-    ('px',x,y,c) ('line',x0,y0,x1,y1,c) ('rect',x0,y0,x1,y1,c) ('disc',cx,cy,r,(light,mid,dark)) lit from the top-left."""
+    ('px',x,y,c) ('line',x0,y0,x1,y1,c) ('rect',x0,y0,x1,y1,c) ('disc',cx,cy,r,(light,mid,dark)) lit from the top-left.
+    ('band',x0,y0,x1,y1,w0,w1,(outline,light,mid,dark)) row-wise tapered stroke (steep/45deg lines; light left, dark right)
+    ('art',x,y,rows,{char:colour}) stamps a char grid (' ' and '.' = transparent)."""
     for op in ops:
         k = op[0]
         if k == 'px': px[op[2]][op[1]] = op[3]
@@ -160,6 +231,25 @@ def overlay(px, ops):
         elif k == 'rect':
             for y in range(op[2], op[4] + 1):
                 for x in range(op[1], op[3] + 1): px[y][x] = op[5]
+        elif k == 'band':
+            x0, y0, x1, y1, w0, w1, (o, l, m, d) = op[1:]
+            st = 1 if y1 >= y0 else -1
+            n = abs(y1 - y0)
+            for i in range(n + 1):
+                y = y0 + st * i; t = i / max(1, n)
+                cx = x0 + (x1 - x0) * t; w = max(1, round(w0 + (w1 - w0) * t))
+                xl = int(round(cx - (w - 1) / 2.0)); xr = xl + w - 1
+                cells = [(xl - 1, o)] + [(xl + j, l if j == 0 else d if j == w - 1 else m) for j in range(w)] + [(xr + 1, o)]
+                if w == 1: cells[1] = (xl, m)
+                if o is None: cells = cells[1:-1]
+                if o is not None and (i == 0 or i == n): cells = [(x, o) for x, _ in cells] if i == n else [(xl - 1, o)] + [(xl + j, o) for j in range(w)] + [(xr + 1, o)]
+                for x, c in cells:
+                    if 1 <= x < N - 1 and 1 <= y < N - 1: px[y][x] = c
+        elif k == 'art':
+            ax, ay, rows, pal = op[1:]
+            for j, row in enumerate(rows):
+                for i, ch in enumerate(row):
+                    if ch in pal and 1 <= ax + i < N - 1 and 1 <= ay + j < N - 1: px[ay + j][ax + i] = pal[ch]
         elif k == 'disc':
             cx, cy, r, ramp = op[1:]
             for y in range(1, N - 1):

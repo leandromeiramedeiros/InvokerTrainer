@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Contact sheet: OLD hand-drawn set (2028da4^), CURRENT reference set (2028da4), NEW (working tree js/art/icons.js).
-Each icon shown 4x with its 1x copy beside it. Usage: python tools/icons_sheet.py OUT.png"""
+Each icon shown 4x with its 1x copy beside it. Usage: python tools/icons_sheet.py OUT.png   |   --big OUT.png key...   |   --cmp OUT.png BEFORE.js key..."""
 import sys, re, subprocess, os
 from PIL import Image, ImageDraw
 
@@ -42,8 +42,20 @@ def big_sheet(out, keys):
             im = S[k].resize((20 * Z, 20 * Z), Image.NEAREST); sheet.paste(im, (6 + i * (20 * Z + 6), 3 + r * (20 * Z + 6)), im)
     sheet.save(out); print('wrote', out)
 
+def cmp_sheet(out, before, keys):
+    """--cmp OUT.png BEFORE.js key...: rows BEFORE / AFTER (working tree), each icon at 4x with its 1x copy beside it."""
+    S = (parse(open(before, encoding='utf-8').read()), parse(open(os.path.join(ROOT, 'js', 'art', 'icons.js'), encoding='utf-8').read()))
+    cw = 80 + 6 + 20 + 12
+    sheet = Image.new('RGB', (len(keys) * cw + 6, 2 * 90 + 6), (52, 54, 66))
+    for i, k in enumerate(keys):
+        for r, src in enumerate(S):
+            im = src[k]; x, y = 6 + i * cw, 4 + r * 90
+            big = im.resize((80, 80), Image.NEAREST); sheet.paste(big, (x, y), big); sheet.paste(im, (x + 86, y), im)
+    sheet.save(out); print('wrote', out)
+
 def main():
     if sys.argv[1] == '--big': return big_sheet(sys.argv[2], sys.argv[3:])
+    if sys.argv[1] == '--cmp': return cmp_sheet(sys.argv[2], sys.argv[3], sys.argv[4:])
     out = sys.argv[1]
     sets = [('OLD', parse(git_show('2028da4^'))), ('CUR', parse(git_show('2028da4'))),
             ('NEW', parse(open(os.path.join(ROOT, 'js', 'art', 'icons.js'), encoding='utf-8').read()))]
