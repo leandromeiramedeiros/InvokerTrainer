@@ -45,6 +45,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [ ] #48 Detected invisible enemies render half-transparent (not fully visible).
 - [ ] #49 Awareness indicators (CEO likes them: faint ghost = general idea, "!" = excellent): show the predicted-heading arrow more often/clearly; add a "?" above the head when they search a spot and don't find you.
 
+- [ ] #50 Enemy AI is weak/generic (CEO). Scenarios must DICTATE behavior: each scenario declares an enemy intent/script (e.g. flee to tower, chase Invoker, farm then TP out, gank from fog, hold high ground, blink in, kite, bait), with phases + triggers (on spotted / on low HP / on spell landed / timer). Difficulty only scales execution (reaction time, pathing quality, item/spell usage, prediction), not the intent. Audit all scenarios: tag each enemy with an intent, fix the ones where the enemy idles/wanders/acts nonsensically. Ties in with #46 (MS) and #49 (awareness).
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - Ogre two-headed enemy portrait: v2 preview in session scratchpad (ogre/v2, 48x32 wide recommended). CEO: "don't replace yet" — awaiting approve/v3; name TBD (Ian?).
