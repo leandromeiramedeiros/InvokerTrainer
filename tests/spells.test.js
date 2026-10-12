@@ -88,7 +88,7 @@ test('sun strike: delay, danger, pure damage, hit/miss, lifted dodge', () => {
   assert.strictEqual(e.hit.length, nh);
 });
 
-test('sun strike cataclysm (scepter): self-cast drops cataclysm_count strikes per visible enemy', () => {
+test('sun strike cataclysm (scepter): self-cast drops cataclysm_count strikes per enemy, fogged ones too (vision)', () => {
   const e = env({ quas: 4, wex: 4, exort: 4 }, { scepter: true, scepterOrb: 'exort' });
   const d1 = e.dummy(900, 0), d2 = e.dummy(-900, 400), d3 = e.dummy(0, 1200); d3.visible = false;
   e.w.fog = true;
@@ -97,17 +97,17 @@ test('sun strike cataclysm (scepter): self-cast drops cataclysm_count strikes pe
   e.cast('sunstrike', { target: e.h.id, x: e.h.x, y: e.h.y });
   e.run(0.2);
   const strikes = e.w.query(t => t.kind === 'thinker' && t.ability === 'sunstrike');
-  assert.strictEqual(strikes.length, 2 * cnt);
+  assert.strictEqual(strikes.length, 3 * cnt);
   const lo = e.V('sunstrike', 'cataclysm_min_range'), hi = e.V('sunstrike', 'cataclysm_max_range');
   for (const s of strikes) {
-    const d = [d1, d2].map(u => Math.hypot(s.x - u.x, s.y - u.y));
+    const d = [d1, d2, d3].map(u => Math.hypot(s.x - u.x, s.y - u.y));
     assert.ok(d.some(x => x >= lo - 1e-6 && x <= hi + 1e-6), 'range');
-    assert.ok(s.danger);
+    assert.ok(s.danger); assert.ok(s.vision > 0);
   }
   near(e.h.cd.sunstrike, e.V('sunstrike', 'cataclysm_cooldown'), 0.3);
   e.run(2.2);
   assert.ok(e.dealt('sunstrike', d1) > 0 && e.dealt('sunstrike', d2) > 0);
-  assert.strictEqual(e.dealt('sunstrike', d3), 0);   // not visible
+  assert.ok(e.dealt('sunstrike', d3) > 0);   // in fog: still hit (TODO 4)
   assert.strictEqual(e.hit.filter(x => x.target === d1.id).length, 1);   // hit once per enemy per cast
   // without scepter: self-cast is a plain strike
   const f = env(); f.cast('sunstrike', { x: 0, y: 0 }); f.run(0.2);

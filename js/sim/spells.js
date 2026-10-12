@@ -126,7 +126,7 @@
       const self = o.target === c.id || (o.x != null && Math.hypot(o.x - c.x, o.y - c.y) <= 100);
       if (count > 0 && self) {
         const lo = val(c, d, 'cataclysm_min_range'), hi = val(c, d, 'cataclysm_max_range');
-        const targets = w.query(u => u.team !== c.team && COMBATANT[u.kind] && u.hp > 0 && (c.team !== 0 || u.visible));
+        const targets = w.query(u => u.team !== c.team && COMBATANT[u.kind] && u.hp > 0);   // global, ignores vision; each strike gives vision (TODO 4)
         if (!c.cd) c.cd = {};
         c.cd.sunstrike = val(c, d, 'cataclysm_cooldown');
         const tr = tracker(w, c, 'sunstrike', Math.max(1, targets.length * count));
