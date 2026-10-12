@@ -33,10 +33,9 @@
       const k = (IT.GAME && IT.GAME.DUMMY.refillBelow) || 0.25;
       if (t.hp < t.maxHp * k) { t.hp = t.maxHp; t.mana = t.maxMana; w.emit('refill', { unit: t.id }); }
     } else if (t.kind === 'enemy') {
-      // enemies die at 0 hp (legacy AI dummies: below killFrac*maxHp, the old "refill" threshold, so scenario code still sees them go)
-      if (t.refillBelow && t.hp < t.maxHp * t.refillBelow) { t.hp = t.maxHp; t.mana = t.maxMana; w.emit('refill', { unit: t.id }); }
-      else if (t.hp <= 0 || (t.killFrac && t.hp < t.maxHp * t.killFrac)) {
-        t.hp = Math.max(0, t.hp); t.killed = true;
+      // enemies are real units: they die at 0 hp (only scarecrow dummies refill)
+      if (t.hp <= 0) {
+        t.hp = 0; t.killed = true;
         w.emit('kill', { unit: t.id, by: srcId });
         w.remove(t);
       }

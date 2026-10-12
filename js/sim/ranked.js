@@ -71,6 +71,9 @@
     return { sc, df, lo, fog: sc.fog != null ? !!sc.fog : !!df.fog, par: sc.par, limit: esc ? sc.obj.time : Math.ceil(sc.par * df.timer + SLACK), skin: lo.skin };
   }
 
+  // tier dummy behaviour -> enemy NPC behaviour ('evasive' foes wander and dodge ground danger on foot)
+  const ENEMY_BEHAVIOR = { stationary: 'stationary', wander: 'wander', evasive: 'wander' };
+
   // spawn point of a dummy def (walkable)
   function place(w, d) {
     const sp = w.map.spawns.hero;
@@ -103,19 +106,24 @@
     hero.items = []; for (let i = 0; i < 6; i++) hero.items.push(pr.lo.items[i] ? { id: pr.lo.items[i], cd: 0, charges: 0 } : null);
     hero.lastSeen = { x: hero.x, y: hero.y, t: w.t };
     w.fog = pr.fog; w.loadout = pr.lo;
-    const out = [];
-    sc.dummies.forEach(d => {
+    const out = [], E = IT.GAME.ENEMY, SK = IT.GAME.SKINS, s0 = Math.max(0, SK.indexOf(pr.skin));
+    sc.dummies.forEach((d, i) => {
       const p = place(w, d), mot = d.mot;
       const items = d.items || (df.useBkb || d.useBkb ? ['bkb'] : undefined);
-      const e = IT.Units.spawnDummy(w, {
-        x: p.x, y: p.y, preset: df.preset, skin: pr.skin, behavior: mot ? 'stationary' : df.behavior,
+      const skin = SK[(s0 + i) % SK.length], lap = Math.floor(i / SK.length);   // every foe wears a different NPC hero skin + name
+      // real enemy NPC: hp = the damage the scenario needs to kill it (d.hp = start fraction on the old 25% kill line) x tier hpMul; dies at 0 hp
+      const need = d.hp != null && d.hp < 1 ? Math.max(0.05, d.hp - 0.25) : 0.75;
+      const hp = Math.round(Math.max(100, need * E.hp * (df.hpMul != null ? df.hpMul : 1)));
+      const e = IT.Units.spawnEnemy(w, {
+        x: p.x, y: p.y, skin, name: IT.GAME.SKIN_NAMES[skin] + (lap ? ' ' + (lap + 1) : ''), hp, armor: E.armor + (df.armorAdd || 0),
+        behavior: d.behavior || (mot ? 'stationary' : ENEMY_BEHAVIOR[df.behavior] || 'stationary'),
         scenario: { stunBolt: df.stunBolt, dummyEscape: mot ? 'none' : df.escape, blinkAfter: df.blinkAfter },
         useBkb: !!(df.useBkb || d.useBkb), items,
+        telegraph: df.telegraph, awareness: d.aware != null ? d.aware : df.awareness, reaction: mot === 'still' ? 99 : df.reaction,
+        dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
       });
-      e.scarecrow = false; e.noHpBar = false;   // scenario foes look like enemies (skin, name, hp bar, dummychat)
-      e.reaction = mot === 'still' ? 99 : df.reaction; e.hpRegen = 0; e.base.hpRegen = 0;
+      e.hpRegen = 0; e.base.hpRegen = 0;
       if (mot === 'flee' || mot === 'chase') { const ms = mot === 'flee' ? 330 * df.flee : 380 * df.chase; e.ms = ms; e.base.ms = ms; }
-      if (d.hp != null && d.hp < 1) e.hp = e.maxHp * Math.min(1, 0.25 + (d.hp - 0.25) * (df.hpMul || df.hp || 1));
       e.scn = { mot: mot || null, next: 0, lastSeen: null };
       out.push(e);
     });
@@ -154,7 +162,7 @@
 
     function enter(w) {
       run.dummies = apply(w, run.pr);
-      run.result = null; run.caught = false; run.t0 = w.t;
+      run.result = null; run.caught = false; run.died = false; run.t0 = w.t;
       run.phase = run.countdown > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
       w.paused = run.phase !== 'play';
       w.emit('scnStart', { id: run.pr.sc.id, n: run.n, diff: run.pr.df.id });
@@ -164,12 +172,7 @@
     run.attach = (w, onSwap) => {
       run.w = w; w.ranked = run; run.onSwap = onSwap || null;
       if (!run.pr) run.next();
-      w.on('damage', p => {   // dummies die below the refill threshold so they never refill
-        if (run.phase !== 'play') return;
-        const d = w.get(p.target);
-        if (!d || d.kind !== 'dummy' || !run.dummies.includes(d)) return;
-        if (d.hp <= 0 || d.hp < d.maxHp * ((IT.GAME.DUMMY && IT.GAME.DUMMY.refillBelow) || 0.25)) { d.killed = true; w.emit('kill', { unit: d.id }); w.remove(d); }
-      });
+      w.on('heroDown', () => { if (run.phase === 'play') run.died = true; });   // foes hit back now: the hero can fall
       enter(w);
       return run;
     };
@@ -194,6 +197,7 @@
     function check(w) {
       const pr = run.pr, o = pr.sc.obj, h = w.hero, el = w.t - run.t0;
       const alive = run.dummies.filter(d => !d.dead);
+      if (run.died) return conclude(false, 'died');
       if (o.type === 'kill') { if (!alive.length) return conclude(true); }
       else if (o.type === 'rootAll') { if (alive.length && alive.every(d => IT.Status.has(d, 'root') || IT.Status.has(d, 'atosRoot'))) return conclude(true); }
       else if (o.type === 'escape') {
@@ -210,6 +214,7 @@
       const h = w.hero, ghost = IT.Status.has(h, 'ghost');
       for (const d of run.dummies) {
         if (d.dead || (d.scn.mot !== 'flee' && d.scn.mot !== 'chase') || w.t < d.scn.next || !IT.Status.canMove(d)) continue;
+        if (d.orders[0] && d.orders[0].type === 'attack') continue;   // a chaser that has reached the hero is busy hitting it
         d.scn.next = w.t + 0.35;
         if (d.scn.mot === 'flee') {
           const a = Math.atan2(d.y - h.y, d.x - h.x);

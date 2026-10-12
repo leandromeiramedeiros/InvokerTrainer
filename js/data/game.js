@@ -47,7 +47,14 @@
       hitAwareFor: 2,        // s an enemy stays aware after taking damage
       flee: { range: 1100, step: 500, think: 0.4 },   // 'escape' behaviour: keeps this far from the hero
       shadowRange: 900,      // 'escape': pops Shadow Blade when an aware hero is closer than this
+      leash: 150,            // 'defend' / fights-back: chases the hero this far beyond its attack range, then goes home
     },
+    // Hero auto-attack of an enemy NPC (Dota hero baseline: ~50 dmg, 1.7 BAT; no per-hero KV is baked, only the forged spirit). Scaled by the tier's dmgMul.
+    ENEMY_ATTACK: {
+      ranged: { min: 46, max: 54, bat: 1.7, point: 0.4, range: 600, projSpeed: 1250 },
+      melee: { min: 50, max: 60, bat: 1.7, point: 0.4, range: 150, projSpeed: 0 },
+    },
+    ENEMY_ATTACK_KIND: { pedro: 'ranged', renan: 'melee', vitinho: 'ranged' },   // skin -> ENEMY_ATTACK profile
     DUMMY: {
       refillBelow: 0.25,     // refill to full when HP drops below 25%
       radius: 24, vision: 800,

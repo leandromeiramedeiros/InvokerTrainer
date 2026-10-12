@@ -38,7 +38,7 @@
   // ---------- spawning ----------
   function newAI(behavior, x, y, t) {
     return { behavior, home: { x, y }, mode: 'idle', moving: false, pauseUntil: 0, nextPeek: 0, peekUntil: 0,
-      hideSpot: null, nextThink: 0, dodgeId: 0, dodgeUntil: 0, useBkb: false, bkbAt: null,
+      hideSpot: null, nextThink: 0, cornered: 0, dodgeId: 0, dodgeUntil: 0, useBkb: false, bkbAt: null,
       bolt: { readyAt: t, active: false, castEnd: 0 },
       blink: { used: false, pending: false, tellEnd: 0, t0: t },
       pend: [], handled: {}, fleeAt: 0 };   // v4 enemy AI: queued threats {ability, kind, at, lands, shape}, danger thinker ids reacted to
@@ -101,6 +101,17 @@
     e.telegraph = o.telegraph != null ? o.telegraph : E.telegraph;   // lead (s) between the 'telegraph' event and the item firing
     e.awareness = o.awareness != null ? o.awareness : E.awareness;
     e.aware = false; e.tele = null; e.lastHit = -99;
+    if (o.name) e.name = o.name;
+    // hero auto-attack (opts.attack: 'ranged'|'melee' override, false = none). Never auto-acquires: the AI orders it (see fightHero).
+    const kind = o.attack === false ? null : (typeof o.attack === 'string' ? o.attack : G_.ENEMY_ATTACK_KIND[o.skin] || 'ranged'), AT = kind && G_.ENEMY_ATTACK[kind];
+    if (AT) {
+      const m = o.dmgMul != null ? o.dmgMul : 1, mn = Math.round(AT.min * m), mx = Math.max(mn, Math.round(AT.max * m));
+      e.attack = { min: mn, max: mx, bat: AT.bat, point: AT.point, range: AT.range, projSpeed: AT.projSpeed, next: 0, target: null };
+      Object.assign(e.base, { dmgMin: mn, dmgMax: mx, bat: AT.bat, point: AT.point, attackRange: AT.range, projSpeed: AT.projSpeed });
+      e.autoAttack = false;
+      e.atkKind = kind;
+    }
+    e.fights = !!o.fights;   // hits back whenever aware and in reach (hard+); otherwise only 'defend' or when cornered
     return w.add(e);
   }
 
@@ -538,15 +549,31 @@
     return false;
   }
 
+  // false = nowhere to run (rooted / boxed in): the caller may fight back instead
   function flee(w, e, h, E) {
     const a = e.ai;
-    if (w.t < a.fleeAt || !IT.Status.canMove(e)) return;
+    if (!IT.Status.canMove(e)) return false;
+    if (w.t < a.fleeAt) return true;
     a.fleeAt = w.t + E.flee.think;
     const base = away(h, e);
     for (const da of [0, 0.7, -0.7, 1.4, -1.4]) {
       const p = fixPoint(w, e.x + Math.cos(base + da) * E.flee.step, e.y + Math.sin(base + da) * E.flee.step);
-      if (p && U.dist(p, e) > 50) { issueMove(w, e, p.x, p.y); a.moving = false; return; }
+      if (p && U.dist(p, e) > 50) { issueMove(w, e, p.x, p.y); a.moving = false; return true; }
     }
+    return false;
+  }
+
+  // Hero auto-attack: hit the hero while it is seen and within attack range (+ leash for a guard / hard+ foe: a melee foe steps in, a ranged one
+  // stands its ground). Returns true while it is attacking. Out of reach: drops the order.
+  function fightHero(w, e, h) {
+    const a = e.ai, at = e.attack, cur = e.orders[0], on = !!cur && cur.type === 'attack';
+    const reach = at.range + e.radius + h.radius + (a.behavior === 'defend' || e.fights ? GM().ENEMY.leash : 0);
+    if (e.aware && !h.dead && !hasS(h, 'lift') && U.dist(e, h) <= reach && canSee(w, e, h)) {
+      if (!on || cur.target !== h.id) IT.Orders.issue(w, e, { type: 'attack', target: h.id });
+      return true;
+    }
+    if (on) issueStop(w, e);
+    return false;
   }
 
   function tickEnemy(w, e) {
@@ -586,10 +613,14 @@
       if (d < E.shadowRange && !hasS(e, 'invisible') && useItem(w, e, 'shadowblade', {})) return;
       if ((a.escaping || d < 600) && useItem(w, e, 'blink', blinkTo(e, ang))) return;   // disable_escape: out of reach at once
       if (d < 500 && useItem(w, e, 'forcestaff', { face: ang })) return;
-      flee(w, e, h, E);
-      return;
+      if (flee(w, e, h, E)) return;
+      a.cornered = w.t + 1.5;   // rooted / boxed in: fights back (below) instead of standing idle
     }
     if (a.behavior === 'defend' && e.aware && e.hp < e.maxHp * 0.5 && !hasS(e, 'invisible') && useItem(w, e, 'shadowblade', {})) return;
+    if (e.attack && IT.Status.canAttack(e) && (a.behavior === 'defend' || e.fights || w.t < a.cornered)) {
+      if (fightHero(w, e, h)) return;
+      if (a.behavior === 'defend' && !e.orders.length && IT.Status.canMove(e) && U.dist(e, a.home) > 40) issueMove(w, e, a.home.x, a.home.y);
+    } else if (e.attack && e.orders[0] && e.orders[0].type === 'attack') issueStop(w, e);
     if (a.behavior === 'wander' && IT.Status.canMove(e)) tickWander(w, e);
   }
 

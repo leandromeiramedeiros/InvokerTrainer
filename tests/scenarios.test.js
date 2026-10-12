@@ -131,7 +131,7 @@ for (const df of ['ian', 'easy', 'common', 'hard', 'bambam']) {
       const m = mk(sc.id, df);
       // hold wandering/evasive dummies still so the bot's static aim is fair; scripted ones keep moving
       for (const d of m.run.dummies) {
-        d.ai.useBkb = false; d.scenario.stunBolt = false; d.scenario.dummyEscape = 'none';   // the bot is naive: no bolt stuns, no BKB pops, no blinks
+        d.ai.useBkb = false; d.scenario.stunBolt = false; d.scenario.dummyEscape = 'none'; d.items = null;   // the bot is naive: no bolt stuns, no item reactions (BKB), no blinks
         if (!d.scn.mot) { d.ai.behavior = 'stationary'; d.ms = 0; d.base.ms = 0; }
       }
       thaw(m.run);
