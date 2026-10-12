@@ -177,7 +177,7 @@ test('center: first tap selects hero, second tap centers, hold follows, release 
   r.up(ev); r.at(300); const ev2 = r.down(' ');
   assert.deepEqual(r.cam.c, [r.h.x, r.h.y]); assert.equal(r.cam.follow, true);
   r.up(ev2); assert.equal(r.cam.follow, false);
-  r.cam.c = null; r.at(2000); r.key(' '); assert.equal(r.cam.c, null, 'outside the timeout it is a first tap again');
+  r.cam.c = null; r.at(2000); r.key(' '); assert.deepEqual(r.cam.c, [r.h.x, r.h.y], 'hero already selected: every press centers');
 });
 
 test('window-edge scroll flags + camSpeed multiplier', () => {

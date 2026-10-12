@@ -69,4 +69,5 @@
 .rkdiff{pointer-events:auto;cursor:help;padding:.1em .5em;border:.15em solid var(--dim);background:#1d1236;color:var(--ink);font-size:max(calc(var(--g)*.85),9px);letter-spacing:.08em;text-transform:uppercase}
 .rkdiff.d-ian,.rkdiff.d-easy{border-color:var(--good)}.rkdiff.d-common{border-color:var(--gold)}.rkdiff.d-hard,.rkdiff.d-bambam{border-color:var(--bad)}
 .rktip{color:var(--ink);font-size:max(calc(var(--g)*1.35),13px);font-style:italic}
-.rkgo{pointer-events:auto;font-size:max(calc(var(--g)*1.1),11px)}
+.rkhint{color:var(--ink);opacity:.75;font-size:max(calc(var(--g)*1.1),11px);text-transform:uppercase;letter-spacing:.08em;animation:rkpulse 1.4s ease-in-out infinite}
+@keyframes rkpulse{50%{opacity:.35}}

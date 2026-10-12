@@ -208,7 +208,7 @@
     R.rkNum = h('div', { class: 'rknum' });
     R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
     R.rkBadge = h('span', { class: 'rkdiff' }); R.rkTip = h('span', { class: 'rktip' });
-    R.rkGo = h('button', { class: 'btn grn rkgo', type: 'button', text: t('hud.rkStart'), onmousedown: ev => { ev.stopPropagation(); }, onclick: ev => { ev.stopPropagation(); const In = IT.Input; if (In && In.hooks && In.hooks.skip) In.hooks.skip(); } });
+    R.rkGo = h('div', { class: 'rkhint', text: t('hud.rkHint') });   // countdown ends on the first gameplay action (no button)
     R.rkCombo = h('div', { class: 'rkcombo' });
     R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
     R.rkTm = h('div', { class: 'rkt tm' }, h('span', { text: t('hud.rkTime') }), R.rkTv);
@@ -301,6 +301,10 @@
     R.r = btnEl('r', () => In.doAction('invoke', { hud: true }));
     R.s1 = btnEl('slot', ev => In.doAction('slot1', { hud: true, queued: ev.shiftKey })); R.s2 = btnEl('slot', ev => In.doAction('slot2', { hud: true, queued: ev.shiftKey }));
     R.items = [0, 1, 2, 3, 4, 5].map(i => { const b = btnEl('item', null); b.el.setAttribute('data-slot', i); b.el.addEventListener('mousedown', ev => itemDown(i, ev)); return b; });
+    // hovering an ability / item icon previews its radius (instant casts show no rangefinder otherwise)
+    const hov = (el, idOf) => { el.addEventListener('mouseenter', () => { In.preview = idOf; }); el.addEventListener('mouseleave', () => { if (In.preview === idOf) In.preview = null; }); };
+    hov(R.s1.el, () => ctx.hero.inv.slots[0]); hov(R.s2.el, () => ctx.hero.inv.slots[1]);
+    R.items.forEach((b, i) => hov(b.el, () => { const it = ctx.hero.items[i]; return it ? it.id : null; }));
     setIcon(R.q, 'quas'); setIcon(R.w, 'wex'); setIcon(R.e, 'exort'); setIcon(R.r, 'invoke');
     R.hood = hoodEl();   // Scepter/Shard hood emblem: between abilities and items (Dota)
     R.bar = h('div', { class: 'hudp hbar' },

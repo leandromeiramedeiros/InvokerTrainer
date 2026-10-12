@@ -61,6 +61,8 @@
   }
   const isAbilityAction = a => /^(slot[12]|item[1-6])$/.test(a) || !!(IT.Abilities.get(a) && IT.Abilities.get(a).kind === 'spell');
   const isSeq = a => /^orb[QWE]$/.test(a) || a === 'invoke' || isAbilityAction(a);
+  const isSkipAction = a => isSeq(a) || /^(attack|stop|hold)$/.test(a);   // first of these during the pre-scenario countdown starts the run and is executed
+  const isFrozenOk = a => a === 'center' || a === 'camLock' || a === 'cheat';   // usable during the countdown without ending it
 
   // Is a different cast still on its way (turning / walking / cast point)? Then a new cast must queue behind it, not drop it.
   function pendingCast(id) {
@@ -271,8 +273,12 @@
     if (!In.ctx) return;
     opts = Object.assign({}, opts);
     const { w } = In.ctx;
-    if (w.paused) { if (In.hooks.skip && In.inspecting()) In.hooks.skip(); return; }   // frozen ranked countdown: an action (key / HUD button) skips it
-    In.selected = null;     // any player action returns the HUD to the hero
+    if (w.paused) {   // frozen ranked countdown: camera / select / sheet keys work; the first real action (orb, invoke, cast, item, attack, stop, hold) ends it AND runs
+      if (!In.inspecting()) return;
+      if (isFrozenOk(action)) { /* handled below without skipping */ }
+      else if (!isSkipAction(action) || !In.hooks.skip || !In.hooks.skip()) return;
+    }
+    if (action !== 'center') In.selected = null;     // any player action returns the HUD to the hero ('center' decides itself: 1st press selects the hero)
     // Cataclysm: Sun Strike key with the scepter spell ready -> press 1 holds, press 2 = self-cast, window over = normal strike
     const sun = !opts.hud && isAbilityAction(action) && abilityId(action) === 'sunstrike';
     if (In._cat && !(sun && In._cat.id === 'sunstrike')) { if (action === 'stop' || action === 'hold') In._cat = null; else resolveCat(); }
@@ -317,9 +323,11 @@
         giveOrder({ type: action }); return;
       }
       case 'select': In.cycleSel(); return;
-      case 'center': {
-        const now = In.now(), s = S();
-        if (!s.doubleTap || (In._ctap && now - In._ctap <= s.doubleTapTimeout * 1000)) { glide(cam, hero.x, hero.y); cam.follow = true; In._ctap = 0; } else In._ctap = now;
+      case 'center': {   // Select hero / Center camera: 1st press selects Invoker alone, 2nd (he is already the only selection) centers the camera
+        syncSel();
+        const only = In.selected == null && In.sel.group === 'hero' && In.sel.units.length === 1 && In.sel.units[0] === hero.id;
+        if (!only) { In.selected = null; setSel([hero.id], 'hero', false); sfx('click'); return; }
+        glide(cam, hero.x, hero.y); cam.follow = true;
         return;
       }
       case 'camLock': cam.lock = !cam.lock; return;
@@ -390,7 +398,12 @@
     if (ev.repeat) { if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
     const k = IT.Settings.keyName(ev);
     if (!k) return;
-    if (insp) { const a = IT.Settings.actionFor(k); if (a === 'center' || a === 'camLock') press(k, {}); else if (a && (isSeq(a) || /^(attack|stop|hold)$/.test(a)) && In.hooks.skip) In.hooks.skip(); if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault(); return; }
+    if (insp) {   // frozen countdown: camera / select keys work, an action key starts the run and is executed
+      const a = IT.Settings.actionFor(k);
+      if (a && (isFrozenOk(a) || isSkipAction(a))) press(k, { shift: ev.shiftKey, alt: ev.altKey });
+      if (/^Arrow/.test(ev.key) || ev.key === ' ') ev.preventDefault();
+      return;
+    }
     if (!press(k, { shift: ev.shiftKey, alt: ev.altKey })) { if (/^Arrow/.test(ev.key)) ev.preventDefault(); return; }
     ev.preventDefault();
   };
@@ -483,12 +496,16 @@
     };
     const onDown = ev => {
       if (!In.enabled) return;
-      if (ctx.w.paused) {   // frozen inspect (ranked countdown): minimap + dummy select only
-        if (!In.inspecting() || ev.button !== 0) return;
-        setMouse(ev);
-        if (miniMove()) { mmDrag = true; return; }
-        const t = unitAt(worldMouse(), 1); In.selected = t && inspectable(t) ? t.id : null;
-        return;
+      if (ctx.w.paused) {   // frozen inspect (ranked countdown): minimap + foe select; RMB (move / attack) starts the run and is executed
+        if (!In.inspecting()) return;
+        if (ev.button === 2) { setMouse(ev); if (!(In.hooks.skip && In.hooks.skip())) return; }
+        else {
+          if (ev.button !== 0) return;
+          setMouse(ev);
+          if (miniMove()) { mmDrag = true; return; }
+          const t = unitAt(worldMouse(), 1); In.selected = t && inspectable(t) ? t.id : null;
+          return;
+        }
       }
       if (In.locked && ev.isTrusted !== false) {   // locked: the event targets the canvas, so route UI clicks by hand
         const el = doc.elementFromPoint(In.vx, In.vy), p = { x: In.vx, y: In.vy };
@@ -548,7 +565,7 @@
       const k = In.mouseKeyName(ev);
       if (!k || !In.enabled) return;
       ev.preventDefault();
-      if (ctx.w.paused) return;
+      if (ctx.w.paused && !In.inspecting()) return;
       press(k, { shift: ev.shiftKey, alt: ev.altKey });
     };
     const onAuxUp = ev => {
@@ -715,14 +732,13 @@
   }
   In.aimShapes = aimShapes;
 
-  // what the rangefinder shows: the armed spell/item, else a HUD-hovered one, else a target-less spell/item whose key is held down
+  // what the rangefinder shows: the armed spell/item, else a HUD-hovered target-less one. Instant casts (target 'none') show their radius ONLY while their HUD icon is hovered
   function previewId() {
     const c = In.ctx; if (!c) return null;
     if (In.armed && !In.armed.attack) return In.armed.id;
     const noTarget = id => { const d = id && id !== '__none' && IT.Abilities.get(id); return !!d && d.target === 'none'; };
-    if (In.preview && noTarget(In.preview)) return In.preview;
-    for (const a of In._held) { if (!isAbilityAction(a)) continue; const id = abilityId(a); if (noTarget(id)) return id; }
-    return null;
+    const pv = typeof In.preview === 'function' ? In.preview() : In.preview;   // HUD hover: id or a resolver (slots change on invoke)
+    return noTarget(pv) ? pv : null;
   }
   In.previewId = previewId;
 

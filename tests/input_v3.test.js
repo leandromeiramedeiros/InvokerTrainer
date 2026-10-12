@@ -81,9 +81,10 @@ test('camera: follow and lock glide toward the hero; minimap centerOn still snap
   c.glideTo(60000, 60000); c.update(1 / 60, new Set(['ArrowLeft']), m, null); assert.equal(c.glide, null);
 });
 
-test('center key: double tap glides (glideTo), release keeps gliding to the hero', () => {
+test('center key: select press then center press glides (glideTo), release keeps gliding to the hero', () => {
   const r = rig({ autoAttack: false });
   const calls = []; r.cam.glideTo = (x, y) => calls.push([x, y]);
+  r.In.selected = r.dummy.id;   // something else selected: 1st press only selects the hero
   r.at(10); const e1 = r.down(' '); r.up(e1);
   assert.equal(calls.length, 0);
   r.at(300); const e2 = r.down(' ');
