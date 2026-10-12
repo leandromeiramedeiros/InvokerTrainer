@@ -5,3 +5,4 @@ reference/
 tools/.cache/
 tools/out/
 tools/.cache/
+.cache/
