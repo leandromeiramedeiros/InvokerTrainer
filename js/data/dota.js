@@ -855,6 +855,95 @@
       "channelTime": [0],
       "cost": 500,
       "values": {"bonus_movement_speed":{"v":[45],"levelkey":null,"mods":[]}}
+    },
+    "item_force_staff": {
+      "behavior": ["UNIT_TARGET","DONT_RESUME_ATTACK"],
+      "targetTeam": "BOTH",
+      "targetType": ["HERO","BASIC","CUSTOM"],
+      "damageType": null,
+      "spellImmunity": null,
+      "maxLevel": 1,
+      "innate": false,
+      "castPoint": [0],
+      "castRange": [550],
+      "cooldown": [19],
+      "manaCost": [150],
+      "channelTime": [0],
+      "cost": 2200,
+      "values": {
+        "bonus_intellect": {"v":[10],"levelkey":null,"mods":[]},
+        "bonus_health": {"v":[175],"levelkey":null,"mods":[]},
+        "push_length": {"v":[600],"levelkey":null,"mods":[]},
+        "enemy_cast_range": {"v":[850],"levelkey":null,"mods":[]},
+        "push_time": {"v":[0.5],"levelkey":null,"mods":[]}
+      }
+    },
+    "item_cyclone": {
+      "behavior": ["UNIT_TARGET","DONT_RESUME_ATTACK"],
+      "targetTeam": "CUSTOM",
+      "targetType": ["CUSTOM"],
+      "damageType": null,
+      "spellImmunity": null,
+      "maxLevel": 1,
+      "innate": false,
+      "castPoint": [0],
+      "castRange": [550],
+      "cooldown": [23],
+      "manaCost": [175],
+      "channelTime": [0],
+      "cost": 2600,
+      "values": {
+        "bonus_intellect": {"v":[10],"levelkey":null,"mods":[]},
+        "bonus_mana_regen": {"v":[2.5],"levelkey":null,"mods":[]},
+        "bonus_movement_speed": {"v":[20],"levelkey":null,"mods":[]},
+        "cyclone_duration": {"v":[2.5],"levelkey":null,"mods":[]},
+        "tooltip_drop_damage": {"v":[50],"levelkey":null,"mods":[]}
+      }
+    },
+    "item_invis_sword": {
+      "behavior": ["IMMEDIATE","NO_TARGET","IGNORE_CHANNEL"],
+      "targetTeam": null,
+      "targetType": [],
+      "damageType": null,
+      "spellImmunity": null,
+      "maxLevel": 1,
+      "innate": false,
+      "castPoint": [0],
+      "castRange": [0],
+      "cooldown": [25],
+      "manaCost": [75],
+      "channelTime": [0],
+      "cost": 3250,
+      "values": {
+        "bonus_damage": {"v":[25],"levelkey":null,"mods":[]},
+        "bonus_attack_speed": {"v":[35],"levelkey":null,"mods":[]},
+        "windwalk_duration": {"v":[17],"levelkey":null,"mods":[]},
+        "windwalk_movement_speed": {"v":[20],"levelkey":null,"mods":[]},
+        "windwalk_fade_time": {"v":[0.3],"levelkey":null,"mods":[]},
+        "windwalk_bonus_damage": {"v":[175],"levelkey":null,"mods":[]}
+      }
+    },
+    "item_dust": {
+      "behavior": ["IMMEDIATE","NO_TARGET"],
+      "targetTeam": null,
+      "targetType": [],
+      "damageType": null,
+      "spellImmunity": null,
+      "maxLevel": 1,
+      "innate": false,
+      "castPoint": [0],
+      "castRange": [1050],
+      "cooldown": [30],
+      "manaCost": [0],
+      "channelTime": [0],
+      "cost": 80,
+      "values": {
+        "duration": {"v":[12],"levelkey":null,"mods":[]},
+        "radius": {"v":[1050],"levelkey":null,"mods":[]},
+        "movespeed": {"v":[-20],"levelkey":null,"mods":[]},
+        "damage": {"v":[25],"levelkey":null,"mods":[]},
+        "linger_duration": {"v":[8],"levelkey":null,"mods":[]}
+      }
     }
   },
   "units": {

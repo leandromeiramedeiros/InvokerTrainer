@@ -1,4 +1,4 @@
-// Dummies (training targets) + forge spirits: spawn, respawn, AI. Pure. See CONTRACT.md.
+// Dummies (scarecrows), enemies (NPC heroes + their AI) + forge spirits: spawn, respawn, AI. Pure. See CONTRACT.md + docs/PLAN-v4.md.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -27,7 +27,10 @@
     if (w.map && IT.Nav && IT.Nav.nearestWalkable) { const p = IT.Nav.nearestWalkable(w.map, x, y); if (p && walkable(w, p.x, p.y)) return p; }
     return null;
   }
+  const isFoe = e => !!e && (e.kind === 'dummy' || e.kind === 'enemy');   // any target unit the player fights
   const dummies = w => w.query(e => e.kind === 'dummy');
+  const enemies = w => w.query(e => e.kind === 'enemy');
+  const foes = w => w.query(isFoe);
   const disabled = e => !IT.Status.canAct(e) || hasS(e, 'hex') || hasS(e, 'knockback');
   const canBlink = e => IT.Status.canAct(e) && !hasS(e, 'root') && !hasS(e, 'atosRoot') && !hasS(e, 'hex');
 
@@ -36,7 +39,8 @@
     return { behavior, home: { x, y }, mode: 'idle', moving: false, pauseUntil: 0, nextPeek: 0, peekUntil: 0,
       hideSpot: null, nextThink: 0, dodgeId: 0, dodgeUntil: 0, useBkb: false, bkbAt: null,
       bolt: { readyAt: t, active: false, castEnd: 0 },
-      blink: { used: false, pending: false, tellEnd: 0, t0: t } };
+      blink: { used: false, pending: false, tellEnd: 0, t0: t },
+      pend: [], handled: {}, fleeAt: 0 };   // v4 enemy AI: queued threats {ability, kind, at, lands, shape}, danger thinker ids reacted to
   }
 
   // Disables a bkb-using dummy reacts to (cast START by the hero): ability -> how it is aimed.
@@ -57,46 +61,62 @@
     return along >= -d.radius && along <= len + d.radius && side <= r + d.radius;
   }
 
-  function hook(w) {   // first-hit trigger for blink_on_first_hit; hero disable casts -> bkb reaction timer
-    if (w._unitsHook) return;
-    w._unitsHook = true;
-    w.on('castStart', (p) => {
-      if (!DISABLES[p.ability]) return;
-      const c = w.get(p.unit);
-      if (!c) return;
-      for (const d of w.ents) {
-        if (d.dead || d.kind !== 'dummy' || !d.ai || !d.ai.useBkb || d.team === c.team || d.ai.bkbAt != null || !aimedAt(w, c, d, p)) continue;
-        d.ai.bkbAt = w.t + (d.reaction || 0);
-      }
-    });
-    w.on('damage', (p) => {
-      const d = w.get(p.target);
-      if (!d || d.kind !== 'dummy' || !d.ai || !d.scenario) return;
-      if (d.scenario.dummyEscape === 'blink_on_first_hit' && !d.ai.blink.used) d.ai.blink.pending = true;
-    });
-  }
-
-  function spawnDummy(w, o) {
-    hook(w);
-    const G_ = GM(), p = G_.DUMMY_PRESETS[o.preset || 'training'], D = G_.DUMMY;
-    const sc = Object.assign({ stunBolt: false, dummyEscape: 'none', blinkAfter: 3 }, o.scenario || {});
-    const behavior = o.behavior || p.behavior;
+  // Shared body of dummy + enemy (hero-shaped stats; AI state in e.ai).
+  function body(w, o, kind, st) {
+    const G_ = GM(), D = G_.DUMMY;
     const e = {
-      kind: 'dummy', team: 1, x: o.x, y: o.y, radius: D.radius, vision: D.vision, visible: false,
+      kind, team: 1, x: o.x, y: o.y, radius: st.radius || D.radius, vision: st.vision != null ? st.vision : D.vision, visible: false,
       lastSeen: { x: o.x, y: o.y, t: 0 },
-      hp: p.hp, maxHp: p.hp, mana: p.mana, maxMana: p.mana, hpRegen: p.hpRegen, manaRegen: p.manaRegen,
-      armor: p.armor, magicRes: p.magicRes, ms: p.ms, turnRate: 10, attack: null,
-      base: { ms: p.ms, armor: p.armor, magicRes: p.magicRes, hpRegen: p.hpRegen, manaRegen: p.manaRegen, as: 100, dmgMin: 0, dmgMax: 0, bat: 1.7, attackRange: 0 },
+      hp: st.hp, maxHp: st.hp, mana: st.mana, maxMana: st.mana, hpRegen: st.hpRegen, manaRegen: st.manaRegen,
+      armor: st.armor, magicRes: st.magicRes, ms: st.ms, turnRate: 10, attack: null,
+      base: { ms: st.ms, armor: st.armor, magicRes: st.magicRes, hpRegen: st.hpRegen, manaRegen: st.manaRegen, as: 100, dmgMin: 0, dmgMax: 0, bat: 1.7, attackRange: 0 },
       skin: o.skin, name: G_.SKIN_NAMES[o.skin] || o.skin, preset: o.preset || 'training',
-      reaction: p.reaction, scenario: sc,
+      reaction: st.reaction, scenario: Object.assign({ stunBolt: false, dummyEscape: 'none', blinkAfter: 3 }, o.scenario || {}),
     };
-    e.ai = newAI(behavior, o.x, o.y, w.t);
-    e.ai.useBkb = !!o.useBkb;   // activates its BKB (if carried + ready) `reaction` s after the hero starts casting a disable at it
     e.cd = {};
     if (Array.isArray(o.items)) {   // same slot shape as the hero (HUD can show them)
       e.items = [];
       for (let i = 0; i < 6; i++) e.items.push(typeof o.items[i] === 'string' ? { id: o.items[i], cd: 0, charges: 0 } : null);
     }
+    return e;
+  }
+
+  // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, mana, behavior, items, awareness, reaction, telegraph, preset,
+  // scenario ({stunBolt, ...} legacy hooks), useBkb. Dies at 0 hp (combat.js emits 'kill').
+  function spawnEnemy(w, o) {
+    hook(w);
+    const G_ = GM(), E = G_.ENEMY, p = o.preset ? G_.DUMMY_PRESETS[o.preset] : null;
+    const pick = (k) => o[k] != null ? o[k] : p && p[k] != null ? p[k] : E[k];
+    const behavior = o.behavior || 'stationary';
+    const items = Array.isArray(o.items) ? o.items.filter(id => G_.ENEMY_ITEMS.includes(id)) : undefined;
+    const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
+      hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
+      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: E.vision,
+    });
+    e.ai = newAI(behavior, o.x, o.y, w.t);
+    e.ai.useBkb = !!o.useBkb;
+    if (behavior === 'disable_escape') e.scenario.stunBolt = true;   // disables the hero (stun bolt), then escapes
+    e.behavior = behavior;
+    e.telegraph = o.telegraph != null ? o.telegraph : E.telegraph;   // lead (s) between the 'telegraph' event and the item firing
+    e.awareness = o.awareness != null ? o.awareness : E.awareness;
+    e.aware = false; e.tele = null; e.lastHit = -99;
+    return w.add(e);
+  }
+
+  // Dummy = scarecrow: stationary, no AI, never dies (combat.js refills it), no hp bar.
+  // Backward compatible (ranked/main): AI options (non-stationary preset behavior, stun bolt, scripted blink, bkb reaction) keep the
+  // old dummy AI on a kind:'dummy' unit (it keeps its hp bar).
+  function spawnDummy(w, o) {
+    hook(w);
+    const G_ = GM(), p = G_.DUMMY_PRESETS[o.preset || 'training'];
+    const sc = o.scenario || {};
+    const behavior = o.behavior || p.behavior;
+    const hasAI = behavior !== 'stationary' || sc.stunBolt || (sc.dummyEscape && sc.dummyEscape !== 'none') || o.useBkb;
+    const e = body(w, o, 'dummy', p);
+    e.ai = newAI(behavior, o.x, o.y, w.t);
+    e.ai.useBkb = !!o.useBkb;   // activates its BKB (if carried + ready) `reaction` s after the hero starts casting a disable at it
+    e.behavior = behavior;
+    if (!hasAI) e.noHpBar = true;
     return w.add(e);
   }
 
@@ -153,6 +173,7 @@
     d.x = spot.x; d.y = spot.y; d.z = 0;
     d.hp = d.maxHp; d.mana = d.maxMana;
     d.statuses.length = 0; d.orders.length = 0; d.path.length = 0;
+    d.tele = null; d.z = 0;
     setAnim(d, 'idle');
     const ub = d.ai.useBkb;
     d.ai = newAI(d.ai.behavior, spot.x, spot.y, w.t);
@@ -213,7 +234,7 @@
   function spiritAction(w, s) {
     const owner = w.get(s.owner);
     if (!owner) return null;
-    const ok = t => t && !t.dead && t.team !== s.team && (t.kind === 'dummy' || t.kind === 'hero' || t.kind === 'spirit') &&
+    const ok = t => t && !t.dead && t.team !== s.team && (isFoe(t) || t.kind === 'hero' || t.kind === 'spirit') &&
       !hasS(t, 'lift') && (!w.fog || t.visible);
     const auto = !w.opts || w.opts.autoAttack !== false;   // setting autoAttack: OFF = spirits only help with attacks the hero orders
     const oo = owner.orders && owner.orders[0], at = owner.attack;
@@ -238,6 +259,30 @@
       return { type: 'move', x: owner.x + Math.cos(a) * 150, y: owner.y + Math.sin(a) * 150 };
     }
     return null;
+  }
+
+  function hook(w) {   // first-hit trigger for blink_on_first_hit; hero disable casts -> bkb reaction timer
+    if (w._unitsHook) return;
+    w._unitsHook = true;
+    w.on('castStart', (p) => {
+      if (!DISABLES[p.ability]) return;
+      const c = w.get(p.unit);
+      if (!c) return;
+      for (const d of w.ents) {
+        if (d.dead || !isFoe(d) || !d.ai || d.team === c.team || !aimedAt(w, c, d, p)) continue;
+        if (d.kind === 'enemy') { if (d.ai.pend.length < 8) d.ai.pend.push({ type: 'disable', ability: p.ability, at: w.t + reactionOf(d) }); }
+        else if (d.ai.useBkb && d.ai.bkbAt == null) d.ai.bkbAt = w.t + (d.reaction || 0);
+      }
+    });
+    w.on('damage', (p) => {
+      const d = w.get(p.target);
+      if (!d || !isFoe(d) || !d.ai || !d.scenario) return;
+      if (d.scenario.dummyEscape === 'blink_on_first_hit' && !d.ai.blink.used) d.ai.blink.pending = true;
+    });
+    w.on('bolt', (p) => {   // disable_escape: the bolt landed -> run
+      const u = w.get(p.unit);
+      if (p.phase === 'hit' && u && u.kind === 'enemy' && u.ai && u.ai.behavior === 'disable_escape') u.ai.escaping = true;
+    });
   }
 
   // ---------- AI ----------
@@ -433,6 +478,120 @@
     else if (a.behavior === 'evasive') tickEvasive(w, d);
   }
 
+  // ---------- enemy NPC AI (v4) ----------
+  // reaction time: x2.5 while the enemy is unaware of the hero (assumption, no Dota analogue)
+  const reactionOf = e => (e.reaction || 0) * (e.aware ? 1 : GM().ENEMY.unawareMul);
+  const away = (from, e) => (from.x === e.x && from.y === e.y) ? (e.facing || 0) : Math.atan2(e.y - from.y, e.x - from.x);
+
+  function updateAware(w, e) {
+    const h = w.hero, E = GM().ENEMY;
+    let sees = false;
+    if (h && !h.dead) {
+      sees = IT.Vision && IT.Vision.teamSees && w.map ? IT.Vision.teamSees(w, e.team, h) : canSee(w, e, h);
+      // awareness 0..1 = share of its vision it actually pays attention to (assumption): 0 -> only noticed when hit / very close
+      if (sees && e.awareness < 1 && U.dist(e, h) > e.vision * (0.25 + 0.75 * e.awareness)) sees = false;
+    }
+    const was = e.aware;
+    e.aware = sees || (w.t - e.lastHit) < E.hitAwareFor;
+    e.ai.awareSince = e.aware ? (was ? e.ai.awareSince : w.t) : null;
+  }
+
+  // Start using an item: telegraph first (lead s), then fire at `until`. Returns true if started.
+  function useItem(w, e, id, o) {
+    const A = IT.Abilities, def = A && A.get(id);
+    if (e.tele || !def || !e.items || !e.items.some(s => s && s.id === id) || A.check(w, e, id)) return false;
+    const lead = e.telegraph || 0;
+    w.emit('telegraph', { unit: e.id, item: id, lead });
+    if (lead > 1e-9) { e.tele = { item: id, at: w.t, until: w.t + lead, o: o || {} }; return true; }
+    return fireItem(w, e, id, o || {});
+  }
+  function fireItem(w, e, id, o) {
+    const A = IT.Abilities, def = A && A.get(id);
+    if (!def || A.check(w, e, id)) return false;
+    issueStop(w, e); e.ai.moving = false;
+    if (o.face != null) e.facing = o.face;
+    A.spend(w, e, id);
+    const it = e.items.find(x => x && x.id === id); if (it) it.cd = e.cd[id];
+    w.emit('itemUse', { unit: e.id, ability: id });
+    def.cast(w, e, id === 'forcestaff' ? { target: e.id } : o);
+    return true;
+  }
+  function tickTele(w, e) {
+    const t = e.tele;
+    if (!t || w.t < t.until - 1e-9) return;
+    e.tele = null;
+    fireItem(w, e, t.item, t.o);
+  }
+
+  const blinkTo = (e, ang) => {   // a point ~blink_range away along `ang`
+    const R = IT.Values.item(GM().ITEM_DOTA.blink, 'blink_range') * 0.95;
+    return { x: e.x + Math.cos(ang) * R, y: e.y + Math.sin(ang) * R };
+  };
+
+  // first usable item of `chain` against a threat; `ang` = direction away from it
+  function defend(w, e, chain, ang) {
+    for (const id of chain) {
+      const o = id === 'blink' ? blinkTo(e, ang) : id === 'forcestaff' ? { face: ang } : {};
+      if (useItem(w, e, id, o)) return true;
+    }
+    return false;
+  }
+
+  function flee(w, e, h, E) {
+    const a = e.ai;
+    if (w.t < a.fleeAt || !IT.Status.canMove(e)) return;
+    a.fleeAt = w.t + E.flee.think;
+    const base = away(h, e);
+    for (const da of [0, 0.7, -0.7, 1.4, -1.4]) {
+      const p = fixPoint(w, e.x + Math.cos(base + da) * E.flee.step, e.y + Math.sin(base + da) * E.flee.step);
+      if (p && U.dist(p, e) > 50) { issueMove(w, e, p.x, p.y); a.moving = false; return; }
+    }
+  }
+
+  function tickEnemy(w, e) {
+    const a = e.ai, h = w.hero, E = GM().ENEMY;
+    tickTele(w, e);
+    tickBkb(w, e);     // legacy useBkb
+    if (tickBlink(w, e)) return;
+    if (disabled(e)) { if (a.bolt.active) cancelBolt(w, e, 'disabled'); return; }
+    tickBolt(w, e);
+    if (a.bolt.active) return;
+    // queued threats (hero disable casts aimed at us), acted on after the reaction time
+    if (a.pend.length && !e.tele) {
+      for (let i = 0; i < a.pend.length; i++) {
+        if (w.t < a.pend[i].at - 1e-9) continue;
+        a.pend.splice(i, 1);
+        if (defend(w, e, ['bkb', 'euls', 'blink', 'forcestaff'], h ? away(h, e) : (e.facing || 0))) break;
+      }
+    }
+    if (w.t < a.nextThink) return;
+    a.nextThink = w.t + 0.1;
+    updateAware(w, e);
+    if (e.tele) return;
+    // ground danger zones we stand in: dodge on foot (if mobile), else items
+    if (IT.Status.canAct(e)) for (const t of w.ents) {
+      if (t.dead || !t.danger || a.handled[t.id] || t.age < reactionOf(e)) continue;
+      if (U.dist(e, t.danger) > t.danger.r + e.radius) continue;
+      a.handled[t.id] = 1;
+      const mobile = a.behavior !== 'stationary' && a.behavior !== 'defend' && IT.Status.canMove(e);
+      const dest = mobile ? dodgeTarget(e, t.danger, w.map, w.t) : null;
+      if (dest) { issueMove(w, e, dest.x, dest.y); a.moving = false; return; }
+      if (defend(w, e, ['euls', 'blink', 'forcestaff', 'bkb'], away(t.danger, e))) return;
+    }
+    if (!h) return;
+    const escaping = a.behavior === 'escape' || a.escaping;
+    if (escaping && e.aware && a.awareSince != null && w.t - a.awareSince >= reactionOf(e) - 1e-9 && U.dist(e, h) < E.flee.range) {
+      const d = U.dist(e, h), ang = away(h, e);
+      if (d < E.shadowRange && !hasS(e, 'invisible') && useItem(w, e, 'shadowblade', {})) return;
+      if ((a.escaping || d < 600) && useItem(w, e, 'blink', blinkTo(e, ang))) return;   // disable_escape: out of reach at once
+      if (d < 500 && useItem(w, e, 'forcestaff', { face: ang })) return;
+      flee(w, e, h, E);
+      return;
+    }
+    if (a.behavior === 'defend' && e.aware && e.hp < e.maxHp * 0.5 && !hasS(e, 'invisible') && useItem(w, e, 'shadowblade', {})) return;
+    if (a.behavior === 'wander' && IT.Status.canMove(e)) tickWander(w, e);
+  }
+
   function tickSpirit(w, s) {
     if (w.t >= s.expires) { w.emit('fx', { name: 'spiritExpire', x: s.x, y: s.y, unit: s.id }); w.remove(s); return; }
     if (!w.get(s.owner)) { w.remove(s); return; }
@@ -452,11 +611,14 @@
 
   IT.World.system('unitsAI', 60, (w) => {
     for (const e of w.ents) {
-      if (e.dead) continue;
-      if (e.kind === 'dummy' && e.ai) tickDummy(w, e);
-      else if (e.kind === 'spirit' && e.ai) tickSpirit(w, e);
+      if (e.dead || !e.ai) continue;
+      if (e.kind === 'dummy') tickDummy(w, e);
+      else if (e.kind === 'enemy') tickEnemy(w, e);
+      else if (e.kind === 'spirit') tickSpirit(w, e);
     }
   });
 
-  IT.Units = { spawnDummy, spawnSpirit, respawn, resetCombo, dummies, dodgeTarget, blinkSpot, spiritAction };
+  IT.Units = {
+    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, dummies, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

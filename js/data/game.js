@@ -26,9 +26,11 @@
       refresher: 'item_refresher', atos: 'item_rod_of_atos', vyse: 'item_sheepstick', shiva: 'item_shivas_guard',
       meteorhammer: 'item_meteor_hammer', bkb: 'item_black_king_bar', blink: 'item_blink',
       orchid: 'item_orchid', gleipnir: 'item_gungir', travels: 'item_travel_boots', boots: 'item_boots',
+      forcestaff: 'item_force_staff', dust: 'item_dust', euls: 'item_cyclone', shadowblade: 'item_invis_sword',
     },
     ITEMS_MAIN: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir'],
-    ITEMS_EXTRA: ['blink', 'boots', 'travels'],
+    ITEMS_EXTRA: ['blink', 'boots', 'travels', 'forcestaff', 'dust'],
+    ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff'],   // items an enemy NPC may carry (v4)
     SKINS: ['pedro', 'renan', 'vitinho'],
     SKIN_NAMES: { pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho' },
     // Dummy stat presets. Behavior: stationary | wander | evasive.
@@ -36,6 +38,15 @@
       training: { hp: 2500, mana: 800, armor: 0, magicRes: 0.25, ms: 0, behavior: 'stationary', hpRegen: 0, manaRegen: 0, reaction: 0 },
       standard: { hp: 2200, mana: 900, armor: 5, magicRes: 0.25, ms: 300, behavior: 'wander', hpRegen: 4, manaRegen: 2, reaction: 0.6 },
       expert: { hp: 2600, mana: 1200, armor: 10, magicRes: 0.3, ms: 320, behavior: 'evasive', hpRegen: 8, manaRegen: 3, reaction: 0.35 },
+    },
+    // Enemy NPC defaults (v4 spawnEnemy). reaction/telegraph/awareness are normally overridden by the difficulty tier.
+    ENEMY: {
+      hp: 2200, mana: 900, armor: 5, magicRes: 0.25, ms: 300, hpRegen: 4, manaRegen: 2, radius: 24, vision: 800,
+      reaction: 0.5, telegraph: 0.3, awareness: 0.5,
+      unawareMul: 2.5,       // unaware (hero not seen, not hit in the last 2 s): reaction x2.5 (assumption: no Dota analogue)
+      hitAwareFor: 2,        // s an enemy stays aware after taking damage
+      flee: { range: 1100, step: 500, think: 0.4 },   // 'escape' behaviour: keeps this far from the hero
+      shadowRange: 900,      // 'escape': pops Shadow Blade when an aware hero is closer than this
     },
     DUMMY: {
       refillBelow: 0.25,     // refill to full when HP drops below 25%

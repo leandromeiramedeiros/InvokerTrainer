@@ -13,6 +13,7 @@
   // Adds or refreshes (longer duration wins; data replaced). Returns the status or null if blocked.
   function add(w, e, type, dur, opts) {
     opts = opts || {};
+    if (e.building) return null;   // towers/buildings take no statuses (v4)
     const enemy = opts.src != null && w.get(opts.src) && w.get(opts.src).team !== e.team;
     if (enemy && MAGIC[type] && has(e, 'magicImmune') && !opts.pierce) {
       w.emit('fail', { unit: e.id, reason: 'immune', status: type, ability: opts.ability });
@@ -53,6 +54,15 @@
   // move slow fraction 0..1 (strongest slow wins), hex sets base ms to 100 in hero/units
   const slowPct = e => { let m = 0; for (const s of e.statuses) if (s.type === 'slow' && s.data && s.data.pct > m) m = s.data.pct; return m; };
 
+  // Invisibility (Shadow Blade; Ghost Walk is handled by its own 'ghost' status). Dust of Appearance puts 'revealed' on units.
+  // `invisible(e)`: carries a stealth status. `revealed(e)`: dusted. `hidden(e)`: invisible and not revealed (enemy team cannot see it
+  // without true sight). IT.Vision keeps its own copy of this rule and reads Status.revealed.
+  const invisible = e => has(e, 'invisible') || has(e, 'ghost');
+  const revealed = e => has(e, 'revealed');
+  const hidden = e => invisible(e) && !revealed(e);
+  // Breaks Shadow Blade (attacking). Returns true if something was broken.
+  function breakInvis(w, e) { if (has(e, 'invisible')) { remove(w, e, 'invisible'); w.emit('fx', { name: 'invisBreak', x: e.x, y: e.y, unit: e.id }); return true; } return false; }
+
   // Expire statuses each tick.
   IT.World.system('statuses', 50, (w) => {
     for (const e of w.ents) {
@@ -64,5 +74,23 @@
     }
   });
 
-  IT.Status = { has, find, add, remove, clearOrders, canAct, canMove, canCast, canAttack, slowPct, MAGIC, DISABLE };
+  // Render/UI flags kept on the entity: e.invisible (stealthed), e.revealed (dusted), e.bkb (BKB active: yellow + bigger).
+  IT.World.system('statusFlags', 52, (w) => {
+    for (const e of w.ents) {
+      if (e.dead || !e.statuses) continue;
+      const iv = has(e, 'invisible'), mi = find(e, 'magicImmune');
+      if (iv) { e.invisible = true; e._invS = true; } else if (e._invS) { e.invisible = false; e._invS = false; }
+      e.revealed = has(e, 'revealed');
+      e.bkb = !!(mi && mi.ability === 'bkb');
+    }
+  });
+
+  // Shadow Blade breaks on the wearer's attack.
+  IT.World.system('statusInvisBreak', 4, (w) => {
+    if (w._invisHook) return;
+    w._invisHook = true;
+    w.on('attackStart', p => { const u = w.get(p.src); if (u && has(u, 'invisible')) breakInvis(w, u); });
+  });
+
+  IT.Status = { has, find, add, remove, clearOrders, canAct, canMove, canCast, canAttack, slowPct, invisible, revealed, hidden, breakInvis, MAGIC, DISABLE };
 })(typeof window !== 'undefined' ? window : globalThis);
