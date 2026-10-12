@@ -72,13 +72,9 @@
     if (!run && IT.Towers && map.towers && map.towers.length) IT.Towers.spawnAll(w, map);   // scenario runs spawn theirs in Ranked.apply
     for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
     g.nDummies = n;
-    if (!run && opts.enemy && opts.enemy.count > 0) {   // free play only: NPC enemies near the hero
-      const OFF = [[380, 0], [300, -230], [300, 230]];
-      for (let i = 0; i < Math.min(3, opts.enemy.count | 0); i++) {
-        let x = sp.x + OFF[i][0], y = sp.y + OFF[i][1];
-        if (!map.walkable(x, y) && IT.Nav && IT.Nav.nearestWalkable) { const p = IT.Nav.nearestWalkable(map, x, y); if (p) { x = p.x; y = p.y; } }
-        IT.Units.spawnEnemy(w, { x, y, behavior: opts.enemy.behavior, items: opts.enemy.items, skin: lo.skin });
-      }
+    g.placed = 0;
+    if (!run && opts.enemy && opts.enemy.count > 0) {   // free play only: the enemy card -> NPC enemies (own skin / behaviour / tier / items each) on derived arena spots
+      g.placed = IT.EnemyCard.spawnAll(opts.enemy, w, sp, lo.skin).length;
     }
     if (IT.StatsCollector) IT.StatsCollector.create(w);
     IT.Sfx && IT.Sfx.attach(w);
@@ -101,7 +97,7 @@
       if (p.ok) UI.toast(IT.t(g.mode === 'ranked' || g.mode === 'infinite' ? 'scn.solvedRk' : 'scn.solved', { n: p.points }), 'good');
       else UI.toast(IT.t('scn.fail.' + p.reason), 'bad');
     });
-    const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant };
+    const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant, free: !run };
     if (run) {
       run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout
         g.lo = run.pr.lo; g.nDummies = run.dummies.length;
@@ -237,6 +233,19 @@
         IT.Units.spawnDummy(g.w, { x: s.x, y: s.y, preset: g.lo.preset, skin: g.lo.skin });
         UI.toast(IT.t('toast.spawned'), 'info'); return;
       }
+    },
+    // Free Play "Place enemy": arm a map click that drops the next enemy of the enemy card (see IT.Input onDown)
+    armEnemy() {
+      if (!g || g.mode !== 'sandbox' || g.run || g.menu || g.ended) return;
+      IT.Input.armed = { id: '__place', place: true };
+      UI.toast(IT.t('hud.placeEnemy.d'), 'info');
+    },
+    placeEnemy(p) {
+      if (!g || g.mode !== 'sandbox' || g.run || !p) return false;
+      const EC = IT.EnemyCard;
+      if (g.w.query(e => e.kind === 'enemy').length >= EC.WORLD_CAP) { UI.toast(IT.t('toast.enemyFull', { n: EC.WORLD_CAP }), 'bad'); return false; }
+      if (!EC.place(g.opts.enemy, g.w, g.placed, p.x, p.y, g.lo.skin)) { UI.toast(IT.t('toast.enemyBad'), 'bad'); return false; }
+      g.placed++; UI.toast(IT.t('toast.enemyPlaced'), 'good'); return true;
     },
     resetDummies() {
       if (!g || g.mode !== 'sandbox') return;

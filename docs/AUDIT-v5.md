@@ -13,7 +13,7 @@ Baked Dota KV data + spells/items faithful; progression G1-G4 exact; enemy AI (d
 | C | End splash + curated stats + PNG share; INFINITE RUN mode | BAD 4,5; MISSING 2,3 | Sonnet | done (note: burst overlaps title briefly; PNG ~0.9MB) |
 | D | Combos: SS-after-tornado timing from lift_duration, missing staples, tier scores, validation (wrong-order feedback, timing windows, legit variations) | BAD 8,9 | Sonnet | todo |
 | F | HUD/perf: F1 chip size/backplate, map name line, 'dota' arena cap/lazy thumbs, Shiva radius 825+75 | BAD 11,13,14 | Sonnet | todo |
-| E | Loadout: F3 Aghanim hood picker, Free Play enemy card (place/config), difficulty badge in picker | BAD 10,12; MISSING 5,8 | Sonnet | todo |
+| E | Loadout: F3 Aghanim hood picker, Free Play enemy card (place/config), difficulty badge in picker | BAD 10,12; MISSING 5,8 | Sonnet | done |
 | S | Sounds: redo all SFX to resemble Dota 2 (spells, invoke, orbs, items, hits, UI) | user | Sonnet | todo |
 | P | Points: research real 7.4x Invoker point spending; single pool, talents cost 1 point, 0 left at lvl 30; loadout UI + tests | user | Sonnet | todo |
 | G | Dead code: practice mode, timed combo, legacy dummy AI, looksEnemy hack | BAD 15 | Sonnet | todo |

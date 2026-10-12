@@ -526,6 +526,7 @@
         if (miniMove()) { mmDrag = true; return; }
         if (In.armed) {
           const a = In.armed;
+          if (a.place) { const ok = In.hooks.placeEnemy && In.hooks.placeEnemy(worldMouse()); if (ok && !ev.shiftKey) In.armed = null; return; }   // Free Play "Place enemy"
           if (a.attack) { attackClick(ev.shiftKey || a.queued); return; }
           cast(a.id, 'click', ev.shiftKey || a.queued); afterClick(a, ev.shiftKey);
           return;
@@ -735,7 +736,7 @@
   // what the rangefinder shows: the armed spell/item, else a HUD-hovered target-less one. Instant casts (target 'none') show their radius ONLY while their HUD icon is hovered
   function previewId() {
     const c = In.ctx; if (!c) return null;
-    if (In.armed && !In.armed.attack) return In.armed.id;
+    if (In.armed && !In.armed.attack && !In.armed.place) return In.armed.id;
     const noTarget = id => { const d = id && id !== '__none' && IT.Abilities.get(id); return !!d && d.target === 'none'; };
     const pv = typeof In.preview === 'function' ? In.preview() : In.preview;   // HUD hover: id or a resolver (slots change on invoke)
     return noTarget(pv) ? pv : null;

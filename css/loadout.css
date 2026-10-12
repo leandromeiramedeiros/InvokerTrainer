@@ -16,3 +16,38 @@
 .shsp.need .spsel{border-color:var(--bad)}
 /* scenario chips */
 .scns{gap:.4em;margin-bottom:.5em}
+
+/* Aghanim's hood picker: [Scepter card][hood][Shard card]; the hood's eyes light up with the picks (js/art/hood.js) */
+.hoodpick{position:relative;display:flex;align-items:stretch;justify-content:center;gap:.5em;margin:.3em 0 .5em}
+.hcard{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3em;padding:.7em .3em;background:var(--panel2);border:2px solid var(--line);box-shadow:0 3px 0 #000;color:var(--dim);text-align:center}
+.hcard .ico.huge{width:4.4em;height:4.4em;filter:grayscale(.9) brightness(.7);opacity:.75;transition:filter .15s,opacity .15s,transform .15s}
+.hcard .hn{font-size:.8em;color:var(--ink);line-height:1.15}
+.hcard .hs{font-size:.7em;letter-spacing:.06em;text-transform:uppercase}
+.hcard:hover{border-color:var(--mag)}
+.hcard:hover .ico.huge{opacity:.95;transform:scale(1.06)}
+.hcard:active{transform:translateY(2px);box-shadow:0 1px 0 #000}
+.hcard.on{background:#3a2810;border-color:var(--gold);color:var(--gold);box-shadow:0 3px 0 #000,0 0 .9em rgba(242,196,68,.35)}
+.hcard.on .ico.huge{filter:none;opacity:1}
+.hcard.shard.on{background:#0e2a36;border-color:#5ae6ff;color:#5ae6ff;box-shadow:0 3px 0 #000,0 0 .9em rgba(90,230,255,.35)}
+.hood-stage{flex:none;display:flex;align-items:center;justify-content:center;width:6.6em}
+.hood-cv{width:6.2em;height:6.2em;image-rendering:pixelated;transition:filter .2s}
+.hood-stage.s .hood-cv{filter:drop-shadow(0 0 .35em rgba(255,214,80,.55))}
+.hood-stage.h .hood-cv{filter:drop-shadow(0 0 .35em rgba(90,230,255,.55))}
+.hood-stage.s.h .hood-cv{filter:drop-shadow(0 0 .35em rgba(255,214,80,.5)) drop-shadow(0 0 .35em rgba(90,230,255,.5))}
+.hood-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated}
+.agh-sub .row{margin:.35em 0}
+
+/* tier badges (ian / easy / common / hard / bambam) */
+.tb{display:inline-block;flex:none;padding:0 .45em;margin-right:.4em;border:1px solid var(--c,#aaa);color:var(--c,#aaa);font-size:.72em;font-weight:normal;letter-spacing:.05em;line-height:1.55;text-transform:uppercase;white-space:nowrap;vertical-align:middle}
+.tb.ian{--c:#5fc766}.tb.easy{--c:#a6d83e}.tb.common{--c:#e8c34a}.tb.hard{--c:#f08a3a}.tb.bambam{--c:#ff4a4a}
+.chipb .tb{margin-left:0}
+.chipb.tierb{padding:.25em .5em}.chipb.tierb .tb{margin:0}
+.scr.diff .dn{display:flex;align-items:center;gap:.5em}.scr.diff .dn .tb{margin:0;font-size:.6em;letter-spacing:.12em}
+
+/* Free Play enemy card: one row per enemy */
+.erow{display:flex;flex-wrap:wrap;align-items:center;gap:.4em .5em;margin:.45em 0;padding:.4em .5em;background:var(--panel2);border:1px solid var(--line)}
+.erow .en{font-size:.85em;color:var(--gold);min-width:5em}
+.erow .tb{margin:0}
+.erow select{min-width:0;max-width:100%;font-size:.8em;padding:.2em .3em;background:#0b0618;color:var(--ink);border:2px solid var(--line)}
+.erow .tog{margin:0;font-size:.8em}
+.row.tiers{margin-top:.5em}

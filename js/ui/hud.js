@@ -411,7 +411,8 @@
         h('div', { class: 'srow2' },
           h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.refresh && In.hooks.refresh(), text: t('hud.refresh') + ' [' + IT.Settings.label(IT.Settings.keyOf('refresh')) + ']' }),
           h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.spawn && In.hooks.spawn(), text: t('hud.spawn') + ' [' + IT.Settings.label(IT.Settings.keyOf('spawn')) + ']' }),
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.resetDummies && In.hooks.resetDummies(), text: t('hud.resetDummies') + ' [' + IT.Settings.label(IT.Settings.keyOf('resetDummies')) + ']' })),
+          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.resetDummies && In.hooks.resetDummies(), text: t('hud.resetDummies') + ' [' + IT.Settings.label(IT.Settings.keyOf('resetDummies')) + ']' }),
+          ctx.free ? h('button', { type: 'button', class: 'mini place', 'data-tip': t('hud.placeEnemy.d'), onclick: () => In.hooks.armEnemy && In.hooks.armEnemy(), text: t('hud.placeEnemy') }) : null),
         h('div', { class: 'ch2', text: t('hud.combos') }), R.list);
       H.buildList();
       root.appendChild(R.side);

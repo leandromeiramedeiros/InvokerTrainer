@@ -132,7 +132,7 @@ body.gl #glow{display:none}
 .screen.overlay{background:rgba(5,3,12,.8);align-items:center}
 .screen.overlay.endscr,.screen.overlay.settings{align-items:flex-start}
 .scr{width:100%}
-.tip{position:fixed;z-index:50;display:none;pointer-events:none;max-width:24em;padding:.4em .8em;background:#000;border:2px solid var(--gold);color:var(--ink);font-size:var(--g);font-weight:normal}
+.tip{position:fixed;z-index:50;display:none;pointer-events:none;max-width:24em;white-space:pre-line;padding:.4em .8em;background:#000;border:2px solid var(--gold);color:var(--ink);font-size:var(--g);font-weight:normal}
 .btn{padding:.55em 1.2em;background:var(--panel2);border:2px solid var(--line);box-shadow:0 3px 0 #000;color:var(--ink);font-size:1em;text-transform:uppercase}
 .btn:hover{border-color:var(--mag);color:#fff}
 .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #000}

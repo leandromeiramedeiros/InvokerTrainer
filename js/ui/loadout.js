@@ -6,13 +6,9 @@
   const ORBS = ['quas', 'wex', 'exort'];
   const ORBK = { quas: 'Q', wex: 'W', exort: 'E' };
 
-  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, map: 'grounds', enemy: { count: 0, behavior: 'stationary', items: [] } };
-  const EBEH = ['stationary', 'wander', 'escape', 'disable_escape', 'defend'];
-  function normEnemy(e) {
-    e = e || {};
-    const EI = (IT.GAME && IT.GAME.ENEMY_ITEMS) || [];
-    return { count: Math.max(0, Math.min(3, e.count | 0)), behavior: EBEH.includes(e.behavior) ? e.behavior : 'stationary', items: Array.isArray(e.items) ? e.items.filter(i => EI.includes(i)) : [] };
-  }
+  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, map: 'grounds', diff: 'common', enemy: { count: 0, items: [], list: [] } };
+  const normEnemy = e => IT.EnemyCard.normalize(e);   // Free Play enemy card (count, item set, one row per enemy): js/sim/enemycard.js
+  const diffOk = d => IT.DIFFICULTY.order.indexOf(IT.DIFFICULTY.migrate(d)) >= 0;
 
   const scenarios = () => IT.SCENARIOS || [];
   const scnOf = id => (id == null ? null : scenarios().find(s => s.id === id) || null);
@@ -23,7 +19,7 @@
   const mapOk = id => !!(id && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.map = 'grounds'; st.enemy = normEnemy();
+    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.map = 'grounds'; st.diff = 'common'; st.enemy = normEnemy();
   }
   function load() {
     fresh();
@@ -37,11 +33,12 @@
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
     st.scenario = scnOf(raw.scenario) ? raw.scenario : null;
     st.enemy = normEnemy(raw.enemy);
+    st.diff = diffOk(raw.diff) ? IT.DIFFICULTY.migrate(raw.diff) : 'common';
     st.map = mapOk(raw.map) ? raw.map : 'grounds';
   }
   function save() {
     st.lo.mode = 'sandbox';
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario, map: st.map, enemy: st.enemy })); } catch (e) { /* ignore */ }
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario, map: st.map, diff: st.diff, enemy: st.enemy })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -217,35 +214,90 @@
       }
     }
 
-    // ---- aghs: one toggle per item; scepter -> orb pick, shard -> spell pick
+    // ---- aghs: Invoker-hood picker. Two big cards (Scepter | hood | Shard); the hood's eyes light up with the picks.
+    // The card row is built once (the re-render only touches the sub rows) so the hood canvas and the grain burst survive a pick.
+    const A = IT.Agh;
     const aghBox = reg('aghs', 'aghs');
+    const hoodCv = h('canvas', { class: 'hood-cv', width: 48, height: 48 });
+    const fxCv = h('canvas', { class: 'hood-fx' });
+    const aghSub = h('div', { class: 'agh-sub' });
+    const mkCard = kind => h('button', { type: 'button', class: 'hcard ' + kind, onclick: () => pickAgh(kind) },
+      icon(kind, 'huge'), h('span', { class: 'hn' }), h('span', { class: 'hs' }));
+    const cardS = mkCard('scepter'), cardH = mkCard('shard');
+    const stage = h('div', { class: 'hood-stage' }, hoodCv);
+    const hoodRow = h('div', { class: 'hoodpick' }, cardS, stage, cardH, fxCv);
+    aghBox.appendChild(hoodRow); aghBox.appendChild(aghSub);
+    let burstId = 0;
+    function burst(kind, card) {   // a few sand grains pop out of the card and fall (visual only, ~1 s)
+      let reduced = false;
+      try { reduced = !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { reduced = false; }
+      if (reduced || !hoodRow.isConnected) return;
+      const S = 3, box = hoodRow.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      const W = Math.max(8, Math.round(box.width / S)), H = Math.max(8, Math.round(box.height / S));
+      fxCv.width = W; fxCv.height = H;
+      const cx = (cr.left + cr.width / 2 - box.left) / S, cy = (cr.top + cr.height * 0.35 - box.top) / S;
+      const cols = kind === 'scepter' ? ['#fff4a8', '#f2c444', '#c28a1a', '#7c5110'] : ['#e8ffff', '#5ae6ff', '#1a8a9e', '#0e5058'];
+      const ps = [];
+      for (let i = 0; i < 46; i++) {
+        const a = Math.random() * Math.PI * 2, v = 14 + Math.random() * 38;
+        ps.push({ x: cx + (Math.random() - 0.5) * 8, y: cy + (Math.random() - 0.5) * 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 22, life: 0.7 + Math.random() * 0.7, c: cols[(Math.random() * cols.length) | 0] });
+      }
+      const g2 = fxCv.getContext('2d'), id = ++burstId;
+      let last = performance.now();
+      const step = now => {
+        if (id !== burstId || !fxCv.isConnected) return;
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        g2.clearRect(0, 0, W, H);
+        let live = false;
+        for (const p of ps) {
+          if (p.life <= 0) continue;
+          p.vy += 130 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - 1.5 * dt;
+          if (p.y > H - 1) { p.y = H - 1; p.vy = 0; p.vx *= 0.4; }   // grains settle on the floor of the picker
+          p.life -= dt; live = true;
+          g2.globalAlpha = Math.max(0, Math.min(1, p.life * 2));
+          g2.fillStyle = p.c; g2.fillRect(p.x | 0, p.y | 0, 1, 1);
+        }
+        g2.globalAlpha = 1;
+        if (live) G.requestAnimationFrame(step); else g2.clearRect(0, 0, W, H);
+      };
+      G.requestAnimationFrame(step);
+    }
+    function pickAgh(kind) {
+      const wasOn = kind === 'scepter' ? lo.scepter : lo.shard;
+      if (kind === 'scepter') A.setScepter(lo, !lo.scepter); else A.setShard(lo, !lo.shard);
+      if (!wasOn) burst(kind, kind === 'scepter' ? cardS : cardH);
+      changed();
+    }
     function renderAghs() {
-      aghBox.textContent = '';
-      aghBox.appendChild(h('div', { class: 'row agh-row' },
-        h('button', {
-          type: 'button', class: 'agh' + (lo.scepter ? ' on' : ''), 'data-tip': t('agh.scepter'),
-          onclick: () => { lo.scepter = !lo.scepter; if (!lo.scepter) lo.scepterOrb = null; changed(); },
-        }, icon('scepter', 'mini')),
-        h('button', {
-          type: 'button', class: 'agh' + (lo.shard ? ' on' : ''), 'data-tip': t('agh.shard'),
-          onclick: () => { lo.shard = !lo.shard; if (!lo.shard) lo.shardSpell = null; changed(); },
-        }, icon('shard', 'mini'))));
+      const g2 = hoodCv.getContext('2d');
+      g2.clearRect(0, 0, 48, 48);
+      if (IT.Hood) g2.drawImage(IT.Hood.canvas(lo.scepter, lo.shard), 0, 0);
+      stage.className = 'hood-stage' + (lo.scepter ? ' s' : '') + (lo.shard ? ' h' : '');
+      const fill = (card, on, tip, name, sub) => {
+        card.classList.toggle('on', !!on);
+        card.setAttribute('data-tip', tip);
+        card.querySelector('.hn').textContent = name;
+        card.querySelector('.hs').textContent = sub;
+      };
+      fill(cardS, lo.scepter, A.scepterTip(lo), t('agh.name.scepter'), lo.scepter ? (lo.scepterOrb ? t('orb.' + lo.scepterOrb) : t('agh.pickOrb')) : t('agh.off'));
+      fill(cardH, lo.shard, A.shardTip(lo), t('agh.name.shard'), lo.shard ? (lo.shardSpell ? t('spell.' + lo.shardSpell) : t('agh.pickSpell')) : t('agh.off'));
+      aghSub.textContent = '';
       if (lo.scepter) {
         const need = !lo.scepterOrb;
-        aghBox.appendChild(h('div', { class: 'row scorb' + (need ? ' need' : '') },
+        aghSub.appendChild(h('div', { class: 'row scorb' + (need ? ' need' : '') },
           h('span', { class: 'lbl', text: t('lo.scepterOrb') }),
-          ORBS.map(k => h('button', { type: 'button', class: 'orbsel ' + k + (lo.scepterOrb === k ? ' on' : ''), onclick: () => { lo.scepterOrb = k; changed(); }, 'data-tip': t('orb.' + k) }, icon(k)))));
-        if (need) aghBox.appendChild(h('div', { class: 'warn', text: t('err.scepter') }));
+          ORBS.map(k => h('button', { type: 'button', class: 'orbsel ' + k + (lo.scepterOrb === k ? ' on' : ''), onclick: () => { A.setScepterOrb(lo, k); changed(); }, 'data-tip': t('orb.' + k) }, icon(k)))));
+        if (need) aghSub.appendChild(h('div', { class: 'warn', text: t('err.scepter') }));
       }
       if (lo.shard) {
         const need = !lo.shardSpell;
-        aghBox.appendChild(h('div', { class: 'row shsp' + (need ? ' need' : '') },
+        aghSub.appendChild(h('div', { class: 'row shsp' + (need ? ' need' : '') },
           h('span', { class: 'lbl', text: t('lo.shardSpell') }),
           IT.Loadout.SHARD_SPELLS.map(s => h('button', {
-            type: 'button', class: 'spsel' + (lo.shardSpell === s ? ' on' : ''), 'data-tip': t('spell.' + s) + ': ' + t('shard.' + s),
-            onclick: () => { lo.shardSpell = s; changed(); },
+            type: 'button', class: 'spsel' + (lo.shardSpell === s ? ' on' : ''), 'data-tip': t('spell.' + s) + ': ' + A.shardSpellTip(lo, s),
+            onclick: () => { A.setShardSpell(lo, s); changed(); },
           }, icon(s)))));
-        if (need) aghBox.appendChild(h('div', { class: 'warn', text: t('err.shard') }));
+        if (need) aghSub.appendChild(h('div', { class: 'warn', text: t('err.shard') }));
       }
     }
 
@@ -297,21 +349,34 @@
         [1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (st.count === n ? ' on' : ''), text: n, onclick: () => { st.count = n; changed(); } }))));
     }
 
-    // ---- enemy (free play only)
+    // ---- enemy card (free play only): count 0-5, then one row per enemy (skin, behaviour, tier, items on/off) + the item set they carry
     const eneBox = reg('enemy', 'enemy');
+    const EC = IT.EnemyCard;
     function renderEnemy() {
       eneBox.textContent = '';
       const en = st.enemy;
       if (st.scenario) { eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.scn') })); return; }
       eneBox.appendChild(h('div', { class: 'row cnt' }, h('span', { class: 'lbl', text: t('lo.enemy.count') }),
-        [0, 1, 2, 3].map(n => h('button', { type: 'button', class: 'num' + (en.count === n ? ' on' : ''), text: n, onclick: () => { en.count = n; changed(); } }))));
-      if (!en.count) return;
-      eneBox.appendChild(h('div', { class: 'row wrap' }, EBEH.map(b => h('button', {
-        type: 'button', class: 'chipb' + (en.behavior === b ? ' on' : ''), text: t('lo.enemy.b.' + b), onclick: () => { en.behavior = b; changed(); },
-      }))));
-      eneBox.appendChild(h('div', { class: 'row wrap' }, GM.ENEMY_ITEMS.map(id => h('label', { class: 'tog' },
+        [0, 1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (en.count === n ? ' on' : ''), text: n, onclick: () => { en.count = n; changed(); } }))));
+      const sel = (opts, cur, on, cls) => h('select', { class: 'mapsel ' + (cls || ''), onchange: ev => on(ev.target.value) },
+        opts.map(o => h('option', { value: o[0], selected: cur === o[0] ? true : null, text: o[1] })));
+      for (let i = 0; i < en.count; i++) {
+        const r = en.list[i];
+        eneBox.appendChild(h('div', { class: 'erow' },
+          h('span', { class: 'en', text: t('lo.enemy.row', { n: i + 1 }) }),
+          IT.UI.tierBadge(r.tier),
+          sel([[EC.AUTO, t('lo.enemy.skin.auto')]].concat(GM.SKINS.map(k => [k, GM.SKIN_NAMES[k]])), r.skin, v => { r.skin = v; changed(); }, 'sk'),
+          sel(EC.BEHAVIORS.map(b => [b, t('lo.enemy.b.' + b)]), r.behavior, v => { r.behavior = v; changed(); }, 'bh'),
+          sel(IT.DIFFICULTY.order.map(d => [d, t('diff.' + d)]), r.tier, v => { r.tier = v; changed(); }, 'tr'),
+          h('label', { class: 'tog', 'data-tip': t('lo.enemy.hasItems.d') },
+            h('input', { type: 'checkbox', checked: r.items ? true : null, onchange: ev => { r.items = ev.target.checked; changed(); } }),
+            h('span', { class: 'box' }), h('span', { text: t('lo.enemy.hasItems') }))));
+      }
+      if (!en.count) { eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.hint') })); return; }
+      eneBox.appendChild(h('div', { class: 'row wrap' }, h('span', { class: 'lbl', text: t('lo.enemy.itemset') }), GM.ENEMY_ITEMS.map(id => h('label', { class: 'tog' },
         h('input', { type: 'checkbox', checked: en.items.includes(id) ? true : null, onchange: ev => { en.items = en.items.filter(x => x !== id); if (ev.target.checked) en.items.push(id); changed(); } }),
         h('span', { class: 'box' }), h('span', { text: t('item.' + id) })))));
+      eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.hint') }));
     }
 
     // ---- map (free play only; scenarios bring their own)
@@ -336,10 +401,13 @@
       scnBox.textContent = '';
       const list = scenarios();
       const opts = [{ id: null, name: t('lo.freePlay'), tip: t('lo.freePlay.d') }].concat(list.map(s => ({ id: s.id, name: scnName(s), tip: scnTip(s), lvl: s.level })));
+      const sc = scnOf(st.scenario), EC2 = IT.EnemyCard;
       scnBox.appendChild(h('div', { class: 'row wrap scns' }, opts.map(o => h('button', {
         type: 'button', class: 'chipb' + (st.scenario === o.id ? ' on' : ''), 'data-tip': o.tip,
-        onclick: () => { st.scenario = o.id; changed(); },
-      }, o.lvl ? h('span', { class: 'lvb', text: String(o.lvl) }) : null, o.name))));
+        onclick: () => { st.scenario = o.id; if (o.lvl) st.diff = EC2.tierOfLevel(o.lvl); changed(); },   // picking a scenario suggests the tier its level is aimed at
+      }, o.lvl ? h('span', { class: 'lvb', text: String(o.lvl) }) : null, o.lvl ? IT.UI.tierBadge(EC2.tierOfLevel(o.lvl), { tip: t('lo.lvTier', { n: o.lvl, tier: t('diff.' + EC2.tierOfLevel(o.lvl)) }) }) : null, o.name))));
+      if (sc) scnBox.appendChild(h('div', { class: 'row wrap tiers' }, h('span', { class: 'lbl', 'data-tip': t('lo.diff.d'), text: t('lo.diff') }),
+        IT.DIFFICULTY.order.map(d => h('button', { type: 'button', class: 'chipb tierb' + (st.diff === d ? ' on' : ''), onclick: () => { st.diff = d; changed(); } }, IT.UI.tierBadge(d)))));
       if (!list.length) scnBox.appendChild(h('p', { class: 'fine', text: t('lo.noScenarios') }));
       const n = avail();
       if (n >= 0) scnBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));
@@ -420,7 +488,7 @@
 
   function startOpts() {
     save();
-    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null, map: mapOk(st.map) ? st.map : 'grounds', enemy: scnOf(st.scenario) ? null : normEnemy(st.enemy) };
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null, map: mapOk(st.map) ? st.map : 'grounds', diff: diffOk(st.diff) ? IT.DIFFICULTY.migrate(st.diff) : 'common', enemy: scnOf(st.scenario) ? null : normEnemy(st.enemy) };
   }
 
   load();
