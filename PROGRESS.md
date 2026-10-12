@@ -72,3 +72,7 @@ W1 launched (Sonnet, background), ids in session transcript:
 7. Ability rangefinder less intrusive (thinner/fainter).
 8. VFX must not persist from round to round (clear particles/sand/fx on scenario swap).
 9. Round countdown: no START button; skipped by the player's first move/cast/attack, and that first input is executed (seamless).
+10. TOP PRIORITY (user, current build): enemies and dummies are almost flipped. ENEMIES = hero skins (Pedro etc.) + name tags + dummychat speech.
+    DUMMY = scarecrow only: no skin, no name tag, no speech bubbles (dummychat only for kind 'enemy'). Ranked/scenario AI foes (spawnDummy with
+    behavior/scenario/useBkb opts) must become kind 'enemy' (or render as enemy); plain stationary targets stay scarecrows. Check render/units.js,
+    ui/dummychat.js, ranked.js apply(), main.js sandbox spawns, Free Play enemy section.
