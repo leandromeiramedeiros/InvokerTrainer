@@ -6,7 +6,13 @@
   const ORBS = ['quas', 'wex', 'exort'];
   const ORBK = { quas: 'Q', wex: 'W', exort: 'E' };
 
-  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null };
+  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, enemy: { count: 0, behavior: 'stationary', items: [] } };
+  const EBEH = ['stationary', 'wander', 'escape', 'disable_escape', 'defend'];
+  function normEnemy(e) {
+    e = e || {};
+    const EI = (IT.GAME && IT.GAME.ENEMY_ITEMS) || [];
+    return { count: Math.max(0, Math.min(3, e.count | 0)), behavior: EBEH.includes(e.behavior) ? e.behavior : 'stationary', items: Array.isArray(e.items) ? e.items.filter(i => EI.includes(i)) : [] };
+  }
 
   const scenarios = () => IT.SCENARIOS || [];
   const scnOf = id => (id == null ? null : scenarios().find(s => s.id === id) || null);
@@ -15,7 +21,7 @@
 
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.grant = true; st.scenario = null;
+    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.enemy = normEnemy();
   }
   function load() {
     fresh();
@@ -28,10 +34,11 @@
     st.count = Math.max(1, Math.min(5, raw.count | 0 || 1));
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
     st.scenario = scnOf(raw.scenario) ? raw.scenario : null;
+    st.enemy = normEnemy(raw.enemy);
   }
   function save() {
     st.lo.mode = 'sandbox';
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario })); } catch (e) { /* ignore */ }
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario, enemy: st.enemy })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -287,6 +294,23 @@
         [1, 2, 3, 4, 5].map(n => h('button', { type: 'button', class: 'num' + (st.count === n ? ' on' : ''), text: n, onclick: () => { st.count = n; changed(); } }))));
     }
 
+    // ---- enemy (free play only)
+    const eneBox = reg('enemy', 'enemy');
+    function renderEnemy() {
+      eneBox.textContent = '';
+      const en = st.enemy;
+      if (st.scenario) { eneBox.appendChild(h('p', { class: 'fine', text: t('lo.enemy.scn') })); return; }
+      eneBox.appendChild(h('div', { class: 'row cnt' }, h('span', { class: 'lbl', text: t('lo.enemy.count') }),
+        [0, 1, 2, 3].map(n => h('button', { type: 'button', class: 'num' + (en.count === n ? ' on' : ''), text: n, onclick: () => { en.count = n; changed(); } }))));
+      if (!en.count) return;
+      eneBox.appendChild(h('div', { class: 'row wrap' }, EBEH.map(b => h('button', {
+        type: 'button', class: 'chipb' + (en.behavior === b ? ' on' : ''), text: t('lo.enemy.b.' + b), onclick: () => { en.behavior = b; changed(); },
+      }))));
+      eneBox.appendChild(h('div', { class: 'row wrap' }, GM.ENEMY_ITEMS.map(id => h('label', { class: 'tog' },
+        h('input', { type: 'checkbox', checked: en.items.includes(id) ? true : null, onchange: ev => { en.items = en.items.filter(x => x !== id); if (ev.target.checked) en.items.push(id); changed(); } }),
+        h('span', { class: 'box' }), h('span', { text: t('item.' + id) })))));
+    }
+
     // ---- scenario (optional) + sandbox options
     const scnBox = reg('scenario', 'scenario');
     function avail() { try { return IT.Combo ? IT.Combo.available(lo, { grantMissing: st.grant }).length : -1; } catch (e) { return -1; } }
@@ -352,7 +376,7 @@
         h('button', { type: 'button', class: 'btn big gold go' + (errs.length ? ' dis' : ''), text: t('ui.go'), 'data-tip': errs.length ? errs[0] : '', onclick: () => { const e2 = problems(); if (e2.length) { flash(e2[0]); return; } save(); IT.App.start(startOpts()); } })));
     }
 
-    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderScenario(); renderPrev(); renderGo(); }
+    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderEnemy(); renderScenario(); renderPrev(); renderGo(); }
     const sec = (title, ...kids) => h('section', { class: 'sec' }, h('h3', { text: title }), kids);
 
     const el = h('div', { class: 'scr loadout' },
@@ -366,6 +390,7 @@
         h('div', { class: 'col' },
           sec(t('lo.items'), itemBox, h('p', { class: 'fine', text: t('lo.itemsHint') })),
           sec(t('lo.dummy'), dumBox),
+          sec(t('lo.enemy'), eneBox),
           sec(t('lo.scenario'), scnBox)),
         h('div', { class: 'col' },
           sec(t('lo.preview'), prevBox),
@@ -376,7 +401,7 @@
 
   function startOpts() {
     save();
-    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null };
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null, enemy: scnOf(st.scenario) ? null : normEnemy(st.enemy) };
   }
 
   load();

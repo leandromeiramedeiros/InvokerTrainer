@@ -71,6 +71,14 @@
     const n = run ? 0 : opts.mode === 'sandbox' ? Math.max(1, opts.count | 0) : 1;
     for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
     g.nDummies = n;
+    if (!run && opts.enemy && opts.enemy.count > 0) {   // free play only: NPC enemies near the hero
+      const OFF = [[380, 0], [300, -230], [300, 230]];
+      for (let i = 0; i < Math.min(3, opts.enemy.count | 0); i++) {
+        let x = sp.x + OFF[i][0], y = sp.y + OFF[i][1];
+        if (!map.walkable(x, y) && IT.Nav && IT.Nav.nearestWalkable) { const p = IT.Nav.nearestWalkable(map, x, y); if (p) { x = p.x; y = p.y; } }
+        IT.Units.spawnEnemy(w, { x, y, behavior: opts.enemy.behavior, items: opts.enemy.items, skin: lo.skin });
+      }
+    }
     if (IT.StatsCollector) IT.StatsCollector.create(w);
     IT.Sfx && IT.Sfx.attach(w);
     IT.DummyChat && IT.DummyChat.attach(w, g);
