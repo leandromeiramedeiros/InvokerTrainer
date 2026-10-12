@@ -9,7 +9,7 @@ HARD RULE (user): a PLAYABLE build must be committed + pushed by 90 % usage (eit
 - d9a6a25 scroll-wheel zoom 0.7-1.2 (live view size, renderer resize, minimap own canvas).
 
 ## Cuts / shrinks (decided up front)
-- Maps: >=10 (not 20). Ranked infinite run uses the same scenario pool at bambam.
+- Maps: back to >=20 (user, 2026-10-12), carved from reference/dota_map.jpg (real Dota 2 map). Ranked infinite run uses the same scenario pool at bambam.
 - F6 icons: P2 — only if budget remains after P0/P1; then priority = 10 spells + player items.
 - PNG share: one template, ornament level by medal tier.
 - Music for splash: reuse existing stinger/theme.

@@ -314,6 +314,7 @@
       if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; inten = 0.25 + 0.5 * clamp(1 - rem, 0, 1); }
       else if (key === 'bolt') { r = 30; inten = 0.8; }
       else if (key === 'attack') { const g = orbPal(w.byId.get(e.src)).rgb; r = 30; inten = 0.75; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
+      else if (key === 'tower') { r = 30; inten = 0.75; const g = e.team === 1 ? [255, 120, 50] : [140, 255, 110]; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
       else if (key === 'chaosmeteor') { r = 80; inten = 0.9; }
       else if (key === 'meteorhammer') { c[0] = 40; c[1] = 190; c[2] = 255; inten = 0.7; }
       else if (key === 'gleipnir') { r = 34; inten = 0.8; c[0] = 255; c[1] = 200; c[2] = 70; }
@@ -638,6 +639,7 @@
           break;
         }
         case 'attack': drawFireball(R, e, x, y - 9 - zp, y); break;
+        case 'tower': IT.TowerDraw.proj(R, e, x, y - 9 - zp, y); break;
         case 'chaosmeteor': drawMeteor(R, e, x, y); break;
         case 'deafeningblast': drawBlast(R, e, x, y); break;
         default: break;

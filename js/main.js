@@ -8,7 +8,7 @@
   const aimG = aimCv.getContext('2d');
   const UI = IT.UI, S = IT.Settings;
 
-  let map = null, g = null, lastOpts = null, settingsOver = false, state = 'title';
+  let g = null, lastOpts = null, settingsOver = false, state = 'title';
   const THEME = { ranked: 'ranked', practice: 'practice', sandbox: 'sandbox' };
   const music = n => { try { IT.Music && IT.Music.play(n); } catch (e) { /* audio is optional */ } };
   const isScn = o => o.mode === 'ranked' || o.mode === 'practice' || (o.mode === 'sandbox' && !!o.scenario);
@@ -46,7 +46,7 @@
 
   // ---------------------------------------------------------------- game session
   function spawnDummyAt(i, lo) {
-    const sp = map.spawns.dummies[i % map.spawns.dummies.length];
+    const ds = g.w.map.spawns.dummies, sp = ds[i % ds.length];
     return IT.Units.spawnDummy(g.w, { x: sp.x, y: sp.y, preset: lo.preset, skin: lo.skin });
   }
 
@@ -54,7 +54,6 @@
     teardown();
     UI.clear(); UI.clearToasts();
     lastOpts = opts;
-    if (!map) map = IT.Map.build(IT.MAPDEF);
     const set = S.get(), scn = isScn(opts);
     let run = null, pr = null;
     if (scn) {   // ranked / practice / scenario sandbox: a run feeds scenarios; the first one builds the world
@@ -63,12 +62,14 @@
       pr = run.next();
     }
     const lo = IT.Loadout.normalize(scn ? pr.lo : opts.loadout);
+    const map = IT.Maps.get((scn ? pr.sc.map : opts.map) || 'grounds');
     const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: scn ? pr.fog : opts.fog !== false, autoAttack: set.autoAttack });
     const sp = map.spawns.hero;
     const hero = IT.Hero.create(w, lo, sp.x, sp.y);
     g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv, run, menu: false, quiet: false, failAt: {} };
     g.cam.centerOn(hero.x, hero.y); g.cam.lock = !!set.camLock;
     const n = run ? 0 : opts.mode === 'sandbox' ? Math.max(1, opts.count | 0) : 1;
+    if (!run && IT.Towers && map.towers && map.towers.length) IT.Towers.spawnAll(w, map);   // scenario runs spawn theirs in Ranked.apply
     for (let i = 0; i < n; i++) spawnDummyAt(i, lo);
     g.nDummies = n;
     if (!run && opts.enemy && opts.enemy.count > 0) {   // free play only: NPC enemies near the hero
@@ -105,7 +106,7 @@
       run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout
         g.lo = run.pr.lo; g.nDummies = run.dummies.length;
         IT.Input.cancel(true); aimG.clearRect(0, 0, aimCv.width, aimCv.height);
-        g.cam.centerOn(hero.x, hero.y); acc = 0;
+        g.cam.setMap(g.w.map); g.cam.centerOn(hero.x, hero.y); acc = 0;
         if (IT.HUD.resetMeter) IT.HUD.resetMeter();
         IT.HUD.bind(ctx);
       });
@@ -230,7 +231,7 @@
       if (!g || g.mode !== 'sandbox') return;
       const alive = g.w.query(e => e.kind === 'dummy');
       if (alive.length >= 8 || g.run) return;
-      const spots = map.spawns.dummies;
+      const spots = g.w.map.spawns.dummies;
       for (const s of spots) if (!alive.some(d => Math.hypot(d.x - s.x, d.y - s.y) < 150)) {
         IT.Units.spawnDummy(g.w, { x: s.x, y: s.y, preset: g.lo.preset, skin: g.lo.skin });
         UI.toast(IT.t('toast.spawned'), 'info'); return;
@@ -243,7 +244,7 @@
       const ds = g.w.query(e => e.kind === 'dummy');
       ds.forEach((d, i) => {
         if (i >= g.nDummies) { g.w.remove(d); return; }
-        const sp = map.spawns.dummies[i % map.spawns.dummies.length];
+        const dl = g.w.map.spawns.dummies, sp = dl[i % dl.length];
         d.x = sp.x; d.y = sp.y; d.hp = d.maxHp; d.mana = d.maxMana; d.orders.length = 0; d.path.length = 0;
         for (const s of d.statuses.slice()) IT.Status.remove(g.w, d, s.type);
       });

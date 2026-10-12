@@ -9,6 +9,8 @@
   const FLOOR = ['#15251a', '#1b2f20'].map(A), FLOOR_LEAF = A('#27401f');
   const DIRT = ['#503f2b', '#5f4a33', '#6e583b'].map(A), DIRT_PEB = A('#8a7656');
   const WATER = ['#1b3f6a', '#214a7b', '#28558a'].map(A), SHORE = A('#3b6c98'), FOAM = A('#6ea0bc');
+  const RIVER = ['#2a6c9c', '#3380ad', '#4094bd'].map(A), RIVER_EDGE = A('#6cb4d0'), RIVER_SAND = A('#9c8c62'), RIVER_FOAM = A('#a8dcec');
+  const STONE = ['#4a4a52', '#55555e', '#61616b'].map(A), STONE_LINE = A('#33333b'), STONE_HI = A('#7a7a86');
   const ROCK = ['#35323d', '#423e4b', '#4e4a59'].map(A);
   const R_HI = A('#9c98a8'), R_HI2 = A('#7a7686'), R_FACE = A('#26242d'), R_FACE2 = A('#2f2d38'), R_EDGE = A('#18161d'), R_LEFT = A('#66627a');
 
@@ -61,6 +63,8 @@
     const id = bx.createImageData(W, H), u = new Uint32Array(id.data.buffer);
     const at = (tx, ty) => map.at(tx, ty);
 
+    const el = (tx, ty) => map.elevTile(tx, ty);
+    const wet = t => t === 3 || t === 5, drt = t => t === 4 || t === 6 || t === 5 || t === 3;
     const grass = (x, y) => {
       const n = PX.noise2(x, y, 14, 1) * 0.65 + PX.noise2(x, y, 5, 2) * 0.35;
       const v = n + (PX.bayer(x, y) - 0.5) * 0.24;
@@ -81,7 +85,7 @@
     for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
       const t = at(tx, ty), x0 = tx * T, y0 = ty * T;
       const up = at(tx, ty - 1), dn = at(tx, ty + 1), lf = at(tx - 1, ty), rt = at(tx + 1, ty);
-      if (t === 3) {
+      if (t === 3 || t === 5) {
         waterIdx[ty * MW + tx] = shimmer.length / 3;
         for (let k = 0; k < 2; k++) shimmer.push(x0 + (PX.hash2(tx, ty, 20 + k) * T | 0), y0 + (PX.hash2(tx, ty, 30 + k) * T | 0), PX.hash2(tx, ty, 40 + k));
       }
@@ -89,26 +93,42 @@
         const x = x0 + lx, y = y0 + ly;
         let c;
         if (t === 0) c = grass(x, y);
-        else if (t === 1) {
+        else if (t === 6) {
+          const v = PX.noise2(x, y, 5, 14) + (PX.bayer(x, y) - 0.5) * 0.2;
+          c = v < 0.4 ? STONE[0] : v < 0.6 ? STONE[1] : STONE[2];
+          if ((ly === 0 || lx === 0) && (tx + ty) % 2 === 0) c = STONE_LINE;
+          else if (ly === 1 && lx > 0 && (tx + ty) % 2 === 1) c = STONE_HI;
+        } else if (t === 5) {
+          const v = PX.noise2(x * 1.0, y * 1.8, 7, 16) * 0.7 + PX.noise2(x, y, 3, 17) * 0.3 + (PX.bayer(x, y) - 0.5) * 0.22;
+          c = v < 0.4 ? RIVER[0] : v < 0.58 ? RIVER[1] : RIVER[2];
+          let d = 99;
+          if (!wet(up)) d = Math.min(d, ly);
+          if (!wet(dn)) d = Math.min(d, T - 1 - ly);
+          if (!wet(lf)) d = Math.min(d, lx);
+          if (!wet(rt)) d = Math.min(d, T - 1 - lx);
+          if (d === 0) c = PX.bayer(x, y) > 0.5 ? RIVER_SAND : RIVER_EDGE;
+          else if (d === 1 && PX.bayer(x, y) < 0.4) c = RIVER_EDGE;
+          else if (d === 2 && PX.bayer(x, y) < 0.15) c = RIVER_FOAM;
+        } else if (t === 1) {
           const v = PX.noise2(x, y, 6, 3) + (PX.bayer(x, y) - 0.5) * 0.3;
           c = PX.hash2(x, y, 12) < 0.03 ? FLOOR_LEAF : v < 0.5 ? FLOOR[0] : FLOOR[1];
         } else if (t === 4) {
           const v = PX.noise2(x, y, 7, 4) + (PX.bayer(x, y) - 0.5) * 0.26;
           c = PX.hash2(x, y, 13) < 0.025 ? DIRT_PEB : v < 0.42 ? DIRT[0] : v < 0.58 ? DIRT[1] : DIRT[2];
           let d = 99;
-          if (up !== 4 && up !== 3) d = Math.min(d, ly);
-          if (dn !== 4 && dn !== 3) d = Math.min(d, T - 1 - ly);
-          if (lf !== 4 && lf !== 3) d = Math.min(d, lx);
-          if (rt !== 4 && rt !== 3) d = Math.min(d, T - 1 - lx);
+          if (!drt(up)) d = Math.min(d, ly);
+          if (!drt(dn)) d = Math.min(d, T - 1 - ly);
+          if (!drt(lf)) d = Math.min(d, lx);
+          if (!drt(rt)) d = Math.min(d, T - 1 - lx);
           if (d < 3 && PX.hash2(x, y, 5) < (3 - d) / 3 * 0.85) c = grass(x, y);
         } else if (t === 3) {
           const v = PX.noise2(x * 1.0, y * 1.8, 8, 6) * 0.7 + PX.noise2(x, y, 3, 8) * 0.3 + (PX.bayer(x, y) - 0.5) * 0.2;
           c = v < 0.4 ? WATER[0] : v < 0.56 ? WATER[1] : WATER[2];
           let d = 99;
-          if (up !== 3) d = Math.min(d, ly);
-          if (dn !== 3) d = Math.min(d, T - 1 - ly);
-          if (lf !== 3) d = Math.min(d, lx);
-          if (rt !== 3) d = Math.min(d, T - 1 - lx);
+          if (up !== 3 && up !== 5) d = Math.min(d, ly);
+          if (dn !== 3 && dn !== 5) d = Math.min(d, T - 1 - ly);
+          if (lf !== 3 && lf !== 5) d = Math.min(d, lx);
+          if (rt !== 3 && rt !== 5) d = Math.min(d, T - 1 - lx);
           if (d === 0) c = PX.bayer(x, y) > 0.45 ? FOAM : SHORE;
           else if (d < 3 && PX.bayer(x, y) < 0.5 - d * 0.15) c = SHORE;
         } else {   // rock / cliff
@@ -118,6 +138,11 @@
           else if (dn !== 2 && ly >= T - 3) c = ly === T - 1 ? R_EDGE : ((x % 3) === 0 ? R_FACE2 : R_FACE);
           else if (lf !== 2 && lx === 0) c = R_LEFT;
           else if (rt !== 2 && lx === T - 1) c = R_FACE;
+        }
+        // elevation tint: plateaus lighter, pits darker and cooler
+        if (t !== 2) {
+          const e = el(tx, ty);
+          if (e === 2) c = mul(c, 1.16); else if (e === 0) c = mul(mul(c, 0.8), 1);
         }
         // cliff shadow on ground just below a rock tile
         if (t !== 2 && up === 2) { if (ly === 0) c = mul(c, 0.6); else if (ly === 1) c = mul(c, 0.8); }
@@ -143,19 +168,20 @@
 
     const spr = TREE_PAL.map(p => TREE_SHAPES.map(s => makeTree(p, s)));
     const mm = buildMini(map);
-    return { base, W, H, T, trees, treeRows, spr, shimmer, waterIdx, mini: mm };
+    return { map, base, W, H, T, trees, treeRows, spr, shimmer, waterIdx, mini: mm };
   }
 
   // minimap colour per mini pixel (covered tiles averaged); 135x75
   const MINI_W = 135, MINI_H = 75;
-  const MINI = [[44, 76, 44], [18, 40, 24], [92, 88, 104], [40, 88, 150], [104, 82, 56]];
+  const MINI = [[44, 76, 44], [18, 40, 24], [92, 88, 104], [40, 88, 150], [104, 82, 56], [64, 140, 206], [86, 86, 96]];
+  const ELEV_K = [0.78, 1, 1.2];
   function buildMini(map) {
     const w = MINI_W, h = MINI_H, rgb = new Uint8Array(w * h * 3);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const x0 = Math.floor(x * map.w / w), x1 = Math.max(x0, Math.ceil((x + 1) * map.w / w) - 1), y0 = Math.floor(y * map.h / h), y1 = Math.max(y0, Math.ceil((y + 1) * map.h / h) - 1);
       let r = 0, g = 0, b = 0, n = 0;
-      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) { const c = MINI[map.at(tx, ty)]; r += c[0]; g += c[1]; b += c[2]; n++; }
-      const i = (y * w + x) * 3; rgb[i] = r / n; rgb[i + 1] = g / n; rgb[i + 2] = b / n;
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) { const c = MINI[map.at(tx, ty)] || MINI[0], k = ELEV_K[map.elevTile(tx, ty)] || 1; r += c[0] * k; g += c[1] * k; b += c[2] * k; n++; }
+      const i = (y * w + x) * 3; rgb[i] = Math.min(255, r / n); rgb[i + 1] = Math.min(255, g / n); rgb[i + 2] = Math.min(255, b / n);
     }
     return { w, h, rgb };
   }

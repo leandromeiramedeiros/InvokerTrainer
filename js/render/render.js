@@ -28,8 +28,8 @@
       if (!on) gameCx.clearRect(0, 0, VW, VH);
     };
     let cx = gameCx;
-    const ter = IT.Terrain.build(w.map);
-    const fog = IT.Fog.create(w.map);
+    let ter = IT.Terrain.build(w.map);
+    let fog = IT.Fog.create(w.map);
     let light = IT.Light.create(VW, VH);
     IT.Particles.init(VW, VH);
     const prev = new Map();
@@ -40,20 +40,22 @@
     mmCv.width = MM_W + 2; mmCv.height = MM_H + 2;
     const mmCx = mmCv.getContext('2d'); mmCx.imageSmoothingEnabled = false;
 
-    // minimap layers
+    // minimap layers (rebuilt by R.setMap)
     const mmBase = document.createElement('canvas'); mmBase.width = MM_W; mmBase.height = MM_H;
-    {
-      const c = mmBase.getContext('2d'), img = c.createImageData(MM_W, MM_H), m = ter.mini;
-      for (let i = 0; i < MM_W * MM_H; i++) { img.data[i * 4] = m.rgb[i * 3]; img.data[i * 4 + 1] = m.rgb[i * 3 + 1]; img.data[i * 4 + 2] = m.rgb[i * 3 + 2]; img.data[i * 4 + 3] = 255; }
-      c.putImageData(img, 0, 0);
-    }
     const mmFog = document.createElement('canvas'); mmFog.width = MM_W; mmFog.height = MM_H;
     const mmFogC = mmFog.getContext('2d'), mmImg = mmFogC.createImageData(MM_W, MM_H);
     let mmTick = 0;
     // minimap pixel -> tile index pairs for fog sampling (2x2 around the pixel centre)
     const mmIx0 = new Int32Array(MM_W), mmIx1 = new Int32Array(MM_W), mmIy0 = new Int32Array(MM_H), mmIy1 = new Int32Array(MM_H);
-    for (let x = 0; x < MM_W; x++) { const c = (x + 0.5) * w.map.w / MM_W - 0.5; mmIx0[x] = Math.max(0, Math.min(w.map.w - 1, Math.floor(c))); mmIx1[x] = Math.min(w.map.w - 1, mmIx0[x] + 1); }
-    for (let y = 0; y < MM_H; y++) { const c = (y + 0.5) * w.map.h / MM_H - 0.5; mmIy0[y] = Math.max(0, Math.min(w.map.h - 1, Math.floor(c))); mmIy1[y] = Math.min(w.map.h - 1, mmIy0[y] + 1); }
+    function buildMM() {
+      const c = mmBase.getContext('2d'), img = c.createImageData(MM_W, MM_H), m = ter.mini;
+      for (let i = 0; i < MM_W * MM_H; i++) { img.data[i * 4] = m.rgb[i * 3]; img.data[i * 4 + 1] = m.rgb[i * 3 + 1]; img.data[i * 4 + 2] = m.rgb[i * 3 + 2]; img.data[i * 4 + 3] = 255; }
+      c.putImageData(img, 0, 0);
+      mmTick = 0;
+      for (let x = 0; x < MM_W; x++) { const c2 = (x + 0.5) * w.map.w / MM_W - 0.5; mmIx0[x] = Math.max(0, Math.min(w.map.w - 1, Math.floor(c2))); mmIx1[x] = Math.min(w.map.w - 1, mmIx0[x] + 1); }
+      for (let y = 0; y < MM_H; y++) { const c2 = (y + 0.5) * w.map.h / MM_H - 0.5; mmIy0[y] = Math.max(0, Math.min(w.map.h - 1, Math.floor(c2))); mmIy1[y] = Math.min(w.map.h - 1, mmIy0[y] + 1); }
+    }
+    buildMM();
 
     const R = {
       cx: gameCx, gx, w, P, VW, VH, camX: 0, camY: 0, time: 0, simT: 0, alpha: 1, fog, ter, lightmap: light,
@@ -95,6 +97,13 @@
         if (mx < MMX || my < MMY || mx >= MMX + MM_W || my >= MMY + MM_H) return null;
         return { x: (mx - MMX) / MM_W * w.map.W, y: (my - MMY) / MM_H * w.map.H };
       },
+      // new map on the same world (map swap between scenarios): terrain, fog and minimap tables are rebuilt, old snapshots dropped
+      setMap(map) {
+        if (map) w.map = map;
+        ter = R.ter = IT.Terrain.build(w.map);
+        fog = R.fog = IT.Fog.create(w.map);
+        prev.clear(); buildMM();
+      },
       // scroll-wheel zoom: GM.VIEW_W/VIEW_H changed -> rebuild every view-sized buffer in place (world listeners untouched)
       resize() {
         VW = R.VW = GM.VIEW_W; VH = R.VH = GM.VIEW_H;
@@ -111,6 +120,7 @@
     // VFX never carries over: a new world, a scenario swap / redo (scnStart) or a sandbox reset starts clean
     R.clearVfx = () => { IT.Particles.clear(); IT.Sand.clear(); IT.FX.clear(); };
     R.clearVfx();
+    w.on('mapChange', () => { if (w.map !== R.ter.map) R.setMap(w.map); });
     w.on('scnStart', () => R.clearVfx());
     w.on('cast', p => { if (p.kind !== 'item') IT.UnitDraw.castFlash(R, p); });   // spells only; items have no pose
     w.on('attack', p => IT.UnitDraw.launched(R, p));                                // wind-up release pop
@@ -134,6 +144,7 @@
         }
       }
     }
+    function drawTower(e) { IT.TowerDraw.draw(R, e, R.ix / P - R.camX, R.iy / P - R.camY); }
     function drawTree(t) {
       cx.drawImage(ter.spr[t.p][t.s], t.x - R.camX - IT.Terrain.TAX, t.y - R.camY - IT.Terrain.TAY);
     }
@@ -162,6 +173,12 @@
         const px = MMX + Math.round(e.x * sx), py = MMY + Math.round(e.y * sy);
         cx.fillStyle = e.kind === 'hero' ? '#6dff8a' : e.kind === 'spirit' ? '#ff9a30' : '#ff4a4a';
         cx.fillRect(px - 1, py - 1, e.kind === 'hero' ? 3 : 2, e.kind === 'hero' ? 3 : 2);
+      }
+      for (const e of w.ents) {      // towers: always drawn (also in fog), green allied / red enemy / grey destroyed
+        if (e.dead || e.kind !== 'tower') continue;
+        const px = MMX + Math.round(e.x * sx), py = MMY + Math.round(e.y * sy);
+        cx.fillStyle = '#000'; cx.fillRect(px - 2, py - 2, 5, 5);
+        cx.fillStyle = e.destroyed ? '#7a7a82' : e.team === 0 ? '#5dff7a' : '#ff5a4a'; cx.fillRect(px - 1, py - 1, 3, 3);
       }
       cx.strokeStyle = '#fff'; cx.lineWidth = 1;
       cx.strokeRect(MMX + Math.round(cam.x * sx) + 0.5, MMY + Math.round(cam.y * sy) + 0.5, Math.round(VW * P * sx) - 1, Math.round(VH * P * sy) - 1);
@@ -201,6 +218,7 @@
       tSand += performance.now() - tm; tm = performance.now();
       IT.Particles.draw(R, 0);
       IT.FX.ground(R);
+      IT.TowerDraw.ground(R);
       tFx += performance.now() - tm;
 
       // y-sorted pass: units, trees, tall fx
@@ -209,6 +227,11 @@
         if (e.dead || !IT.UnitDraw.isUnit(e) || !IT.UnitDraw.visible(R, e)) continue;
         R.interp(e);
         push(R.iy / P - R.camY, drawUnit, e);
+      }
+      for (const e of w.ents) {      // towers: buildings, always visible once on the map
+        if (e.dead || e.kind !== 'tower') continue;
+        R.interp(e);
+        push(R.iy / P - R.camY, drawTower, e);
       }
       drawTreesInto(R.camX, R.camY);
       tm = performance.now();
@@ -241,6 +264,7 @@
       for (const e of w.ents) if (!e.dead && IT.UnitDraw.isUnit(e) && IT.UnitDraw.visible(R, e)) IT.UnitDraw.lights(R, e);
       tm = performance.now();
       IT.FX.lights(R);
+      IT.TowerDraw.lights(R);
       const tl1 = performance.now();
       IT.Sand.lights(R);
       const tl2 = performance.now();
@@ -270,6 +294,7 @@
       if (useGL) R.cx = cx = gameCx;
       const th0 = performance.now();
       for (const e of w.ents) if (!e.dead && IT.UnitDraw.isUnit(e) && IT.UnitDraw.visible(R, e)) IT.UnitDraw.hud(R, e);
+      for (const e of w.ents) if (!e.dead && e.kind === 'tower') { R.interp(e); IT.TowerDraw.hud(R, e, R.ix / P - R.camX, R.iy / P - R.camY); }
       IT.FX.hud(R);
       minimap();
       tFx += performance.now() - th0;

@@ -81,10 +81,16 @@
 
   // swap the world over to a prepared scenario, in place (hero kept, everything else removed)
   function apply(w, pr) {
-    const hero = w.hero, df = pr.df, sc = pr.sc, sp = w.map.spawns.hero;
+    const hero = w.hero, df = pr.df, sc = pr.sc;
+    const nm = IT.Maps && IT.Maps.get ? IT.Maps.get(sc.map || 'grounds') : null;   // scenario map (default: the Training Grounds)
+    const swapped = !!nm && nm !== w.map;
+    if (swapped) w.map = nm;
+    const sp = w.map.spawns.hero;
     for (const e of w.ents) if (e !== hero && !e.dead) w.remove(e);
     w.ents = w.ents.filter(e => !e.dead);
     for (const [id, e] of w.byId) if (e.dead) w.byId.delete(id);
+    if (swapped) w.emit('mapChange', { map: nm.id });
+    if (IT.Towers && IT.Towers.spawnAll && w.map.towers && w.map.towers.length) IT.Towers.spawnAll(w, w.map);
     hero.statuses.length = 0; hero.orders.length = 0; hero.path.length = 0;
     hero.cd = {}; hero.inv = { orbs: [], slots: [null, null], invokeCd: 0 };
     hero._wind = null; hero._blinkLock = null; hero._pg = null; hero.channel = null;

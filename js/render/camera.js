@@ -11,6 +11,7 @@
     const cx = v => IT.U.clamp(v, 0, Math.max(0, map.W - GM.VIEW_W * P));
     const cy = v => IT.U.clamp(v, 0, Math.max(0, map.H - GM.VIEW_H * P));
     const cam = {
+      setMap(m) { map = m; cam.glide = null; cam.clamp(); },   // map swap: new bounds
       x: 0, y: 0, lock: false, follow: false, speed: 2200, edge: 3, glide: null, tau: TAU,
       clamp() { cam.x = cx(cam.x); cam.y = cy(cam.y); },
       centerOn(x, y) { cam.glide = null; cam.x = x - GM.VIEW_W * P / 2; cam.y = y - GM.VIEW_H * P / 2; cam.clamp(); },   // instant (minimap, start)

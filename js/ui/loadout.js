@@ -6,7 +6,7 @@
   const ORBS = ['quas', 'wex', 'exort'];
   const ORBK = { quas: 'Q', wex: 'W', exort: 'E' };
 
-  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, enemy: { count: 0, behavior: 'stationary', items: [] } };
+  const st = { lo: null, count: 1, fog: true, grant: true, scenario: null, map: 'grounds', enemy: { count: 0, behavior: 'stationary', items: [] } };
   const EBEH = ['stationary', 'wander', 'escape', 'disable_escape', 'defend'];
   function normEnemy(e) {
     e = e || {};
@@ -19,9 +19,10 @@
   const scnName = s => (s.name && typeof s.name === 'object' ? (s.name[IT.lang] || s.name.en) : s.name) || IT.t(s.nameKey || ('scn.' + s.id));
   const scnTip = s => (s.descKey ? IT.t(s.descKey) : '');
 
+  const mapOk = id => !!(id && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
   function fresh() {
     st.lo = IT.Loadout.normalize(Object.assign(IT.Loadout.default(), { mode: 'sandbox' }));
-    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.enemy = normEnemy();
+    st.count = 1; st.fog = true; st.grant = true; st.scenario = null; st.map = 'grounds'; st.enemy = normEnemy();
   }
   function load() {
     fresh();
@@ -35,10 +36,11 @@
     st.fog = raw.fog !== false; st.grant = raw.grant !== false;
     st.scenario = scnOf(raw.scenario) ? raw.scenario : null;
     st.enemy = normEnemy(raw.enemy);
+    st.map = mapOk(raw.map) ? raw.map : 'grounds';
   }
   function save() {
     st.lo.mode = 'sandbox';
-    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario, enemy: st.enemy })); } catch (e) { /* ignore */ }
+    try { G.localStorage.setItem(KEY, JSON.stringify({ lo: st.lo, count: st.count, fog: st.fog, grant: st.grant, scenario: st.scenario, map: st.map, enemy: st.enemy })); } catch (e) { /* ignore */ }
   }
 
   const talentIdx = (name) => IT.RULES.talentTiers.findIndex(t => t.left === name || t.right === name);
@@ -311,6 +313,21 @@
         h('span', { class: 'box' }), h('span', { text: t('item.' + id) })))));
     }
 
+    // ---- map (free play only; scenarios bring their own)
+    const mapBox = reg('map', 'mapbox');
+    function renderMap() {
+      mapBox.textContent = '';
+      if (st.scenario) { mapBox.appendChild(h('p', { class: 'fine', text: t('lo.map.scn') })); return; }
+      const ML = (IT.Maps && IT.Maps.list) || [];
+      if (!ML.length) return;
+      const nm = m => (IT.hasT('map.' + m.id) ? t('map.' + m.id) : (m.name && m.name.en) || m.id);
+      const sel = h('select', { class: 'mapsel', onchange: ev => { st.map = ev.target.value; changed(); } },
+        ML.map(m => h('option', { value: m.id, selected: st.map === m.id ? true : null, text: nm(m) })));
+      const cur = ML.find(m => m.id === st.map) || ML[0];
+      mapBox.appendChild(h('div', { class: 'row' }, h('span', { class: 'lbl', text: t('lo.map') }), sel));
+      mapBox.appendChild(h('p', { class: 'fine', text: IT.hasT('map.' + cur.id + '.d') ? t('map.' + cur.id + '.d') : ((cur.blurb && cur.blurb.en) || '') }));
+    }
+
     // ---- scenario (optional) + sandbox options
     const scnBox = reg('scenario', 'scenario');
     function avail() { try { return IT.Combo ? IT.Combo.available(lo, { grantMissing: st.grant }).length : -1; } catch (e) { return -1; } }
@@ -376,7 +393,7 @@
         h('button', { type: 'button', class: 'btn big gold go' + (errs.length ? ' dis' : ''), text: t('ui.go'), 'data-tip': errs.length ? errs[0] : '', onclick: () => { const e2 = problems(); if (e2.length) { flash(e2[0]); return; } save(); IT.App.start(startOpts()); } })));
     }
 
-    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderEnemy(); renderScenario(); renderPrev(); renderGo(); }
+    function all() { renderPts(); renderOrbs(); renderTalents(); renderAghs(); renderItems(); renderDummy(); renderEnemy(); renderMap(); renderScenario(); renderPrev(); renderGo(); }
     const sec = (title, ...kids) => h('section', { class: 'sec' }, h('h3', { text: title }), kids);
 
     const el = h('div', { class: 'scr loadout' },
@@ -391,6 +408,7 @@
           sec(t('lo.items'), itemBox, h('p', { class: 'fine', text: t('lo.itemsHint') })),
           sec(t('lo.dummy'), dumBox),
           sec(t('lo.enemy'), eneBox),
+          sec(t('lo.map'), mapBox),
           sec(t('lo.scenario'), scnBox)),
         h('div', { class: 'col' },
           sec(t('lo.preview'), prevBox),
@@ -401,7 +419,7 @@
 
   function startOpts() {
     save();
-    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null, enemy: scnOf(st.scenario) ? null : normEnemy(st.enemy) };
+    return { loadout: IT.Loadout.normalize(st.lo), mode: 'sandbox', count: st.count, fog: st.fog, grant: st.grant, scenario: scnOf(st.scenario) ? st.scenario : null, map: mapOk(st.map) ? st.map : 'grounds', enemy: scnOf(st.scenario) ? null : normEnemy(st.enemy) };
   }
 
   load();
