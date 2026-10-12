@@ -61,3 +61,14 @@ W1 launched (Sonnet, background), ids in session transcript:
 - Remaining (stash@{0}): HUD F1-F5 (hud.js/css), MAPS (maps.js/towers/terrain), scenario v4 content (scenarios.js), end splash/stats PNG/infinite run, B2 FP enemy card.
 - 2fc8b50 Free Play enemy section (count/behavior/items). F2: bigger scenario objective/tip text. Stopped at ~95 %.
 - Next: HUD F1 modes + F5 tooltips, MAPS, scenario v4 content, end splash/stats PNG/infinite run, F3 Aghs picker, F6 icons.
+
+## USER TODO (2026-10-12, priority over remaining stash work)
+1. Rename key "Center camera" -> "Select hero / Center camera": 1st press selects hero, 2nd press centers camera.
+2. Selected unit: green outline circle beneath it.
+3. Pathing line (green move, red attack, etc.): draw the path trajectory, animated.
+4. Cataclysm gives vision like Sun Strike.
+5. Instant-cast abilities: no range indicator, unless the user hovers the ability.
+6. Fog of war Dota-style ON/OFF, no memory: outside vision very dark (terrain + towers still visible), inside vision very bright.
+7. Ability rangefinder less intrusive (thinner/fainter).
+8. VFX must not persist from round to round (clear particles/sand/fx on scenario swap).
+9. Round countdown: no START button; skipped by the player's first move/cast/attack, and that first input is executed (seamless).
