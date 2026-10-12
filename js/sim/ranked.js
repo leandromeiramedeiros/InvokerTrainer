@@ -613,7 +613,7 @@
     const lvRng = IT.U.mulberry32((seed ^ 0x5bd1e995) >>> 0);   // v6 item 11: hero level rolls (own stream: picks / twists stay as they were)
     const run = {
       mode, ranked, infinite, fixed, rating, rng, lvRng, varRng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
-      runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
+      runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, log: [], dmgMark: 0, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
       pr: null, dummies: [], intro: null, result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
       // v6: a fixed sandbox scenario also gets the full countdown (nothing is pre-invoked: it is the time to invoke); item 13: the 12 s intro
@@ -786,6 +786,11 @@
         run.failed++; run.streak = 0; run.failId = pr.sc.id;
         w.emit('comboFail', { id: pr.sc.id, reason, detail: detail || null, spells: spells || null, s: reason === 'method' ? methodText(detail, spells) : '' });
       }
+      // v6 end splash: one record per concluded scenario (timeline strip + best combo): id, name, ok, fail reason, time / par / limit, points, step abilities, damage dealt this turn
+      const dealt = w._stats && w._stats.data && w._stats.data.damage ? Math.round(w._stats.data.damage.dealt.total || 0) : 0;
+      run.log.push({ n: run.n, id: pr.sc.id, name: pr.sc.name, ok: !!ok, reason: ok ? null : reason || null, detail: ok ? null : detail || null, time: Math.round(time * 10) / 10, par: pr.par, limit: pr.limit, points: pts,
+        steps: (pr.sc.steps || []).map(s => s.a).filter(a => a && a !== 'move'), dmg: Math.max(0, dealt - run.dmgMark) });
+      run.dmgMark = dealt;
       run.result = { ok, reason: reason || null, detail: detail || null, spells: spells || null, points: pts, time };
       run.phase = 'result'; run.hold = RESULT_HOLD; run.held = 0; w.paused = true;
       w.emit('scnResult', { id: pr.sc.id, ok, reason: reason || null, detail: detail || null, points: pts, time });
@@ -915,7 +920,7 @@
       const SC = IT.StatsCollector, rel = ranked && w && w._stats && SC && SC.relicScore ? SC.relicScore(w._stats.data.relics) : { score: 0, parts: [] };
       const clearScore = ranked || infinite ? run.score : 0, relicScore = ranked ? rel.score : 0;
       const sum = { mode, combos: run.solved, solved: run.solved, fails: run.failed, bestStreak: run.bestStreak, score: clearScore + relicScore, clearScore, relicScore, relicParts: rel.parts, reason: reason || 'time',
-        turns: run.turns, diff: run.pr ? run.pr.df.id : null, level: run.maxLevel || null };
+        turns: run.turns, diff: run.pr ? run.pr.df.id : null, level: run.maxLevel || null, log: run.log.slice() };
       if (ranked && (run.n > 0 || run.solved + run.failed > 0)) sum.rank = record(sum.score);
       if (infinite) {
         const r = recordInfinite(run.solved), sc = run.failId ? IT.SCENARIOS.get(run.failId) : null;

@@ -28,6 +28,31 @@
     });
   }
 
+  // item 14: SPECIAL relic level-up (multi-hero Ice Wall / EMP / Deafening Blast / Chaos Meteor): a sub boom + rising noise swell, a wide two-octave
+  // arpeggio (detuned saw pairs + FM bells), then a held major chord with a long shimmer tail. ~2 s, clearly bigger than relicTier.
+  if (SFX && SFX.define && SFX.T && SFX.N) {
+    const T = SFX.T, N = SFX.N;
+    SFX.define('relicSpecial', b => {
+      T(b, { type: 'sine', f: 90, f2: 38, d: 0.9, g: 0.16, a: 0.004 });
+      N(b, { nk: 'brown', ft: 'lowpass', f: 300, f2: 1200, d: 0.5, g: 0.07, a: 0.2, q: 0.7 });
+      N(b, { nk: 'pink', ft: 'bandpass', f: 800, f2: 5200, d: 0.45, g: 0.05, a: 0.4, q: 1.1 });
+      const arp = [392, 523.25, 659.25, 783.99, 1046.5, 1318.5, 1568];
+      arp.forEach((f, i) => {
+        const at = 0.28 + i * 0.07;
+        T(b, { type: 'sawtooth', f, d: 0.5, g: 0.032, a: 0.01, at, lp: 2600 });
+        T(b, { type: 'sawtooth', f: f * 1.006, d: 0.5, g: 0.026, a: 0.01, at, lp: 2600 });
+        T(b, { type: 'sine', f: f * 2, d: 0.8, g: 0.05, a: 0.002, at, mr: 3.5, mi: 1.2, mdec: 0.04 });
+      });
+      const end = 0.28 + arp.length * 0.07;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        T(b, { type: 'sawtooth', f, d: 1.5, g: 0.034, a: 0.03, at: end, lp: 2400 });
+        T(b, { type: 'sine', f: f * 2, d: 1.7, g: 0.05, a: 0.004, at: end + i * 0.04, mr: 3.5, mi: 1, mdec: 0.05 });
+      });
+      T(b, { type: 'triangle', f: 2093, d: 1.4, g: 0.04, a: 0.004, at: end + 0.1 });
+      N(b, { nk: 'pink', ft: 'highpass', f: 6000, d: 1.1, g: 0.04, at: end, q: 0.7 });
+    });
+  }
+
   // ---------------------------------------------------------------- engine
 
   // Per-voice metadata. verb = reverb send, prio = never dropped under load, low = first to be dropped,
@@ -130,6 +155,13 @@
       if (!SFX || !SFX.playEx || !SFX.has('relicTier') || !soundOn() || !once('relicTier', 400)) return false;
       this.calls++;
       SFX.playEx('relicTier', { vol: 0.7, pan: 0, tier, verb: 0.3, prio: 1 });
+      return true;
+    },
+    // special relic level-up (js/ui/relics.js special toast): bigger fanfare, still unpositioned and under the action; one per 800 ms
+    relicSpecial(tier) {
+      if (!SFX || !SFX.playEx || !SFX.has('relicSpecial') || !soundOn() || !once('relicSpecial', 800)) return false;
+      this.calls++;
+      SFX.playEx('relicSpecial', { vol: 0.8, pan: 0, tier, verb: 0.45, prio: 1 });
       return true;
     },
     detach() {

@@ -122,6 +122,26 @@
       txt(c, fmtN(sp.v), x0 + wd - 16, y + 34, 22, '#f1f4f8', 'right', true, 120);
     });
     if (!top.length) txt(c, t('end.sp.noDmg'), x0 + 16, y1 + 110, 18, '#9aa6b4', 'left', false, wd - 32);
+    // v6 item 8: per-turn timeline summary line (one cell per turn: cleared green / failed red / not played grey, time-vs-par bar, check / cross mark)
+    const tl = d.timeline || [];
+    if (tl.length) {
+      const ty = 508, n = tl.length, gap = 7, cwid = Math.floor((wd - gap * (n - 1)) / n), ok = tl.filter(c => c.state === 'ok').length, played = tl.filter(c => c.state !== 'none').length;
+      txt(c, t('share.timeline'), x0, ty, 15, '#9aa6b4', 'left', false, 200);
+      txt(c, ok + '/' + played + ' ' + t('end.tl.cleared'), x0 + wd, ty, 15, p.hi, 'right', true, 240);
+      tl.forEach((q, i) => {
+        const x = x0 + i * (cwid + gap), y = ty + 10, hh = 36, col = q.state === 'ok' ? '#58cc34' : q.state === 'fail' ? '#e4504c' : '#39414f';
+        c.fillStyle = 'rgba(8,10,14,0.62)'; c.fillRect(x, y, cwid, hh);
+        c.fillStyle = col; c.fillRect(x, y, cwid, 4);
+        if (q.state !== 'none') {   // mark: check / cross drawn as strokes (no glyph font needed)
+          const mx = x + 14, my = y + 18;
+          c.strokeStyle = col; c.lineWidth = 3; c.beginPath();
+          if (q.state === 'ok') { c.moveTo(mx - 6, my); c.lineTo(mx - 2, my + 5); c.lineTo(mx + 6, my - 6); } else { c.moveTo(mx - 5, my - 5); c.lineTo(mx + 5, my + 5); c.moveTo(mx + 5, my - 5); c.lineTo(mx - 5, my + 5); }
+          c.stroke();
+          c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x + 28, y + 14, cwid - 36, 6);
+          c.fillStyle = q.state === 'fail' ? '#e4504c' : q.under ? '#58cc34' : '#f2a43a'; c.fillRect(x + 28, y + 14, Math.max(2, (cwid - 36) * q.frac), 6);
+        }
+      });
+    }
     // footer: difficulty / level / date
     const dn = d.diff && IT.hasT('dtier.' + d.diff) ? t('dtier.' + d.diff) : d.diff || '';
     const foot = [dn ? t('share.diff') + ': ' + dn : '', d.level ? t('share.level') + ' ' + d.level : '', stamp()].filter(Boolean).join('   |   ');

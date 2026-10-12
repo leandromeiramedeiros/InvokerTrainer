@@ -34,8 +34,12 @@
     ITEMS_MAIN: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir'],
     ITEMS_EXTRA: ['blink', 'boots', 'travels', 'forcestaff', 'dust'],
     ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust', 'boots', 'travels'],   // v6 item 40: boots / travels add the KV ms bonus; items an enemy NPC may carry (v4; v6 dust: one charge, used by a chaser at the last-seen spot)
-    SKINS: ['pedro', 'renan', 'vitinho'],
-    SKIN_NAMES: { pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho' },
+    // v6 item 22: 'default' (bland hooded grunt) is FIRST: the skin a plain enemy wears. Flair lines per skin live in js/data/flair.js.
+    // TODO(ranked package): js/sim/ranked.js apply() rotates SK[(s0+i)%SK.length]; once the shop gates skins, ranked uses 'default' only.
+    // TODO(art): 'nando' needs a sprite sheet in js/art/dummies.js before it joins SKINS (flair lines already exist in flair.js); add 'nando' after 'vitinho'.
+    // TODO(CEO): 'ian' slot reserved (no skin, no sprite, no flair yet).
+    SKINS: ['default', 'pedro', 'renan', 'vitinho'],
+    SKIN_NAMES: { default: 'Grunt', pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho', nando: 'Nando' /* , ian: 'Ian' */ },
     // Dummy stat presets. Behavior: stationary | wander | evasive.
     DUMMY_PRESETS: {
       training: { hp: 2500, mana: 800, armor: 0, magicRes: 0.25, ms: 0, behavior: 'stationary', hpRegen: 0, manaRegen: 0, reaction: 0 },
@@ -62,7 +66,7 @@
       ranged: { min: 46, max: 54, bat: 1.7, point: 0.4, range: 600, projSpeed: 1250 },
       melee: { min: 50, max: 60, bat: 1.7, point: 0.4, range: 150, projSpeed: 0 },
     },
-    ENEMY_ATTACK_KIND: { pedro: 'ranged', renan: 'melee', vitinho: 'ranged' },   // skin -> ENEMY_ATTACK profile
+    ENEMY_ATTACK_KIND: { default: 'ranged', pedro: 'ranged', renan: 'melee', vitinho: 'ranged', nando: 'ranged' },   // skin -> ENEMY_ATTACK profile
     DUMMY: {
       refillBelow: 0.25,     // refill to full when HP drops below 25%
       radius: 24, vision: 800,

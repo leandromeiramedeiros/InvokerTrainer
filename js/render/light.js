@@ -42,6 +42,7 @@
       get night() { return nf; },
       // screen-space light: sx,sy px, radius px, rgb 0..255 array, intensity
       add(sx, sy, r, rgb, inten) {
+        if (!rgb || !(r > 0)) return;   // unknown colour (e.g. a bad orb id) must not throw per frame
         if (sx + r < 0 || sy + r < 0 || sx - r > VW || sy - r > VH) return;
         lights++;
         const x0 = Math.max(0, Math.floor((sx - r) / CELL)), x1 = Math.min(LW - 1, Math.floor((sx + r) / CELL));

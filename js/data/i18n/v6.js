@@ -44,6 +44,8 @@
       'sc.search': 'Search scenarios', 'sc.sort': 'Sort', 'sc.sort.level': 'Level, easy first', 'sc.sort.levelDesc': 'Level, hard first', 'sc.sort.name': 'Name A-Z', 'sc.sort.todo': 'Not cleared first',
       'sc.count': '{n} / {total}', 'sc.modeOr': 'ANY tag', 'sc.modeAnd': 'ALL tags', 'sc.mode.d': 'Tag filter: match any selected tag, or all of them', 'sc.clear': 'Clear', 'sc.clear.d': 'Reset tabs, tags and search',
       'sc.none': 'No scenario matches these filters.', 'sc.cleared': 'Cleared {n}x', 'sc.best': 'Best {time}s', 'tag.edge': 'edge', 'tag.juke': 'juke',
+      // v6 item 22: aria labels of the flair bubble icons (the lines themselves live in js/data/flair.js)
+      'dc.icon.muted': 'muted mic', 'dc.icon.camera': 'camera', 'dc.icon.monkey': 'monkey', 'dc.icon.star': 'star', 'dc.icon.goiaba': 'guava',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -88,5 +90,6 @@
       'sc.search': 'Buscar cenários', 'sc.sort': 'Ordem', 'sc.sort.level': 'Nível, fácil primeiro', 'sc.sort.levelDesc': 'Nível, difícil primeiro', 'sc.sort.name': 'Nome A-Z', 'sc.sort.todo': 'Não concluídos primeiro',
       'sc.count': '{n} / {total}', 'sc.modeOr': 'QUALQUER tag', 'sc.modeAnd': 'TODAS as tags', 'sc.mode.d': 'Filtro de tags: qualquer tag marcada, ou todas elas', 'sc.clear': 'Limpar', 'sc.clear.d': 'Zera abas, tags e busca',
       'sc.none': 'Nenhum cenário combina com esses filtros.', 'sc.cleared': 'Concluído {n}x', 'sc.best': 'Melhor {time}s', 'tag.edge': 'borda', 'tag.juke': 'juke',
+      'dc.icon.muted': 'microfone mutado', 'dc.icon.camera': 'camera', 'dc.icon.monkey': 'macaco', 'dc.icon.star': 'estrela', 'dc.icon.goiaba': 'goiaba',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

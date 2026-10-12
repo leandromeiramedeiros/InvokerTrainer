@@ -25,7 +25,7 @@ test('clear score: difficulty is a normalized bonus (ian x1 .. bambam x1.3), not
 });
 
 test('relic score: delta / step x weight x K, capped per relic; spell-skill relics weigh 3x raw volume', () => {
-  for (const r of RL.LIST) assert.ok([1, 2, 3].includes(r.weight), r.id);
+  for (const r of RL.LIST) assert.ok([0, 1, 2, 3].includes(r.weight), r.id);   // 0 = tracked + shown, not scored (item 14: triple_kills / rampages / killing_sprees)
   for (const id of ['sunstrike_kills', 'tornado_kills', 'multi_icewall', 'three_emp', 'three_deafening', 'multi_meteor', 'cataclysm_hits']) assert.equal(RL.BY[id].weight, 3, id);
   for (const id of ['alacrity_dmg', 'kills', 'meteor_dmg', 'emp_mana']) assert.equal(RL.BY[id].weight, 1, id);
   const K = SC.RELIC_K;

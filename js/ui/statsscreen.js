@@ -37,11 +37,8 @@
       h('div', { class: 'kcard' }, h('span', { text: t('stats.bestScore') }), h('b', { text: fmtN(life.bestScore || 0) })),
       h('div', { class: 'kcard' }, h('span', { text: t('stats.lifeDmg') }), h('b', { text: fmtN(life.damage && life.damage.dealt ? life.damage.dealt.total : 0) })),
       h('div', { class: 'kcard' }, h('span', { text: t('stats.started') }), h('b', { text: started + '/' + (R ? R.LIST.length : 0) })));
-    // started relics first (highest tier, then closest to the next one), then the ones still missing, in list order
-    const ids = R ? R.LIST.map(r => r.id) : [];
-    const key = id => { const pg = R.progress(id, rel[id] || 0); return (rel[id] > 0 ? 100 : 0) + pg.tier * 10 + pg.frac; };
-    ids.sort((a, b) => key(b) - key(a) || ids.indexOf(a) - ids.indexOf(b));
-    const grid = h('div', { class: 'st-relics' }, IT.UI.Relics ? ids.map(id => IT.UI.Relics.card(id, rel[id] || 0, 0)) : null);
+    // the client's relic grid: 4 special shields, then 3 / 4 / 3 regular ones (Dota relics), then the trainer relics (js/ui/relics.js collection)
+    const grid = h('div', { class: 'st-relics' }, IT.UI.Relics ? IT.UI.Relics.collection(rel) : null);
     let confirm = false;
     const rb = h('button', {
       type: 'button', class: 'btn dim', text: t('ui.reset'),

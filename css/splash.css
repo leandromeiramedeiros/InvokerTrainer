@@ -44,7 +44,7 @@
 @media (prefers-reduced-motion:reduce){.splash *,.scr.splash{animation-duration:.01s!important;animation-delay:0s!important}}
 @media (max-width:640px){.splash .sp-stage{width:9em;height:9em}.splash .sp-medal canvas{width:8.5em;height:8.5em}.splash .sp-count{font-size:4em}}
 
-/* v6 WP6: per-run medal side, tiles + damage block, relics button / panel, relic cards, in-play relic toast, stats screen collection */
+/* v6 WP6: per-run medal side, tiles + damage block, relics button (relic panel / cards / toast / stats collection: css/relics.css) */
 .splash .sp-body{gap:.8em;max-width:60em}
 .splash .sp-hero{gap:1.6em}
 .splash .sp-stage{width:10em;height:10em}
@@ -78,71 +78,62 @@
 .btn.relicbtn:hover{color:#fff;filter:brightness(1.15)}
 @keyframes spGrow{from{transform:scaleX(0)}to{transform:none}}
 
-/* relics panel (end splash) */
-.rl-over{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(4,3,10,.72)}
-.rl-panel{width:min(44em,94%);max-height:86%;display:flex;flex-direction:column;gap:.7em;padding:1em 1.2em;background:#130c24f2;border:3px solid #6a4ca8;box-shadow:0 0 0 2px #000,0 0 2.4em #9c52e455;animation:rlPop .3s cubic-bezier(.2,1.4,.4,1) both}
-.rl-panel h3{margin:0;color:#e6d4ff;letter-spacing:.14em;text-align:center;text-shadow:0 0 .6em #9c52e4}
-.rl-list{display:flex;flex-direction:column;gap:.5em;overflow:auto;min-height:0;padding-right:.3em}
-.rl-empty{text-align:center;color:#cfd6dc}
-.rl-empty .dim{color:#9aa6b4;font-size:.85em}
-.rl-foot{display:flex;justify-content:center}
-@keyframes rlPop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
-
-/* relic card (panel + stats screen) */
-.rl-card{display:flex;align-items:center;gap:.7em;padding:.45em .7em;background:#0b0618;border:2px solid #2e2250;min-width:0}
-.rl-card.dota{border-color:#4a3780}
-.rl-card.adv{border-color:#c9a4ff;box-shadow:0 0 .6em #9c52e444}
-.rl-ico{width:2.2em;height:2.2em;flex:none;image-rendering:pixelated;border:1px solid #000;box-shadow:0 0 0 1px #3a2a63}
-.rl-card.t0 .rl-ico{filter:grayscale(.85) brightness(.75)}
-.rl-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25em}
-.rl-top{display:flex;align-items:center;gap:.5em;min-width:0}
-.rl-top b{flex:1;min-width:0;color:#efe9ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.92em}
-.rl-tier{font-size:.72em;color:#f2c444;white-space:nowrap}
-.rl-card.t0 .rl-tier{color:#9a8fc0}
-.rl-pips{display:inline-flex;gap:2px}
-.rl-pips i{width:.5em;height:.5em;transform:rotate(45deg);background:#2a2044;border:1px solid #000}
-.rl-pips i.on{background:#f2c444;box-shadow:0 0 .3em #f2c444}
-.rl-bar{position:relative;height:.5em;background:#1d1236;border:1px solid #000}
-.rl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(#b48cff,#7a4fd0)}
-.rl-bar em{position:absolute;top:0;bottom:0;background:linear-gradient(#fff4a8,#f2c444);box-shadow:0 0 .5em #f2c444;animation:rlGain 1.2s ease-in-out infinite alternate}
-.rl-sub{display:flex;gap:.9em;font-size:.72em;color:#9a8fc0;white-space:nowrap;overflow:hidden}
-.rl-sub .rl-delta{color:#ffe27a;font-weight:bold}
-.rl-sub .rl-next{margin-left:auto}
-@keyframes rlGain{from{filter:brightness(.9)}to{filter:brightness(1.35)}}
-
-/* in-play relic toast: top-left over the world (clear of the scenario HUD and side panels), no input, gold bloom then fade */
-.rl-toasts{position:absolute;left:1.2%;top:20%;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:.4em;pointer-events:none;font-size:calc(var(--u,4px)*5)}
-.rl-toast{position:relative;display:flex;align-items:center;gap:.6em;padding:.4em .9em .4em .5em;background:#160c2cee;border:2px solid #f2c444;color:#efe9ff;box-shadow:0 0 0 2px #000;animation:rlIn .35s cubic-bezier(.2,1.5,.4,1) both,rlGlow 1.4s ease-out .1s both;transition:opacity .45s,transform .45s}
-.rl-toast.out{opacity:0;transform:translateX(-1em)}
-.rl-toast small{display:block;font-size:.68em;letter-spacing:.16em;color:#f2c444}
-.rl-toast b{font-size:.95em;white-space:nowrap}
-.rl-toast .rl-ico{width:1.9em;height:1.9em}
-.rl-bloom{position:absolute;inset:-60% -20%;background:radial-gradient(ellipse,#fff4a8aa 0%,#f2c44433 35%,transparent 65%);opacity:0;animation:rlBloom 1.1s ease-out both;pointer-events:none}
-@keyframes rlIn{from{opacity:0;transform:translateX(-2em) scale(.9)}to{opacity:1;transform:none}}
-@keyframes rlGlow{0%{box-shadow:0 0 0 2px #000,0 0 1.6em .4em #f2c444}100%{box-shadow:0 0 0 2px #000,0 0 .3em #f2c44466}}
-@keyframes rlBloom{0%{opacity:0;transform:scale(.4)}25%{opacity:1}100%{opacity:0;transform:scale(1.3)}}
-
-/* stats screen: relic collection, one screen at 1280x720 (the grid scrolls inside the panel) */
-.scr.st6 .panel{display:flex;flex-direction:column;max-height:calc(100vh - 4em);min-height:0;max-width:72em}
-.scr.st6 .ph{margin-bottom:.5em}
-.st-head{display:flex;flex-wrap:wrap;gap:.6em;margin-bottom:.6em}
-.st-head .kcard{flex:1;min-width:8em}
-.st-best{flex-direction:row!important;align-items:center;gap:.6em}
-.st-best>div{display:flex;flex-direction:column}
-.st-medal{width:3em;height:3em;image-rendering:pixelated;flex:none}
-.st-sub{display:flex;align-items:baseline;gap:1em;margin-bottom:.4em}
-.st-sub h3{margin:0;color:var(--gold,#f2c444);font-size:1em;letter-spacing:.08em}
-.st-sub .dim{font-size:.75em;color:var(--dim,#9a8fc0)}
-.st-relics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.45em;overflow:auto;min-height:0;flex:1 1 auto;padding-right:.3em;margin-bottom:.7em}
-@media (max-width:900px){.st-relics{grid-template-columns:repeat(2,minmax(0,1fr))}.splash .sp-grid{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:reduce){.rl-toast,.rl-bloom,.rl-bar em,.rl-panel{animation-duration:.01s!important;animation-delay:0s!important}}
-.st-relics .rl-tier{display:none}
+@media (max-width:900px){.splash .sp-grid{grid-template-columns:1fr}}
 
 /* ---- v6 WP9 ornaments */
 .splash .sp-tile,.splash .sp-dmg{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
-.rl-panel{border-image:var(--orn-frame) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
-.rl-card{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
-.rl-card.adv{border-image-source:var(--orn-mini-gold)}
-.rl-toast{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
 .btn.relicbtn{border-image-source:var(--orn-mini-gold)}
 .splash .sp-head{margin-left:calc(14*var(--fs));margin-right:calc(14*var(--fs))}
+
+/* ---- v6 items 8 + 9: best combo tile, turn timeline strip, tier-scaled show (FX table in js/ui/endsplash.js) */
+.splash .sp-tbest.wide{grid-column:1/-1}
+.splash .sp-tbest b.bc-name{font-size:1em;color:var(--sp1,#fff);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.splash .sp-tbest .bc-ico{display:flex;gap:.2em;flex-wrap:wrap}
+.splash .sp-tbest .bc-row{display:flex;align-items:center;gap:.5em;min-width:0}
+.splash .sp-tbest small{font-size:.78em;color:#cfd6dc}
+.splash .sp-tl{width:100%;display:flex;flex-direction:column;gap:.4em;padding:.6em .8em;background:rgba(6,8,12,.72);border:1px solid color-mix(in srgb,var(--sp1,#fff) 45%,#000);animation:spRise .45s ease-out 1.3s both;min-width:0;image-rendering:pixelated}
+.splash .sp-tlrow{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:.4em}
+.splash .tlc{position:relative;display:flex;flex-direction:column;gap:.22em;padding:.4em .5em .45em;background:#0b0e14;border:1px solid #000;border-top:.2em solid #58cc34;box-shadow:inset 0 0 0 1px #ffffff14;min-width:0;animation:spRise .4s ease-out both;animation-delay:calc(1.45s + var(--i,0)*.12s)}
+.splash .tlc.fail{border-top-color:#e4504c}
+.splash .tlc.none{border-top-color:#2a3140;opacity:.5}
+.splash .tl-top{display:flex;align-items:center;gap:.3em;font-size:.72em;color:#9aa6b4}
+.splash .tl-top i{font-style:normal;flex:1;letter-spacing:.06em}
+.splash .sp-gl{width:1em;height:1em;image-rendering:pixelated;flex:none}
+.splash .tl-name{font-size:.78em;color:#e6ebf0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.splash .tl-bar{position:relative;height:.45em;background:#ffffff14;border:1px solid #000}
+.splash .tl-bar i{display:block;height:100%;background:#58cc34;transform-origin:left;animation:spGrow .5s ease-out both;animation-delay:calc(1.6s + var(--i,0)*.12s)}
+.splash .tlc.over .tl-bar i{background:#f2a43a}
+.splash .tlc.fail .tl-bar i{background:#e4504c}
+.splash .tl-bar u{position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:#ffffffb0;text-decoration:none}
+.splash .tl-sub{font-size:.66em;color:#9aa6b4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.splash .tl-pts{font-size:.9em;color:var(--sp1,#fff)}
+.splash .tlc.fail .tl-pts{color:#9aa6b4}
+@media (max-width:900px){.splash .sp-tlrow{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+.splash .sp-sand{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;z-index:1}
+.splash .sp-rays{position:absolute;left:50%;top:50%;width:46em;height:46em;margin:-23em 0 0 -23em;pointer-events:none;z-index:-1;opacity:0;animation:spRaysIn 1.2s ease-out .66s both,spRays var(--rayT,90s) linear infinite}
+.splash .sp-medal{filter:drop-shadow(0 0 var(--glow,.6em) var(--sp1,#fff))}
+.splash .sp-aura{position:absolute;inset:-22%;border-radius:50%;background:radial-gradient(circle,var(--sp1,#fff) 0%,transparent 66%);opacity:0;pointer-events:none;z-index:-1;animation:spAura 2.6s ease-in-out 1.2s infinite}
+.splash .sp-medal canvas{animation:spBreath 2.6s ease-in-out 1.2s infinite}
+.splash .sp-medal .sp-shine{position:absolute;left:0;top:0;pointer-events:none;opacity:.6;
+  -webkit-mask-image:linear-gradient(115deg,transparent 42%,#000 50%,transparent 58%);mask-image:linear-gradient(115deg,transparent 42%,#000 50%,transparent 58%);
+  -webkit-mask-size:300% 100%;mask-size:300% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:85% 0;mask-position:85% 0;
+  animation:spShine 1.1s ease-in-out 1.3s 1 both,spBreath 2.6s ease-in-out 1.2s infinite}
+.splash .sp-medal.loop .sp-shine{animation:spShineL var(--shT,8s) ease-in-out 1.3s infinite,spBreath 2.6s ease-in-out 1.2s infinite}
+@keyframes spRaysIn{to{opacity:var(--rayA,0)}}
+@keyframes spRays{to{transform:rotate(360deg)}}
+@keyframes spAura{0%,100%{opacity:calc(.12 + var(--pl,0)*.1);transform:scale(.92)}50%{opacity:calc(.22 + var(--pl,0)*.6);transform:scale(calc(1 + var(--pl,0)*.18))}}
+@keyframes spBreath{50%{transform:scale(calc(1 + var(--pl,0)*.03))}}
+@keyframes spShine{0%{-webkit-mask-position:85% 0;mask-position:85% 0}100%{-webkit-mask-position:15% 0;mask-position:15% 0}}
+@keyframes spShineL{0%{-webkit-mask-position:85% 0;mask-position:85% 0}14%,100%{-webkit-mask-position:15% 0;mask-position:15% 0}}
+@media (prefers-reduced-motion:reduce){.splash *,.scr.splash{animation-iteration-count:1!important}.splash .sp-rays{animation:none!important;opacity:var(--rayA,0)}.splash .sp-aura,.splash .sp-shine,.splash .sp-medal canvas{animation:none!important}.splash .sp-aura{opacity:.2}.splash .sp-shine{display:none}}
+
+/* ornament ladder by medal tier: mini frame (0-1), thin (2-3), thin gold (4-5), gold frame + a framed hero (6), red-gold frame (7) */
+.splash.tier-0 .sp-tile,.splash.tier-0 .sp-dmg,.splash.tier-0 .sp-tl,.splash.tier-1 .sp-tile,.splash.tier-1 .sp-dmg,.splash.tier-1 .sp-tl{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round}
+.splash .sp-tl{border-image:var(--orn-thin) 8/calc(8*var(--fs)) round}
+.splash.tier-4 .sp-tile,.splash.tier-4 .sp-dmg,.splash.tier-4 .sp-tl,.splash.tier-5 .sp-tile,.splash.tier-5 .sp-dmg,.splash.tier-5 .sp-tl{border-image-source:var(--orn-thin-gold)}
+.splash.tier-6 .sp-tile,.splash.tier-6 .sp-dmg,.splash.tier-6 .sp-tl,.splash.tier-7 .sp-tile,.splash.tier-7 .sp-dmg,.splash.tier-7 .sp-tl{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round;box-shadow:0 0 1.2em color-mix(in srgb,var(--sp1,#fff) 35%,transparent)}
+.splash.tier-4 .sp-hero,.splash.tier-5 .sp-hero{border:calc(5*var(--fs)) solid transparent;border-image:var(--orn-mini-gold) 5/calc(5*var(--fs)) round;padding:.5em 1.6em;background:rgba(6,8,12,.3);image-rendering:pixelated}
+.splash.tier-6 .sp-hero,.splash.tier-7 .sp-hero{border:calc(12*var(--fs)) solid transparent;border-image:var(--orn-frame-gold) 12/calc(12*var(--fs)) round;padding:.4em 1.8em;background:rgba(6,8,12,.35);box-shadow:0 0 2em color-mix(in srgb,var(--sp1,#fff) 30%,transparent);image-rendering:pixelated}
+.splash.tier-7 .sp-hero{border-image-source:var(--orn-frame-red)}
+.splash.tier-3 .sp-head::before,.splash.tier-3 .sp-head::after,.splash.tier-4 .sp-head::before,.splash.tier-4 .sp-head::after,.splash.tier-5 .sp-head::before,.splash.tier-5 .sp-head::after,.splash.tier-6 .sp-head::before,.splash.tier-6 .sp-head::after,.splash.tier-7 .sp-head::before,.splash.tier-7 .sp-head::after{content:"";display:inline-block;width:calc(7*var(--fs));height:calc(7*var(--fs));margin:0 .7em;background:var(--sp1,#fff);transform:rotate(45deg);vertical-align:middle;box-shadow:0 0 .6em var(--sp1,#fff)}

@@ -46,8 +46,9 @@ test('scenario foes are real enemies: kind enemy, name/hp bar, distinct skins + 
   assert.equal(m.run.dummies.length, 4);
   for (const e of m.run.dummies) { assert.equal(e.kind, 'enemy'); assert.ok(!e.scarecrow && !e.noHpBar); assert.ok(e.ai && e.attack); }
   const sk = m.run.dummies.map(e => e.skin);
-  assert.deepEqual(sk, ['renan', 'vitinho', 'pedro', 'renan']);                       // starts at the chosen skin, then rotates
-  assert.deepEqual(m.run.dummies.map(e => e.name), ['Renan', 'Vitinho', 'Pedro', 'Renan 2']);
+  const SK = IT.GAME.SKINS, s0 = SK.indexOf('renan'), exp = [0, 1, 2, 3].map(i => SK[(s0 + i) % SK.length]);
+  assert.deepEqual(sk, exp);                                                          // starts at the chosen skin, then rotates through GAME.SKINS
+  assert.deepEqual(m.run.dummies.map(e => e.name), exp.map((s, i) => IT.GAME.SKIN_NAMES[s] + (i >= SK.length ? ' 2' : '')));
   assert.equal(new Set(sk.slice(0, 3)).size, 3);
   const g = mk('gleipnir_cluster', 'common', 'pedro');
   assert.equal(new Set(g.run.dummies.map(e => e.skin)).size, 3);

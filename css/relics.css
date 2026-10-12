@@ -1,0 +1,139 @@
+/* relics: end-splash panel, relic cards, in-play toast, stats screen collection (moved out of splash.css, item 14) */
+.rl-over{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(4,3,10,.72)}
+.rl-panel{width:min(44em,94%);max-height:86%;display:flex;flex-direction:column;gap:.7em;padding:1em 1.2em;background:#130c24f2;border:3px solid #6a4ca8;box-shadow:0 0 0 2px #000,0 0 2.4em #9c52e455;animation:rlPop .3s cubic-bezier(.2,1.4,.4,1) both}
+.rl-panel h3{margin:0;color:#e6d4ff;letter-spacing:.14em;text-align:center;text-shadow:0 0 .6em #9c52e4}
+.rl-list{display:flex;flex-direction:column;gap:.5em;overflow:auto;min-height:0;padding-right:.3em}
+.rl-empty{text-align:center;color:#cfd6dc}
+.rl-empty .dim{color:#9aa6b4;font-size:.85em}
+.rl-foot{display:flex;justify-content:center}
+@keyframes rlPop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+
+/* relic card (panel + stats screen) */
+.rl-card{display:flex;align-items:center;gap:.7em;padding:.45em .7em;background:#0b0618;border:2px solid #2e2250;min-width:0}
+.rl-card.dota{border-color:#4a3780}
+.rl-card.adv{border-color:#c9a4ff;box-shadow:0 0 .6em #9c52e444}
+.rl-ico{width:2.2em;height:2.2em;flex:none;image-rendering:pixelated;border:1px solid #000;box-shadow:0 0 0 1px #3a2a63}
+.rl-card.t0 .rl-ico{filter:grayscale(.85) brightness(.75)}
+.rl-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25em}
+.rl-top{display:flex;align-items:center;gap:.5em;min-width:0}
+.rl-top b{flex:1;min-width:0;color:#efe9ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.92em}
+.rl-tier{font-size:.72em;color:#f2c444;white-space:nowrap}
+.rl-card.t0 .rl-tier{color:#9a8fc0}
+.rl-pips{display:inline-flex;gap:2px}
+.rl-pips i{width:.5em;height:.5em;transform:rotate(45deg);background:#2a2044;border:1px solid #000}
+.rl-pips i.on{background:#f2c444;box-shadow:0 0 .3em #f2c444}
+.rl-bar{position:relative;height:.5em;background:#1d1236;border:1px solid #000}
+.rl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(#b48cff,#7a4fd0)}
+.rl-bar em{position:absolute;top:0;bottom:0;background:linear-gradient(#fff4a8,#f2c444);box-shadow:0 0 .5em #f2c444;animation:rlGain 1.2s ease-in-out infinite alternate}
+.rl-sub{display:flex;gap:.9em;font-size:.72em;color:#9a8fc0;white-space:nowrap;overflow:hidden}
+.rl-sub .rl-delta{color:#ffe27a;font-weight:bold}
+.rl-sub .rl-next{margin-left:auto}
+@keyframes rlGain{from{filter:brightness(.9)}to{filter:brightness(1.35)}}
+
+/* in-play relic toast: top-left over the world (clear of the scenario HUD and side panels), no input, gold bloom then fade */
+.rl-toasts{position:absolute;left:1.2%;top:20%;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:.4em;pointer-events:none;font-size:calc(var(--u,4px)*5)}
+.rl-toast{position:relative;display:flex;align-items:center;gap:.6em;padding:.4em .9em .4em .5em;background:#160c2cee;border:2px solid #f2c444;color:#efe9ff;box-shadow:0 0 0 2px #000;animation:rlIn .35s cubic-bezier(.2,1.5,.4,1) both,rlGlow 1.4s ease-out .1s both;transition:opacity .45s,transform .45s}
+.rl-toast.out{opacity:0;transform:translateX(-1em)}
+.rl-toast small{display:block;font-size:.68em;letter-spacing:.16em;color:#f2c444}
+.rl-toast b{font-size:.95em;white-space:nowrap}
+.rl-toast .rl-ico{width:1.9em;height:1.9em}
+.rl-bloom{position:absolute;inset:-60% -20%;background:radial-gradient(ellipse,#fff4a8aa 0%,#f2c44433 35%,transparent 65%);opacity:0;animation:rlBloom 1.1s ease-out both;pointer-events:none}
+@keyframes rlIn{from{opacity:0;transform:translateX(-2em) scale(.9)}to{opacity:1;transform:none}}
+@keyframes rlGlow{0%{box-shadow:0 0 0 2px #000,0 0 1.6em .4em #f2c444}100%{box-shadow:0 0 0 2px #000,0 0 .3em #f2c44466}}
+@keyframes rlBloom{0%{opacity:0;transform:scale(.4)}25%{opacity:1}100%{opacity:0;transform:scale(1.3)}}
+
+/* stats screen: relic collection, one screen at 1280x720 (the grid scrolls inside the panel) */
+.scr.st6 .panel{display:flex;flex-direction:column;max-height:calc(100vh - 4em);min-height:0;max-width:72em}
+.scr.st6 .ph{margin-bottom:.5em}
+.st-head{display:flex;flex-wrap:wrap;gap:.6em;margin-bottom:.6em}
+.st-head .kcard{flex:1;min-width:8em}
+.st-best{flex-direction:row!important;align-items:center;gap:.6em}
+.st-best>div{display:flex;flex-direction:column}
+.st-medal{width:3em;height:3em;image-rendering:pixelated;flex:none}
+.st-sub{display:flex;align-items:baseline;gap:1em;margin-bottom:.4em}
+.st-sub h3{margin:0;color:var(--gold,#f2c444);font-size:1em;letter-spacing:.08em}
+.st-sub .dim{font-size:.75em;color:var(--dim,#9a8fc0)}
+@media (prefers-reduced-motion:reduce){.rl-toast,.rl-bloom,.rl-bar em,.rl-panel{animation-duration:.01s!important;animation-delay:0s!important}}
+
+/* ornaments */
+.rl-panel{border-image:var(--orn-frame) 12/calc(12*var(--fs)) round;image-rendering:pixelated}
+.rl-card{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.rl-card.adv{border-image-source:var(--orn-mini-gold)}
+.rl-toast{border-image:var(--orn-thin-gold) 8/calc(8*var(--fs)) round;image-rendering:pixelated}
+
+/* ---- item 14: special relics ---- */
+.rl-card.special{border-color:#e0a8ff;background:linear-gradient(100deg,#1d0c33,#0b0618 70%);box-shadow:0 0 .8em #d46cff55,inset 0 0 .9em #f2c44422;position:relative;overflow:hidden;padding:.6em .8em}
+.rl-card.special .rl-ico{width:2.8em;height:2.8em;box-shadow:0 0 0 1px #f2c444,0 0 .6em #f2c44488}
+.rl-card.special .rl-top b{color:#fff4c8}
+.rl-spk{display:block;font-size:.6em;letter-spacing:.2em;color:#ff9be8;text-shadow:0 0 .5em #d46cff}
+.rl-card.special.on::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:30%;pointer-events:none;background:linear-gradient(100deg,transparent,#fff4a855,transparent);transform:skewX(-18deg);animation:rlShim 4.2s ease-in-out 1s infinite}
+@keyframes rlShim{0%{left:-40%}45%,100%{left:130%}}
+
+/* stats screen: the client's shield grid. rows 4 (special) / 3 / 4 / 3, then the trainer relics */
+.st-relics{display:block;overflow:auto;min-height:0;flex:1 1 auto;padding:0 .3em .4em 0;margin-bottom:.4em}
+.rl-coll{display:flex;flex-direction:column;align-items:center;gap:.2em}
+.rl-chead{align-self:stretch;display:flex;justify-content:center;color:#e6d4ff;letter-spacing:.14em;font-size:.9em;text-shadow:0 0 .6em #9c52e4}
+.rl-grid{display:flex;flex-direction:column;align-items:center}
+.rl-row{display:flex;justify-content:center;gap:.7em}
+.rl-row+.rl-row{margin-top:-1.1em}
+.rl-thead{margin-top:.5em;color:#9a8fc0;font-size:.72em;letter-spacing:.2em}
+.rl-row.tr{flex-wrap:wrap;margin-top:-.2em}
+.rl-tile{position:relative;width:8em;flex:none;filter:drop-shadow(0 .2em .25em #000c)}
+.rl-tile.special{width:10em;filter:drop-shadow(0 .2em .35em #000c) drop-shadow(0 0 .5em #d46cff66)}
+.rl-sh{position:relative;aspect-ratio:.9;padding:.18em;background:linear-gradient(#5a4a86,#2c2250 55%,#1d1636);
+  clip-path:polygon(0 9%,9% 0,91% 0,100% 9%,100% 68%,50% 100%,0 68%)}
+.rl-sh.t1{background:linear-gradient(#b48cff,#5a3a9c)}
+.rl-sh.t2{background:linear-gradient(#6ab0ff,#2c5aa0)}
+.rl-sh.t3{background:linear-gradient(#7fe0a0,#2c8a58)}
+.rl-sh.t4{background:linear-gradient(#ffd070,#a8741c)}
+.rl-sh.t5{background:linear-gradient(#fff4a8,#e08a2c 50%,#a8441c)}
+.rl-sh.special{padding:.24em;background:linear-gradient(#f2c444,#a14fd0 55%,#e04fa8)}
+.rl-shin{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.22em;padding:.5em .5em 1.6em;box-sizing:border-box;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 28%,#2e2250,#120a22 75%);
+  clip-path:polygon(0 8.6%,8.6% 0,91.4% 0,100% 8.6%,100% 67.5%,50% 100%,0 67.5%)}
+.rl-sh.special .rl-shin{background:radial-gradient(ellipse at 50% 28%,#3a1c58,#150826 75%);padding-bottom:1.9em}
+.rl-shin .rl-ico{width:2.6em;height:2.6em}
+.rl-sh.special .rl-ico{width:3.2em;height:3.2em;box-shadow:0 0 0 1px #f2c444,0 0 .6em #f2c44488}
+.rl-sh.t0:not(.on) .rl-ico{filter:grayscale(.85) brightness(.7)}
+.rl-nm{max-width:100%;color:#efe9ff;font-size:.74em;line-height:1.1;text-align:center;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.2em}
+.rl-sh.special .rl-nm{font-size:.82em;color:#fff4c8}
+.rl-shin .rl-pips{margin:.05em 0}
+.rl-shin .rl-bar{width:76%;height:.4em}
+.rl-val{font-size:.62em;color:#b8aadc;white-space:nowrap}
+.rl-sh.special .rl-val{color:#ffdff6}
+.rl-orn{position:absolute;inset:0;pointer-events:none}
+.rl-orn i{position:absolute;width:.5em;height:.5em;background:linear-gradient(135deg,#fff4a8,#f2c444);transform:rotate(45deg);box-shadow:0 0 .4em #f2c444}
+.rl-orn i:nth-child(1){left:50%;top:.1em;margin-left:-.25em}
+.rl-orn i:nth-child(2){left:.35em;top:.9em}
+.rl-orn i:nth-child(3){right:.35em;top:.9em}
+.rl-sh.on.special .rl-shin::after,.rl-sh.on.t5 .rl-shin::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:35%;pointer-events:none;background:linear-gradient(100deg,transparent,#ffffff40,transparent);transform:skewX(-18deg);animation:rlShim 4.6s ease-in-out 1s infinite}
+
+/* special relic toast: big, centred in the upper stage, no input */
+.rl-sp-box{position:absolute;left:0;right:0;top:12%;z-index:7;display:flex;flex-direction:column;align-items:center;gap:1.4em;pointer-events:none;font-size:calc(var(--u,4px)*7.5)}
+.rl-sp{--ac:#ff4fd8;position:relative;display:flex;justify-content:center;pointer-events:none;animation:rlSpIn .5s cubic-bezier(.2,1.5,.4,1) both;transition:opacity .45s,transform .45s}
+.rl-sp.out{opacity:0;transform:translateY(-.8em) scale(.96)}
+.rl-spcard{position:relative;z-index:2;display:flex;align-items:center;gap:.9em;min-width:17em;padding:.7em 1.4em .7em .8em;background:linear-gradient(100deg,#2a1048f2,#120a24f2 70%);border:3px solid var(--ac);color:#fff4c8;
+  box-shadow:0 0 0 2px #000,0 0 1.6em .3em var(--ac),inset 0 0 1em #f2c44433;animation:rlSpGlow 1.6s ease-out .1s both}
+.rl-spico{display:flex}
+.rl-spcard .rl-ico{width:3.4em;height:3.4em;box-shadow:0 0 0 2px #f2c444,0 0 .9em var(--ac)}
+.rl-sptxt{display:flex;flex-direction:column;gap:.25em;min-width:0}
+.rl-sptxt small{font-size:.6em;letter-spacing:.24em;color:var(--ac);text-shadow:0 0 .6em var(--ac);white-space:nowrap}
+.rl-sptxt b{font-size:1.15em;white-space:nowrap;text-shadow:0 0 .5em #f2c44488}
+.rl-sptxt .rl-bar{width:100%;height:.5em}
+.rl-sptxt .rl-val{font-size:.62em;color:#ffdff6}
+.rl-rays{position:absolute;left:50%;top:50%;width:34em;height:34em;margin:-17em 0 0 -17em;z-index:0;pointer-events:none;opacity:0;
+  background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--ac) 55%,#fff4a8) 0 7deg,transparent 7deg 22.5deg);
+  -webkit-mask-image:radial-gradient(circle,#000 8%,transparent 66%);mask-image:radial-gradient(circle,#000 8%,transparent 66%);
+  animation:rlRaysIn .6s ease-out .05s both,rlRaysSpin 9s linear infinite}
+.rl-bloom.big{z-index:1;inset:-120% -35%;background:radial-gradient(ellipse,#fff4a8cc 0%,color-mix(in srgb,var(--ac) 45%,transparent) 32%,transparent 66%);animation:rlBloom 1.5s ease-out both}
+.rl-pts{position:absolute;left:3em;top:50%;z-index:3;width:0;height:0;pointer-events:none}
+.rl-pts i{position:absolute;left:0;top:0;width:var(--s,.3em);height:var(--s,.3em);margin:calc(var(--s,.3em)/-2) 0 0 calc(var(--s,.3em)/-2);background:#fff4a8;box-shadow:0 0 .5em var(--ac),0 0 .2em #fff;opacity:0;
+  animation:rlPt 1.5s ease-out var(--dl,0s) both}
+.rl-pts i:nth-child(3n){background:var(--ac)}
+@keyframes rlSpIn{from{opacity:0;transform:translateY(-1.2em) scale(.7)}to{opacity:1;transform:none}}
+@keyframes rlSpGlow{0%{box-shadow:0 0 0 2px #000,0 0 3em .9em var(--ac),inset 0 0 1.4em #fff4a899}100%{box-shadow:0 0 0 2px #000,0 0 1em .1em var(--ac),inset 0 0 1em #f2c44433}}
+@keyframes rlRaysIn{to{opacity:.55}}
+@keyframes rlRaysSpin{to{transform:rotate(360deg)}}
+@keyframes rlPt{0%{opacity:0;transform:rotate(var(--a)) translateX(0) scale(.5)}12%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateX(var(--d)) scale(1.1)}}
+@media (max-width:900px){.rl-tile{width:6.6em}.rl-tile.special{width:8.2em}}
+@media (prefers-reduced-motion:reduce){.rl-rays{animation:none;opacity:.35}.rl-pts{display:none}.rl-sp,.rl-spcard,.rl-bloom.big{animation-duration:.01s!important;animation-delay:0s!important}.rl-card.special.on::after,.rl-sh.on .rl-shin::after{animation:none;display:none}}

@@ -29,7 +29,7 @@ const dmg = (w, src, t, ability, amount, type) => IT.Combat.damage(w, { src: src
 
 test('relics data: the Invoker relics + generic kill relics, 5 ascending tiers, tier / progress / fmt', () => {
   const ids = RL.LIST.map(r => r.id);
-  for (const id of ['sunstrike_kills', 'tornado_kills', 'multi_icewall', 'three_emp', 'three_deafening', 'multi_meteor', 'alacrity_dmg', 'kills', 'stun_kills', 'blink_kills', 'bkb_kills']) {
+  for (const id of ['sunstrike_kills', 'tornado_kills', 'multi_icewall', 'three_emp', 'three_deafening', 'multi_meteor', 'alacrity_dmg', 'kills', 'stun_kills', 'blink_kills', 'bkb_kills', 'triple_kills', 'rampages', 'killing_sprees']) {
     assert.ok(ids.includes(id), id); assert.equal(RL.BY[id].dota, true, id);
   }
   assert.equal(new Set(ids).size, ids.length);
@@ -48,7 +48,8 @@ test('relics data: the Invoker relics + generic kill relics, 5 ascending tiers, 
 test('relics data: Dota relics level linearly by the items_game in_game_display_interval step (local build 6957), tiers = levels 1..5', () => {
   // kill_eater_score_types.<event>.in_game_display_interval (scripts/items/items_game.txt, pak01_dir.vpk, build 6957)
   const STEP = { sunstrike_kills: [23, 15], tornado_kills: [32, 3], multi_icewall: [578, 25], three_emp: [579, 5], three_deafening: [580, 5],
-    multi_meteor: [581, 20], alacrity_dmg: [582, 25000], kills: [0, 75], stun_kills: [5043, 50], blink_kills: [5038, 100], bkb_kills: [5041, 15] };
+    multi_meteor: [581, 20], alacrity_dmg: [582, 25000], kills: [0, 75], stun_kills: [5043, 50], blink_kills: [5038, 100], bkb_kills: [5041, 15],
+    triple_kills: [223, 2], rampages: [224, 1], killing_sprees: [8, 10] };
   for (const [id, [ev, step]] of Object.entries(STEP)) {
     const r = RL.BY[id]; assert.equal(r.event, ev, id); assert.equal(r.step, step, id);
     assert.deepEqual(r.tiers, [1, 2, 3, 4, 5].map(k => k * step), id);
@@ -174,4 +175,85 @@ test('i18n: relics pack en/pt parity + placeholders, a name and description for 
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
     for (const mt of src.matchAll(/\bt\('((?:relics|stats\.(?:relics|runs|bestMedal|bestScore|lifeDmg|started|noMedal))[a-zA-Z.]*)'/g)) assert.ok(en.includes(mt[1]), f + ' uses ' + mt[1]);
   }
+});
+
+// ---- item 14: special relics (client RELICS 0/14: 4 special + 3 Invoker + 7 generic), shield layout, big-toast queue, new generic relics
+test('special relics: exactly the 4 rare ones, client layout rows 4-3-4-3 (14 Dota relics) + trainer relics outside', () => {
+  assert.deepEqual(RL.SPECIAL, ['multi_icewall', 'three_emp', 'three_deafening', 'multi_meteor']);
+  for (const r of RL.LIST) assert.equal(!!r.special, RL.SPECIAL.includes(r.id), r.id);
+  for (const id of RL.SPECIAL) { assert.equal(RL.isSpecial(id), true); assert.equal(RL.BY[id].dota, true); }
+  assert.equal(RL.isSpecial('kills'), false); assert.equal(RL.isSpecial('nope'), false);
+  assert.deepEqual(RL.ROWS.map(r => r.length), [4, 3, 4, 3]);
+  assert.equal(RL.DOTA, 14); assert.equal(RL.TRAINER.length, 6);
+  const placed = RL.ROWS.flat();
+  assert.equal(new Set(placed).size, 14, 'every Dota relic is in exactly one row');
+  for (const id of placed) assert.equal(RL.BY[id].dota, true, id);
+  for (const id of RL.TRAINER) assert.equal(RL.BY[id].dota, false, id);
+  assert.equal(RL.ROWS[0].join(), RL.SPECIAL.join());
+});
+
+test('collector: triple kills (3 inside the chain window), rampages (5), killing sprees (3 without dying); weight 0 relics are not scored', () => {
+  const { w, h, S } = mk(true);
+  const foes = [];
+  for (let i = 0; i < 6; i++) foes.push(IT.Units.spawnEnemy(w, { x: h.x + 500, y: h.y + i * 60, hp: 500, attack: false }));
+  for (let i = 0; i < 5; i++) { dmg(w, h, foes[i], 'attack', 1e5, 'physical'); w.t += 2; }
+  let r = S.summary().relics;
+  assert.equal(r.kills, 5);
+  assert.equal(r.triple_kills, 1, 'the 3rd kill of the chain');
+  assert.equal(r.rampages, 1, 'the 5th kill of the chain');
+  assert.equal(r.killing_sprees, 1, '3 kills without dying');
+  dmg(w, h, foes[5], 'attack', 1e5, 'physical');
+  r = S.summary().relics;
+  assert.equal(r.triple_kills, 1, 'the 6th kill is not a new triple'); assert.equal(r.rampages, 1);
+  for (const id of ['triple_kills', 'rampages', 'killing_sprees']) assert.equal(RL.BY[id].weight, 0, id);
+  assert.equal(SC.relicScore({ triple_kills: 4, rampages: 3, killing_sprees: 9 }).score, 0, 'tracked, not scored');
+  assert.deepEqual(SC.relicScore({ triple_kills: 4 }).parts, []);
+});
+
+test('collector: a gap above the chain window restarts the chain (no triple from 1 + 1 + 1 spread out)', () => {
+  const { w, h, S } = mk(true);
+  const foes = [];
+  for (let i = 0; i < 3; i++) foes.push(IT.Units.spawnEnemy(w, { x: h.x + 500, y: h.y + i * 60, hp: 500, attack: false }));
+  for (const f of foes) { dmg(w, h, f, 'attack', 1e5, 'physical'); w.t += 30; }
+  const r = S.summary().relics;
+  assert.equal(r.kills, 3); assert.equal(r.triple_kills, undefined);
+  assert.equal(r.killing_sprees, 1, 'the spree is deaths-based, not time-based');
+});
+
+test('special toast queue: one at a time, in order, ~3 s each; clear drops the pending ones', () => {
+  const ui = load([...FILES, 'js/ui/relics.js']).UI.Relics;
+  assert.equal(ui.SPECIAL_MS, 3000);
+  const timers = [], shown = [];
+  const q = ui.createQueue(e => { shown.push(e.id); return 3000; }, (f, ms) => timers.push({ f, ms }));
+  q.push({ id: 'multi_icewall' }); q.push({ id: 'three_emp' }); q.push({ id: 'multi_meteor' });
+  assert.deepEqual(shown, ['multi_icewall'], 'only the first is up');
+  assert.equal(q.busy, true); assert.equal(q.length, 2);
+  assert.equal(timers.length, 1); assert.equal(timers[0].ms, 3000);
+  timers.shift().f();
+  assert.deepEqual(shown, ['multi_icewall', 'three_emp']);
+  q.clear(); assert.equal(q.length, 0);
+  timers.shift().f();
+  assert.deepEqual(shown, ['multi_icewall', 'three_emp'], 'cleared');
+  assert.equal(q.busy, false);
+  q.push({ id: 'three_deafening' }); assert.deepEqual(shown.slice(-1), ['three_deafening'], 'idle queue starts again');
+  // a throwing renderer never wedges the queue
+  const q2 = ui.createQueue(() => { throw new Error('x'); }, (f, ms) => timers.push({ f, ms }));
+  q2.push({ id: 'a' }); q2.push({ id: 'b' });
+  assert.equal(q2.length, 1); timers.pop().f(); assert.equal(q2.length, 0);
+});
+
+test('special toast: UI toast routes specials into the queue (not the small toast), regular relics keep the small one', () => {
+  const ui = load([...FILES, 'js/ui/relics.js']).UI.Relics;
+  assert.equal(ui.toast({ id: 'multi_icewall', tier: 1, value: 25 }), null, 'no DOM in node: nothing built, no throw');
+  assert.equal(ui.toast({ id: 'kills', tier: 1, value: 75 }), null);
+  assert.equal(ui.advanced({ kills: 3, multi_meteor: 1, tornado_kills: 1 }).join(), 'multi_meteor,tornado_kills,kills', 'specials first');
+});
+
+test('i18n: special relic keys exist (toast header, RELICS n / m, headers) and the three new relics have names', () => {
+  let pack = null;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/data/i18n/relics.js'), 'utf8'), vm.createContext({ IT: { i18nAdd: p => { pack = p; } } }));
+  for (const k of ['relics.special', 'relics.specialToast', 'relics.count', 'relics.trainerHead', 'relic.triple_kills', 'relic.rampages', 'relic.killing_sprees', 'relic.triple_kills.d']) {
+    assert.ok(pack.en[k] && pack.pt[k], k);
+  }
+  assert.match(pack.en['relics.specialToast'], /\{t\}/); assert.match(pack.en['relics.count'], /\{n\}.*\{m\}/);
 });

@@ -77,11 +77,18 @@
     });
     on('blink', p => { if (p.unit === hid()) blinkAt = w.t; });
     on('fx', p => { if (p.name === 'cataclysm') cataUntil = w.t + 3; });
+    // Dota multi-kill rule: each kill within 18 s of the previous one extends the chain (3 = Triple Kill, 5 = Rampage); a Killing Spree = 3 kills in a row without dying
+    let chain = 0, chainAt = -99, streak = 0;
     on('kill', p => {
+      if (p.unit === hid()) { streak = 0; chain = 0; return; }
       const same = lastDmg && lastDmg.target === p.unit, by = p.by != null ? p.by : same ? lastDmg.src : null;
       if (by == null || !mine(by)) return;
       const ab = same ? lastDmg.ab : 'attack', t = w.t;
       relic('kills', 1);
+      chain = t - chainAt <= 18 ? chain + 1 : 1; chainAt = t; streak++;
+      if (chain === 3) relic('triple_kills', 1);
+      if (chain === 5) relic('rampages', 1);
+      if (streak === 3) relic('killing_sprees', 1);
       if (ab === 'sunstrike') relic('sunstrike_kills', 1);
       if (ab === 'tornado' || (liftAt[p.unit] != null && t <= liftAt[p.unit] + 2)) relic('tornado_kills', 1);
       if (ab === 'forgespirit' || isSpirit(by)) relic('spirit_kills', 1);
@@ -268,7 +275,7 @@
     if (!Rd || !rel) return { score: 0, parts };
     for (const r of Rd.LIST) {
       const v = rel[r.id] || 0, unit = r.step || r.tiers[0];
-      if (!(v > 0) || !(unit > 0)) continue;
+      if (!(v > 0) || !(unit > 0) || r.weight === 0) continue;   // weight 0 = tracked only
       const lv = Math.min(RELIC_CAP, v / unit), pts = lv * (r.weight || 1) * RELIC_K;
       score += pts; parts.push({ id: r.id, v, lv: round(lv), pts: Math.round(pts) });
     }

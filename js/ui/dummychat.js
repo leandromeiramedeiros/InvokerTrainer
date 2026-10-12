@@ -1,22 +1,34 @@
-// Dummy taunts: speech bubbles over dummies when the player fumbles / is slow. Owner: S3 (v3 wave 2).
+// Dummy / enemy flair: speech bubbles over enemies. Owner: S3 (v3 wave 2), reworked in v6 item 22 (table-driven).
 // attach(w, g) / detach() are wired from main.js; update(dt) is driven by IT.HUD.update every frame.
-// Lines live in js/data/i18n/s3.js as dc.<category>.<n>.
+// WHAT is said lives in the editable TABLE js/data/flair.js (skin x situation x language, weights, cooldowns, icons);
+// the legacy generic taunts are the 'default' skin's lines there (the old js/data/i18n/s3.js dc.* keys are kept for the tests / fallback).
+// This file only decides WHEN a situation happens (sim events -> say(situation)) and WHICH line wins (pickFlair).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
 
-  const CATS = ['fail', 'mana', 'cooldown', 'wrong', 'miss', 'comboFail', 'idle', 'dodge', 'hurt', 'praise'];
-  const GAP = 4;          // min sim-seconds between two bubbles
+  const CATS = ['fail', 'mana', 'cooldown', 'wrong', 'miss', 'comboFail', 'idle', 'dodge', 'hurt', 'praise'];   // legacy dc.* i18n categories
+  const GAP = 4;          // default min sim-seconds between two bubbles (a skin's own `cd` in the flair table wins)
   const LIFE = 2.5;       // bubble lifetime (real seconds, unpaused)
   const FADE = 0.45;
   const IDLE_AFTER = 6;   // seconds without damage dealt while a scenario runs
   const PRAISE_P = 0.4;   // chance of a grudging compliment on comboDone
   const DODGE_P = 0.6;
   const HEAD = 40;        // px above the dummy's feet
+  const NEAR_DEATH = 0.2; // fraction of max HP
+  const DISABLES = { stun: 1, frozen: 1, hex: 1, lift: 1 };
+  const HERO_CASTS = { icewall: 1, alacrity: 1, forgespirit: 1, ghostwalk: 1 };   // hitBy:<id> fired when the hero casts it (nothing "hits" the foe)
+  // per-situation chance (x the skin's `chat`) so a DoT / a chatty character does not talk over every tick
+  const REACT_P = { damaged: 0.3, stunned: 0.6, nearDeath: 1, death: 0.8, playerMissed: 0.7, playerWhiffSunstrike: 0.8, heroInvisible: 0.8 };
+  const CLS = { praise: 'praise', heroLow: 'hurt', killedHero: 'hurt', comboFail: 'comboFail' };   // css colour classes in hud.css
 
-  const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, now: 0 };
+  const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, ambAt: 0, now: 0, st: { last: {} }, pend: null, nd: new Set(), invAt: -99, rng: null };
 
-  // ---- text
+  // ---- seeded rng (mulberry32); tests can pass their own to pickFlair
+  function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function rnd() { return (D.rng || (D.rng = mulberry((Date.now() ^ 0x9e3779b9) >>> 0)))(); }
+
+  // ---- legacy text (dc.* i18n keys)
   function lines(cat) { const out = []; for (let i = 0; IT.hasT('dc.' + cat + '.' + i); i++) out.push(i); return out; }
   // pick a random line index of a category, avoiding the previous pick. rng: () => [0,1)
   function pick(cat, rng) {
@@ -25,6 +37,70 @@
     if (n > 1 && i === D.last[cat]) i = (i + 1 + Math.floor((rng || Math.random)() * (n - 1))) % n;
     D.last[cat] = i;
     return IT.t('dc.' + cat + '.' + i);
+  }
+
+  // ---- flair table picker
+  function skinOf(skin) { const T = IT.Flair && IT.Flair.table; return T ? (T[skin] ? skin : 'default') : null; }
+  function listOf(owner, sit) { const T = IT.Flair.table, s = T[owner]; return (s && s.lines[sit]) || []; }
+  // does this skin (or its fallback skin) have any line for the situation?
+  function hasLines(skin, sit) {
+    if (!IT.Flair) return false;
+    const T = IT.Flair.table, id = skinOf(skin), s = T[id];
+    if (!s || s.silent) return false;
+    if (listOf(id, sit).length) return true;
+    if (sit.indexOf('hitBy:') === 0 && listOf(id, 'damaged').length) return true;
+    return !!(s.fallback && T[s.fallback] && listOf(s.fallback, sit).length);
+  }
+  // Pick a line for skin + situation. opts: { lang, rng, now, state }  -> { text, icon, skin, sit, idx, key } | null
+  //  - null for a silent skin (scarecrow), or when every candidate is on cooldown
+  //  - unknown skin -> 'default'; hitBy:<id> with no (or exhausted) lines falls to 'damaged'; a skin with NO lines for the situation borrows its `fallback` skin's
+  //  - weights (w) bias the pick; a line cannot repeat for its `cd` (else the skin's `lineCd`) sim-seconds counted from opts.now
+  function pickFlair(skin, sit, opts) {
+    const F = IT.Flair; if (!F) return null;
+    opts = opts || {};
+    const T = F.table, id = skinOf(skin), s = T[id]; if (!s || s.silent) return null;
+    const rng = opts.rng || Math.random, now = opts.now || 0, lang = opts.lang || IT.lang || 'en';
+    const st = opts.state || D.st; if (!st.last) st.last = {};
+    const chain = [[id, sit]];
+    if (sit.indexOf('hitBy:') === 0) chain.push([id, 'damaged']);
+    if (s.fallback && T[s.fallback]) { chain.push([s.fallback, sit]); if (sit.indexOf('hitBy:') === 0) chain.push([s.fallback, 'damaged']); }
+    for (let c = 0; c < chain.length; c++) {
+      const owner = chain[c][0], name = chain[c][1], list = listOf(owner, name);
+      if (!list.length) continue;
+      const cands = []; let tot = 0;
+      for (let i = 0; i < list.length; i++) {
+        const ln = list[i], key = owner + '|' + name + '|' + i, cd = ln.cd != null ? ln.cd : T[owner].lineCd;
+        if (st.last[key] != null && now - st.last[key] < cd) continue;
+        cands.push({ i, ln, key }); tot += ln.w;
+      }
+      if (!cands.length) { if (c === 0 || owner === id) { if (sit.indexOf('hitBy:') === 0) continue; return null; } continue; }   // exhausted: silence (hitBy -> try damaged)
+      let r = rng() * tot, k = cands[cands.length - 1];
+      for (let i = 0; i < cands.length; i++) { r -= cands[i].ln.w; if (r < 0) { k = cands[i]; break; } }
+      st.last[k.key] = now;
+      return { text: k.ln.t[lang] || k.ln.t.en || '', icon: k.ln.icon || null, skin: owner, sit: name, idx: k.i, key: k.key };
+    }
+    return null;
+  }
+
+  // ---- pixel icons (inline SVG built from these grids; no css / assets needed)
+  const PAL = { g: '#c9c4d6', k: '#2a2238', w: '#ffffff', y: '#ffd24a', r: '#e5484d', b: '#8a5a32', t: '#e0b684', G: '#4aa86a', p: '#ee6f86', o: '#f29a3a' };
+  const ICONS = {
+    muted: ['...ggg...', '..ggggg..', '..ggggg..', '..ggggg..', 'g.ggggg.g', 'g.ggggg.g', '.g.ggg.g.', '..ggggg..', '....g....', '...ggg...', '.........'],
+    camera: ['..ggg.....', 'gggggggggg', 'ggg.kk.ggg', 'gg.kwwk.gg', 'gg.kwwk.gg', 'ggg.kk.ggg', 'gggggggggg'],
+    monkey: ['..bbbbb..', '.bbbbbbb.', 'bbtttttbb', 'btktttktb', 'bbtttttbb', '.btttttb.', '.bttrrtb.', '..bbbbb..'],
+    star: ['....y....', '....y....', '...yyy...', 'yyyyyyyyy', '.yyyyyyy.', '..yyyyy..', '..yyyyy..', '.yyy.yyy.', '.yy...yy.'],
+    goiaba: ['....GG..', '...GG...', '..pppp..', '.pppppp.', '.ppwppp.', '.pppppp.', '.pppppp.', '..pppp..'],
+  };
+  // slash over the mic
+  (function () { const g = ICONS.muted.map(r => r.split('')); [[0, 0], [1, 1], [2, 2], [3, 2], [4, 3], [5, 4], [6, 5], [7, 6], [8, 6], [9, 7], [10, 8]].forEach(p => { g[p[0]][p[1]] = 'r'; }); ICONS.muted = g.map(r => r.join('')); })();
+  function iconEl(name, doc) {
+    const grid = ICONS[name]; doc = doc || (typeof document !== 'undefined' ? document : null); if (!grid || !doc) return null;
+    const NS = 'http://www.w3.org/2000/svg', h = grid.length, w = grid[0].length;
+    const svg = doc.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('shape-rendering', 'crispEdges'); svg.setAttribute('class', 'dc-ic dc-ic-' + name);
+    svg.style.cssText = 'height:1.15em;width:' + (1.15 * w / h).toFixed(2) + 'em;vertical-align:-.2em;margin-right:.4em;display:inline-block;image-rendering:pixelated';
+    grid.forEach((row, y) => { for (let x = 0; x < row.length; x++) { const c = PAL[row[x]]; if (!c) continue; const r = doc.createElementNS(NS, 'rect'); r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', 1); r.setAttribute('height', 1); r.setAttribute('fill', c); svg.appendChild(r); } });
+    return svg;
   }
 
   // ---- state helpers
@@ -52,18 +128,27 @@
     const c = w.combo; return !!(c && c.def && c.phase === 'active');
   }
 
-  // nearest on-screen visible dummy to the hero (pref first when usable)
-  function speaker(pref) {
+  // can this unit talk? enemies always (the flair table decides per skin); a buyable dummy skin (raven) only if its skin has a non-silent table entry
+  function talker(d) {
+    if (!d) return false;
+    if (d.kind === 'enemy') return true;
+    const T = IT.Flair && IT.Flair.table;
+    return d.kind === 'dummy' && !!d.skin && !!T && !!T[d.skin] && !T[d.skin].silent;
+  }
+  const skinName = d => (d && d.skin) || 'default';
+
+  // nearest on-screen visible talker to the hero (pref first when usable; o.dead lets a dead pref speak: its own death line)
+  function speaker(pref, dead) {
     const w = D.w, cam = D.g.cam, hero = D.g.hero, P = IT.GAME.UNIT_PX, VW = IT.GAME.VIEW_W, VH = IT.GAME.VIEW_H;
     const ok = d => {
-      if (!d || d.kind !== 'enemy') return false;
+      if (!talker(d)) return false;
       const sx = d.x / P - cam.px, sy = d.y / P - cam.py;
       return sx > 6 && sx < VW - 6 && sy > 14 && sy < VH - 4;
     };
-    if (pref && ok(pref) && !pref.dead && pref.visible) return pref;
+    if (pref && ok(pref) && (dead ? pref.dead : (!pref.dead && pref.visible))) return pref;
     let best = null, bd = Infinity;
     for (const d of w.ents) {
-      if (d.dead || d.kind !== 'enemy' || !d.visible || !ok(d)) continue;
+      if (d.dead || !talker(d) || !d.visible || !ok(d)) continue;
       const k = Math.hypot(d.x - hero.x, d.y - hero.y);
       if (k < bd) { bd = k; best = d; }
     }
@@ -81,24 +166,36 @@
   }
   function clearBubble() { if (D.bub) { D.bub.el.remove(); D.bub = null; } }
 
-  function say(cat, o) {
+  // say(situation, o): o = { pref (speaker unit), dead (pref is a corpse), p (extra chance 0..1), amb (ambient: chat x0.35), alt (situation to use when the speaker's skin has none), fallback (unit) }
+  // -> 'ok' spoke | 'dice' the chance roll failed (counts as handled) | false could not speak (blocked / cooldown / no line / no speaker)
+  function say(sit, o) {
     o = o || {};
     const w = D.w; if (!w || !D.g || !enabled() || blocked()) return false;
     if (D.bub) return false;
-    const gap = cat === 'praise' ? 1.5 : GAP;
-    if (w.t - D.lastSay < gap) return false;
-    if (o.p != null && Math.random() > o.p) return false;
-    const who = speaker(o.pref) || (o.fallback && o.fallback.kind === 'enemy' ? o.fallback : null);   // praise: the foe that just died
+    const who = speaker(o.pref, o.dead) || (o.fallback && talker(o.fallback) ? o.fallback : null);   // praise: the foe that just died
     if (!who) return false;
-    const txt = pick(cat); if (!txt) return false;
+    const skin = skinOf(skinName(who)); if (!skin) return false;
+    const T = IT.Flair.table[skin];
+    if (T.silent) return false;
+    const gap = sit === 'praise' ? Math.min(1.5, T.cd) : (T.cd != null ? T.cd : GAP);
+    if (w.t - D.lastSay < gap) return false;
+    if (o.alt && !hasLines(skin, sit)) sit = o.alt;
+    if (!hasLines(skin, sit)) return false;
+    const base = sit.indexOf('hitBy:') === 0 ? REACT_P.stunned : REACT_P[sit];
+    const prob = (o.p == null ? 1 : o.p) * (base == null ? 1 : base) * (o.amb ? T.chat * 0.35 : T.chat);
+    if (prob < 1 && rnd() > prob) return 'dice';
+    const f = pickFlair(skin, sit, { rng: rnd, now: w.t, state: D.st }); if (!f) return false;
     const root = ensureEl(); if (!root) return false;
     const el = document.createElement('div');
-    el.className = 'dchat dc-' + cat; el.textContent = txt;
+    el.className = 'dchat dc-' + (CLS[sit] || sit.replace(/[^\w-]/g, '_')) + (f.text ? '' : ' dc-icononly') + ' dc-skin-' + skin;
+    const ic = f.icon && iconEl(f.icon, document);
+    if (ic) { ic.setAttribute('aria-label', IT.t('dc.icon.' + f.icon)); if (!f.text) ic.style.cssText += ';height:1.6em;width:' + (1.6 * (ICONS[f.icon][0].length / ICONS[f.icon].length)).toFixed(2) + 'em;margin:0'; el.appendChild(ic); }
+    if (f.text) el.appendChild(document.createTextNode(f.text));
     root.appendChild(el);
     D.bub = { el, who, age: 0 };
     D.lastSay = w.t;
     place();
-    return true;
+    return 'ok';
   }
 
   // anchored right above the speaker's head: percent of the live internal view (VIEW_W/H change with the scroll zoom, so no --u units);
@@ -129,61 +226,109 @@
         else { place(); D.bub.el.classList.toggle('out', D.bub.age > LIFE - FADE); }
       }
     }
-    if (bl || !enabled()) { D.idleAt = Math.max(D.idleAt, w.t); return; }
+    if (bl || !enabled()) { D.idleAt = Math.max(D.idleAt, w.t); if (D.ambAt) D.ambAt = Math.max(D.ambAt, w.t + 8); return; }
+    // delayed one-shots (spawn / night / caught / escaped): wait a beat so the phase has flipped, drop them if they went stale
+    const pe = D.pend;
+    if (pe && w.t >= pe.at) {
+      D.pend = null;
+      if (w.t - pe.at < 3) { if (pe.clear) { clearBubble(); D.lastSay = -99; } say(pe.sit, pe.o); }
+    }
     // long idle: no damage dealt for a while during a scenario
     if (scenarioPlaying(w)) {
       const since = w.t - Math.max(D.lastDmg, D.idleAt);
-      if (since > IDLE_AFTER && say('idle')) D.idleAt = w.t;
+      if (since > IDLE_AFTER && say('idleLong')) D.idleAt = w.t;
+      if (D.ambAt && w.t >= D.ambAt) { say('idle', { amb: true }); D.ambAt = w.t + 16 + rnd() * 20; }
     } else D.idleAt = w.t;
     // low HP (edge triggered with hysteresis)
     const h = D.g.hero;
     if (h && h.maxHp) {
       const f = h.hp / h.maxHp;
       if (f > 0.5) D.hurtArm = true;
-      else if (f < 0.25 && D.hurtArm && say('hurt')) D.hurtArm = false;
+      else if (f < 0.25 && D.hurtArm && say('heroLow')) D.hurtArm = false;
     }
   }
 
   // ---- events
-  const FAIL_CAT = { mana: 'mana', cooldown: 'cooldown', invokeCooldown: 'cooldown' };
+  const FAIL_SIT = { mana: 'playerNoMana', cooldown: 'playerCooldown', invokeCooldown: 'playerCooldown' };
   const FAIL_SKIP = { gone: 1, unknown: 1, immune: 1 };
 
   function attach(w, g) {
     detach();
-    D.w = w; D.g = g; D.last = {}; D.lastSay = -99; D.lastDmg = w.t; D.idleAt = w.t; D.hurtArm = true;
+    D.w = w; D.g = g; D.last = {}; D.lastSay = -99; D.lastDmg = w.t; D.idleAt = w.t; D.ambAt = 0; D.hurtArm = true; D.st = { last: {} }; D.pend = null; D.nd = new Set(); D.invAt = -99;
     const on = (n, f) => D.off.push(w.on(n, f)), hid = () => g.hero && g.hero.id;
+    const mine = id => id === hid() || (w.get(id) && w.get(id).team === 0 && w.get(id).kind !== 'enemy');   // hero + its spirits / summons
+    const foe = id => { const u = w.get(id); return u && u.team === 1 && talker(u) ? u : null; };
+    // a foe got hurt / hit: hitBy:<ability> when the skin has it, else 'damaged'
+    const react = (u, ability) => { if (u && !u.dead) say(ability && ability !== 'attack' ? 'hitBy:' + ability : 'damaged', { pref: u, alt: 'damaged' }); };
     on('fail', p => {
       if (p.unit !== hid() || FAIL_SKIP[p.reason]) return;
       if (p.reason === 'orbNotLearned' || p.reason === 'locked' || p.reason === 'noItem') return;
-      say(FAIL_CAT[p.reason] || 'fail');
+      say(FAIL_SIT[p.reason] || 'playerFail');
     });
-    const wrong = spell => { const n = needed(w); if (n && !n.has(spell) && (!run() || run().phase === 'play')) say('wrong'); };
+    const wrong = spell => { const n = needed(w); if (n && !n.has(spell) && (!run() || run().phase === 'play')) say('playerWrong'); };
     on('invoke', p => { if (p.unit === hid() && p.spell) wrong(p.spell); });
-    on('cast', p => { if (p.unit === hid() && p.ability && IT.GAME.SPELL_ORBS[p.ability]) wrong(p.ability); });
-    on('miss', p => { if (p.src === hid() && p.ability !== 'attack') say('miss'); });
+    on('cast', p => {
+      if (p.unit !== hid() || !p.ability) return;
+      if (IT.GAME.SPELL_ORBS[p.ability]) wrong(p.ability);
+      if (HERO_CASTS[p.ability]) {
+        if (p.ability === 'ghostwalk') { D.invAt = w.t; say(rnd() < 0.5 ? 'heroInvisible' : 'hitBy:ghostwalk', { alt: 'heroInvisible' }); }
+        else say('hitBy:' + p.ability, { p: 0.6 });
+      }
+    });
+    on('miss', p => {
+      if (p.src !== hid() || p.ability === 'attack') return;
+      say(p.ability === 'sunstrike' ? 'playerWhiffSunstrike' : 'playerMissed', { alt: 'playerMissed' });
+    });
     on('comboFail', () => say('comboFail'));
     on('comboDone', () => {
       const dead = D.lastKilled && w.byId.get(D.lastKilled);
       say('praise', { p: PRAISE_P, fallback: dead });
     });
-    on('kill', p => { D.lastKilled = p.unit; });
-    on('telegraph', p => { const u = (p.item === 'dust' || p.say) && w.get(p.unit); if (u && u.visible) { clearBubble(); D.lastSay = -99; say(p.say || 'dust', { pref: u }); } });   // v6: enemy Dust shout / item line (pit juke)
-    on('fx', p => { if (p.name === 'dodge' && p.unit != null) say('dodge', { pref: w.get(p.unit), p: DODGE_P }); });
-    on('heroDown', p => { if (p.unit === hid()) say('hurt'); });
-    on('hit', p => { if (p.ability === 'stunbolt' && p.target === hid()) say('hurt', { p: 0.5 }); });
-    on('damage', p => {
-      if (p.dealt > 0 && p.target !== hid()) { const t = w.get(p.target); if (t && t.team === 1) D.lastDmg = w.t; }
+    on('kill', p => {
+      D.lastKilled = p.unit;
+      const u = foe(p.unit); if (u) say('death', { pref: u, dead: true });
     });
-    on('scnStart', () => { D.lastDmg = w.t; D.idleAt = w.t; D.lastKilled = null; clearBubble(); });
-    on('scnGo', () => { D.lastDmg = w.t; D.idleAt = w.t; });
+    on('telegraph', p => {   // v6: enemy Dust shout / item line (pit juke)
+      const u = (p.item === 'dust' || p.say) && w.get(p.unit);
+      if (u && u.visible) { clearBubble(); D.lastSay = -99; say(p.say === 'juke' ? 'pitJuke' : 'dustUsed', { pref: u }); }
+    });
+    on('fx', p => { if (p.name === 'dodge' && p.unit != null) say('dodge', { pref: w.get(p.unit), p: DODGE_P }); });
+    on('heroDown', p => { if (p.unit === hid()) say('killedHero', { alt: 'heroLow' }); });
+    on('hit', p => {
+      if (p.ability === 'stunbolt' && p.target === hid()) { say('heroLow', { p: 0.5 }); return; }
+      if (mine(p.src) && p.ability !== 'attack') { const u = foe(p.target); if (u) react(u, p.ability); }
+    });
+    on('status', p => {
+      const u = w.get(p.target); if (!u) return;
+      if (DISABLES[p.status] && foe(p.target) && mine(p.src)) say('stunned', { pref: u });
+      else if ((p.status === 'invisible' || p.status === 'ghost') && p.target === hid() && w.t - D.invAt > 0.5) say('heroInvisible');
+    });
+    on('timeOfDay', p => { if (p && p.night) D.pend = { at: w.t + 0.6, sit: 'night', o: {} }; });
+    on('damage', p => {
+      if (!(p.dealt > 0) || p.target === hid()) return;
+      const t = w.get(p.target); if (!t || t.team !== 1) return;
+      D.lastDmg = w.t;
+      const u = foe(p.target); if (!u || !mine(p.src)) return;
+      if (u.maxHp && u.hp / u.maxHp < NEAR_DEATH && u.hp > 0 && !D.nd.has(u.id)) { D.nd.add(u.id); if (say('nearDeath', { pref: u })) return; }
+      react(u, p.ability);
+    });
+    on('scnStart', () => { D.lastDmg = w.t; D.idleAt = w.t; D.lastKilled = null; D.nd = new Set(); D.pend = null; D.ambAt = 0; clearBubble(); });
+    on('scnGo', () => {
+      D.lastDmg = w.t; D.idleAt = w.t; D.ambAt = w.t + 10 + rnd() * 10;
+      D.pend = { at: w.t + 0.5, sit: w.tod && w.tod.night && rnd() < 0.5 ? 'night' : 'spawn', o: {} };
+    });
+    on('scnResult', p => {
+      if (!p || p.ok) return;
+      if (p.reason === 'caught' || p.reason === 'escaped') D.pend = { at: w.t + 0.25, sit: p.reason, o: {}, clear: true };
+    });
   }
 
   function detach() {
     for (const f of D.off) { try { f(); } catch (e) { /* ignore */ } }
     D.off = []; clearBubble();
     if (D.root && D.root.remove) D.root.remove();
-    D.root = null; D.w = null; D.g = null; D.lastKilled = null;
+    D.root = null; D.w = null; D.g = null; D.lastKilled = null; D.pend = null;
   }
 
-  IT.DummyChat = { attach, detach, update, CATS, lines, pick, needed };
+  IT.DummyChat = { attach, detach, update, CATS, lines, pick, needed, pickFlair, hasLines, iconEl, ICONS, seed: n => { D.rng = mulberry(n >>> 0); } };
 })(typeof window !== 'undefined' ? window : globalThis);

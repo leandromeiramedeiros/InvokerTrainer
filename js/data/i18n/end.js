@@ -13,6 +13,8 @@
       'end.btn.share': 'SAVE IMAGE', 'end.btn.shared': 'Image saved', 'end.btn.shareFail': 'Could not make the image',
       'end.sp.breakdown': 'Clear {clear} + Relics {relic} = {total}',
       'end.sp.breakdown.d': 'Medal points: scenario clears (speed, streak, difficulty) plus the relic progress earned this run',
+      'end.sp.bestCombo': 'Best combo', 'end.sp.topSpell': 'Most used spell', 'end.sp.casts': '{n} casts', 'end.sp.pts': '{n} pts', 'end.sp.dmgN': '{n} dmg',
+      'end.tl.title': 'TURN TIMELINE', 'end.tl.turn': 'Turn {n}', 'end.tl.par': 'par {p}s', 'end.tl.skipped': 'not played', 'end.tl.cleared': 'cleared', 'share.timeline': 'Turns',
       'share.brand': 'INVOKER TRAINER', 'share.diff': 'Difficulty', 'share.level': 'Level', 'share.alt': 'Run summary image',
     },
     pt: {
@@ -28,6 +30,8 @@
       'end.btn.share': 'SALVAR IMAGEM', 'end.btn.shared': 'Imagem salva', 'end.btn.shareFail': 'Não foi possível gerar a imagem',
       'end.sp.breakdown': 'Cenários {clear} + Relíquias {relic} = {total}',
       'end.sp.breakdown.d': 'Pontos da medalha: cenários resolvidos (velocidade, sequência, dificuldade) mais o progresso de relíquias desta partida',
+      'end.sp.bestCombo': 'Melhor combo', 'end.sp.topSpell': 'Magia mais usada', 'end.sp.casts': '{n} usos', 'end.sp.pts': '{n} pts', 'end.sp.dmgN': '{n} de dano',
+      'end.tl.title': 'LINHA DO TEMPO', 'end.tl.turn': 'Rodada {n}', 'end.tl.par': 'par {p}s', 'end.tl.skipped': 'não jogada', 'end.tl.cleared': 'resolvidas', 'share.timeline': 'Rodadas',
       'share.brand': 'INVOKER TRAINER', 'share.diff': 'Dificuldade', 'share.level': 'Nível', 'share.alt': 'Imagem do resumo da partida',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);
