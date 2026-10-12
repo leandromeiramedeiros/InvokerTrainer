@@ -66,7 +66,7 @@ test('agh: tooltips are built from the real KV numbers (no NaN, no unfilled plac
     assert.equal(A.scepterTip(lo).split('\n').length, 1 + A.scepterLines(lo).length);
   }
   IT.lang = 'en';
-  const V = IT.Values, ctxS = V.ctx(Object.assign({}, lo, { scepter: true, scepterOrb: 'quas' }));
+  const V = IT.Values, ctxS = V.ctx(Object.assign({}, lo, { scepter: true, scepterOrb: 'exort' }));   // 7.41: Cataclysm is the Exort Scepter upgrade
   const sun = A.scepterLines(lo).find(l => l.k === 'agh.sc.sunstrike');
   assert.equal(Number(sun.v.n), V.get(GM.SPELL_DOTA.sunstrike, 'cataclysm_count', ctxS));
   assert.ok(Number(sun.v.n) > 0 && Number(sun.v.pct) > 0);

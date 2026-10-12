@@ -501,6 +501,9 @@
       const m = ctx.R.mmHit(In.mouse.x, In.mouse.y); if (!m) return false;
       ctx.cam.lock = false; ctx.cam.centerOn(m.x, m.y); return true;
     };
+    // pointer lock: wheel / mouse events target the canvas, so HUD scroll areas (sandbox combo list) are scrolled by hand
+    const scrollHost = el => { for (let e = el; e && e !== doc.body; e = e.parentElement) { const cs = G.getComputedStyle ? G.getComputedStyle(e) : null; if (cs && /(auto|scroll)/.test(cs.overflowY) && e.scrollHeight > e.clientHeight + 1) return e; } return null; };
+    let sbDrag = null;   // locked scrollbar drag: { el, y0, st0 }
     const synth = (el, type, p, button) => { try { el.dispatchEvent(new G.MouseEvent(type, { bubbles: true, cancelable: true, clientX: p.x, clientY: p.y, button: button || 0, view: G })); } catch (e) { /* ignore */ } };
     const onWinMove = ev => {   // track the cursor over HUD too (for edge scroll and aim)
       if (In._rmb && ev.isTrusted !== false && ev.buttons !== undefined && !(ev.buttons & 2)) In._rmb = null;   // release happened where we could not see it
@@ -508,6 +511,7 @@
         In.vx = Math.max(0, Math.min(G.innerWidth - 1, In.vx + (ev.movementX || 0)));
         In.vy = Math.max(0, Math.min(G.innerHeight - 1, In.vy + (ev.movementY || 0)));
         if (IT.Cursor) IT.Cursor.virtual(In.vx, In.vy);
+        if (sbDrag) { const e = sbDrag.el; e.scrollTop = sbDrag.st0 + (In.vy - sbDrag.y0) * e.scrollHeight / Math.max(1, e.clientHeight); return; }
         const el = doc.elementFromPoint(In.vx, In.vy);
         if (el && el !== cv) synth(el, 'mousemove', { x: In.vx, y: In.vy });   // HUD tooltips
         setMouse(ev);
@@ -532,7 +536,7 @@
     const onLeave = () => { In.mouse.in = false; };
     const onDocLeave = () => { if (!In.locked) { In.win.in = false; In._rmb = null; } };
     const onUp = ev => {
-      mmDrag = false;
+      mmDrag = false; sbDrag = null;
       if (!ev || ev.button === 2 || ev.button === undefined) In._rmb = null;
       if (In._drag && (!ev || ev.button === 0 || ev.button === undefined)) finishDrag(ev);
       In._ctrlEv = false;
@@ -569,6 +573,11 @@
       if (In.locked && ev.isTrusted !== false) {   // locked: the event targets the canvas, so route UI clicks by hand
         const el = doc.elementFromPoint(In.vx, In.vy), p = { x: In.vx, y: In.vy };
         if (el && el !== cv && isUi(el)) {
+          const sh = ev.button === 0 ? scrollHost(el) : null;
+          if (sh) {   // press on the scrollbar gutter: drag the thumb (a native scrollbar never sees a locked mouse)
+            const r = sh.getBoundingClientRect();
+            if (In.vx >= r.left + sh.clientLeft + sh.clientWidth) { sbDrag = { el: sh, y0: In.vy, st0: sh.scrollTop }; return; }
+          }
           synth(el, 'mousedown', p, ev.button);
           const up = () => { G.removeEventListener('mouseup', up, true); synth(el, 'mouseup', p, ev.button); if (ev.button === 0) synth(el, 'click', p, 0); };
           G.addEventListener('mouseup', up, true);
@@ -642,6 +651,10 @@
     const onWheel = ev => {   // scroll wheel zooms in fixed steps (one notch ~100 delta; trackpads accumulate)
       if (isUi(ev.target)) return;
       ev.preventDefault();
+      if (In.locked) {   // locked: the wheel targets the canvas; over the HUD it scrolls the list under the virtual cursor, never zooms
+        const el = doc.elementFromPoint(In.vx, In.vy);
+        if (el && el !== cv && isUi(el)) { const sh = scrollHost(el); if (sh) sh.scrollTop += ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaMode === 2 ? ev.deltaY * sh.clientHeight : ev.deltaY; wheelAcc = 0; return; }
+      }
       wheelAcc += ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaY;
       if (Math.abs(wheelAcc) < 50) return;
       const dir = wheelAcc < 0 ? 1 : -1; wheelAcc = 0;

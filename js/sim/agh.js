@@ -17,13 +17,16 @@
   // what the Scepter does in this build (KV numbers at the loadout's orb levels)
   function scepterLines(lo) {
     const V = IT.Values, S = IT.GAME.SPELL_DOTA, R = IT.RULES;
+    // 7.41: each spell upgrade belongs to one orb (IT.Values.SCEPTER_ORB), so each line is read with the Scepter on that spell's orb
+    const on = ab => ctxOf(lo, { scepter: true, scepterOrb: V.SCEPTER_ORB[ab] || lo.scepterOrb || 'quas' });
     const c = ctxOf(lo, { scepter: true, scepterOrb: lo.scepterOrb || 'quas' }), c0 = ctxOf(lo, { scepter: false, scepterOrb: null });
+    const ct = on(S.tornado), cs = on(S.sunstrike), ci = on(S.icewall);
     return [
       { k: 'agh.sc.orb', v: { n: fmt(V.get('invoker_quas', 'scepter_bonus_levels', c)) } },
       { k: 'agh.sc.invoke', v: { n: fmt(R.invokeCooldown(3, false) - R.invokeCooldown(3, true)) } },
-      { k: 'agh.sc.tornado', v: { dmg: fmt(V.get(S.tornado, 'twister_damage', c)), dur: fmt(V.get(S.tornado, 'twister_duration', c)) } },
-      { k: 'agh.sc.sunstrike', v: { n: fmt(V.get(S.sunstrike, 'cataclysm_count', c)), pct: fmt(V.get(S.sunstrike, 'cataclysm_damage_pct', c)), cd: fmt(V.get(S.sunstrike, 'cataclysm_cooldown', c)) } },
-      { k: 'agh.sc.icewall', v: { from: fmt(V.get(S.icewall, 'wall_width', c0)), to: fmt(V.get(S.icewall, 'wall_width', c)) } },
+      { k: 'agh.sc.tornado', v: { dmg: fmt(V.get(S.tornado, 'twister_damage', ct)), dur: fmt(V.get(S.tornado, 'twister_duration', ct)) } },
+      { k: 'agh.sc.sunstrike', v: { n: fmt(V.get(S.sunstrike, 'cataclysm_count', cs)), pct: fmt(V.get(S.sunstrike, 'cataclysm_damage_pct', cs)), cd: fmt(V.get(S.sunstrike, 'cataclysm_cooldown', cs)) } },
+      { k: 'agh.sc.icewall', v: { from: fmt(V.get(S.icewall, 'wall_width', c0)), to: fmt(V.get(S.icewall, 'wall_width', ci)) } },
     ];
   }
 

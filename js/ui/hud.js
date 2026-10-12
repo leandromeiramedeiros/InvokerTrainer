@@ -95,10 +95,12 @@
     // damage: base range + green bonus (orbs / Alacrity / items)
     const bonus = sum('dmg'), hasA = !!(a && a.max > 0);
     const dmn = hasA ? Math.round(a.min - bonus) : 0, dmx = hasA ? Math.round(a.max - bonus) : 0;
-    const dtx = hasA ? (dmn === dmx ? String(dmn) : dmn + '-' + dmx) : '-';
-    rows.dmg = { txt: dtx, bonus: hasA && bonus ? sgn(bonus) : '', cls: '', tip: tip('dmg', t('hs.dmg') + ': ' + (hasA ? Math.round(a.min) + '-' + Math.round(a.max) : '-'), hasA ? dtx : null) };
+    // Dota HUD: one number = the average of the base range (15.webp: 145-151 -> 148); the tooltip keeps the range
+    const dtx = hasA ? (dmn === dmx ? String(dmn) : dmn + '-' + dmx) : '-', davg = hasA ? String(Math.round((a.min + a.max) / 2 - bonus)) : '-';
+    rows.dmg = { txt: davg, bonus: hasA && bonus ? sgn(bonus) : '', cls: '', tip: tip('dmg', t('hs.dmg') + ': ' + (hasA ? Math.round(a.min) + '-' + Math.round(a.max) : '-'), hasA ? dtx : null) };
     const ar = e.armor || 0, ms = e.ms || 0, asv = a ? a.as || 0 : 0, mrv = e.magicRes || 0, hp = e.hpRegen || 0, mp = e.manaRegen || 0;
-    rows.armor = { txt: f1(ar), bonus: '', cls: cls(ar, bv('armor', ar)), tip: tip('armor', t('hs.armor') + ': ' + f1(ar), f1(bv('armor', ar))) };
+    // Dota HUD shows whole armor, rounded down (15.webp: -1 + 70/6 = 10.67 -> 10); the tooltip keeps the decimal
+    rows.armor = { txt: String(Math.floor(ar + 1e-9)), bonus: '', cls: cls(ar, bv('armor', ar)), tip: tip('armor', t('hs.armor') + ': ' + f1(ar), f1(bv('armor', ar))) };
     rows.ms = { txt: String(Math.round(ms)), bonus: '', cls: cls(ms, bv('ms', ms)), tip: tip('ms', t('hs.ms') + ': ' + Math.round(ms), String(Math.round(bv('ms', ms)))) };
     const at = a && a.bat && asv ? a.bat / (asv / 100) : 0;
     rows.as = { txt: String(Math.round(asv)), bonus: '', cls: cls(asv, bv('as', asv)), tip: tip('as', t('hs.as') + ': ' + Math.round(asv), String(Math.round(bv('as', asv))), at ? ['  ' + t('hs.at') + ' ' + at.toFixed(2) + 's'] : []) };

@@ -34,8 +34,15 @@
   function shardOn(ability, ctx) {
     return !!ctx.shard && (!ctx.shardSpell || SPELL_IDS[ctx.shardSpell] === ability);
   }
+  // Scepter (7.41): KV special_bonus_scepter_N / ScepterUpgradeID N ties each upgrade to ONE orb (1 Quas: Ice Wall -> Ice Floe,
+  // 2 Wex: Tornado twisters, 3 Exort: Sun Strike Cataclysm). Only the chosen orb's (ctx.scepterOrb) spell is upgraded; a legacy ctx
+  // with scepter but no orb upgrades every spell (as the shard). The bake drops the _N suffix, so the map lives here.
+  const SCEPTER_ORB = { invoker_quas: 'quas', invoker_ice_wall: 'quas', invoker_wex: 'wex', invoker_tornado: 'wex', invoker_exort: 'exort', invoker_sun_strike: 'exort' };
+  function scepterOn(ability, ctx) {
+    return !!ctx.scepter && (!ctx.scepterOrb || !SCEPTER_ORB[ability] || SCEPTER_ORB[ability] === ctx.scepterOrb);
+  }
   function active(m, ctx, ability) {
-    if (m.src === 'scepter') return !!ctx.scepter;
+    if (m.src === 'scepter') return scepterOn(ability, ctx);
     if (m.src === 'shard') return shardOn(ability, ctx);
     return ctx.talentSet.has(m.src);
   }
@@ -59,7 +66,7 @@
   function raw(ability, key, ctx, idx) {
     const e = entry(ability, key);
     if (!e) return 0;
-    if (e.requiresScepter && !ctx.scepter) return 0;
+    if (e.requiresScepter && !scepterOn(ability, ctx)) return 0;
     if (e.requiresShard && !shardOn(ability, ctx)) return 0;
     const v = applyMods(e, ctx, ability);
     return v[Math.max(0, Math.min(v.length - 1, idx))];
@@ -71,6 +78,8 @@
 
   const Values = {};
   Values.SPELL_IDS = SPELL_IDS;
+  Values.SCEPTER_ORB = SCEPTER_ORB;
+  Values.scepterOn = scepterOn;
 
   // loadout: { heroLevel, orbs:{quas,wex,exort}, talents:[names], scepter, scepterOrb:'quas'|'wex'|'exort', shard } -> immutable-ish ctx
   Values.ctx = function (loadout) {

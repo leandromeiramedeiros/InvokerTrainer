@@ -53,11 +53,11 @@ test('statSheet: rows mirror the live sim fields, unsupported stats read 0 and s
   for (const k of KEYS) assert.ok(S[k] && typeof S[k].txt === 'string' && typeof S[k].tip === 'string', k);
   assert.strictEqual(S.ms.txt, String(Math.round(hero.ms)));
   assert.strictEqual(S.as.txt, String(Math.round(hero.attack.as)));
-  assert.strictEqual(S.armor.txt, String(Math.round(hero.armor * 10) / 10));
+  assert.strictEqual(S.armor.txt, String(Math.floor(hero.armor)));   // playtest 3: whole armor, rounded down (Dota HUD)
   assert.strictEqual(S.mr.txt, Math.round(hero.magicRes * 100) + '%');
   assert.strictEqual(S.hpr.txt, String(Math.round(hero.hpRegen * 10) / 10));
   assert.strictEqual(S.mpr.txt, String(Math.round(hero.manaRegen * 10) / 10));
-  assert.strictEqual(S.dmg.txt, Math.round(hero.attack.min) + '-' + Math.round(hero.attack.max));
+  assert.strictEqual(S.dmg.txt, String(Math.round((hero.attack.min + hero.attack.max) / 2)));   // playtest 3: average (Dota HUD)
   assert.strictEqual(S.dmg.bonus, '');
   assert.strictEqual(S.amp.txt, '0%'); assert.strictEqual(S.range.txt, '0'); assert.strictEqual(S.cdr.txt, '0%');
   assert.ok(S.amp.tip.includes(IT.I18N.en['hs.none']));

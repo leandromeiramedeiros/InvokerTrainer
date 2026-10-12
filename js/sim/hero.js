@@ -132,5 +132,5 @@
   // invokeCd, canRaise:{}, locked:{}, talentsAllowed:{}, ... } (see IT.RULES.levelInfo)
   const levelInfo = (lvl, orbs, scepter, talents) => IT.RULES.levelInfo(lvl, orbs, scepter, talents);
 
-  IT.Hero = { create, refresh, levelInfo, applyPreinvoked, attackTime, attackPoint, attrs, maxHp: ctx => build(ctx).maxHp, maxMana: ctx => build(ctx).maxMana };
+  IT.Hero = { create, refresh, levelInfo, applyPreinvoked, attackTime, attackPoint, attrs, build, maxHp: ctx => build(ctx).maxHp, maxMana: ctx => build(ctx).maxMana };
 })(typeof window !== 'undefined' ? window : globalThis);

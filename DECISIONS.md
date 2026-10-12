@@ -264,3 +264,42 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 - **Result card**: RESULT_MIN 1.0 s + RESULT_AUTO 3.0 s. run.cont() leaves the card once it has shown >= 1 s; otherwise auto-continue at 4 s with a visible countdown. runLeft and w.t do not run in 'result'. input.js: in 'result' any non-modifier key / canvas click calls run.cont and is consumed. combobar.js draws the card (CLEARED +N / FAILED: reason, "press any key - auto in N"); its comboDone / comboFail toasts are skipped in scenario modes (SFX kept).
 - **"Not invoked"**: i18n string removed; casting a non-invoked spell from input plays the fail SFX only. Abilities.check still returns 'notInvoked' (AI / tests).
 - Tests: tests/playtest2_v6.test.js (new); tests/ceo_v6_core.test.js updated.
+
+## v6 playtest 3 (items 18-20)
+
+### 19. HUD stats vs Dota (15.webp: lvl 25, Boots of Speed, Q/W/E 8, special_bonus_unique_invoker_13, W-W-W, Ghost Walk)
+Sources: KV npc_dota_hero_invoker (MovementSpeed 280, ArmorPhysical -1, AttackDamage 19-25, BaseAttackSpeed 100, MagicalResistance 25,
+attributes 19+2.5 / 14+2.0 / 22+4.0, +1 STR/AGI/INT per Quas/Wex/Exort level), invoker_wex move_speed_per_instance 0.6..5.4 /
+attack_speed_per_instance 1..9 (x2 with _13), invoker_ghost_walk self_slow -20..20 on wex level (not doubled), item_boots
+bonus_movement_speed 45; dota_english: AGI = 1 AS + armor, INT = 0.1% MR.
+- MS = (280 + 45) x (1 + 3 x 9.6% + 15%) = 467.35 -> **467**. Cap 550. Formula was already correct.
+- AS = 100 + AGI 70 + 3 x 16 = **218**.
+- Damage = avg(19, 25) + INT 126 = **148**. The HUD now shows the average (was the 145-151 range); the tooltip keeps the range.
+- Armor = -1 + AGI / 6 = 10.67 -> HUD **10**: whole armor, rounded down (Dota HUD). Tooltip keeps 1 decimal.
+  The localization says "0.16 armor per AGI", but 1/6 is what the KV/engine uses and what reproduces 10.67.
+- MR = 25% + 0.1% x INT 126 = 37.6% -> **38%**.
+- Root cause of 439 vs 467: the trainer spends at most 7 levels per orb (RULES.ORB_MAX = 7, G3). The 7.41 KV has max_level 8,
+  plus 1 with the Scepter. At 7/7/7, the result is 325 x (1 + 3 x 8.4% + 10%) = 439.4.
+  REQUEST (lead, rules.js is not owned): raise ORB_MAX to 8. This changes the pool math (3 x 8 + 8 talents = 32 vs 29 points).
+- Test: tests/playtest3_v6.test.js builds the 8/8/8 ctx un-normalized with IT.Hero.build (now exported).
+
+### 18. Scepter / Shard audit (KV mods src scepter/shard vs sim)
+| Ability | Upgrade (KV) | Status |
+|---|---|---|
+| quas/wex/exort | Scepter: max_level +1, scepter_bonus_levels +1 (ONE chosen orb, 7.41) | implemented (bonusLevels) |
+| ghost_walk | Shard: apply_ice_wall_debuff (Ice Wall DPS to enemy heroes in its AoE) | implemented (already); **no Scepter upgrade exists** in the KV or localization |
+| ice_wall | Scepter (Quas): Ice Floe, i.e. wall_width +45, glacier_formation_delay, root_delay 2.5, root_duration 2.5, root_damage 325 | **implemented now**: glacier forms after the delay; a hero/dummy continuously inside for root_delay is rooted and takes root_damage once. vector_cast_range +600 NOT implemented (the wall is still placed in front of the facing; vector targeting needs input work) |
+| tornado | Scepter (Wex): twisters (twister_damage/duration/distance_interval) | implemented (already) |
+| sun_strike | Scepter (Exort): Cataclysm cataclysm_count +2 | implemented (already) |
+| sun_strike | Shard: create_forged_spirit_on_hero_damage | implemented (already) |
+| emp | Shard: drag_speed 125, damage_per_mana_pct +50% | implemented (already) |
+- Fix: Scepter upgrades used to apply to every spell. Now they are gated by the chosen orb (Values.SCEPTER_ORB, ScepterUpgradeID 1/2/3),
+  the same as the bonus level. A legacy ctx (scepter with no scepterOrb) still upgrades all.
+  js/sim/agh.js (tooltip lines) reads each line under its own orb (minimal fallout, not in the owned list).
+
+### 20. Combo Sandbox side-pane list does not scroll
+- Cause: with "Confine mouse to game" (pointer lock), every wheel/mouse event targets the locked canvas. The wheel zoomed the
+  camera, and the list's native scrollbar never received the mouse. Unlocked, the list already scrolled (.clist overflow-y:auto + wheel stopPropagation).
+- Fix (js/input.js): when locked, the wheel over a HUD element scrolls the nearest scrollable ancestor under the virtual cursor and
+  never zooms. A left press in that element's scrollbar gutter starts a thumb drag (scrollTop += dy x scrollHeight / clientHeight) until mouseup.
+  Other presses are still routed as synthetic clicks.

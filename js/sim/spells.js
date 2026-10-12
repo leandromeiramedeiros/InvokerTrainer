@@ -198,10 +198,17 @@
       const px = -Math.sin(f), py = Math.cos(f), h = len / 2;
       const ax = cx - px * h, ay = cy - py * h, bx = cx + px * h, by = cy + py * h;
       const tr = tracker(w, c, 'icewall', 1);
-      w.emit('fx', { name: 'iceWall', x: cx, y: cy, ax, ay, bx, by, r: width, dur });
+      // Scepter on Quas = Ice Floe (KV special_bonus_scepter_1): the wall rises after glacier_formation_delay; an enemy hero (dummies stand in)
+      // that stays inside for root_delay seconds is rooted for root_duration and takes root_damage magic damage (once per cast).
+      const rootDelay = val(c, d, 'root_delay'), floe = rootDelay > 0;
+      const form = floe ? val(c, d, 'glacier_formation_delay') : 0, rootDur = val(c, d, 'root_duration'), rootDmg = val(c, d, 'root_damage');
+      w.emit('fx', { name: floe ? 'iceFloe' : 'iceWall', x: cx, y: cy, ax, ay, bx, by, r: width, dur, delay: form });
       w.thinker({
-        x: cx, y: cy, ax, ay, bx, by, r: width, color: '#8ef', team: c.team, ability: 'icewall', next: 0, inside: new Set(),
+        x: cx, y: cy, ax, ay, bx, by, r: width, color: '#8ef', team: c.team, ability: 'icewall', next: 0, inside: new Set(), tin: new Map(), rooted: new Set(),
+        danger: floe ? { x: cx, y: cy, r: width, at: w.t + form } : undefined,
         upd(w, e) {
+          if (e.age < form - 1e-9) return false;
+          if (floe && !e.risen) { e.risen = true; e.next = w.t; w.emit('fx', { name: 'iceWall', x: cx, y: cy, ax, ay, bx, by, r: width, dur }); }
           const tick = w.t >= e.next - 1e-9;
           if (tick) e.next = w.t + iv;
           const now = new Set();
@@ -211,9 +218,19 @@
             tr.touch(u);
             if (tick || !e.inside.has(u.id)) slow(w, u, pct, linger, c.id, 'icewall');
             if (tick) { dmg(w, c, u, 'icewall', 'magical', dps * iv); w.emit('fx', { name: 'iceWallTick', x: u.x, y: u.y, unit: u.id }); }
+            if (floe && HEROISH[u.kind] && !e.rooted.has(u.id)) {
+              const tin = (e.tin.get(u.id) || 0) + w.dt; e.tin.set(u.id, tin);
+              if (tin >= rootDelay - 1e-9) {
+                e.rooted.add(u.id);
+                IT.Status.add(w, u, 'root', rootDur, { src: c.id, ability: 'icewall' });
+                dmg(w, c, u, 'icewall', 'magical', rootDmg);
+                w.emit('fx', { name: 'iceFloeRoot', x: u.x, y: u.y, unit: u.id, dur: rootDur });
+              }
+            }
           }
+          for (const id of e.tin.keys()) if (!now.has(id)) e.tin.delete(id);   // must stay inside continuously
           e.inside = now;
-          if (e.age >= dur - 1e-9) { tr.done(cx, cy); w.emit('fx', { name: 'iceWallEnd', x: cx, y: cy }); return true; }
+          if (e.age >= form + dur - 1e-9) { tr.done(cx, cy); w.emit('fx', { name: 'iceWallEnd', x: cx, y: cy }); return true; }
           return false;
         },
       });

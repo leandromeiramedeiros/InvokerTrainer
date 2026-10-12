@@ -299,8 +299,8 @@ test('tornado: lift, land damage, invulnerable while lifted, path vision, miss',
   assert.strictEqual(f.w.query(t => t.ability === 'tornado').length, 0);
 });
 
-test('tornado scepter: twisters along the path', () => {
-  const e = env({ quas: 3, wex: 4, exort: 1 }, { scepter: true, scepterOrb: 'quas' });
+test('tornado scepter: twisters along the path (7.41: Scepter on Wex)', () => {
+  const e = env({ quas: 3, wex: 4, exort: 1 }, { scepter: true, scepterOrb: 'wex' });
   const gap = e.V('tornado', 'twister_distance_interval'); assert.strictEqual(gap, 300);
   e.cast('tornado', { x: 2000, y: 0 }); e.run(1.2);
   const tw = e.w.query(t => t.ability === 'tornado' && t.dir === undefined);
