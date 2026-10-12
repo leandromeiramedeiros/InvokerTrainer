@@ -99,6 +99,7 @@ body.gl #glow{display:none}
 
 /* sandbox side panel */
 .hside{position:absolute;right:1%;top:12em;width:22%;max-height:58%;display:flex;flex-direction:column;gap:.6em;padding:.8em;background:#150d27e6;border:.25em solid var(--line);font-size:calc(var(--u)*3.3333)}
+.maplin{flex:none;font-size:max(1em,10px);color:var(--gold);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dpsrow{display:flex;align-items:baseline;gap:.5em;font-size:max(1em,10px);color:var(--dim)}
 .dpsrow .sp{margin-left:auto}
 .dpsrow b{color:var(--gold);font-size:1.4em}

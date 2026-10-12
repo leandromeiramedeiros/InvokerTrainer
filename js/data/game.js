@@ -4,6 +4,9 @@
   const IT = G.IT = G.IT || {};
   IT.GAME = {
     UNIT_PX: 6,                 // Dota units per screen pixel
+    // Huge-map cap (the 368x368 'dota' whole map): terrain is painted in CHUNK-tile squares around the camera, A* is confined to the start/goal box + SEARCH_MARGIN tiles,
+    // nearest-walkable rings stop at NEAR_MAX tiles. Maps with w*h <= LAZY_TILES keep the eager full-map paths.
+    ARENA: { LAZY_TILES: 40000, CHUNK: 32, SEARCH_MARGIN: 48, NEAR_MAX: 96 },
     VIEW_W: 480, VIEW_H: 270,   // internal canvas (live: scroll-wheel zoom rescales it)
     VIEW_W_BASE: 480, VIEW_H_BASE: 270, ZOOMS: [0.7, 0.8, 0.9, 1, 1.1, 1.2],
     TICK: 1 / 30,

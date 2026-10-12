@@ -707,7 +707,7 @@
         if (len > 0) out.push({ k: 'poly', pts: [[cx + fy * h - fx * width, cy - fx * h - fy * width], [cx - fy * h - fx * width, cy + fx * h - fy * width], [cx - fy * h + fx * width, cy + fx * h + fy * width], [cx + fy * h + fx * width, cy - fx * h + fy * width]], st: 'aoe' });
         break;
       }
-      case 'shiva': circ(hx, hy, v('blast_radius'), 'aoe'); circ(hx, hy, v('aura_radius'), 'aura'); break;   // expanding wave is centred on Invoker
+      case 'shiva': circ(hx, hy, v('blast_radius') + (v('bonus_aoe') || 0), 'aoe'); circ(hx, hy, v('aura_radius'), 'aura'); break;   // expanding wave is centred on Invoker
       case 'dust': circ(hx, hy, v('radius'), 'aoe'); break;
       case 'gleipnir': circ(m.x, m.y, v('radius_tooltip', 'radius'), 'aoe'); break;
       case 'forcestaff': {

@@ -182,7 +182,8 @@
     const trees = [], treeRows = [];
     for (let i = 0; i < MH; i++) treeRows.push([]);
 
-    for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
+    // paint the tile rectangle [ax0,ax1) x [ay0,ay1) into the shared ImageData (the caller puts it on the canvas)
+    const paint = (ax0, ay0, ax1, ay1) => { for (let ty = ay0; ty < ay1; ty++) for (let tx = ax0; tx < ax1; tx++) {
       const t = at(tx, ty), x0 = tx * T, y0 = ty * T;
       const up = at(tx, ty - 1), dn = at(tx, ty + 1), lf = at(tx - 1, ty), rt = at(tx + 1, ty);
       if (t === 3 || t === 5) {
@@ -256,9 +257,12 @@
         const tr = { x: Math.round(tx * T + T / 2 + jx), y: Math.round(ty * T + T - 1 + jy), p: (h * 3) | 0, s: ((h * 97) | 0) % 3, k: 1 };
         treeRows[ty].push(tr); trees.push(tr);
       }
-    }
-    bx.putImageData(id, 0, 0);
+    } };
+    // Arena cap: huge maps (the 368x368 whole map) paint ground + tree shadows in CHUNK-tile squares only where the camera looks
+    const AR = IT.GAME.ARENA, lazy = ent && !!AR && MW * MH > AR.LAZY_TILES;
+    if (!lazy) { paint(0, 0, MW, MH); bx.putImageData(id, 0, 0); }
 
+    let shadow = null;
     if (ent) {
       for (const e of map.trees) {
         const c = treeSprite(e.m, e.s), tr = { x: Math.round(e.x / UP), y: Math.round(e.y / UP), c, k: Math.max(0.6, Math.min(1, e.s)), hh: c._hh, hw: c._hw };
@@ -266,10 +270,8 @@
         treeRows[row].push(tr); trees.push(tr);
       }
       bx.fillStyle = 'rgba(2,10,6,0.36)';        // ellipse shadow, offset right/down of the trunk
-      for (const tr of trees) {
-        const sw = Math.round(11 * tr.k);
-        for (let dy = -2; dy <= 2; dy++) { const hw = Math.round(sw * Math.sqrt(1 - (dy / 2.8) * (dy / 2.8))); bx.fillRect(tr.x - hw + 3, tr.y + dy, hw * 2, 1); }
-      }
+      shadow = tr => { const sw = Math.round(11 * tr.k); for (let dy = -2; dy <= 2; dy++) { const hw = Math.round(sw * Math.sqrt(1 - (dy / 2.8) * (dy / 2.8))); bx.fillRect(tr.x - hw + 3, tr.y + dy, hw * 2, 1); } };
+      if (!lazy) for (const tr of trees) shadow(tr);
     } else {
       const spr = TREE_PAL.map(p => TREE_SHAPES.map(s => makeTree(p, s)));
       for (const tr of trees) { tr.c = spr[tr.p][tr.s]; tr.hh = 22; tr.hw = 11; }
@@ -283,7 +285,41 @@
     for (const r of treeRows) r.sort((a, b) => a.y - b.y);
 
     const mm = buildMini(map);
-    return { map, base, W, H, T, trees, treeRows, shimmer, waterIdx, mini: mm };
+    const ter = { map, base, W, H, T, trees, treeRows, shimmer, waterIdx, mini: mm, lazy, ensure: null, chunksDone: () => 0 };
+    if (lazy) {
+      const CH = AR.CHUNK, cs = CH * T, cw = Math.ceil(MW / CH), chn = Math.ceil(MH / CH), done = new Uint8Array(cw * chn), buckets = [];
+      let nDone = 0;
+      for (const tr of trees) {   // a tree's shadow spills ~14 px right and ~3 px up/down: bucket it into every chunk it touches
+        const r = chunkRange(tr.x - 12, tr.y - 4, 30, 8, cs, cw, chn, 0);
+        for (let cy = r.y0; cy <= r.y1; cy++) for (let cx = r.x0; cx <= r.x1; cx++) (buckets[cy * cw + cx] || (buckets[cy * cw + cx] = [])).push(tr);
+      }
+      const chunk = (cx, cy) => {
+        const i = cy * cw + cx; if (done[i]) return; done[i] = 1; nDone++;
+        const x0 = cx * CH, y0 = cy * CH, x1 = Math.min(MW, x0 + CH), y1 = Math.min(MH, y0 + CH);
+        paint(x0, y0, x1, y1);
+        bx.putImageData(id, 0, 0, x0 * T, y0 * T, (x1 - x0) * T, (y1 - y0) * T);
+        const b = buckets[i]; if (!b) return;
+        bx.save(); bx.beginPath(); bx.rect(x0 * T, y0 * T, (x1 - x0) * T, (y1 - y0) * T); bx.clip();
+        bx.fillStyle = 'rgba(2,10,6,0.36)'; for (const tr of b) shadow(tr);
+        bx.restore();
+      };
+      // paint every chunk the view touches now, plus (a couple per call) a one-chunk ring so scrolling never shows blanks
+      ter.ensure = (camX, camY, VW, VH) => {
+        const v = chunkRange(camX, camY, VW, VH, cs, cw, chn, 0);
+        for (let cy = v.y0; cy <= v.y1; cy++) for (let cx = v.x0; cx <= v.x1; cx++) chunk(cx, cy);
+        const m = chunkRange(camX, camY, VW, VH, cs, cw, chn, 1); let budget = 2;
+        for (let cy = m.y0; cy <= m.y1 && budget > 0; cy++) for (let cx = m.x0; cx <= m.x1 && budget > 0; cx++) if (!done[cy * cw + cx]) { chunk(cx, cy); budget--; }
+      };
+      ter.chunksDone = () => nDone;
+      ter.chunkCount = cw * chn;
+    }
+    return ter;
+  }
+
+  // Pure: the chunk index rectangle (inclusive, clamped to the cw x chn grid) covering the pixel box (x, y, w, h) grown by `margin` chunks.
+  function chunkRange(x, y, w, h, cs, cw, chn, margin) {
+    const m = margin || 0;
+    return { x0: Math.max(0, Math.floor(x / cs) - m), y0: Math.max(0, Math.floor(y / cs) - m), x1: Math.min(cw - 1, Math.floor((x + w - 1) / cs) + m), y1: Math.min(chn - 1, Math.floor((y + h - 1) / cs) + m) };
   }
 
   // minimap colour per mini pixel (covered tiles averaged); 135x75
@@ -306,6 +342,7 @@
   // blit visible region of the pre-rendered map + animated water pixels
   function draw(R, ter) {
     const cx = R.cx, VW = R.VW, VH = R.VH;
+    if (ter.ensure) ter.ensure(R.camX, R.camY, VW, VH);
     cx.drawImage(ter.base, R.camX, R.camY, VW, VH, 0, 0, VW, VH);
     const T = ter.T, map = R.w.map;
     const tx0 = Math.max(0, Math.floor(R.camX / T)), ty0 = Math.max(0, Math.floor(R.camY / T));
@@ -323,5 +360,5 @@
     }
   }
 
-  IT.Terrain = { build, draw, TW, TH, TAX, TAY, MINI_W, MINI_H };
+  IT.Terrain = { build, draw, chunkRange, TW, TH, TAX, TAY, MINI_W, MINI_H };
 })(typeof window !== 'undefined' ? window : globalThis);

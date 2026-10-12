@@ -36,11 +36,20 @@
     return top;
   }
 
+  // Arena cap: on huge maps (w*h > GAME.ARENA.LAZY_TILES) path search is confined to the start/goal tile box grown by SEARCH_MARGIN.
+  // -> { x0, y0, x1, y1 } inclusive tile bounds (the whole map for normal-size maps).
+  function searchBounds(map, sx, sy, gx, gy) {
+    const A = IT.GAME && IT.GAME.ARENA;
+    if (!A || map.w * map.h <= A.LAZY_TILES) return { x0: 0, y0: 0, x1: map.w - 1, y1: map.h - 1 };
+    const m = A.SEARCH_MARGIN;
+    return { x0: Math.max(0, Math.min(sx, gx) - m), y0: Math.max(0, Math.min(sy, gy) - m), x1: Math.min(map.w - 1, Math.max(sx, gx) + m), y1: Math.min(map.h - 1, Math.max(sy, gy) + m) };
+  }
+
   function nearestWalkable(map, x, y) {
     if (map.walkable(x, y)) return { x, y };
     const tx = map.toTile(x), ty = map.toTile(y);
     let best = null, bd = Infinity;
-    const maxR = Math.max(map.w, map.h);
+    const A = IT.GAME && IT.GAME.ARENA, maxR = A && map.w * map.h > A.LAZY_TILES ? Math.min(A.NEAR_MAX, Math.max(map.w, map.h)) : Math.max(map.w, map.h);
     for (let r = 1; r < maxR; r++) {
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !map.walkableTile(tx + dx, ty + dy)) continue;
@@ -73,6 +82,7 @@
     if (!map.walkable(x1, y1)) goal = nearestWalkable(map, x1, y1);
     const sx = map.toTile(s.x), sy = map.toTile(s.y), gx = map.toTile(goal.x), gy = map.toTile(goal.y);
     if (sx === gx && sy === gy) return [{ x: goal.x, y: goal.y }];
+    const bb = searchBounds(map, sx, sy, gx, gy);
     const gen = ++nv.gen, G_ = nv.g, par = nv.par, stamp = nv.stamp, closed = nv.closed, near = nv.near;
     nv.hn.length = 0; nv.hk.length = 0;
     const h = (x, y) => { const dx = Math.abs(x - gx), dy = Math.abs(y - gy); return (dx + dy) + (SQ2 - 2) * Math.min(dx, dy); };
@@ -89,7 +99,7 @@
       const hc = h(cx, cy); if (hc < bestH) { bestH = hc; best = cur; }
       for (let k = 0; k < 8; k++) {
         const nx = cx + DX[k], ny = cy + DY[k];
-        if (!map.walkableTile(nx, ny)) continue;
+        if (nx < bb.x0 || nx > bb.x1 || ny < bb.y0 || ny > bb.y1 || !map.walkableTile(nx, ny)) continue;
         if (k >= 4 && (!map.walkableTile(cx + DX[k], cy) || !map.walkableTile(cx, cy + DY[k]))) continue;
         const ni = ny * w + nx;
         if (closed[ni] === gen) continue;
@@ -146,5 +156,5 @@
     return { x, y };
   }
 
-  IT.Nav = { findPath, lineWalkable, nearestWalkable, slide, circleFree };
+  IT.Nav = { findPath, lineWalkable, nearestWalkable, slide, circleFree, searchBounds };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -74,11 +74,13 @@
     },
   });
 
+  // Blast reach = KV blast_radius (825) + bonus_aoe (75, hull/expansion) = 900 (decided).
+  const shivaRadius = () => iv('shiva', 'blast_radius') + (iv('shiva', 'bonus_aoe') || 0);
   // ---- Shiva's Guard: active ring blast; passive aura (-AS to nearby enemies); armor via itemStats.
   item('shiva', {
     target: 'none',
     cast(w, c) {
-      const R = iv('shiva', 'blast_radius'), speed = iv('shiva', 'blast_speed'), dmg = iv('shiva', 'blast_damage');
+      const R = shivaRadius(), speed = iv('shiva', 'blast_speed'), dmg = iv('shiva', 'blast_damage');
       const slow = -iv('shiva', 'blast_movement_speed') / 100, sdur = iv('shiva', 'blast_debuff_duration');
       const hit = new Set(); let any = false;
       w.emit('fx', { name: 'shivaBlast', x: c.x, y: c.y, r: R, speed, unit: c.id });
@@ -408,7 +410,7 @@
   function preview(id) {
     if (!DOTA(id)) return null;
     switch (id) {
-      case 'shiva': return { shape: 'circle', around: 'self', r: iv(id, 'blast_radius'), speed: iv(id, 'blast_speed'), aura: iv(id, 'aura_radius'), range: 0 };
+      case 'shiva': return { shape: 'circle', around: 'self', r: shivaRadius(), speed: iv(id, 'blast_speed'), aura: iv(id, 'aura_radius'), range: 0 };
       case 'gleipnir': return { shape: 'circle', around: 'point', r: iv(id, 'radius_tooltip') || iv(id, 'radius'), range: iv(id, 'castRange') };
       case 'meteorhammer': return { shape: 'circle', around: 'point', r: iv(id, 'impact_radius'), range: iv(id, 'castRange') };
       case 'dust': return { shape: 'circle', around: 'self', r: iv(id, 'radius'), range: 0 };
@@ -418,5 +420,5 @@
     }
   }
 
-  IT.Items = { applyPassives, ids, swap, preview };
+  IT.Items = { applyPassives, ids, swap, preview, shivaRadius };
 })(typeof window !== 'undefined' ? window : globalThis);

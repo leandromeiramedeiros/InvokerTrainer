@@ -14,6 +14,9 @@
 .spsel:hover{border-color:var(--mag)}
 .spsel.on{border-color:var(--gold);background:#3a2810}
 .shsp.need .spsel{border-color:var(--bad)}
+/* free-play map preview (drawn lazily) */
+.mapthumb{width:192px;height:108px;margin:.4em 0;background:#0b0618;border:2px solid var(--line)}
+.mapthumb canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
 /* scenario chips */
 .scns{gap:.4em;margin-bottom:.5em}
 

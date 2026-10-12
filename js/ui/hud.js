@@ -406,7 +406,9 @@
     if (ctx.mode === 'sandbox') {
       R.dpsN = h('b', { class: 'dpsn', text: '0' }); R.totN = h('b', { class: 'totn', text: '0' });
       R.list = h('div', { class: 'clist' });
+      R.mapLine = h('div', { class: 'maplin' });   // current map name (Free Play / sandbox top line)
       R.side = h('div', { class: 'hudp hside' },
+        R.mapLine,
         h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, h('span', { class: 'sp', text: t('hud.total') }), R.totN),
         h('div', { class: 'srow2' },
           h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.refresh && In.hooks.refresh(), text: t('hud.refresh') + ' [' + IT.Settings.label(IT.Settings.keyOf('refresh')) + ']' }),
@@ -604,6 +606,12 @@
     if (hm === 'steps') updTimeline(R);
   };
 
+  // localized name of a map object (i18n 'map.<id>' first, then its own name table); '' when unknown
+  H.mapLabel = function (map) {
+    if (!map) return '';
+    if (map.id && IT.hasT('map.' + map.id)) return IT.t('map.' + map.id);
+    const n = map.name; return n == null ? '' : typeof n === 'object' ? (n[IT.lang] || n.en || '') : String(n);
+  };
   H.update = function (dt) {
     const c = H.c; if (!c) return;
     const { w, hero } = c, R = H.refs, ca = H.cache, S = IT.Settings, t = IT.t;
@@ -678,6 +686,7 @@
       R.bar.style.display = U ? 'none' : ''; R.ubar.style.display = U ? '' : 'none'; R.orbcol.style.display = U ? 'none' : '';
     }
     if (U) H.updUnit(U, R, ca, w);
+    if (R.mapLine) { const mn = H.mapLabel(w.map); setText(R.mapLine, mn ? t('hud.map') + ': ' + mn : '', ca, 'mapl'); R.mapLine.style.display = mn ? '' : 'none'; }
     // ranked panel
     H.updRanked(R, ca, dt);
     H.updHood(R, ca, w.loadout || {}, dt);

@@ -381,6 +381,20 @@
 
     // ---- map (free play only; scenarios bring their own)
     const mapBox = reg('map', 'mapbox');
+    // Map preview: a sized placeholder first; the (cached) tile thumbnail is drawn once it is on screen and the browser is idle.
+    // Building a thumbnail builds the map itself (the 368x368 whole map is the slow one), so nothing runs while the picker is closed.
+    function lazyThumb(box, id) {
+      let done = false;
+      const paint = () => {
+        if (done || !box.isConnected) return; done = true;
+        try { const cv = IT.Maps && IT.Maps.thumb ? IT.Maps.thumb(id, 96, 54) : null; if (cv) { box.textContent = ''; box.classList.add('ready'); box.appendChild(cv); } } catch (e) { /* no preview */ }
+      };
+      const idle = () => { if (typeof requestIdleCallback === 'function') requestIdleCallback(paint, { timeout: 400 }); else setTimeout(paint, 30); };
+      if (typeof IntersectionObserver === 'function') {
+        const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); idle(); } });
+        io.observe(box);
+      } else idle();
+    }
     function renderMap() {
       mapBox.textContent = '';
       if (st.scenario) { mapBox.appendChild(h('p', { class: 'fine', text: t('lo.map.scn') })); return; }
@@ -391,6 +405,8 @@
         ML.map(m => h('option', { value: m.id, selected: st.map === m.id ? true : null, text: nm(m) })));
       const cur = ML.find(m => m.id === st.map) || ML[0];
       mapBox.appendChild(h('div', { class: 'row' }, h('span', { class: 'lbl', text: t('lo.map') }), sel));
+      const thumb = h('div', { class: 'mapthumb', 'data-map': cur.id });
+      mapBox.appendChild(thumb); lazyThumb(thumb, cur.id);
       mapBox.appendChild(h('p', { class: 'fine', text: IT.hasT('map.' + cur.id + '.d') ? t('map.' + cur.id + '.d') : ((cur.blurb && cur.blurb.en) || '') }));
     }
 
