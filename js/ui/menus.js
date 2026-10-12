@@ -140,6 +140,7 @@
   // ---- title (mode-first). RANKED on top, then practice / sandbox / stats / settings.
   const FS_SVG = '<svg viewBox="0 0 16 16"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
   // player's medal + rank name + rating under RANKED; nothing if ranked data or medal art is missing
+  const infBest = () => { try { return IT.Ranked.infiniteProfile().best | 0; } catch (e) { return 0; } };
   function rankBox() {
     let p = null;
     try { p = IT.Ranked && IT.Ranked.profile ? IT.Ranked.profile() : null; } catch (e) { p = null; }
@@ -171,6 +172,7 @@
       h('div', { class: 'menu tmenu' },
         h('button', { class: 'btn grn ranked', type: 'button', 'data-snd': 'start', onclick: () => A.go('ranked'), text: IT.t('title.ranked') }),
         rankBox(),
+        h('button', { class: 'btn grn inf', type: 'button', 'data-snd': 'start', 'data-tip': IT.t('title.infinite.d', { n: infBest() }), onclick: () => A.go('infinite'), text: IT.t('title.infinite') }),
         btn('title.sandbox', () => A.go('sandbox'), 'slt'),
         btn('ui.stats', () => A.go('stats'), 'slt'),
         btn('ui.settings', () => A.go('settings'), 'slt')),

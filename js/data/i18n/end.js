@@ -1,0 +1,29 @@
+// v5 i18n pack (end): end splash, curated stats, share image, infinite run. en/pt key parity is tested (tests/modes_v5.test.js).
+(function (G) { 'use strict'; const IT = G.IT; IT.i18nAdd({
+    en: {
+      'mode.infinite': 'Infinite Run', 'title.infinite': 'Infinite Run',
+      'title.infinite.d': 'Extreme scenarios until your first fail. Best: {n}',
+      'hud.rkCleared': 'CLEARED',
+      'end.sp.ranked': 'RANKED RUN COMPLETE', 'end.sp.infinite': 'INFINITE RUN OVER',
+      'end.sp.cleared': 'Cleared', 'end.sp.score': 'Score', 'end.sp.streak': 'Best streak', 'end.sp.apm': 'Actions/min',
+      'end.sp.fastest': 'Fastest clear', 'end.sp.sun': 'Sun Strike hits', 'end.sp.meteor': 'Meteor hits',
+      'end.sp.infCleared': 'SCENARIOS CLEARED', 'end.sp.best': 'Best ever: {n}', 'end.sp.newBest': 'NEW BEST!',
+      'end.sp.failedOn': 'Failed on {name}', 'end.sp.failedBy': 'Failed: {why}', 'end.sp.quit': 'Run abandoned', 'end.sp.timeUp': 'Time is up',
+      'end.btn.again': 'PLAY AGAIN', 'end.btn.infinite': 'INFINITE RUN', 'end.btn.ranked': 'RANKED', 'end.btn.back': 'GO BACK',
+      'end.btn.share': 'SAVE IMAGE', 'end.btn.shared': 'Image saved', 'end.btn.shareFail': 'Could not make the image',
+      'share.brand': 'INVOKER TRAINER', 'share.diff': 'Difficulty', 'share.level': 'Level', 'share.alt': 'Run summary image',
+    },
+    pt: {
+      'mode.infinite': 'Corrida Infinita', 'title.infinite': 'Corrida Infinita',
+      'title.infinite.d': 'Cenários extremos até a primeira falha. Recorde: {n}',
+      'hud.rkCleared': 'FEITOS',
+      'end.sp.ranked': 'PARTIDA RANQUEADA CONCLUÍDA', 'end.sp.infinite': 'FIM DA CORRIDA INFINITA',
+      'end.sp.cleared': 'Resolvidos', 'end.sp.score': 'Pontos', 'end.sp.streak': 'Maior sequência', 'end.sp.apm': 'Ações/min',
+      'end.sp.fastest': 'Resolução mais rápida', 'end.sp.sun': 'Acertos de Sun Strike', 'end.sp.meteor': 'Acertos de Meteoro',
+      'end.sp.infCleared': 'CENÁRIOS RESOLVIDOS', 'end.sp.best': 'Recorde: {n}', 'end.sp.newBest': 'NOVO RECORDE!',
+      'end.sp.failedOn': 'Falhou em {name}', 'end.sp.failedBy': 'Falha: {why}', 'end.sp.quit': 'Partida abandonada', 'end.sp.timeUp': 'Acabou o tempo',
+      'end.btn.again': 'JOGAR DE NOVO', 'end.btn.infinite': 'CORRIDA INFINITA', 'end.btn.ranked': 'RANQUEADA', 'end.btn.back': 'VOLTAR',
+      'end.btn.share': 'SALVAR IMAGEM', 'end.btn.shared': 'Imagem salva', 'end.btn.shareFail': 'Não foi possível gerar a imagem',
+      'share.brand': 'INVOKER TRAINER', 'share.diff': 'Dificuldade', 'share.level': 'Nível', 'share.alt': 'Imagem do resumo da partida',
+    },
+  }); })(typeof window !== 'undefined' ? window : globalThis);

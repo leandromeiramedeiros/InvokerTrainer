@@ -66,6 +66,7 @@
   function end(info) {
     const { h, btn } = IT.UI, t = IT.t, A = IT.App;
     const S = info.stats, m = info.mode || {};
+    if ((m.mode === 'ranked' || m.mode === 'infinite') && IT.UI.endSplash) return IT.UI.endSplash(info);   // v5: colourful splash for scored runs
     const scn = m.mode === 'ranked' || m.mode === 'practice';
     const head = [
       h('div', { class: 'kcard big' }, h('span', { text: t(m.mode === 'ranked' ? 'end.score' : 'end.solved') }), h('b', { text: String(m.mode === 'ranked' ? Math.round(m.score || 0) : scn ? (m.solved || 0) : Math.round(m.score != null ? m.score : (S.combos ? S.combos.score : 0))) })),

@@ -9,9 +9,9 @@
   const UI = IT.UI, S = IT.Settings;
 
   let g = null, lastOpts = null, settingsOver = false, state = 'title';
-  const THEME = { ranked: 'ranked', practice: 'practice', sandbox: 'sandbox' };
+  const THEME = { ranked: 'ranked', infinite: 'ranked', practice: 'practice', sandbox: 'sandbox' };
   const music = n => { try { IT.Music && IT.Music.play(n); } catch (e) { /* audio is optional */ } };
-  const isScn = o => o.mode === 'ranked' || o.mode === 'practice' || (o.mode === 'sandbox' && !!o.scenario);
+  const isScn = o => o.mode === 'ranked' || o.mode === 'infinite' || o.mode === 'practice' || (o.mode === 'sandbox' && !!o.scenario);
 
   // ---------------------------------------------------------------- sizing
   function fit() {
@@ -98,7 +98,7 @@
     });
     w.on('modeEnd', p => { if (!g.quiet) finish(p); });
     w.on('scnResult', p => {
-      if (p.ok) UI.toast(IT.t(g.mode === 'ranked' ? 'scn.solvedRk' : 'scn.solved', { n: p.points }), 'good');
+      if (p.ok) UI.toast(IT.t(g.mode === 'ranked' || g.mode === 'infinite' ? 'scn.solvedRk' : 'scn.solved', { n: p.points }), 'good');
       else UI.toast(IT.t('scn.fail.' + p.reason), 'bad');
     });
     const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant };
@@ -168,6 +168,7 @@
       if (name === 'again') { abandon(); if (lastOpts) start(lastOpts); else App.go('loadout'); return; }
       if (name === 'sandbox') name = 'loadout';
       if (name === 'ranked') { abandon(); commitStats(); start({ mode: 'ranked' }); return; }
+      if (name === 'infinite') { abandon(); commitStats(); start({ mode: 'infinite' }); return; }
       abandon();
       commitStats();
       teardown();
@@ -297,7 +298,7 @@
       if (!w.paused) {
         acc += dt;
         while (acc >= w.dt && !w.paused) { g.R.snapshot(); w.step(); acc -= w.dt; }
-        if (g.run && g.run.turns != null && g.run.turns - g.run.n <= 1 && IT.Music) IT.Music.intensity(1);
+        if (g.run && (g.run.turns != null ? g.run.turns - g.run.n <= 1 : g.run.infinite && g.run.solved >= 4) && IT.Music) IT.Music.intensity(1);
         if (!g.ended) g.cam.update(dt, IT.Input.keys, IT.Input.camMouse(), g.hero);
       } else if (g.run && !g.menu && !g.ended) {   // countdown / result: sim frozen, camera + inspect stay live
         acc = 0;

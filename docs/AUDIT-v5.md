@@ -10,7 +10,7 @@ Baked Dota KV data + spells/items faithful; progression G1-G4 exact; enemy AI (d
 |---|---|---|---|---|
 | B | Enemies in scenarios: spawnEnemy (hp=dmg-to-kill, real death), tier telegraph/awareness/reaction/armorAdd, skin rotation, hero auto-attack from KV, drop killFrac/refill on enemies | BAD 2,6,7 | Sonnet | done |
 | A | Scenario engine + >=30 v4 scenarios on v5 maps (salvage wip/scenarios-oldmap engine; arena-tag spots, no absolute coords; 'seen' fail fix; tests) | BAD 1,3,16; MISSING 1,7 | Opus | done |
-| C | End splash + curated stats + PNG share; INFINITE RUN mode | BAD 4,5; MISSING 2,3 | Sonnet | todo |
+| C | End splash + curated stats + PNG share; INFINITE RUN mode | BAD 4,5; MISSING 2,3 | Sonnet | done (note: burst overlaps title briefly; PNG ~0.9MB) |
 | D | Combos: SS-after-tornado timing from lift_duration, missing staples, tier scores, validation (wrong-order feedback, timing windows, legit variations) | BAD 8,9 | Sonnet | todo |
 | F | HUD/perf: F1 chip size/backplate, map name line, 'dota' arena cap/lazy thumbs, Shiva radius 825+75 | BAD 11,13,14 | Sonnet | todo |
 | E | Loadout: F3 Aghanim hood picker, Free Play enemy card (place/config), difficulty badge in picker | BAD 10,12; MISSING 5,8 | Sonnet | todo |

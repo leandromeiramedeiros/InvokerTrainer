@@ -246,6 +246,15 @@
       taiko(th, t + 0.8, 0.3); note(th, t + 0.8, 60, 1.2, { type: 'sine', f2: 35, g: 0.25, a: 0.01 });
       return 2.2;
     },
+    reveal(th, t) { // end splash, rank unchanged: drum roll -> hit on the medal pop (0.66 s) -> bright chord + sparkle
+      [0, 0.16, 0.3, 0.42, 0.52, 0.6].forEach((d, k) => tom(th, t + d, 0.12 + k * 0.035, 150 - k * 6));
+      nz(th, t, 0.66, { ft: 'bandpass', f: 500, f2: 6000, q: 1.1, g: 0.1, a: 0.6 });
+      taiko(th, t + 0.66, 0.45);
+      chord(th, t + 0.66, [52, 59, 64, 71], 1.5, 0.1);
+      pad(th, t + 0.66, [64, 68, 71, 76], 1.8, 0.05);
+      [88, 92, 95, 100].forEach((m, k) => note(th, t + 0.72 + k * 0.08, mf(m), 0.7, { type: 'sine', g: 0.035, a: 0.004 }));
+      return 2.4;
+    },
     start(th, t) { // match start: drum hits, riser, accent
       tom(th, t, 0.3, 120); tom(th, t + 0.25, 0.28, 120); tom(th, t + 0.5, 0.32, 100);
       nz(th, t, 0.8, { ft: 'bandpass', f: 400, f2: 5000, q: 1.2, g: 0.12, a: 0.7 });

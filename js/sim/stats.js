@@ -128,6 +128,37 @@
     return L;
   }
 
-  IT.StatsCollector = { create, merge, blank };
+  // ---- end-splash curation (pure): the few numbers worth showing for a finished ranked / infinite run.
+  // S = stats summary, m = the modeEnd summary (Ranked finish()). Tiles are { id, kind:'int'|'frac'|'pct'|'sec'|'rate', v [, of, n] } in display order.
+  function accOf(S, id) {
+    const s = S && S.spells && S.spells[id], n = s ? s.hits + s.misses : 0;
+    return n > 0 ? { acc: s.hits / n, hits: s.hits, casts: s.casts } : null;
+  }
+  function fastest(S) {
+    const b = S && S.combos && S.combos.best, v = b ? Object.keys(b).map(k => b[k]).filter(x => typeof x === 'number' && isFinite(x) && x > 0) : [];
+    return v.length ? Math.min.apply(null, v) : null;
+  }
+  // ornament level 0..7 for the share card / splash: the rank tier of a ranked run, ~2 clears per step for an infinite one
+  function ornament(m) {
+    m = m || {};
+    if (m.mode === 'infinite') return Math.max(0, Math.min(7, Math.floor((m.cleared != null ? m.cleared : m.solved || 0) / 2)));
+    const r = m.rank && m.rank.after && m.rank.after.rank;
+    return r ? Math.max(0, Math.min(7, r.tier | 0)) : 0;
+  }
+  function curated(S, m) {
+    S = S || blank(); m = m || {};
+    const inf = m.mode === 'infinite', solved = m.solved != null ? m.solved : m.cleared != null ? m.cleared : (m.combos || 0);
+    const sun = accOf(S, 'sunstrike'), met = accOf(S, 'chaosmeteor'), fast = fastest(S), t = [];
+    t.push({ id: 'score', kind: 'int', v: Math.round(m.score || 0) });
+    if (!inf) t.push({ id: 'cleared', kind: 'frac', v: solved, of: m.turns || null });
+    t.push({ id: 'streak', kind: 'int', v: m.bestStreak || 0 });
+    if (S.apm > 0) t.push({ id: 'apm', kind: 'rate', v: S.apm });
+    if (fast != null) t.push({ id: 'fastest', kind: 'sec', v: fast });
+    if (sun) t.push({ id: 'sun', kind: 'pct', v: sun.acc, n: sun.hits });
+    if (met) t.push({ id: 'meteor', kind: 'pct', v: met.acc, n: met.hits });
+    return { tiles: t, cleared: solved, ornament: ornament(m) };
+  }
+
+  IT.StatsCollector = { create, merge, blank, curated, ornament };
   IT.World.system('statsCollector', 90, (w, dt) => { if (w._stats) w._stats.sys(w, dt); });
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -567,15 +567,15 @@
     R.rkRow.style.display = cd ? 'none' : '';
     if (cd) setText(R.rkNum, String(Math.max(1, Math.ceil(rk.countdown || 0))), ca, 'rkcd');
     setText(R.rkTv, fmtS(rk.timeLeft), ca, 'rkt'); R.rkTv.classList.toggle('low', rk.timeLeft != null && rk.timeLeft < 5);
-    setText(R.rkRv, rk.turns != null ? rk.turn + '/' + rk.turns : fmtM(rk.runLeft), ca, 'rkr');
-    setText(R.rkRl, IT.t(rk.turns != null ? 'hud.rkTurn' : 'hud.rkRun'), ca, 'rkrl');
+    setText(R.rkRv, rk.cleared != null ? String(rk.cleared) : rk.turns != null ? rk.turn + '/' + rk.turns : fmtM(rk.runLeft), ca, 'rkr');
+    setText(R.rkRl, IT.t(rk.cleared != null ? 'hud.rkCleared' : rk.turns != null ? 'hud.rkTurn' : 'hud.rkRun'), ca, 'rkrl');
     R.rkGo.style.display = cd ? '' : 'none'; R.rkTip.style.display = cd ? '' : 'none';
     setText(R.rkTip, cd ? txt(rk.tip) : '', ca, 'rktip');
     R.rkBadge.className = 'rkdiff d-' + rk.diff; R.rkBadge.title = rk.diffDesc || '';
     setText(R.rkBadge, IT.hasT('dtier.' + rk.diff) ? IT.t('dtier.' + rk.diff) : rk.diff, ca, 'rkdf');
     setText(R.rkSv, String(Math.round(rk.score || 0)), ca, 'rks');
     R.rkTm.style.display = rk.timeLeft == null ? 'none' : '';
-    R.rkRn.style.display = rk.runLeft == null && rk.turns == null ? 'none' : '';
+    R.rkRn.style.display = rk.runLeft == null && rk.turns == null && rk.cleared == null ? 'none' : '';
     R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
     setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
     // scenario level, v5 map name, ranked twist (when present)

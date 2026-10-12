@@ -5,12 +5,13 @@
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  const KEY = 'it2.rank';
+  const KEY = 'it2.rank', IKEY = 'it2.inf';
   const RUN_SECONDS = 300, TURNS = 8, COUNTDOWN = 10, PRACTICE_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lang = () => IT.lang || 'en';
   const loc = o => (o && typeof o === 'object' ? o[lang()] || o.en : o);
   const TIER_NAME = ['basic', 'intermediate', 'advanced'];
+  const INF_MIN_LEVEL = 6, INF_COUNTDOWN = 5;   // infinite run: the hard end of the scenario pool, bambam, 5 s countdown
   const maxDelta = () => (IT.Ranks && IT.Ranks.MAX_DELTA) || 150;
 
   // ---------------------------------------------------------------- pure math
@@ -56,6 +57,35 @@
     return { score, delta: r1 - r0, before: { rating: r0, rank: b }, after: { rating: r1, rank: a }, up: rankKey(a) > rankKey(b), down: rankKey(a) < rankKey(b) };
   }
   function reset() { mem = null; try { G.localStorage && G.localStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
+
+  // ---------------------------------------------------------------- infinite run: best-ever (own key, same guarded storage)
+  let imem = null;
+  const iblank = () => ({ best: 0, games: 0, last: 0 });
+  function infiniteProfile() {
+    try { const s = G.localStorage && G.localStorage.getItem(IKEY); if (s) return Object.assign(iblank(), JSON.parse(s)); } catch (e) { /* fall through */ }
+    return imem ? Object.assign(iblank(), imem) : iblank();
+  }
+  // pure: previous best + this run's cleared count -> { cleared, prev, best, isNew }
+  function infiniteResult(prev, cleared) {
+    const p = Math.max(0, prev | 0), n = Math.max(0, cleared | 0);
+    return { cleared: n, prev: p, best: Math.max(p, n), isNew: n > p };
+  }
+  function recordInfinite(cleared) {
+    const p = infiniteProfile(), r = infiniteResult(p.best, cleared);
+    p.best = r.best; p.games = (p.games | 0) + 1; p.last = r.cleared;
+    imem = p;
+    try { G.localStorage && G.localStorage.setItem(IKEY, JSON.stringify(p)); } catch (e) { /* in-memory only */ }
+    return r;
+  }
+  function resetInfinite() { imem = null; try { G.localStorage && G.localStorage.removeItem(IKEY); } catch (e) { /* ignore */ } }
+  // infinite difficulty: bambam, hardening every full pass over the pool (lap): bulkier + harder-hitting foes, quicker reactions, tighter timer
+  function infDifficulty(base, lap) {
+    if (!(lap > 0)) return base;
+    return Object.assign({}, base, {
+      hpMul: base.hpMul * (1 + 0.12 * lap), dmgMul: base.dmgMul * (1 + 0.1 * lap), reaction: Math.max(0.1, base.reaction * Math.pow(0.9, lap)),
+      timer: Math.max(0.6, base.timer * Math.pow(0.95, lap)), mult: base.mult * (1 + 0.15 * lap),
+    });
+  }
 
   // ---------------------------------------------------------------- scenario preparation (pure)
   // sc + difficulty -> { sc, df, lo, fog, par, limit, skin }
@@ -230,23 +260,28 @@
   }
 
   // ---------------------------------------------------------------- run
-  // opts: { mode:'ranked'|'practice'|'sandbox', diff:id (practice), scenario:id (sandbox, fixed), rating, seed, skin, runSeconds }
+  // opts: { mode:'ranked'|'practice'|'sandbox'|'infinite', diff:id (practice), scenario:id (sandbox, fixed), rating, seed, skin, runSeconds }
+  // 'infinite': bambam scenarios from the hard end of the pool in a seeded shuffled order (a fresh shuffle each lap, harder each lap, twists from the 3rd),
+  //   until the first failed scenario; the summary carries cleared + the persisted best-ever.
   function create(opts) {
     opts = opts || {};
-    const mode = opts.mode || 'practice', ranked = mode === 'ranked', fixed = opts.scenario ? IT.SCENARIOS.get(opts.scenario) : null;
+    const mode = opts.mode || 'practice', ranked = mode === 'ranked', infinite = mode === 'infinite', fixed = opts.scenario ? IT.SCENARIOS.get(opts.scenario) : null;
     const rating = opts.rating != null ? opts.rating : ranked ? profile().rating : 0;
     const rng = IT.U.mulberry32(opts.seed == null ? (Math.random() * 1e9) | 0 : opts.seed);
     const run = {
-      mode, ranked, fixed, rating, rng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
+      mode, ranked, infinite, fixed, rating, rng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
       runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
-      pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false,
+      pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
-      countdown: ranked ? COUNTDOWN : fixed && mode === 'sandbox' ? 0 : PRACTICE_COUNTDOWN,
+      countdown: ranked ? COUNTDOWN : infinite ? INF_COUNTDOWN : fixed && mode === 'sandbox' ? 0 : PRACTICE_COUNTDOWN,
     };
     const DF = () => IT.DIFFICULTY;
 
-    run.diffIndex = () => (ranked ? rampDiff(rating, run.n) : DF().get(run.diffId).idx);
-    run.difficulty = () => DF().get(run.diffIndex());
+    const infPool = () => { const l = IT.SCENARIOS.filter(s => (s.level || s.tier * 3) >= INF_MIN_LEVEL); return l.length ? l : IT.SCENARIOS.slice(); };
+    const infSize = infinite ? infPool().length : 1;
+    run.lap = () => (infinite ? Math.floor(run.n / infSize) : 0);   // full passes over the pool so far
+    run.diffIndex = () => (ranked ? rampDiff(rating, run.n) : infinite ? DF().order.length - 1 : DF().get(run.diffId).idx);
+    run.difficulty = () => (infinite ? infDifficulty(DF().get(run.diffIndex()), run.lap()) : DF().get(run.diffIndex()));
 
     // ranked ramp: the n-th scenario aims at level 1 + n (+2 per rating band), picked among levels within +-r (widening until >= 3)
     run.levelTarget = () => clamp(Math.round(1 + run.n + 2 * baseDiff(rating)), 1, 10);
@@ -261,8 +296,19 @@
       }
       run.twistTurns.sort((a, b) => a - b);
     }
+    // infinite: draw from a shuffled bag of the pool (never the same scenario twice in a row across a refill)
+    function infPick() {
+      if (!run.bag.length) {
+        const b = infPool();
+        for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)) % (i + 1), t = b[i]; b[i] = b[j]; b[j] = t; }
+        if (b.length > 1 && b[b.length - 1].id === run.lastId) { const t = b[0]; b[0] = b[b.length - 1]; b[b.length - 1] = t; }
+        run.bag = b;
+      }
+      const sc = run.bag.pop(); run.lastId = sc.id; return sc;
+    }
     function pick() {
       if (fixed) return fixed;
+      if (infinite) return infPick();
       const all = IT.SCENARIOS;
       let pool = all;
       if (ranked) {
@@ -274,6 +320,11 @@
       return pool[Math.floor(rng() * pool.length) % pool.length];
     }
     function twist(sc) {
+      if (infinite) {   // from the 3rd scenario: every other one in the first lap, every one after (bambam already has fog)
+        if (run.n < 2 || (run.lap() < 1 && run.n % 2 === 0)) return null;
+        const okI = Object.keys(TWISTS).filter(k => k !== 'fog' && TWISTS[k].ok(sc));
+        return okI.length ? okI[Math.floor(rng() * okI.length) % okI.length] : null;
+      }
       if (!ranked || run.twistTurns.indexOf(run.n) < 0) return null;
       const ok = Object.keys(TWISTS).filter(k => TWISTS[k].ok(sc));
       return ok.length ? ok[Math.floor(rng() * ok.length) % ok.length] : null;
@@ -293,6 +344,7 @@
       run.dummies = apply(w, run.pr);
       run.st = freshSt();   // objective bookkeeping (v5), filled by the attach() listeners
       run.result = null; run.caught = false; run.died = false; run.t0 = w.t;
+      run.maxLevel = Math.max(run.maxLevel, run.pr.sc.level || 0);
       run.phase = run.countdown > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
       w.paused = run.phase !== 'play';
       w.emit('scnStart', { id: run.pr.sc.id, n: run.n, diff: run.pr.df.id });
@@ -337,11 +389,11 @@
       let pts = 0;
       if (ok) {
         run.solved++; run.streak++; run.bestStreak = Math.max(run.bestStreak, run.streak);
-        if (ranked) pts = scenarioScore(pr.df.mult, pr.par, time, run.streak - 1);
+        if (ranked || infinite) pts = scenarioScore(pr.df.mult, pr.par, time, run.streak - 1);
         run.score += pts;
         w.emit('comboDone', { id: pr.sc.id, tier: TIER_NAME[pr.sc.tier - 1] || 'basic', score: pts, time });
       } else {
-        run.failed++; run.streak = 0;
+        run.failed++; run.streak = 0; run.failId = pr.sc.id;
         w.emit('comboFail', { id: pr.sc.id, reason });
       }
       run.result = { ok, reason: reason || null, points: pts, time };
@@ -431,8 +483,13 @@
       run.ended = true;
       const w = run.w;
       if (w) w.paused = true;
-      const sum = { mode, combos: run.solved, solved: run.solved, fails: run.failed, bestStreak: run.bestStreak, score: ranked ? run.score : 0, reason: reason || 'time' };
+      const sum = { mode, combos: run.solved, solved: run.solved, fails: run.failed, bestStreak: run.bestStreak, score: ranked || infinite ? run.score : 0, reason: reason || 'time',
+        turns: run.turns, diff: run.pr ? run.pr.df.id : null, level: run.maxLevel || null };
       if (ranked && (run.n > 0 || run.solved + run.failed > 0)) sum.rank = record(run.score);
+      if (infinite) {
+        const r = recordInfinite(run.solved), sc = run.failId ? IT.SCENARIOS.get(run.failId) : null;
+        Object.assign(sum, { cleared: r.cleared, best: r.best, prevBest: r.prev, newBest: r.isNew && r.cleared > 0, failId: run.failId, failName: sc ? sc.name : null, failReason: run.result && !run.result.ok ? run.result.reason : null, laps: run.lap() });
+      }
       run.summary = sum;
       if (w) w.emit('modeEnd', sum);
       return sum;
@@ -443,6 +500,7 @@
       const w = run.w;
       run.n++;
       if (run.turns != null && run.n >= run.turns) { finish('turns'); return; }   // ranked: fixed number of scenarios
+      if (infinite && run.failed > 0) { finish('fail'); return; }   // infinite: the first failed scenario ends the run
       run.next();
       enter(w);
       if (run.onSwap) run.onSwap(run);
@@ -482,7 +540,7 @@
       countdown: r.phase === 'countdown' ? Math.max(1, Math.ceil(r.cd - 1e-9)) : 0,
       timeLeft: r.mode === 'sandbox' ? null : Math.max(0, pr.limit - el),
       runLeft: r.runLeft, turn: r.turns != null ? Math.min(r.turns, r.n + 1) : null, turns: r.turns,
-      score: r.ranked ? r.score : null,
+      score: r.ranked || r.infinite ? r.score : null, cleared: r.infinite ? r.solved : null,
       scenario: loc(pr.sc.name), objective: loc(pr.sc.goal),
       // extras
       mode: r.mode, id: pr.sc.id, n: r.n, solved: r.solved, failed: r.failed, streak: r.streak, bestStreak: r.bestStreak,
@@ -494,7 +552,8 @@
 
   IT.Ranked = {
     RUN_SECONDS, TURNS, COUNTDOWN, PRACTICE_COUNTDOWN, RESULT_HOLD,
-    streakMult, scenarioScore, expected, ratingDelta, baseDiff, rampDiff, rankKey,
+    streakMult, scenarioScore, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
+    infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     profile, record, reset, load, prepare, apply, create, hud, spot, arenas, TWISTS,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
