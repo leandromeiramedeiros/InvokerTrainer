@@ -128,7 +128,7 @@
     C('i_bolt_cancel', 'intermediate', L('Interrupt the Stun Bolt', 'Interrompa o Stun Bolt'),
       L('The dummy winds up a stun bolt when you get close. Cold Snap it during the cast to cancel the bolt.',
         'O alvo prepara um stun bolt quando você chega perto. Use Cold Snap durante a conjuração para cancelar.'),
-      12, [hit('coldsnap'), react('boltCancel', { within: 3 })], { scenario: { stunBolt: true } }),
+      12, [pos(0, 650), hit('coldsnap'), react('boltCancel', { within: 3 })], { scenario: { stunBolt: true } }),
     C('i_blind_sunstrike', 'intermediate', L('Blind Sun Strike', 'Sun Strike às cegas'),
       L('The dummy is out of vision. Use its last known position (ping) and Sun Strike it blind.',
         'O alvo está fora da visão. Use a última posição conhecida (ping) e lance o Sun Strike às cegas.'),

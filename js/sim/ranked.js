@@ -6,7 +6,7 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const KEY = 'it2.rank', IKEY = 'it2.inf';
-  const RUN_SECONDS = 300, TURNS = 8, COUNTDOWN = 10, PRACTICE_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40;
+  const RUN_SECONDS = 300, TURNS = 8, COUNTDOWN = 10, PRACTICE_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lang = () => IT.lang || 'en';
   const loc = o => (o && typeof o === 'object' ? o[lang()] || o.en : o);
@@ -339,11 +339,13 @@
       return run.pr;
     };
 
-    const freshSt = () => ({ last: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null });
+    const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null });
     function enter(w) {
       run.dummies = apply(w, run.pr);
       run.st = freshSt();   // objective bookkeeping (v5), filled by the attach() listeners
       run.result = null; run.caught = false; run.died = false; run.t0 = w.t;
+      // kill_with: the hero does not auto-acquire (as on Hold); an explicit attack / attack-move order still works
+      if (w.hero) { if (run.pr.sc.obj.type === 'kill_with') w.hero.autoAttack = false; else delete w.hero.autoAttack; }
       run.maxLevel = Math.max(run.maxLevel, run.pr.sc.level || 0);
       run.phase = run.countdown > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
       w.paused = run.phase !== 'play';
@@ -365,7 +367,9 @@
         const f = foeOf(p.target); if (!f) return;
         const h = w.hero, s = w.get(p.src);
         if (ours(p.src)) touch();
-        st().last[p.target] = { ability: p.ability || 'attack', by: s ? s.kind : 'other', heroElev: w.map.elevAt(h.x, h.y), foeElev: w.map.elevAt(f.x, f.y), inv: !!IT.Status.invisible(h) };
+        const rec = { ability: p.ability || 'attack', by: s ? s.kind : 'other', heroElev: w.map.elevAt(h.x, h.y), foeElev: w.map.elevAt(f.x, f.y), inv: !!IT.Status.invisible(h) };
+        st().last[p.target] = rec;
+        if (p.ability && ours(p.src)) st().abil[p.target] = Object.assign({ t: w.t }, rec);   // last ability (non-attack) hit, to credit a basic attack that lands the final blow
       });
       w.on('hit', p => { if (run.phase === 'play' && foeOf(p.target) && ours(p.src)) touch(); });
       w.on('status', p => {
@@ -373,7 +377,12 @@
         if (ours(p.src)) touch();   // Tornado lift, Cold Snap ... count as the first touch
         if (p.status === 'disarm' && p.ability === 'deafeningblast') { const b = st().blasts; if (b.length) b[b.length - 1].add(p.target); }   // foes one blast pushed
       });
-      w.on('kill', p => { if (run.phase === 'play' && foeOf(p.unit)) st().kills.push(Object.assign({ id: p.unit }, st().last[p.unit] || {}, { t: w.t })); });
+      w.on('kill', p => {
+        if (run.phase !== 'play' || !foeOf(p.unit)) return;
+        const k = Object.assign({ id: p.unit }, st().last[p.unit] || {}, { t: w.t }), a = st().abil[p.unit];
+        if (k.ability === 'attack' && a && w.t - a.t <= ASSIST) k.assist = a;   // an ability hurt it just before the basic attack finished it
+        st().kills.push(k);
+      });
       w.on('cast', p => {
         if (p.unit !== w.hero.id || run.phase !== 'play') return;
         const s = st(); s.casts[p.ability] = (s.casts[p.ability] || 0) + 1;
@@ -384,7 +393,7 @@
       return run;
     };
 
-    function conclude(ok, reason) {
+    function conclude(ok, reason, detail) {
       const w = run.w, pr = run.pr, time = w.t - run.t0;
       let pts = 0;
       if (ok) {
@@ -394,11 +403,11 @@
         w.emit('comboDone', { id: pr.sc.id, tier: TIER_NAME[pr.sc.tier - 1] || 'basic', score: pts, time });
       } else {
         run.failed++; run.streak = 0; run.failId = pr.sc.id;
-        w.emit('comboFail', { id: pr.sc.id, reason });
+        w.emit('comboFail', { id: pr.sc.id, reason, detail: detail || null });
       }
-      run.result = { ok, reason: reason || null, points: pts, time };
+      run.result = { ok, reason: reason || null, detail: detail || null, points: pts, time };
       run.phase = 'result'; run.hold = RESULT_HOLD; w.paused = true;
-      w.emit('scnResult', { id: pr.sc.id, ok, reason: reason || null, points: pts, time });
+      w.emit('scnResult', { id: pr.sc.id, ok, reason: reason || null, detail: detail || null, points: pts, time });
     }
 
     // does one recorded kill satisfy an objective's "how"? { ability:[ids], by:'hero'|'spirit', low (hero below the foe), high, inv (hero invisible) }
@@ -412,6 +421,9 @@
       return true;
     };
     run.howOk = howOk;
+    // a kill passes the objective's `how`, or it was a basic attack finishing a foe that a qualifying ability hit <= ASSIST s earlier (that ability gets the credit)
+    const killOk = (k, how) => howOk(k, how) || (k.ability === 'attack' && !!k.assist && howOk(k.assist, how));
+    run.killOk = killOk;
     // n kills by one ability within `span` s of each other (one cast)
     const burst = (kills, n, span) => {
       const by = {};
@@ -425,13 +437,14 @@
       const pr = run.pr, sc = pr.sc, o = sc.obj, h = w.hero, el = w.t - run.t0, st = run.st;
       const alive = run.dummies.filter(d => !d.dead), fail = sc.fail || [];
       // fail conditions first (a lethal mistake beats a simultaneous win)
+      // the hero falling always ends the scenario in every tier; the world refills its hp so the sim keeps running (see Combat.damage)
       if (run.died) return conclude(false, 'died');
       if (fail.indexOf('cross') >= 0 && w.gate) for (const d of alive) if (Math.hypot(d.x - w.gate.x, d.y - w.gate.y) < w.gate.r) return conclude(false, 'cross');
       // tower: the hero stepped into a living Dire tower's range
       if (fail.indexOf('tower') >= 0) for (const e of w.ents) if (e.kind === 'tower' && e.team === 1 && !e.dead && e.hp > 0 && Math.hypot(e.x - h.x, e.y - h.y) < e.attack.range + (h.radius || 0)) return conclude(false, 'tower');
       // seen: an enemy noticed the hero (vision) before anything of ours had touched a foe
       if (fail.indexOf('seen') >= 0 && st.hit == null) for (const d of alive) if (d.kind === 'enemy' && d.aware) return conclude(false, 'seen');
-      if (o.how && st.kills.some(k => !howOk(k, o.how))) return conclude(false, 'method');
+      if (o.how) { const bad = st.kills.find(k => !killOk(k, o.how)); if (bad) return conclude(false, 'method', bad.ability === 'attack' ? 'attack' : null); }   // 'attack' => the toast says it was an auto-attack
       if (o.type === 'kill' || o.type === 'kill_with') { if (!alive.length) return conclude(true); }
       else if (o.type === 'killN') {
         if (killsOk(o, st.kills)) return conclude(true);
@@ -488,7 +501,7 @@
       if (ranked && (run.n > 0 || run.solved + run.failed > 0)) sum.rank = record(run.score);
       if (infinite) {
         const r = recordInfinite(run.solved), sc = run.failId ? IT.SCENARIOS.get(run.failId) : null;
-        Object.assign(sum, { cleared: r.cleared, best: r.best, prevBest: r.prev, newBest: r.isNew && r.cleared > 0, failId: run.failId, failName: sc ? sc.name : null, failReason: run.result && !run.result.ok ? run.result.reason : null, laps: run.lap() });
+        Object.assign(sum, { cleared: r.cleared, best: r.best, prevBest: r.prev, newBest: r.isNew && r.cleared > 0, failId: run.failId, failName: sc ? sc.name : null, failReason: run.result && !run.result.ok ? run.result.reason : null, failDetail: run.result && !run.result.ok ? run.result.detail : null, laps: run.lap() });
       }
       run.summary = sum;
       if (w) w.emit('modeEnd', sum);

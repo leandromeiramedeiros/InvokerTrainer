@@ -163,8 +163,8 @@
       const dur = iv('bkb', 'duration', n);
       it.charges = n + 1;
       for (const t of BKB_DISPEL) S.remove(w, c, t);
-      // Enemy-NPC BKB: CC immunity + KV spell_reduce % less magic damage (instead of full immunity). Hero / legacy-AI dummies: full immunity.
-      const reduce = c.kind === 'enemy' && !c.legacy ? iv('bkb', 'spell_reduce') / 100 : null;
+      // Hero / enemy-NPC BKB (Dota 7.33+): debuff immunity + KV spell_reduce % less magic damage (not full spell immunity). Legacy-AI dummies: full immunity.
+      const reduce = c.kind === 'hero' || (c.kind === 'enemy' && !c.legacy) ? iv('bkb', 'spell_reduce') / 100 : null;
       S.add(w, c, 'magicImmune', dur, { src: c.id, ability: 'bkb', data: reduce != null ? { reduce } : undefined });
       w.emit('fx', { name: 'bkb', x: c.x, y: c.y, unit: c.id, dur, use: n + 1 });
     },

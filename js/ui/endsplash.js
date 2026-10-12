@@ -126,7 +126,7 @@
       side.appendChild(h('div', { class: 'sp-best' + (m.newBest ? ' new' : ''), text: m.newBest ? t('end.sp.newBest') + '  ' + t('end.sp.best', { n: m.best }) : t('end.sp.best', { n: m.best || 0 }) }));
       let why = '';
       if (m.reason === 'quit') why = t('end.sp.quit');
-      else if (m.failReason) why = IT.hasT('scn.fail.' + m.failReason) ? t('scn.fail.' + m.failReason) : m.failReason;
+      else if (m.failReason) { const dk = 'scn.fail.' + m.failReason + (m.failDetail ? '.' + m.failDetail : ''); why = IT.hasT(dk) ? t(dk) : IT.hasT('scn.fail.' + m.failReason) ? t('scn.fail.' + m.failReason) : m.failReason; }
       if (why) side.appendChild(h('div', { class: 'sp-why', text: t('end.sp.failedBy', { why }) }));
       if (m.failName) side.appendChild(h('div', { class: 'sp-on', text: t('end.sp.failedOn', { name: nameOf(m.failName) }) }));
     } else {

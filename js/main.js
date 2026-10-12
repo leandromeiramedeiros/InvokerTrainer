@@ -95,7 +95,7 @@
     w.on('modeEnd', p => { if (!g.quiet) finish(p); });
     w.on('scnResult', p => {
       if (p.ok) UI.toast(IT.t(g.mode === 'ranked' || g.mode === 'infinite' ? 'scn.solvedRk' : 'scn.solved', { n: p.points }), 'good');
-      else UI.toast(IT.t('scn.fail.' + p.reason), 'bad');
+      else { const dk = 'scn.fail.' + p.reason + (p.detail ? '.' + p.detail : ''); UI.toast(IT.t(IT.hasT(dk) ? dk : 'scn.fail.' + p.reason), 'bad'); }
     });
     const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant, free: !run };
     if (run) {
