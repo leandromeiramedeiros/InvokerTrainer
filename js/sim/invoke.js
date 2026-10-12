@@ -19,7 +19,7 @@
   function orb(w, hero, key) {
     if (!hero || hero.dead || !NAME[key]) return false;
     const b = blocked(hero); if (b) return fail(w, hero, b);
-    if (level(hero, key) < 1) return fail(w, hero, 'orbNotLearned');
+    if (level(hero, key) < 1) return fail(w, hero, 'locked');   // orb still locked (no points in it): the key does nothing
     const orbs = hero.inv.orbs;
     orbs.push(key);
     if (orbs.length > 3) orbs.shift();
@@ -33,7 +33,7 @@
     const inv = hero.inv;
     const spell = recipeOf(inv.orbs);
     if (!spell) return fail(w, hero, 'noRecipe');
-    for (const k of new Set(inv.orbs)) if (level(hero, k) < 1) return fail(w, hero, 'orbNotLearned');
+    for (const k of new Set(inv.orbs)) if (level(hero, k) < 1) return fail(w, hero, 'locked');
     if (inv.slots[0] === spell) return true;
     if (inv.slots[1] === spell) {
       inv.slots = [inv.slots[1], inv.slots[0]];

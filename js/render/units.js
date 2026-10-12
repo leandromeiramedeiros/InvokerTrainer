@@ -1,12 +1,20 @@
 // Unit drawing: sprites by anim/facing, shadows, status visuals, orbs, bars/labels (HUD pass).
+// Covers hero, spirits, dummies (scarecrow) and enemies (+ their item visuals: BKB, Eul's, Shadow Blade, Force Staff, Blink, telegraph).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
   const PX = IT.Pixel;
-  const state = new Map();
+  const TAU = Math.PI * 2;
+  const state = new Map();     // entity id -> per-unit draw state; reset whenever a new Render instance (new world) starts
   const cntCache = new Map();
+  let boundR = null;
+  // ids and R.time both restart per world: stale state (castUntil, t0, ...) from a previous run must never leak into the next one
+  function bind(R) { if (boundR !== R) { state.clear(); boundR = R; } }
 
   const has = (e, t) => { const s = e.statuses; for (let i = 0; i < s.length; i++) if (s[i].type === t) return true; return false; };
+  const find = (e, t) => { const s = e.statuses; for (let i = 0; i < s.length; i++) if (s[i].type === t) return s[i]; return null; };
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const isFoe = e => e.kind === 'dummy' || e.kind === 'enemy';
   function count(sheet, anim, dir) {
     const k = sheet + '|' + anim + '|' + dir;
     let n = cntCache.get(k);
@@ -14,6 +22,17 @@
     return n;
   }
   const FALLBACK = { cast: 'attack', attack: 'idle', stunned: 'idle', blink: 'idle', walk: 'idle' };
+
+  // ---- lift (Tornado = lifted by the invoker's wind, Eul's = self cyclone) ----
+  function liftOf(e) {
+    const s = e.statuses;
+    for (let i = 0; i < s.length; i++) { const t = s[i].type; if (t === 'lift' || t === 'cyclone' || t === 'euls') return s[i]; }
+    return null;
+  }
+  const isEuls = s => !!s && (s.type === 'euls' || s.type === 'cyclone' || s.ability === 'euls' || !!(s.data && s.data.euls));
+  const invisOf = e => has(e, 'invisible') || has(e, 'shadowblade') || has(e, 'invis') || has(e, 'invisFade') || e.invisible === true;
+  const hiddenKind = e => invisOf(e) || has(e, 'ghost');
+  const revealedOf = e => { try { return !!(IT.Status && IT.Status.revealed && IT.Status.revealed(e)); } catch (err) { return false; } };
 
   // ---- hex sheep ----
   const SHEEP_PAL = { W: '#f4f4f4', w: '#c4c4d2', K: '#2a2a30', k: '#44444c' };
@@ -32,23 +51,52 @@
     return (sheepCv[k] = c);
   }
 
+  // nearest-neighbour enlarged copy (BKB makes enemies bigger); cached per source canvas
+  const scaleCache = new WeakMap();
+  function scaledOf(src, k) {
+    let m = scaleCache.get(src); if (!m) { m = {}; scaleCache.set(src, m); }
+    let c = m[k];
+    if (c) return c;
+    c = document.createElement('canvas'); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+    x.drawImage(src, 0, 0, c.width, c.height);
+    return (m[k] = c);
+  }
+
   function sheetOf(e) {
     if (e.kind === 'hero') return IT.Art.heroSheet ? IT.Art.heroSheet() : 'invoker';
     if (e.kind === 'spirit') return 'forge';
+    if (e.kind === 'dummy' && IT.Art.sheets.scarecrow) return 'scarecrow';
     return IT.Art.sheets[e.skin] ? e.skin : 'pedro';
   }
-  function isUnit(e) { return e.kind === 'hero' || e.kind === 'dummy' || e.kind === 'spirit'; }
+  function isUnit(e) { return e.kind === 'hero' || e.kind === 'dummy' || e.kind === 'enemy' || e.kind === 'spirit'; }
 
   function st(R, e) {
+    bind(R);
     let s = state.get(e.id);
-    if (!s) { s = { name: '', t0: R.time, lx: e.x, ly: e.y, moveT: -9, phase: Math.random() * 3 }; state.set(e.id, s); }
+    if (!s) { s = { name: '', t0: R.time, lx: e.x, ly: e.y, moveT: -9, phase: Math.random() * 3, va: e.team === 1 ? 0 : 1, lA: 0 }; state.set(e.id, s); }
     return s;
   }
 
+  // ---- visibility: hysteresis + fades (enemies/dummies popped in and out at fog edges and when vision ticked unevenly) ----
+  const HOLD = 0.4, FADE_IN = 0.14, FADE_OUT = 0.3, INVIS_A = 0.2;
   function visible(R, e) {
     if (e.dead) return false;
-    if (e.team === 1 && R.w.fog !== false && !e.visible) return false;
-    return true;
+    if (e.team !== 1) return true;
+    const S = st(R, e);
+    if (S.vT === R.time) return S.va > 0.02;
+    const dt = S.vT == null ? 1 : clamp(R.time - S.vT, 0, 0.25); S.vT = R.time;
+    const inv = hiddenKind(e), rev = inv && (revealedOf(e) || e.revealed === true);
+    let seen = R.w.fog === false ? true : !!e.visible;
+    if (inv && !rev && !has(e, 'invisFade')) seen = false;   // Shadow Blade/Ghost Walk: gone unless dusted/revealed (fade phase: still shimmering)
+    let tg;
+    if (seen) { S.hold = R.time + HOLD; tg = inv ? (has(e, 'invisFade') ? 0.5 : INVIS_A) : 1; }
+    else if (!inv && R.time < (S.hold || 0)) tg = S.tg == null ? 1 : S.tg;   // a one-off missed vision tick must not blink the unit out
+    else tg = 0;
+    S.tg = tg;
+    const rate = tg > S.va ? 1 / FADE_IN : (inv ? 1 / 0.7 : 1 / FADE_OUT);
+    S.va = tg > S.va ? Math.min(tg, S.va + dt * rate) : Math.max(tg, S.va - dt * rate);
+    return S.va > 0.02;
   }
 
   function dirOf(f) {
@@ -60,42 +108,47 @@
   // resolve the sprite for an entity at render time; returns { cv, ax, ay }
   const spin = ['s', 'e', 'n', 'w'];
   const out = { cv: null, ax: 0, ay: 0, mirror: false, sheep: false };
-  function sprite(R, e, S) {
-    const sheet = sheetOf(e), def = IT.Art.sheets[sheet];
+  function sprite(R, e, S, lifted) {
+    const sheet = sheetOf(e), def = IT.Art.sheets[sheet] || IT.Art.sheets.pedro;
     let anim = e.anim ? e.anim.name : 'idle';
     if (e.kind === 'spirit') anim = e._wind ? 'attack' : (R.time - S.moveT < 0.15 ? 'walk' : 'idle');
-    let facing = e.facing;
+    let facing = e.facing || 0;
     let dir = dirOf(facing), mirror = Math.cos(facing) < 0;
-    const lifted = has(e, 'lift') || R.iz > 8;
     if (lifted) {
       const d = spin[Math.floor(R.time * 12) & 3];
       dir = d === 'w' ? 'e' : d; mirror = d === 'w';
     }
-    if (has(e, 'stun') || has(e, 'frozen') && e.kind === 'dummy') { if (count(sheet, 'stunned', dir)) anim = 'stunned'; }
+    if (has(e, 'stun') || has(e, 'frozen') && isFoe(e)) { if (count(sheet, 'stunned', dir)) anim = 'stunned'; }
     if (has(e, 'hex')) {
       out.sheep = true; out.cv = sheep(((R.time * (anim === 'walk' ? 8 : 0)) & 1), Math.cos(facing) < 0);
       out.ax = 7; out.ay = 10; out.mirror = false;
       return out;
     }
     out.sheep = false;
-    // render-driven cast pose (shows even with cast point 0); not over stun/lift
-    const forced = e.kind === 'hero' && S.castUntil > R.time && !lifted && anim !== 'stunned';
+    // render-driven cast pose (shows even with cast point 0); not over stun/lift. A stale/future stamp is ignored.
+    const forced = e.kind === 'hero' && S.castUntil > R.time && S.castUntil < R.time + 1 && R.time >= S.castStart && !lifted && anim !== 'stunned';
     if (forced) anim = 'cast';
     let n = count(sheet, anim, dir);
     while (!n && FALLBACK[anim]) { anim = FALLBACK[anim]; n = count(sheet, anim, dir); }
     if (!n) { anim = 'idle'; n = count(sheet, 'idle', dir); }
     if (S.name !== anim) { S.name = anim; S.t0 = R.time; }
-    const et = R.time - S.t0 + S.phase;
-    let idx;
-    switch (anim) {
-      case 'idle': idx = Math.floor(et * 3) % n; break;
-      case 'walk': idx = Math.floor(et * 8 * IT.U.clamp((e.ms || 300) / 300, 0.6, 1.8)) % n; break;
-      case 'stunned': idx = Math.floor(et * 5) % n; break;
-      case 'cast': idx = forced ? Math.min(n - 1, Math.floor((R.time - S.castStart) * 14)) : Math.min(n - 1, Math.floor((R.time - S.t0) * 6)); break;
-      case 'attack': idx = Math.min(n - 1, Math.floor((R.time - S.t0) * 12)); break;
-      default: idx = Math.min(n - 1, Math.floor((R.time - S.t0) * 6));
+    if (S.t0 > R.time) S.t0 = R.time;
+    const et = Math.max(0, R.time - S.t0 + S.phase);
+    let idx = 0;
+    if (n) {
+      switch (anim) {
+        case 'idle': idx = Math.floor(et * 3) % n; break;
+        case 'walk': idx = Math.floor(et * 8 * IT.U.clamp((e.ms || 300) / 300, 0.6, 1.8)) % n; break;
+        case 'stunned': idx = Math.floor(et * 5) % n; break;
+        case 'cast': idx = forced ? Math.floor((R.time - S.castStart) * 14) : Math.floor((R.time - S.t0) * 6); break;
+        case 'attack': idx = Math.floor((R.time - S.t0) * 12); break;
+        default: idx = Math.floor((R.time - S.t0) * 6);
+      }
+      idx = clamp(idx, 0, n - 1);
     }
-    out.cv = IT.Art.canvas(sheet, `${anim}_${dir}_${idx}`, mirror);
+    let cv = n ? IT.Art.canvas(sheet, `${anim}_${dir}_${idx}`, mirror) : null;
+    if (!cv) { cv = IT.Art.canvas(sheet, 'idle_s_0', false) || IT.Art.canvas('pedro', 'idle_s_0', false); mirror = false; }   // never leave a unit undrawn
+    out.cv = cv;
     out.ax = def.anchor[0]; out.ay = def.anchor[1]; out.mirror = mirror;
     return out;
   }
@@ -109,11 +162,6 @@
   }
 
   const ORB_NAME = { Q: 'orb_q', W: 'orb_w', E: 'orb_e' };
-  function orbPositions(R, e, sx, sy) {
-    const orbs = e.inv && e.inv.orbs;
-    if (!orbs || !orbs.length) return null;
-    return orbs;
-  }
   function drawOrbs(R, e, sx, sy, front) {
     const orbs = e.inv && e.inv.orbs;
     if (!orbs) return;
@@ -127,65 +175,223 @@
     }
   }
 
-  function draw(R, e) {
+  // ---- body distortion for Shadow Blade: horizontal 2px strips wobbling sideways ----
+  function shimmer(cx, img, dx, dy, t, a) {
+    const h = img.height, w = img.width;
+    cx.globalAlpha = a;
+    for (let y = 0; y < h; y += 2) {
+      const hh = Math.min(2, h - y), o = Math.round(Math.sin(t * 9 + y * 0.6) * 1.2);
+      cx.drawImage(img, 0, y, w, hh, dx + o, dy + y, w, hh);
+    }
+  }
+
+  // ---- cyclone / tornado swirl around a lifted unit: helical wind streaks, drawn in two halves around the sprite ----
+  const WIND = ['#ffffff', '#e8f4ff', '#bfe0ff', '#8cc0f0'];
+  function swirl(R, x, yBase, hgt, rx, front, n, eul) {
+    const cx = R.cx, t = R.time;
+    for (let s = 0; s < n; s++) {
+      const base = t * (eul ? 7 : 9) + s * TAU / n, hp = (s * 0.37 + t * 0.9) % 1;
+      for (let k = 0; k < 5; k++) {
+        const a = base - k * 0.2, sn = Math.sin(a);
+        if ((sn > 0) !== front) continue;
+        const h = hgt * clamp(hp - k * 0.03, 0, 1), r = rx * (0.55 + 0.45 * (h / hgt));
+        const px = Math.round(x + Math.cos(a) * r), py = Math.round(yBase - h + sn * r * 0.32);
+        cx.fillStyle = WIND[Math.min(3, k)];
+        cx.fillRect(px, py, k < 2 ? 2 : 1, 1);
+      }
+    }
+    if (!front) return;
+  }
+  // mini funnel of stacked rings (Eul's): same language as the Tornado funnel but hugging the unit
+  function funnel(R, x, yBase, hgt, front) {
+    const cx = R.cx, t = R.time, rings = 6;
+    for (let k = 0; k < rings; k++) {
+      const h = (k + 0.5) / rings * hgt, r = 4 + (h / hgt) * 6 + Math.sin(t * 3 + k) * 0.6;
+      for (let i = 0; i < 5; i++) {
+        const a = t * (8 - k * 0.5) + k * 0.9 + i * TAU / 5, s = Math.sin(a);
+        if ((s > 0) !== front) continue;
+        cx.fillStyle = s > 0 ? '#ffffff' : '#a8d4ff';
+        cx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(yBase - h + s * r * 0.32), 2, 1);
+      }
+    }
+  }
+  function liftMarker(R, x, y, rr, eul) {
+    // ground marker under a lifted unit: pulsing dotted ring + tether of rising dots so it reads as "up in the air"
+    const cx = R.cx, t = R.time, pul = 0.5 + 0.5 * Math.sin(t * 6);
+    const rx = rr + 3 + pul * 2, ry = Math.max(2, Math.round(rx * 0.42)), n = 20;
+    cx.fillStyle = eul ? '#8fe6ff' : '#e8f4ff';
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU + t * 1.5;
+      cx.fillRect(Math.round(x + Math.cos(a) * rx), Math.round(y + Math.sin(a) * ry), 1, 1);
+    }
+    cx.fillStyle = eul ? '#4cb6ec' : '#a8c8f0';
+    cx.fillRect(x - 1, y, 3, 1); cx.fillRect(x, y - 1, 1, 3);
+  }
+  function tether(R, x, yGround, yUnit, eul) {
+    const cx = R.cx, t = R.time;
+    const len = yGround - yUnit; if (len < 4) return;
+    for (let d = (t * 26) % 5; d < len; d += 5) {
+      cx.fillStyle = d > len * 0.7 ? '#ffffff' : '#bfe0ff';
+      cx.fillRect(x, Math.round(yGround - d), 1, 1);
+    }
+  }
+
+  function draw(R, e, top) {
     const cx = R.cx, w = R.w, S = st(R, e);
     R.interp(e);
+    const A0 = cx.globalAlpha;
     const P = R.P, gx = R.ix / P - R.camX, gy = R.iy / P - R.camY, zp = R.iz / P;
-    const sxp = Math.round(gx), syp = Math.round(gy), sy = Math.round(gy - zp);
-    if (Math.hypot(e.x - S.lx, e.y - S.ly) > 0.4) S.moveT = R.time;
-    S.lx = e.x; S.ly = e.y;
-    const sp = sprite(R, e, S);
-    if (!sp.cv) return;
-    const rr = Math.max(3, Math.round(e.radius / P));
-    const zs = Math.min(0.5, zp / 60);
-    shadow(cx, sxp, syp, Math.round(rr * (e.kind === 'spirit' ? 1.0 : 1.25) * (1 - zs)), Math.max(1, Math.round(rr * 0.45)), 0.38 - zs * 0.3);
-
-    const imm = has(e, 'magicImmune'), ghost = has(e, 'ghost'), frozen = has(e, 'frozen');
-    const root = has(e, 'root') || has(e, 'atosRoot'), rk = root ? rootKind(e) : 0;
-    if (root) vines(R, sxp, syp, rr, true, rk);
-    if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, false);
-    const dx = sxp - sp.ax, dy = sy - sp.ay;
-    const bl = e.anim && e.anim.name === 'blink' && e.kind === 'dummy';
-    let img = sp.cv;
-    if (imm) {
-      const pul = 0.55 + 0.25 * Math.sin(R.time * 6), gold = PX.tinted(img, '#ffd24a');
-      cx.globalAlpha = pul;
-      cx.drawImage(gold, dx - 1, dy); cx.drawImage(gold, dx + 1, dy); cx.drawImage(gold, dx, dy - 1); cx.drawImage(gold, dx, dy + 1);
-      cx.globalAlpha = 1;
-      R.glow(sxp, sy - 10, 22, '#ffcc40', 0.35 + 0.1 * Math.sin(R.time * 6));
+    const L = liftOf(e), eul = isEuls(L), lifted = !!L || R.iz > 8;
+    if (!top) {
+      const dt = clamp(R.time - (S.lT == null ? R.time : S.lT), 0, 0.1); S.lT = R.time;
+      S.lA = clamp(S.lA + (L ? dt : -dt) / 0.22, 0, 1);
     }
-    if (ghost) {
-      cx.globalAlpha = 0.65; cx.drawImage(PX.dithered(img, (R.time * 6) & 1), dx, dy); cx.globalAlpha = 1;
+    // visual lift: tornado victims are raised well above the sim height so they read as airborne; Eul's gets a hover even without sim z
+    const zv = L && !eul ? zp * 1.7 : eul ? Math.max(zp * 1.3, 15 * S.lA) : zp;
+    const sxp = Math.round(gx), syp = Math.round(gy), sy = Math.round(gy - zv);
+    if (!top) {
+      if (Math.hypot(e.x - S.lx, e.y - S.ly) > 0.4) S.moveT = R.time;
+      S.lx = e.x; S.ly = e.y;
+    }
+    const sp = sprite(R, e, S, lifted);
+    if (!sp.cv) return;
+    const Av = A0 * (e.team === 1 ? clamp(S.va, 0, 1) : 1);
+    if (Av < 0.02) return;
+    const bk = isFoe(e) && !!e.bkb || (isFoe(e) && has(e, 'magicImmune'));
+    const sc = bk && !sp.sheep ? 1.2 : 1;
+    let img = sp.cv, ax = sp.ax, ay = sp.ay;
+    if (sc !== 1) { img = scaledOf(img, sc); ax = Math.round(ax * sc); ay = Math.round(ay * sc); }
+    const rr = Math.max(3, Math.round(e.radius / P));
+    const dx = sxp - ax, dy = sy - ay;
+    const root = has(e, 'root') || has(e, 'atosRoot'), rk = root ? rootKind(e) : 0;
+    const ghost = has(e, 'ghost'), frozen = has(e, 'frozen');
+    const inv = isFoe(e) && invisOf(e);
+    const imm = has(e, 'magicImmune') || bk;
+    const hgtUnit = Math.max(8, syp - sy + img.height * 0.5);
+
+    if (!top) {
+      const zs = Math.min(0.5, zv / 60);
+      shadow(cx, sxp, syp, Math.round(rr * (e.kind === 'spirit' ? 1.0 : 1.25) * (1 - zs) * (sc === 1 ? 1 : 1.1)), Math.max(1, Math.round(rr * 0.45)), (0.38 - zs * 0.3) * Av / A0 * (A0 || 1));
+      if (L) { liftMarker(R, sxp, syp, rr, eul); tether(R, sxp, syp, sy, eul); }
+      if (root) vines(R, sxp, syp, rr, true, rk);
+      if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, false);
+      if (L) { cx.globalAlpha = Av; if (eul) funnel(R, sxp, syp - 2, Math.max(26, syp - sy + img.height), false); swirl(R, sxp, sy + 2, img.height, 9, false, eul ? 5 : 4, eul); }
+      afterimages(R, e, S, Av);
+    }
+    cx.globalAlpha = Av;
+    if (imm && !top) {
+      const pul = 0.55 + 0.25 * Math.sin(R.time * 6), gold = PX.tinted(img, '#ffd24a');
+      cx.globalAlpha = pul * Av;
+      cx.drawImage(gold, dx - 1, dy); cx.drawImage(gold, dx + 1, dy); cx.drawImage(gold, dx, dy - 1); cx.drawImage(gold, dx, dy + 1);
+      cx.globalAlpha = Av;
+      R.glow(sxp, sy - 10, 22 * sc, '#ffcc40', (0.35 + 0.1 * Math.sin(R.time * 6)) * Av);
+    }
+    const bi = R.time - (S.blinkT == null ? -9 : S.blinkT) < 0.32;
+    const bl = (e.anim && e.anim.name === 'blink' && isFoe(e)) || bi;
+    if (inv) {
+      shimmer(cx, img, dx, dy, R.time, Av);
+      cx.globalAlpha = (0.1 + 0.08 * Math.sin(R.time * 7)) * Av; cx.drawImage(PX.tinted(img, '#a890ff'), dx, dy);
+    } else if (ghost) {
+      cx.globalAlpha = 0.65 * Av; cx.drawImage(PX.dithered(img, (R.time * 6) & 1), dx, dy);
     } else if (bl) {
-      const pr = IT.U.clamp((R.time - S.t0) / 0.35, 0, 1);
+      const pr = bi ? clamp((R.time - S.blinkT) / 0.32, 0, 1) : clamp((R.time - S.t0) / 0.35, 0, 1);
+      cx.globalAlpha = Av;
       cx.drawImage(PX.dithered(img, (R.time * 14) & 1), dx, dy);
-      cx.globalAlpha = 0.25 + 0.5 * pr; cx.drawImage(PX.tinted(img, '#b070ff'), dx, dy); cx.globalAlpha = 1;
-      if (Math.random() < 0.7) IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 70, y: e.y, z: Math.random() * 100, n: 1, ramp: 'purple', speed: 10, up: 25, life: 0.5, rest: 0.8 });
+      cx.globalAlpha = (0.25 + 0.5 * (bi ? 1 - pr : pr)) * Av; cx.drawImage(PX.tinted(img, '#b070ff'), dx, dy);
+      if (!top && !bi && Math.random() < 0.7) IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 70, y: e.y, z: Math.random() * 100, n: 1, ramp: 'purple', speed: 10, up: 25, life: 0.5, rest: 0.8 });
     } else {
       cx.drawImage(img, dx, dy);
     }
-    const al = alacOf(R, e, S);
-    if (al) alacTint(R, img, dx, dy, S, al);
+    cx.globalAlpha = Av;
+    if (bk) {      // BKB: golden-yellow body
+      cx.globalAlpha = (0.42 + 0.14 * Math.sin(R.time * 5)) * Av; cx.drawImage(PX.tinted(img, '#ffc830'), dx, dy);
+      cx.globalAlpha = 0.16 * Av; cx.drawImage(PX.tinted(img, '#fff4b0'), dx, dy);
+      cx.globalAlpha = Av;
+    }
+    const al = top ? null : alacOf(R, e, S);
+    if (al) alacTint(R, img, dx, dy, S, al, Av);
     if (frozen) {
-      cx.globalAlpha = 0.6; cx.drawImage(PX.tinted(img, '#8fe6ff'), dx, dy); cx.globalAlpha = 1;
+      cx.globalAlpha = 0.6 * Av; cx.drawImage(PX.tinted(img, '#8fe6ff'), dx, dy); cx.globalAlpha = Av;
       cx.fillStyle = '#e8fbff';
-      const h = img.height;
       for (let k = -2; k <= 2; k++) { const hh = 3 + ((k & 1) ? 3 : 5) + (k === 0 ? 2 : 0); cx.fillRect(sxp + k * 3 - 1, sy - hh - 1 + 1, 2, hh); cx.fillStyle = k & 1 ? '#8fe6ff' : '#e8fbff'; }
       cx.fillStyle = '#4cb6ec'; cx.fillRect(sxp - 8, sy - 1, 17, 1);
     } else if (has(e, 'slow')) {
-      cx.globalAlpha = 0.18; cx.drawImage(PX.tinted(img, '#4cb6ec'), dx, dy); cx.globalAlpha = 1;
+      cx.globalAlpha = 0.18 * Av; cx.drawImage(PX.tinted(img, '#4cb6ec'), dx, dy); cx.globalAlpha = Av;
       cx.fillStyle = '#6cd0ff';
       for (let k = 0; k < 3; k++) {
         const ph = (R.time * 0.9 + k * 0.37) % 1;
         cx.fillRect(sxp - 5 + k * 5 + (k & 1), sy - img.height * 0.55 + ph * img.height * 0.5, 1, 2);
       }
     }
-    if (has(e, 'hex')) { cx.globalAlpha = 0.22; cx.drawImage(PX.tinted(img, '#5cff6c'), dx, dy); cx.globalAlpha = 1; }
+    if (has(e, 'hex')) { cx.globalAlpha = 0.22 * Av; cx.drawImage(PX.tinted(img, '#5cff6c'), dx, dy); cx.globalAlpha = Av; }
+    if (L) {      // front halves of the swirl (+ light from inside a cyclone)
+      cx.globalAlpha = Av;
+      if (eul) funnel(R, sxp, syp - 2, Math.max(26, syp - sy + img.height), true);
+      swirl(R, sxp, sy + 2, img.height, 9, true, eul ? 5 : 4, eul);
+    }
+    cx.globalAlpha = A0;
+    if (top) return;
     if (root) vines(R, sxp, syp, rr, false, rk);
     if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, true);
     windGlow(R, e, S, sxp, sy);
-    S.sx = sxp; S.sy = sy; S.top = sp.ay;
+    S.sx = sxp; S.sy = sy; S.top = ay; S.cvImg = sp.cv; S.cvAx = sp.ax; S.cvAy = sp.ay; S.sc = sc;
+    if (L && Math.random() < 0.5) IT.Particles.emit({ x: e.x + (Math.random() - 0.5) * 40, y: e.y + (Math.random() - 0.5) * 20, z: Math.max(0, zp * 6 * 0.2), n: 1, ramp: 'white', speed: 25, up: 10, spread: 10, life: 0.4, rest: 0.6 });
+    forceTrail(R, e, S);
     if (al) alacSigil(R, S, sxp, sy - (e.kind === 'hero' ? S.top + 14 : e.kind === 'dummy' ? 42 : S.top + 10), al);
+  }
+
+  // lifted units are re-drawn on top of the dust/funnel layers so their lower half never disappears into the plume
+  function overlay(R) {
+    bind(R);
+    const w = R.w;
+    for (const e of w.ents) {
+      if (e.dead || !isUnit(e) || !liftOf(e) || !visible(R, e)) continue;
+      draw(R, e, true);
+    }
+  }
+
+  // ---- Force Staff push trail + Blink departure ghost: fading tinted copies at earlier positions ----
+  function forceTrail(R, e, S) {
+    if (!(S.forceUntil > R.time) && !has(e, 'knockback') && !has(e, 'force') && !has(e, 'forcestaff')) { S.hist = null; return; }
+    if (!S.hist) S.hist = [];
+    const h = S.hist;
+    if (!h.length || R.time - h[h.length - 1].t > 0.03) { h.push({ t: R.time, x: e.x, y: e.y }); if (h.length > 8) h.shift(); }
+    if (Math.random() < 0.8) IT.Particles.emit({ x: e.x, y: e.y, z: 14, n: 1, ramp: 'cyan', speed: 12, up: 14, spread: 14, life: 0.45, rest: 0.8 });
+  }
+  function afterimages(R, e, S, Av) {
+    const cx = R.cx, P = R.P, img = S.cvImg;
+    if (!img) return;
+    const sc = S.sc || 1, ax = Math.round(S.cvAx * sc), ay = Math.round(S.cvAy * sc);
+    const im = sc === 1 ? img : scaledOf(img, sc);
+    const h = S.hist;
+    if (h && h.length > 1) {
+      for (let i = 0; i < h.length - 1; i++) {
+        const q = h[i], age = R.time - q.t; if (age > 0.3) continue;
+        cx.globalAlpha = 0.5 * (1 - age / 0.3) * Av;
+        cx.drawImage(PX.tinted(im, i & 1 ? '#6cd0ff' : '#b8f0ff'), Math.round(q.x / P - R.camX) - ax, Math.round(q.y / P - R.camY) - ay);
+      }
+    }
+    const g = S.ghost;
+    if (g) {
+      const age = R.time - g.t0;
+      if (age > 0.4) S.ghost = null;
+      else {
+        cx.globalAlpha = 0.7 * (1 - age / 0.4) * Av;
+        const gi = g.img;
+        cx.drawImage(PX.dithered(PX.tinted(gi, '#b070ff'), (R.time * 14) & 1), Math.round(g.x / P - R.camX) - g.ax, Math.round(g.y / P - R.camY) - g.ay);
+      }
+    }
+    cx.globalAlpha = Av;
+  }
+  // sim/fx events routed here by fx.js (all optional / guarded)
+  function event(R, name, p) {
+    bind(R);
+    const e = p && p.unit != null ? R.w.get(p.unit) : null; if (!e) return;
+    const S = st(R, e);
+    if (name === 'blink') {
+      S.blinkT = R.time;
+      if (S.cvImg && p.fromX != null) S.ghost = { x: p.fromX, y: p.fromY, t0: R.time, img: S.sc && S.sc !== 1 ? scaledOf(S.cvImg, S.sc) : S.cvImg, ax: Math.round(S.cvAx * (S.sc || 1)), ay: Math.round(S.cvAy * (S.sc || 1)) };
+    } else if (name === 'forcestaff') { S.forceUntil = R.time + 0.7; S.hist = []; }
   }
 
   // ---- Alacrity: tint-pulse at cast, purple shimmer, rotating sigil crest above the head ----
@@ -198,13 +404,13 @@
     const age = R.time - S.alT0, rem = st.until - R.simT;
     return { age, a: Math.min(1, age / 0.3, Math.max(0, rem / 0.5)) };
   }
-  function alacTint(R, img, dx, dy, S, al) {
-    const cx = R.cx, t = R.time;
-    if (al.age < 0.45) { cx.globalAlpha = 0.85 * (1 - al.age / 0.45); cx.drawImage(PX.tinted(img, '#d8a0ff'), dx, dy); }
-    cx.globalAlpha = (0.1 + 0.08 * Math.sin(t * 5)) * al.a; cx.drawImage(PX.tinted(img, '#b070ff'), dx, dy);
+  function alacTint(R, img, dx, dy, S, al, Av) {
+    const cx = R.cx, t = R.time, K = Av == null ? 1 : Av;
+    if (al.age < 0.45) { cx.globalAlpha = 0.85 * (1 - al.age / 0.45) * K; cx.drawImage(PX.tinted(img, '#d8a0ff'), dx, dy); }
+    cx.globalAlpha = (0.1 + 0.08 * Math.sin(t * 5)) * al.a * K; cx.drawImage(PX.tinted(img, '#b070ff'), dx, dy);
     const h = img.height, by = Math.floor((t * 22) % (h + 10)) - 5, y0 = Math.max(0, by), y1 = Math.min(h, by + 2);
-    if (y1 > y0) { cx.globalAlpha = 0.55 * al.a; cx.drawImage(PX.tinted(img, '#f0d0ff'), 0, y0, img.width, y1 - y0, dx, dy + y0, img.width, y1 - y0); }
-    cx.globalAlpha = 1;
+    if (y1 > y0) { cx.globalAlpha = 0.55 * al.a * K; cx.drawImage(PX.tinted(img, '#f0d0ff'), 0, y0, img.width, y1 - y0, dx, dy + y0, img.width, y1 - y0); }
+    cx.globalAlpha = K;
   }
   function alacSigil(R, S, x, y, al) {
     const cx = R.cx, t = R.time, a = al.a, B = PX.BAYER4, cX = R.camX, cY = R.camY;
@@ -301,12 +507,38 @@
     S.wdP = p;
   }
   // sim 'attack' = launch: arm the release pop
-  function launched(R, p) { const S = state.get(p.src); if (S) S.relT = R.time; }
+  function launched(R, p) { bind(R); const S = state.get(p.src); if (S) S.relT = R.time; }
+
+  // ---- D2 telegraph: pulsing "!" + the item's icon above the head until the item fires ----
+  const ITEM_COL = { bkb: '#ffd24a', blink: '#7aa8ff', shadowblade: '#a070e0', euls: '#7ae0ff', forcestaff: '#6ad0ff' };
+  const ITEM_LET = { bkb: 'B', blink: 'K', shadowblade: 'S', euls: 'E', forcestaff: 'F' };
+  function telegraph(R, e, x, y) {
+    const tl = e.tele; if (!tl) return;
+    const rem = tl.until - R.simT; if (rem < -0.05) return;
+    const tot = Math.max(0.15, tl.until - (tl.at != null ? tl.at : tl.until - 1));
+    const f = clamp(1 - rem / tot, 0, 1), cx = R.cx, t = R.time;
+    const on = Math.sin(t * TAU * (2.5 + 5 * f)) > -0.15;
+    const bob = Math.round(Math.sin(t * 8) * 1), col = ITEM_COL[tl.item] || '#ffd24a';
+    const x0 = Math.round(x) - 11, y0 = Math.round(y) + bob;
+    cx.fillStyle = '#000'; cx.fillRect(x0 - 1, y0 - 2, 22, 17);
+    cx.fillStyle = on ? '#ff3a3a' : '#ffd24a';
+    cx.fillRect(x0 + 1, y0, 3, 8); cx.fillRect(x0 + 1, y0 + 10, 3, 3);
+    cx.fillStyle = '#fff'; cx.fillRect(x0 + 1, y0, 1, 8);
+    cx.fillStyle = col; cx.fillRect(x0 + 6, y0 - 1, 14, 14);
+    cx.fillStyle = '#0c0818'; cx.fillRect(x0 + 7, y0, 12, 12);
+    const ic = IT.Art.canvas('icons', tl.item) || IT.Art.canvas('icons', tl.item + '_item');
+    if (ic) { const sm = cx.imageSmoothingEnabled; cx.imageSmoothingEnabled = true; cx.drawImage(ic, x0 + 7, y0, 12, 12); cx.imageSmoothingEnabled = sm; }
+    else { cx.fillStyle = col; cx.fillRect(x0 + 9, y0 + 2, 8, 8); PX.text(cx, ITEM_LET[tl.item] || '?', x0 + 13, y0 + 3, '#000', 'c'); }
+    cx.fillStyle = '#000'; cx.fillRect(x0 + 6, y0 + 14, 14, 2);
+    cx.fillStyle = on ? '#ff5a4a' : '#ffd24a'; cx.fillRect(x0 + 7, y0 + 14, Math.max(0, Math.round(12 * (1 - f))), 1);
+  }
 
   // HUD pass (after lighting): bars, labels, stun stars
   function hud(R, e) {
+    bind(R);
     const S = state.get(e.id); if (!S || S.sx == null) return;
     const cx = R.cx, x = S.sx, top = S.sy - S.top;
+    if (e.team === 1 && S.va < 0.5) return;
     if (has(e, 'stun')) {
       for (let k = 0; k < 3; k++) {
         const a = R.time * 5 + k * 2.0944, sx = x + Math.cos(a) * 7, sy = top - 3 + Math.sin(a) * 2;
@@ -314,13 +546,19 @@
         cx.fillStyle = '#fff8c0'; cx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
       }
     }
+    if (e.kind === 'enemy' && e.tele) telegraph(R, e, x, top - (e.maxHp ? 30 : 20));
     if (has(e, 'hex') || !e.maxHp) return;
     let y;
     if (e.kind === 'dummy') {
-      y = S.sy - 26;
-      if (e.name) PX.text(cx, e.name, x, y - 7, '#f0e8ff', 'c');
+      if (e.name) PX.text(cx, e.name, x, top - 6, '#f0e8ff', 'c');
+      if (e.noHpBar) return;
+      y = top - 5;
       bar(cx, x - 9, y, 18, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
       if (e.maxMana) bar(cx, x - 9, y + 2, 18, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
+    } else if (e.kind === 'enemy') {
+      y = top - 6;
+      bar(cx, x - 10, y, 20, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
+      if (e.maxMana) bar(cx, x - 10, y + 2, 20, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
     } else if (e.kind === 'hero') {
       y = top - 5;
       bar(cx, x - 9, y, 18, 2, e.hp / e.maxHp, '#48d858', '#082a0c');
@@ -338,6 +576,7 @@
   }
 
   function lights(R, e) {
+    bind(R);
     R.interp(e);
     const sx = R.ix / R.P - R.camX, sy = R.iy / R.P - R.camY - R.iz / R.P;
     const S0 = state.get(e.id);
@@ -357,8 +596,12 @@
     } else if (e.kind === 'spirit') {
       R.light(sx, sy - 6, 46, [255, 140, 50], 0.7);
       R.glow(sx, sy - 8, 12, '#ff8a2a', 0.3);
-    } else if (e.kind === 'dummy' && e.anim && e.anim.name === 'cast') {
-      R.light(sx, sy - 8, 40, [180, 100, 255], 0.5);
+    } else if (isFoe(e)) {
+      if (e.anim && e.anim.name === 'cast') R.light(sx, sy - 8, 40, [180, 100, 255], 0.5);
+      if (e.bkb || has(e, 'magicImmune')) R.light(sx, sy - 8, 54, [255, 205, 70], 0.55);
+      const L = liftOf(e);
+      if (L && isEuls(L)) R.light(sx, sy - 8, 50, [150, 220, 255], 0.5);
+      if (e.tele) R.light(sx, sy - 14, 30, [255, 70, 50], 0.25 + 0.2 * Math.sin(R.time * 14));
     }
   }
 
@@ -373,5 +616,5 @@
     const S = st(R, e); S.castStart = R.time; S.castUntil = R.time + 0.22; S.name = '';
   }
 
-  IT.UnitDraw = { draw, hud, lights, isUnit, visible, has, state, cleanup, bar, castFlash, launched };
+  IT.UnitDraw = { draw, hud, lights, isUnit, isFoe, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
 })(typeof window !== 'undefined' ? window : globalThis);

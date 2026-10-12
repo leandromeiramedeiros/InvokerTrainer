@@ -13,18 +13,33 @@
     if (!t || t.dead) return 0;
     const flags = o.flags || {};
     const type = o.type || 'physical';
-    const raw = Math.max(0, o.amount || 0);
+    let amount = o.amount || 0;
+    if (t.building && IT.Towers && IT.Towers.gate) amount = IT.Towers.gate(w, t, amount, o.src, o.ability);   // 0 => no damage
+    const raw = Math.max(0, amount);
     const Sx = IT.Status;
     let dealt = raw;
     if (Sx.has(t, 'lift') && !flags.allowLifted) dealt = 0;
     else if (type === 'physical') dealt = raw * armorMult(t.armor || 0);
-    else if (type === 'magical') dealt = Sx.has(t, 'magicImmune') && !flags.pierce ? 0 : raw * (1 - (t.magicRes || 0));
+    else if (type === 'magical') {
+      const mi = Sx.has(t, 'magicImmune') && !flags.pierce ? Sx.find(t, 'magicImmune') : null;
+      // BKB: full immunity, except an enemy-NPC BKB (status data.reduce) which only cuts the magic damage by that fraction
+      dealt = mi ? (mi.data && mi.data.reduce != null ? raw * (1 - mi.data.reduce) * (1 - (t.magicRes || 0)) : 0) : raw * (1 - (t.magicRes || 0));
+    }
     const srcId = o.src && typeof o.src === 'object' ? o.src.id : o.src;
     t.hp -= dealt;
+    if (dealt > 0 && t.kind === 'enemy') t.lastHit = w.t;   // awareness: hit in the last 2 s => aware
     w.emit('damage', { src: srcId, target: t.id, ability: o.ability, dmgType: type, raw, dealt, prevented: raw - dealt });
     if (t.kind === 'dummy') {
       const k = (IT.GAME && IT.GAME.DUMMY.refillBelow) || 0.25;
       if (t.hp < t.maxHp * k) { t.hp = t.maxHp; t.mana = t.maxMana; w.emit('refill', { unit: t.id }); }
+    } else if (t.kind === 'enemy') {
+      // enemies die at 0 hp (legacy AI dummies: below killFrac*maxHp, the old "refill" threshold, so scenario code still sees them go)
+      if (t.refillBelow && t.hp < t.maxHp * t.refillBelow) { t.hp = t.maxHp; t.mana = t.maxMana; w.emit('refill', { unit: t.id }); }
+      else if (t.hp <= 0 || (t.killFrac && t.hp < t.maxHp * t.killFrac)) {
+        t.hp = Math.max(0, t.hp); t.killed = true;
+        w.emit('kill', { unit: t.id, by: srcId });
+        w.remove(t);
+      }
     } else if (t.kind === 'hero' && t.hp <= 0) {
       w.emit('heroDown', { unit: t.id });
       t.hp = t.maxHp; t.mana = t.maxMana;

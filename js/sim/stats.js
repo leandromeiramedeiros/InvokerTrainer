@@ -28,7 +28,7 @@
       return !!(e && e.kind === 'spirit' && e.owner === hid());
     };
     const sp = id => S.spells[id] || (S.spells[id] = { casts: 0, hits: 0, misses: 0, accuracy: null });
-    const dummy = () => w.query(e => e.kind === 'dummy')[0];
+    const dummy = () => w.query(e => IT.Units && IT.Units.isFoe ? IT.Units.isFoe(e) : e.kind === 'dummy')[0];
     const on = (t, f) => off.push(w.on(t, f));
 
     on('order', p => { if (p.unit === hid()) S.actions++; });

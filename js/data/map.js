@@ -1,5 +1,7 @@
 // Training-ground map: deterministic generator + hand-placed features -> IT.MAPDEF; IT.Map.build(def) -> map.
-// Tile types: 0 grass, 1 tree (blocks move+sight), 2 rock (blocks both), 3 water (blocks move), 4 dirt (cosmetic).
+// Tile types: 0 grass, 1 tree (blocks move+sight), 2 rock/cliff (blocks both), 3 deep water (blocks move), 4 dirt (cosmetic),
+// 5 river (walkable shallow water), 6 structure footprint (blocks move, not sight; 3x3 around each tower).
+// Optional def.elev (Uint8Array|row strings of '0'..'2'): 0 low, 1 ground, 2 high ground. def.ramp: Uint8Array mask. def.towers: [{tx,ty,team,tier}].
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -175,7 +177,7 @@
 
   IT.MAPDEF = { tile: TILE, w: W, h: H, rows, spawns: { hero: center(90, 50), dummies } };
 
-  const CODE = { '.': 0, 'T': 1, '#': 2, '~': 3, ',': 4 };
+  const CODE = { '.': 0, 'T': 1, '#': 2, '~': 3, ',': 4, 'r': 5, 'S': 6 };
   function build(def) {
     const tile = def.tile, w = def.w, h = def.h;
     const grid = new Uint8Array(w * h);
@@ -183,14 +185,24 @@
       const r = def.rows[y] || '';
       for (let x = 0; x < w; x++) { const c = CODE[r[x]]; grid[y * w + x] = c == null ? 0 : c; }
     }
+    const elev = new Uint8Array(w * h).fill(1);
+    if (def.elev) {
+      if (typeof def.elev[0] === 'string') for (let y = 0; y < h; y++) { const r = def.elev[y] || ''; for (let x = 0; x < w; x++) elev[y * w + x] = Math.min(2, (r.charCodeAt(x) - 48) | 0); }
+      else elev.set(def.elev);
+    }
+    const towers = (def.towers || []).map(t => ({ x: t.tx * tile + tile / 2, y: t.ty * tile + tile / 2, team: t.team | 0, tier: t.tier || 1, tx: t.tx, ty: t.ty }));
+    for (const t of towers) for (let y = t.ty - 1; y <= t.ty + 1; y++) for (let x = t.tx - 1; x <= t.tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) grid[y * w + x] = 6;
     const map = {
-      tile, w, h, W: w * tile, H: h * tile, grid, spawns: def.spawns || { hero: { x: w * tile / 2, y: h * tile / 2 }, dummies: [] },
+      tile, w, h, W: w * tile, H: h * tile, grid, elev, ramp: def.ramp || null, towers,
+      spawns: def.spawns || { hero: { x: w * tile / 2, y: h * tile / 2 }, dummies: [] },
       cover: [],
       toTile: x => Math.floor(x / tile),
       at: (tx, ty) => (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 2 : grid[ty * w + tx],
-      walkableTile: (tx, ty) => { const t = (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 2 : grid[ty * w + tx]; return t === 0 || t === 4; },
+      walkableTile: (tx, ty) => { const t = (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 2 : grid[ty * w + tx]; return t === 0 || t === 4 || t === 5; },
       blocksSight: (tx, ty) => { const t = (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 2 : grid[ty * w + tx]; return t === 1 || t === 2; },
       center: (tx, ty) => ({ x: tx * tile + tile / 2, y: ty * tile + tile / 2 }),
+      elevTile: (tx, ty) => (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 1 : elev[ty * w + tx],
+      elevAt: (x, y) => { const tx = Math.floor(x / tile), ty = Math.floor(y / tile); return (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 1 : elev[ty * w + tx]; },
     };
     map.walkable = (x, y) => map.walkableTile(Math.floor(x / tile), Math.floor(y / tile));
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {

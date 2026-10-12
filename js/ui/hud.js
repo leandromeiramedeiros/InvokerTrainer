@@ -10,6 +10,72 @@
   };
 
   const hasIcon = id => !!(IT.Art && IT.Art.frame('icons', id));
+  // "any target unit" (scarecrow dummy or NPC enemy hero); guarded so the HUD still loads without IT.Units
+  const foe = e => !!e && (IT.Units && IT.Units.isFoe ? IT.Units.isFoe(e) : e.kind === 'dummy' || e.kind === 'enemy');
+  const T = (k, v) => IT.t(k, v);
+  const loc = o => (o && typeof o === 'object' ? o[IT.lang] || o.en || '' : o == null ? '' : String(o));
+  const keyLab = a => { const S = IT.Settings; return S.label(S.keyOf(a)); };
+  const hudMode = () => { const m = IT.Settings && IT.Settings.get ? IT.Settings.get().hudMode : null; return m === 'minimal' || m === 'steps' ? m : 'default'; };
+  const DIFF_ALIAS = { ianzinho: 'ian', normal: 'common' };
+  const diffId = id => DIFF_ALIAS[id] || id;
+
+  // ---------------------------------------------------------------- live tooltips (F5)
+  // Elements get `_tip = () => text|null`; hovering copies it to data-tip (the global #tip toast shows it), H.update keeps the visible text fresh.
+  function tipOf(el, fn) { el._tip = fn; el.classList.add('tp'); return el; }
+  function tipText(fn) { try { return fn() || ''; } catch (e) { return ''; } }
+  function cdLine(cd) { return cd > 0 ? T('tip.cdLeft', { n: cd >= 10 ? Math.ceil(cd) : cd.toFixed(1) }) : T('tip.ready'); }
+  function spellTip(id) {
+    const c = H.c, out = [T('spell.' + id)];
+    if (IT.hasT('spelld.' + id)) out.push(T('spelld.' + id));
+    const rec = IT.GAME.SPELL_ORBS[id];
+    if (rec) out.push(T('tip.recipe', { r: rec.split('').map(ch => keyLab('orb' + ch)).join(' ') + ' + ' + keyLab('invoke') }));
+    if (c) {
+      const hero = c.hero, at = hero.inv.slots.indexOf(id), d = IT.Abilities && IT.Abilities.get(id);
+      if (at < 0) out.push(T('tip.notInvoked'));
+      else out.push(T('tip.invoked') + ' - ' + cdLine(hero.cd[id] || 0));
+      if (d) { const mc = d.manaCost(c.w, hero); out.push(T('tip.manaCost', { n: Math.round(mc) }) + (hero.mana < mc ? ' - ' + T('tip.lowMana') : '')); }
+    }
+    return out.join('\n');
+  }
+  function itemTip(id, it) {
+    const c = H.c, out = [T('item.' + id)];
+    if (IT.hasT('itemd.' + id)) out.push(T('itemd.' + id));
+    const d = IT.Abilities && IT.Abilities.get && IT.Abilities.get(id);
+    if (it) out.push(cdLine(it.cd || 0));
+    if (c && d && d.manaCost) { const mc = d.manaCost(c.w, c.hero); if (mc > 0) out.push(T('tip.manaCost', { n: Math.round(mc) }) + (c.hero.mana < mc ? ' - ' + T('tip.lowMana') : '')); }
+    if (it && it.charges > 0 && id !== 'bkb') out.push(T('tip.charges', { n: it.charges }));
+    return out.join('\n');
+  }
+  function orbTip(name) {
+    const c = H.c, out = [T('orb.' + name)];
+    if (IT.hasT('orbd.' + name)) out.push(T('orbd.' + name));
+    if (c) out.push(T('tip.orbLevel', { n: c.hero.ctx.eff[name] }));
+    return out.join('\n');
+  }
+  function statusTip(s, w) {
+    const nm = IT.hasT('status.' + s.type) ? T('status.' + s.type) : s.type, out = [nm];
+    if (IT.hasT('statusd.' + s.type)) out.push(T('statusd.' + s.type));
+    const rem = Math.max(0, s.until - w.t); out.push(T('tip.remaining', { n: rem >= 10 ? Math.ceil(rem) : rem.toFixed(1) }));
+    return out.join('\n');
+  }
+  function bindTips(off) {
+    const mv = ev => {
+      let n = ev.target, el = null;
+      while (n && n !== document && n.nodeType === 1) { if (n._tip) { el = n; break; } n = n.parentNode; }
+      H.hov = el;
+      if (el) { const tx = tipText(el._tip); if (tx) el.setAttribute('data-tip', tx); else el.removeAttribute('data-tip'); }
+    };
+    window.addEventListener('mousemove', mv, true); window.addEventListener('mouseover', mv, true);
+    off.push(() => { window.removeEventListener('mousemove', mv, true); window.removeEventListener('mouseover', mv, true); H.hov = null; });
+  }
+  function refreshTip() {   // live text (cooldown ticking) while the pointer rests on a tip element
+    const el = H.hov; if (!el || !el.isConnected || !el._tip) return;
+    const tx = tipText(el._tip), cur = el.getAttribute('data-tip') || '';
+    if (tx === cur) return;
+    if (tx) el.setAttribute('data-tip', tx); else el.removeAttribute('data-tip');
+    const tp = document.getElementById('tip');
+    if (tp && tp.style.display === 'block' && tx) tp.textContent = tx;
+  }
 
   function btnEl(cls, onclick) {
     const { h } = IT.UI;
@@ -58,21 +124,32 @@
     if (j != null && j !== d.i) IT.Items.swap(c.w, c.hero, d.i, j);
   }
 
-  // bottom bar for a selected non-hero unit (Dota-style): portrait, name, bars, armor/MR/speed, 6 items
+  // bottom bar for a selected non-hero unit (Dota-style inspect): portrait, name, behaviour / aware badges, bars, armor/MR/speed, 6 items with cooldowns
   function unitBar(R) {
     const { h } = IT.UI, t = IT.t;
     R.upor = h('div', { class: 'hpor' });
     R.uname = h('div', { class: 'uname' });
+    R.ubeh = h('span', { class: 'ubadge beh' }); R.uaw = h('span', { class: 'ubadge aw' });
     R.uhp = h('div', { class: 'bar hp' }, R.uhpf = h('i'), R.uhpt = h('span'));
     R.ump = h('div', { class: 'bar mp' }, R.umpf = h('i'), R.umpt = h('span'));
     R.ua = h('b'); R.um = h('b'); R.us = h('b');
     R.ustats = h('div', { class: 'ustats' }, h('span', {}, t('hud.armor') + ' ', R.ua), h('span', {}, t('hud.mres') + ' ', R.um), h('span', {}, t('hud.ms') + ' ', R.us));
-    R.uitems = [0, 1, 2, 3, 4, 5].map(() => { const ic = h('span', { class: 'ic' }); return { el: h('div', { class: 'hbtn item' }, ic), ic }; });
+    R.uitems = [0, 1, 2, 3, 4, 5].map(() => btnEl('item', null));
+    R.uitemsBox = h('div', { class: 'hitems' }, R.uitems.map(b => b.el));
+    tipOf(R.uhp, () => { const U = H.unit; return U ? T('stat.hp') + ' ' + Math.max(0, Math.round(U.hp)) + '/' + Math.round(U.maxHp) : null; });
+    tipOf(R.ump, () => { const U = H.unit; return U ? T('stat.mana') + ' ' + Math.max(0, Math.round(U.mana || 0)) + '/' + Math.round(U.maxMana || 0) : null; });
+    tipOf(R.ustats, () => T('tip.unitStats'));
+    tipOf(R.ubeh, () => { const U = H.unit, b = U && behOf(U); return b ? T('tip.behavior', { b: behLabel(b) }) + '\n' + (IT.hasT('behd.' + b) ? T('behd.' + b) : '') : null; });
+    tipOf(R.uaw, () => { const U = H.unit; return U ? T(U.aware ? 'tip.aware' : 'tip.unaware') : null; });
+    R.uitems.forEach((b, i) => tipOf(b.el, () => { const U = H.unit, it = U && U.items && U.items[i]; if (!it) return null; const id = typeof it === 'string' ? it : it.id; return itemTip(id, { cd: unitItemCd(U, it, id), charges: 0 }); }));
     return h('div', { class: 'hudp hbar hunit', style: { display: 'none' } },
       R.upor,
-      h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats),
-      h('div', { class: 'hitems' }, R.uitems.map(b => b.el)));
+      h('div', { class: 'hmid' }, h('div', { class: 'urow' }, R.uname, R.ubeh, R.uaw), h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats),
+      R.uitemsBox);
   }
+  const behOf = U => (U.kind === 'enemy' || U.kind === 'dummy') ? (U.behavior || (U.ai && U.ai.behavior) || (U.kind === 'dummy' ? 'stationary' : null)) : null;
+  const behLabel = b => (IT.hasT('beh.' + b) ? T('beh.' + b) : b);
+  const unitItemCd = (U, it, id) => (typeof it === 'object' && it.cd > 0 ? it.cd : (U.cd && U.cd[id]) || 0);
   // ---------------------------------------------------------------- Aghanim's hood emblem (Dota layout)
   // three orb sockets (Wex top, Quas left, Exort right) on a steel frame, Scepter = teardrop gem, Shard = gem trio below.
   // Unowned: dark gems, muted orbs. Owned: the gem lights in the orb colour of the scepter orb / shard spell and that socket brightens.
@@ -194,63 +271,294 @@
       if (e.acc > 1) e.acc = 1;
     }
     for (const p of ps) { p.life += dt; p.vy += 9 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
-    for (let i = ps.length - 1; i >= 0; i--) if (ps[i].life >= ps[i].max || ps[i].y >= HH) ps.splice(i, 1);
+    for (let i = ps.length - 1; i >= 0; i--) if (ps[i].life >= ps[i].max || ps[i].y >= HH || ps[i].x < -2 || ps[i].x > HW + 2) ps.splice(i, 1);
     const cx = el._pt.getContext('2d');
     cx.clearRect(0, 0, HW, HH);
     for (const p of ps) { cx.globalAlpha = Math.min(1, 3 * (1 - p.life / p.max)) * 0.85; cx.fillStyle = p.c; cx.fillRect(p.x | 0, p.y | 0, 1, 1); }
     cx.globalAlpha = 1;
   }
 
-  // top-centre ranked run panel (hidden unless IT.Ranked.hud(w) returns an object):
-  // countdown digit, flair scenario name, one objective line, combo icons (+ order), compact timer / score
-  function rankedPanel(R) {
+  // ---------------------------------------------------------------- Aghanim's Hood picker (loadout, F3)
+  // Reuses the hood art: Wex top, Quas left, Exort right. Click an orb: 1st = Scepter on it (+1 level), 2nd = Shard on it
+  // (Quas Ghost Walk, Wex EMP, Exort Sun Strike). With both chosen, clicking an orb removes what it holds; a neutral orb takes the Shard.
+  const SPELL_OF_ORB = { quas: 'ghostwalk', wex: 'emp', exort: 'sunstrike' };
+  H.hoodClick = function (lo, orb) {
+    if (lo.scepter && !lo.scepterOrb) lo.scepter = false;
+    if (lo.shard && !lo.shardSpell) lo.shard = false;
+    const sc = !!lo.scepter, sh = !!lo.shard;
+    const hs = sc && lo.scepterOrb === orb, hh = sh && SHARD_ORB[lo.shardSpell] === orb;
+    const setSc = o => { lo.scepter = true; lo.scepterOrb = o; }, clrSc = () => { lo.scepter = false; lo.scepterOrb = null; };
+    const setSh = o => { lo.shard = true; lo.shardSpell = SPELL_OF_ORB[o]; }, clrSh = () => { lo.shard = false; lo.shardSpell = null; };
+    if (!sc) { setSc(orb); return 'scepter'; }
+    if (!sh) { setSh(orb); return 'shard'; }
+    if (hs && hh) { clrSc(); clrSh(); return 'clear'; }
+    if (hs) { clrSc(); return 'clear'; }
+    if (hh) { clrSh(); return 'clear'; }
+    setSh(orb); return 'shard';
+  };
+  // grains fly out of the clicked socket in the gem colours
+  function hoodBurst(el, orb, n) {
+    const pal = GEM_PAL[orb], [ox, oy] = HOOD_ORB[orb], ps = el._parts;
+    for (let i = 0; i < n && ps.length < 70; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 6 + Math.random() * 16;
+      ps.push({ x: ox + Math.cos(a) * 2, y: oy + Math.sin(a) * 2, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4, life: 0, max: 0.55 + Math.random() * 0.6, c: Math.random() < 0.4 ? pal.h : pal.m });
+    }
+  }
+  H.hoodPicker = function (lo, onChange) {
+    const { h, icon } = IT.UI, t = IT.t;
+    const hood = hoodEl(), ca = {}, socks = {};
+    const stage = h('div', { class: 'hpstage' }, hood);
+    const cap = h('div', { class: 'hpcap' }), hint = h('div', { class: 'fine hphint', text: t('hood.hint') });
+    const clear = h('button', { type: 'button', class: 'mini hpclear', text: t('hood.clear'), onclick: () => { lo.scepter = false; lo.scepterOrb = null; lo.shard = false; lo.shardSpell = null; if (onChange) onChange('clear'); refresh(); } });
+    let raf = 0, last = 0, miss = 0;
+    const loop = ts => {
+      raf = 0;
+      if (!stage.isConnected) { if (++miss > 120) return; raf = requestAnimationFrame(loop); return; }
+      miss = 0;
+      const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0.016; last = ts;
+      H.updHood({ hood }, ca, lo, dt);
+      raf = requestAnimationFrame(loop);
+    };
+    const ensure = () => { if (!raf && typeof requestAnimationFrame === 'function') { miss = 0; last = 0; raf = requestAnimationFrame(loop); } };
+    for (const n of ['wex', 'quas', 'exort']) {
+      const [x, y] = HOOD_ORB[n];
+      socks[n] = h('button', {
+        type: 'button', class: 'hpsock ' + n, style: { left: (x / HW * 100) + '%', top: (y / HH * 100) + '%' },
+        onclick: () => { const r = H.hoodClick(lo, n); if (r !== 'clear') hoodBurst(hood, n, 26); if (onChange) onChange(r, n); refresh(); },
+      });
+      stage.appendChild(socks[n]);
+    }
+    function refresh() {
+      const so = lo.scepter ? lo.scepterOrb : null, sp = lo.shard ? lo.shardSpell : null, sh = sp ? SHARD_ORB[sp] : null;
+      for (const n in socks) {
+        socks[n].classList.toggle('hs', so === n); socks[n].classList.toggle('hh', sh === n);
+        const hold = so === n ? (sh === n ? 'both' : 'scepter') : sh === n ? 'shard' : 'none';
+        socks[n].setAttribute('data-tip', t('orb.' + n) + '\n' + t('hood.tip.' + hold, { spell: t('spell.' + SPELL_OF_ORB[n]) }));
+      }
+      cap.textContent = '';
+      cap.appendChild(h('div', { class: 'hpl' + (so ? ' on' : '') }, icon('scepter', 'mini'), h('b', { text: t('item.scepter') }), h('span', { text: so ? t('orb.' + so) + ' +1' : t('hood.none') })));
+      cap.appendChild(h('div', { class: 'hpl' + (sp ? ' on' : '') }, icon('shard', 'mini'), h('b', { text: t('item.shard') }), h('span', { text: sp ? t('spell.' + sp) : t('hood.none') })));
+      clear.style.visibility = so || sp ? '' : 'hidden';
+      ensure();
+    }
+    refresh();
+    const el = h('div', { class: 'hoodpick' }, h('div', { class: 'hprow' }, stage, h('div', { class: 'hpside' }, cap, clear)), hint);
+    el.refresh = refresh;
+    return el;
+  };
+
+  // ---------------------------------------------------------------- scenario panel (F1)
+  // Top-centre panel for a scenario run (hidden unless IT.Ranked.hud(w) returns an object). Setting `hudMode`:
+  //   minimal = scenario brief + skill/item/attack/move icons;  default = bigger skill cards (name + orb keys);
+  //   steps   = default + a timeline of key presses (orbs, invoke, cast / item / attack / move) that flashes and falls away when done.
+  // Every mode shows a short explanation plus WIN / LOSE lines.
+  const ORB_OF = { Q: 'quas', W: 'wex', E: 'exort' };
+  function scenarioPanel(R) {
     const { h } = IT.UI, t = IT.t;
     R.rkNum = h('div', { class: 'rknum' });
-    R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
+    R.rkName = h('b', { class: 'rkname' }); R.rkFlair = h('span', { class: 'rkflair' }); R.rkObj = h('span', { class: 'rkobj' });
+    R.rkDiff = h('span', { class: 'rkdiff' });
+    R.rkWinT = h('span'); R.rkLoseT = h('span');
+    R.rkWin = h('div', { class: 'rkw win' }, h('i', { text: t('hud.rkWin') }), R.rkWinT);
+    R.rkLose = h('div', { class: 'rkw lose' }, h('i', { text: t('hud.rkLose') }), R.rkLoseT);
     R.rkCombo = h('div', { class: 'rkcombo' });
+    R.rkTl = h('div', { class: 'rktl' });
     R.rkTv = h('b'); R.rkRv = h('b'); R.rkSv = h('b'); R.rkMed = h('span', { class: 'rkmed' });
     R.rkTm = h('div', { class: 'rkt tm' }, h('span', { text: t('hud.rkTime') }), R.rkTv);
     R.rkRn = h('div', { class: 'rkt' }, h('span', { text: t('hud.rkRun') }), R.rkRv);
     R.rkSc = h('div', { class: 'rkt sc' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed);
     R.rkRow = h('div', { class: 'rkrow' }, R.rkTm, R.rkSc, R.rkRn);
-    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, h('div', { class: 'rkscen' }, R.rkName, R.rkObj), R.rkCombo, R.rkRow);
+    tipOf(R.rkDiff, () => { const id = diffId(H.cache.rkDiffId); if (!id) return null; const d = IT.DIFFICULTY && IT.DIFFICULTY.get ? IT.DIFFICULTY.get(id) : null; return T('diff.' + id) + '\n' + (loc(d && d.desc) || (IT.hasT('diff.' + id + '.d') ? T('diff.' + id + '.d') : '')); });
+    tipOf(R.rkWin, () => T('tip.win')); tipOf(R.rkLose, () => T('tip.lose'));
+    tipOf(R.rkTm, () => T('tip.timeLeft')); tipOf(R.rkRn, () => T('tip.runLeft')); tipOf(R.rkSc, () => T('tip.score'));
+    tipOf(R.rkName, () => T('tip.scenario'));
+    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum,
+      h('div', { class: 'rkscen' }, h('div', { class: 'rkhd' }, R.rkName, R.rkDiff), R.rkFlair, R.rkObj),
+      h('div', { class: 'rkwl' }, R.rkWin, R.rkLose), R.rkCombo, R.rkTl, R.rkRow);
   }
-  // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id }]
-  function rkActions(rk) {
+  // result of run.steps(): array of steps, or { steps|list, idx|index|cur } -> { list, states } (states null when it carries no progress info)
+  function normSteps(src) {
+    if (!src) return null;
+    const list = Array.isArray(src) ? src : (src.steps || src.list);
+    if (!Array.isArray(list)) return null;
+    const idx = Array.isArray(src) ? undefined : [src.idx, src.index, src.cur, src.current, src.i].find(v => typeof v === 'number');
+    let states = null;
+    if (idx != null) states = list.map((s, i) => (i < idx ? 'done' : i === idx ? 'now' : 'todo'));
+    else if (list.some(s => s && (s.done != null || s.state != null || s.status != null))) {
+      let seenNow = false;
+      states = list.map(s => {
+        const d = s && (s.done === true || s.state === 'done' || s.status === 'done');
+        if (d) return 'done';
+        if (!seenNow) { seenNow = true; return 'now'; }
+        return 'todo';
+      });
+    }
+    return { list, states };
+  }
+  // ordered actions of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id, label }]
+  function scnSteps(rk, sc) {
     const w = H.c.w, GM = IT.GAME, out = [];
+    const push = (a, label) => {
+      if (a === 'attack' || a === 'move') out.push({ k: a, label });
+      else if (a === 'pos') out.push({ k: 'pos', label });
+      else if (typeof a === 'string' && GM.SPELL_ORBS[a]) out.push({ k: 'spell', id: a, label });
+      else if (typeof a === 'string' && (GM.ITEM_DOTA[a] || hasIcon(a))) out.push({ k: 'item', id: a, label });
+    };
     const def = w.combo && w.combo.def;
     if (def) {
       for (const s of def.steps) {
-        if (s.ability) out.push({ k: GM.SPELL_ORBS[s.ability] ? 'spell' : 'item', id: s.ability });
-        else if (s.type === 'attack') out.push({ k: 'attack' });
-        else if (s.type === 'move') out.push({ k: 'move' });
-        else if (s.type === 'position') out.push({ k: 'pos' });
+        if (s.ability) push(s.ability);
+        else if (s.type === 'attack' || s.type === 'move') push(s.type);
+        else if (s.type === 'position') push('pos');
       }
       return out;
     }
-    const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null;
-    for (const s of (sc && sc.sol) || []) {
-      if (s.a === 'attack') out.push({ k: 'attack' });
-      else if (s.a === 'move') out.push({ k: 'move' });
-      else if (s.a) out.push({ k: GM.SPELL_ORBS[s.a] ? 'spell' : 'item', id: s.a });
-    }
+    let src = null;
+    const run = w.ranked;
+    if (run && typeof run.steps === 'function') { try { const n = normSteps(run.steps()); if (n) src = n.list; } catch (e) { /* ignore */ } }
+    if (!src) src = sc && sc.steps && sc.steps.length ? sc.steps : sc && sc.sol;
+    for (const s of src || []) if (s) push(s.a != null ? s.a : s.ability, s.label);
     return out;
   }
-  function rkBuildCombo(R, rk, ord, hints) {
-    const { h, icon } = IT.UI, t = IT.t;
+  const orbChip = ch => { const { h, icon } = IT.UI; return h('span', { class: 'tk orb ' + ORB_OF[ch] }, icon(ORB_OF[ch], 'mini'), h('b', { text: keyLab('orb' + ch) })); };
+  // shortest orb presses (<= 3) that leave the 3-orb queue holding exactly the recipe
+  function planOrbs(orbs, recipe) {
+    const want = recipe.split('').sort().join(''), ok = q => q.length === 3 && q.slice().sort().join('') === want;
+    for (let k = 0; k <= 3; k++) {
+      const rs = recipe.split('');
+      if (k === 3 && ok(rs)) return { seq: rs, q: rs };
+      for (let m = 0; m < Math.pow(3, k); m++) {
+        const seq = []; let x = m; for (let i = 0; i < k; i++) { seq.push('QWE'[x % 3]); x = Math.floor(x / 3); }
+        const q = orbs.concat(seq).slice(-3);
+        if (ok(q)) return { seq, q };
+      }
+    }
+    return { seq: recipe.split(''), q: recipe.split('') };
+  }
+  function badgeBox(kind) { const { h } = IT.UI; return h('div', { class: 'rka badge ' + kind }, h('b', { text: T(kind === 'attack' ? 'hud.rkAtk' : kind === 'move' ? 'hud.rkMov' : 'hud.rkPos') })); }
+  function actTip(a) {
+    if (a.k === 'spell') return () => spellTip(a.id);
+    if (a.k === 'item') return () => { const it = H.c.hero.items.find(x => x && x.id === a.id); return itemTip(a.id, it); };
+    return () => T('tip.step.' + a.k);
+  }
+  const dedupe = acts => { const seen = new Set(); return acts.filter(a => (a.k === 'spell' || a.k === 'item') && !seen.has(a.id) && seen.add(a.id)); };
+  // minimal: icons only (recipe letters under spells when hints are on)
+  function buildIcons(R, acts, ord, hints) {
+    const { h, icon } = IT.UI;
     R.rkCombo.textContent = '';
-    let acts = rkActions(rk);
-    if (!ord) { const seen = new Set(); acts = acts.filter(a => (a.k === 'spell' || a.k === 'item') && !seen.has(a.id) && seen.add(a.id)); }
+    if (!ord) acts = dedupe(acts);
     acts.forEach((a, i) => {
       if (ord && i) R.rkCombo.appendChild(h('i', { class: 'rkar' }));
       let box;
       if (a.k === 'spell' || a.k === 'item') {
         box = h('div', { class: 'rka ' + a.k }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }));
         if (hints && a.k === 'spell') box.appendChild(h('em', { class: 'rkrec', text: IT.GAME.SPELL_ORBS[a.id] || '' }));
-      } else box = h('div', { class: 'rka badge ' + a.k }, h('b', { text: t(a.k === 'attack' ? 'hud.rkAtk' : a.k === 'move' ? 'hud.rkMov' : 'hud.rkPos') }));
+      } else box = badgeBox(a.k);
+      tipOf(box, actTip(a));
       R.rkCombo.appendChild(box);
     });
     R.rkCombo.style.display = acts.length ? '' : 'none';
+  }
+  // default / steps: skill cards (big icon, name, orb keys / item key)
+  function buildCards(R, acts, ord, hints) {
+    const { h, icon } = IT.UI;
+    R.rkCombo.textContent = '';
+    if (!ord) acts = dedupe(acts);
+    const hero = H.c.hero;
+    acts.forEach((a, i) => {
+      if (ord && i) R.rkCombo.appendChild(h('i', { class: 'rkar' }));
+      let card;
+      if (a.k === 'spell') {
+        const rec = IT.GAME.SPELL_ORBS[a.id] || '';
+        card = h('div', { class: 'rkc spell' }, icon(a.id), h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: T('spell.' + a.id) }),
+          hints ? h('span', { class: 'rkok' }, rec.split('').map(orbChip), h('i', { class: 'rkpl', text: '+' }), h('span', { class: 'tk inv' }, icon('invoke', 'mini'), h('b', { text: keyLab('invoke') }))) : null));
+      } else if (a.k === 'item') {
+        const slot = hero.items.findIndex(x => x && x.id === a.id);
+        card = h('div', { class: 'rkc item' }, hasIcon(a.id) ? icon(a.id) : h('b', { text: String(a.id).slice(0, 3).toUpperCase() }),
+          h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: IT.hasT('item.' + a.id) ? T('item.' + a.id) : a.id }), slot >= 0 ? h('span', { class: 'rkok' }, h('span', { class: 'tk key' }, h('b', { text: keyLab('item' + (slot + 1)) }))) : null));
+      } else {
+        card = h('div', { class: 'rkc badge ' + a.k }, badgeBox(a.k), h('div', { class: 'rkcm' }, h('b', { class: 'rkcn', text: T(a.k === 'attack' ? 'step.attack' : a.k === 'move' ? 'step.move' : 'step.pos') })));
+      }
+      tipOf(card, actTip(a));
+      R.rkCombo.appendChild(card);
+    });
+    R.rkCombo.style.display = acts.length ? '' : 'none';
+  }
+  // steps: one group per press sequence
+  function buildTimeline(R, list, sc) {
+    const { h, icon } = IT.UI, S = IT.Settings, hero = H.c.hero, GM = IT.GAME;
+    R.rkTl.textContent = ''; R.rkTls = [];
+    const sim = { orbs: (hero.inv.orbs || []).slice(), slots: (hero.inv.slots || []).slice(0, 2) };
+    for (const s of (sc && sc.hero && sc.hero.preinvoked) || []) if (s && !sim.slots.includes(s)) sim.slots = [s, sim.slots[0]];
+    const legacy = S.data.scheme === 'legacy';
+    list.forEach((s, i) => {
+      const kids = [];
+      if (s.k === 'spell') {
+        let at = sim.slots.indexOf(s.id);
+        if (at < 0) {
+          const p = planOrbs(sim.orbs, GM.SPELL_ORBS[s.id]);
+          for (const ch of p.seq) kids.push(orbChip(ch));
+          sim.orbs = p.q;
+          kids.push(h('span', { class: 'tk inv' }, icon('invoke', 'mini'), h('b', { text: keyLab('invoke') })));
+          sim.slots = [s.id, sim.slots[0]]; at = 0;
+        }
+        kids.push(h('span', { class: 'tk cast' }, icon(s.id, 'mini'), h('b', { text: legacy ? S.label(S.data.keys.legacy[s.id]) : keyLab('slot' + (at + 1)) })));
+      } else if (s.k === 'item') {
+        const slot = hero.items.findIndex(x => x && x.id === s.id);
+        kids.push(h('span', { class: 'tk item' }, hasIcon(s.id) ? icon(s.id, 'mini') : null, h('b', { text: slot >= 0 ? keyLab('item' + (slot + 1)) : '?' })));
+      } else kids.push(h('span', { class: 'tk badge ' + s.k }, h('b', { text: T(s.k === 'attack' ? 'hud.rkAtk' : s.k === 'move' ? 'hud.rkMov' : 'hud.rkPos') })));
+      const lab = s.label ? loc(s.label) : '';
+      const el = h('div', { class: 'tls todo' }, h('em', { class: 'tln', text: String(i + 1) }), h('div', { class: 'tlk' }, kids), lab ? h('span', { class: 'tll', text: lab }) : null);
+      tipOf(el, () => T('tip.stepN', { n: i + 1 }) + '\n' + (s.k === 'spell' || s.k === 'item' ? T((s.k === 'spell' ? 'spell.' : 'item.') + s.id) : T('tip.step.' + s.k)));
+      R.rkTl.appendChild(el); R.rkTls.push(el);
+    });
+    R.rkTl.style.display = list.length ? '' : 'none';
+  }
+  function loseText(sc) {
+    if (sc.lose) return loc(sc.lose);
+    const fail = Array.isArray(sc.fail) && sc.fail.length ? sc.fail : [sc.obj && sc.obj.type === 'escape' ? 'caught' : null, 'time'];
+    return fail.filter(f => f && IT.hasT('lose.' + f)).map(f => T('lose.' + f)).join('; ');
+  }
+  function buildScenario(R, rk, sc, hm, ord, hints) {
+    R.rk.className = 'rkp m-' + hm;
+    R.rkFlair.textContent = loc(sc.flair); R.rkFlair.style.display = sc.flair ? '' : 'none';
+    R.rkObj.textContent = loc(sc.desc) || loc(sc.tip) || loc(rk.objective);
+    R.rkWinT.textContent = loc(sc.win) || loc(sc.goal) || loc(rk.objective);
+    R.rkLoseT.textContent = loseText(sc);
+    R.rkLose.style.display = R.rkLoseT.textContent ? '' : 'none';
+    const list = scnSteps(rk, sc);
+    H.trk = { list, idx: 0 };
+    if (hm === 'minimal') buildIcons(R, list, ord, hints); else buildCards(R, list, ord, hints);
+    R.rkCombo.classList.toggle('ord', ord);
+    if (hm === 'steps' && hints !== false) buildTimeline(R, list, sc); else { R.rkTl.textContent = ''; R.rkTls = []; R.rkTl.style.display = 'none'; }
+  }
+  // advance the fallback progress tracker (used when run.steps() carries no progress)
+  function trkAdvance(pred) {
+    const tr = H.trk; if (!tr) return;
+    for (let j = tr.idx; j < Math.min(tr.list.length, tr.idx + 3); j++) if (pred(tr.list[j])) { tr.idx = j + 1; return; }
+  }
+  function stepStates(n) {
+    const run = H.c.w.ranked;
+    if (run && typeof run.steps === 'function') {
+      try { const ns = normSteps(run.steps()); if (ns && ns.states && ns.states.length === n) return ns.states; } catch (e) { /* ignore */ }
+    }
+    const idx = H.trk ? H.trk.idx : 0;
+    return Array.from({ length: n }, (_, i) => (i < idx ? 'done' : i === idx ? 'now' : 'todo'));
+  }
+  // flash a finished step, then let it fall away
+  function updTimeline(R, dt) {
+    if (!R.rkTls || !R.rkTls.length) return;
+    const st = stepStates(R.rkTls.length);
+    R.rkTls.forEach((el, i) => {
+      if (el._gone) return;
+      if (st[i] === 'done' && !el._done) { el._done = true; el._tt = 0; el.className = 'tls done flash'; }
+      else if (!el._done) { const c = 'tls ' + (st[i] === 'now' ? 'now' : 'todo'); if (el.className !== c) el.className = c; }
+      if (el._tt != null) {
+        el._tt += dt;
+        if (el._tt > 0.4 && !el._fall) { el._fall = true; el.classList.add('fall'); }
+        if (el._tt > 1.1) { el._gone = true; el._tt = null; el.classList.add('gone'); }
+      }
+    });
   }
   const fmtS = s => { s = Math.max(0, s || 0); const v = Math.floor(s * 10) / 10, m = Math.floor(v / 60); return m + ':' + (v - m * 60).toFixed(1).padStart(4, '0'); };
   const fmtM = s => { const v = Math.max(0, Math.floor(s || 0)), m = Math.floor(v / 60); return m + ':' + String(v - m * 60).padStart(2, '0'); };
@@ -294,6 +602,19 @@
     R.items = [0, 1, 2, 3, 4, 5].map(i => { const b = btnEl('item', null); b.el.setAttribute('data-slot', i); b.el.addEventListener('mousedown', ev => itemDown(i, ev)); return b; });
     setIcon(R.q, 'quas'); setIcon(R.w, 'wex'); setIcon(R.e, 'exort'); setIcon(R.r, 'invoke');
     R.hood = hoodEl();   // Scepter/Shard hood emblem: between abilities and items (Dota)
+    // hover tooltips (F5)
+    tipOf(R.por, () => T('tip.hero', { lvl: ctx.hero.ctx.heroLevel }));
+    tipOf(R.hp, () => T('stat.hp') + ' ' + Math.max(0, Math.round(ctx.hero.hp)) + '/' + Math.round(ctx.hero.maxHp));
+    tipOf(R.mp, () => T('stat.mana') + ' ' + Math.max(0, Math.round(ctx.hero.mana)) + '/' + Math.round(ctx.hero.maxMana));
+    for (const [b, n] of [[R.q, 'quas'], [R.w, 'wex'], [R.e, 'exort']]) tipOf(b.el, () => orbTip(n));
+    tipOf(R.r.el, () => { const cd = ctx.hero.inv.invokeCd || 0; return T('spell.invoke') + '\n' + T('tip.invoke') + '\n' + cdLine(cd); });
+    [R.s1, R.s2].forEach((b, i) => tipOf(b.el, () => { const id = ctx.hero.inv.slots[i]; return id ? spellTip(id) : T('tip.slotEmpty', { n: i + 1 }); }));
+    R.items.forEach((b, i) => tipOf(b.el, () => { const it = ctx.hero.items[i]; return it ? itemTip(it.id, it) : T('lo.itemSlotN', { n: i + 1 }); }));
+    tipOf(R.hood, () => {
+      const lo = ctx.w.loadout || {};
+      const so = lo.scepter ? lo.scepterOrb : null, sp = lo.shard ? lo.shardSpell : null;
+      return T('hood.title') + '\n' + T('item.scepter') + ': ' + (so ? T('orb.' + so) + ' +1' : T('hood.none')) + '\n' + T('item.shard') + ': ' + (sp ? T('spell.' + sp) : T('hood.none'));
+    });
     R.bar = h('div', { class: 'hudp hbar' },
       R.por,
       h('div', { class: 'hmid' },
@@ -303,30 +624,49 @@
       h('div', { class: 'hitems' }, R.items.map(b => b.el)));
     R.ubar = unitBar(R);
     R.buffs = h('div', { class: 'hbuffs' });
+    tipOf(R.orbs, () => { const o = ctx.hero.inv.orbs; return T('tip.orbsActive') + ': ' + (o.length ? o.map(x => T('orb.' + ORBN[x])).join(', ') : T('hood.none')); });
     R.orbcol = h('div', { class: 'horbcol' }, R.orbs);
     R.stat = h('div', { class: 'hstat' }, R.orbcol, R.buffs);   // orbs + status icons float above the hero bar
     R.aim = h('div', { class: 'aimhint', text: t('hud.aimHint') });
-    R.rk = rankedPanel(R);
+    R.rk = scenarioPanel(R);
     R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
 
-    // --- sandbox panel
+    // --- sandbox panel: DPS, cooldown refresh, Free Play tools (place dummy / spawn enemy), combo list
     if (ctx.mode === 'sandbox') {
+      const free = !ctx.w.ranked;
       R.dpsN = h('b', { class: 'dpsn', text: '0' }); R.totN = h('b', { class: 'totn', text: '0' });
-      R.list = h('div', { class: 'clist' });
+      const LS = () => IT.UI.LoadoutScreen;
+      const miss = () => IT.UI.toast(t('hud.noApi'), 'warn');
+      const mk = (cls, label, key, fn, tip) => { const b = h('button', { type: 'button', class: 'mini ' + cls, onclick: fn, text: label + (key ? ' [' + keyLab(key) + ']' : '') }); return tipOf(b, () => T(tip)); };
+      const bRef = mk('refresh', t('hud.refresh'), 'refresh', () => In.hooks.refresh && In.hooks.refresh(), 'tip.refresh');
+      const bRes = mk('reset', t('hud.resetDummies'), 'resetDummies', () => In.hooks.resetDummies && In.hooks.resetDummies(), 'tip.resetDummies');
+      const bPlace = mk('place', t('hud.placeDummy'), 'spawn', () => { const A = IT.App; if (A && A.placeDummy) A.placeDummy(); else if (In.hooks.spawn) In.hooks.spawn(); else miss(); }, 'tip.placeDummy');
+      const bEnemy = mk('enemy', t('hud.spawnEnemy'), null, () => {
+        const A = IT.App, card = LS() && LS().enemyOpts ? LS().enemyOpts() : { behavior: 'stationary' };
+        if (A && A.spawnEnemy) A.spawnEnemy(card); else miss();
+      }, 'tip.spawnEnemy');
       R.side = h('div', { class: 'hudp hside' },
         h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, h('span', { class: 'sp', text: t('hud.total') }), R.totN),
-        h('div', { class: 'srow2' },
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.refresh && In.hooks.refresh(), text: t('hud.refresh') + ' [' + IT.Settings.label(IT.Settings.keyOf('refresh')) + ']' }),
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.spawn && In.hooks.spawn(), text: t('hud.spawn') + ' [' + IT.Settings.label(IT.Settings.keyOf('spawn')) + ']' }),
-          h('button', { type: 'button', class: 'mini', onclick: () => In.hooks.resetDummies && In.hooks.resetDummies(), text: t('hud.resetDummies') + ' [' + IT.Settings.label(IT.Settings.keyOf('resetDummies')) + ']' })),
-        h('div', { class: 'ch2', text: t('hud.combos') }), R.list);
-      H.buildList();
+        h('div', { class: 'srow2' }, bRef, free ? bPlace : null, free ? bEnemy : null, bRes));
+      if (free && IT.Combo && IT.COMBOS && IT.COMBOS.length) {
+        R.list = h('div', { class: 'clist' });
+        R.side.appendChild(h('div', { class: 'ch2', text: t('hud.combos') })); R.side.appendChild(R.list);
+        H.buildList();
+      }
+      tipOf(R.dpsN.parentNode, () => T('tip.dps'));
       root.appendChild(R.side);
     }
     R.cheat = h('div', { class: 'hudp cheat', style: { display: 'none' } });
     R.live = h('div', { class: 'hudp live', style: { display: 'none' } });
     root.appendChild(R.top); root.appendChild(R.bar); root.appendChild(R.ubar); root.appendChild(R.stat); root.appendChild(R.aim); root.appendChild(R.cheat); root.appendChild(R.live);
     if (IT.ComboBar) IT.ComboBar.bind(ctx, R.top);
+    bindTips(H.off);
+    H.trk = null;
+    const hid = () => ctx.hero.id;
+    H.off.push(ctx.w.on('cast', p => { if (p.unit === hid()) trkAdvance(s => (s.k === 'spell' || s.k === 'item') && s.id === p.ability); }));
+    H.off.push(ctx.w.on('attack', p => { if (p.src === hid()) trkAdvance(s => s.k === 'attack'); }));
+    H.off.push(ctx.w.on('order', p => { if (p.unit === hid() && p.order && p.order.type === 'move') trkAdvance(s => s.k === 'move'); }));
+    H.off.push(ctx.w.on('scnStart', () => { H.cache.rkCk = null; }));
     const wm = ev => itemMove(ev), wu = ev => itemUp(ev);
     window.addEventListener('mousemove', wm); window.addEventListener('mouseup', wu);
     H.off.push(() => { window.removeEventListener('mousemove', wm); window.removeEventListener('mouseup', wu); H.drag = null; });
@@ -420,39 +760,54 @@
   };
 
   // ---------------------------------------------------------------- per-frame
-  // selected non-hero unit panel (red HP for enemies, green for allies)
+  // selected non-hero unit panel (inspect): red HP for foes, green for allies. Dummies have no HP bar; enemies show behaviour, aware/unaware and item cooldowns.
   H.updUnit = function (U, R, ca, w) {
     const { h, icon } = IT.UI, t = IT.t;
+    H.unit = U;
     if (ca.uid !== U.id) {
       ca.uid = U.id;
       const sheet = U.kind === 'hero' ? IT.Art.heroSheet() : U.kind === 'spirit' ? 'forge' : (IT.Art.sheets[U.skin] ? U.skin : null);
       R.upor.textContent = ''; R.upor.appendChild(sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' }));
       R.upor.classList.toggle('foe', U.team !== 0); R.uhp.classList.toggle('foe', U.team !== 0);
-      R.uname.textContent = U.name || t('hud.unit');
-      for (const k of ['uhp', 'ump', 'ua', 'um', 'us']) delete ca[k];
+      R.uname.textContent = U.kind === 'dummy' ? t('hud.dummy') : U.name || (U.kind === 'enemy' ? t('hud.enemy') : U.kind === 'tower' ? t('hud.tower') : t('hud.unit'));
+      for (const k of ['uhp', 'ump', 'ua', 'um', 'us', 'ubeh', 'uaw']) delete ca[k];
     }
+    const nohp = U.kind === 'dummy' || U.noHpBar === true;
+    R.uhp.style.display = nohp ? 'none' : '';
     const hk = Math.max(0, Math.round(U.hp)) + '/' + Math.round(U.maxHp);
-    if (ca.uhp !== hk) { ca.uhp = hk; R.uhpt.textContent = hk; R.uhpf.style.width = (U.maxHp ? Math.max(0, U.hp / U.maxHp) * 100 : 0) + '%'; }
+    if (!nohp && ca.uhp !== hk) { ca.uhp = hk; R.uhpt.textContent = hk; R.uhpf.style.width = (U.maxHp ? Math.max(0, U.hp / U.maxHp) * 100 : 0) + '%'; }
     const mmp = Math.round(U.maxMana || 0), mk = Math.max(0, Math.round(U.mana || 0)) + '/' + mmp;
     R.ump.style.display = mmp > 0 ? '' : 'none';
     if (ca.ump !== mk) { ca.ump = mk; R.umpt.textContent = mk; R.umpf.style.width = (U.maxMana ? Math.max(0, U.mana / U.maxMana) * 100 : 0) + '%'; }
     setText(R.ua, String(Math.round((U.armor || 0) * 10) / 10), ca, 'ua');
     setText(R.um, Math.round((U.magicRes || 0) * 100) + '%', ca, 'um');
     setText(R.us, String(Math.round(U.ms || 0)), ca, 'us');
+    // behaviour + awareness badges
+    const beh = behOf(U);
+    setText(R.ubeh, beh ? behLabel(beh) : '', ca, 'ubeh'); R.ubeh.style.display = beh ? '' : 'none';
+    const isE = U.kind === 'enemy', aw = isE ? (U.aware ? 'aw' : 'un') : '';
+    if (ca.uaw !== aw) { ca.uaw = aw; R.uaw.textContent = aw ? t(aw === 'aw' ? 'hud.aware' : 'hud.unaware') : ''; R.uaw.className = 'ubadge aw ' + aw; R.uaw.style.display = aw ? '' : 'none'; }
+    // items with cooldown sweeps
+    const hasItems = !!(U.items && U.items.some(Boolean));
+    R.uitemsBox.style.display = U.kind === 'dummy' || (!hasItems && U.kind !== 'enemy') ? 'none' : '';
     R.uitems.forEach((b, i) => {
       const it = U.items && U.items[i], id = it ? (typeof it === 'string' ? it : it.id) : null;
-      if (ca['ui' + i] === id) return;
-      ca['ui' + i] = id; b.ic.textContent = ''; if (id && hasIcon(id)) b.ic.appendChild(icon(id));
-      b.el.classList.toggle('empty', !id);
+      if (ca['ui' + i] !== id) {
+        ca['ui' + i] = id; b.ic.textContent = ''; if (id && hasIcon(id)) b.ic.appendChild(icon(id));
+        b.el.classList.toggle('empty', !id); b.id = id;
+      }
+      const cd = id ? unitItemCd(U, it, id) : 0, ck = 'u' + i + (id || '');
+      if (cd > (H.cdMax[ck] || 0)) H.cdMax[ck] = cd;
+      if (cd <= 0) H.cdMax[ck] = 0;
+      setCd(b, cd, H.cdMax[ck], ca, 'ucd' + i);
     });
   };
 
-  // ranked run panel: countdown / flair title / combo icons / timers / score + medal. Hidden when IT.Ranked.hud(w) is null.
-  H.updRanked = function (R, ca) {
-    const rk = IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(H.c.w) : null;
+  // scenario panel: countdown / flair title / explanation / win + lose / skill cards / step timeline / timers + score + medal. Hidden when IT.Ranked.hud(w) is null.
+  H.updRanked = function (R, ca, dt) {
+    const w = H.c.w, rk = IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(w) : null;
     if (!rk) { if (ca.rk !== 0) { ca.rk = 0; R.rk.style.display = 'none'; R.top.classList.remove('rk'); } return; }
     if (ca.rk !== 1) { ca.rk = 1; R.rk.style.display = ''; R.top.classList.add('rk'); }
-    const txt = v => v == null ? '' : typeof v === 'object' ? (v[IT.lang] || v.en || '') : String(v);
     if (ca.rkPh !== rk.phase) {   // medal from the persistent rating; refreshed on phase change
       ca.rkPh = rk.phase;
       if (IT.Medals && IT.Ranks && IT.Ranked.profile) {
@@ -470,10 +825,19 @@
     R.rkTm.style.display = rk.timeLeft == null ? 'none' : '';
     R.rkRn.style.display = rk.runLeft == null ? 'none' : '';
     R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
-    setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
-    const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def;
-    const ck = rk.id + '|' + rk.n + '|' + (def ? def.id : '') + '|' + IT.lang + '|' + (ord ? 1 : 0) + (hints ? 1 : 0);
-    if (ca.rkCk !== ck) { ca.rkCk = ck; rkBuildCombo(R, rk, ord, hints); R.rkCombo.classList.toggle('ord', ord); }
+    setText(R.rkName, loc(rk.scenario), ca, 'rkname');
+    // difficulty badge (hover = what the tier changes)
+    const did = rk.diff ? diffId(rk.diff) : '';
+    ca.rkDiffId = did;
+    setText(R.rkDiff, did ? T('diff.' + did).toUpperCase() : '', ca, 'rkdt'); R.rkDiff.style.display = did ? '' : 'none';
+    if (ca.rkDc !== did) { ca.rkDc = did; R.rkDiff.className = 'rkdiff d-' + did; }
+    const hm = hudMode(), ord = !!S.comboOrder, def = w.combo && w.combo.def;
+    // recipes are shown unless a ranked difficulty hides them (hint-less tiers)
+    const hints = rk.mode === 'ranked' ? !!(rk.hints && S.hints) : true;
+    const sc = (w.ranked && w.ranked.pr && w.ranked.pr.sc) || (IT.SCENARIOS && IT.SCENARIOS.get && IT.SCENARIOS.get(rk.id)) || {};
+    const ck = [rk.id, rk.n, def ? def.id : '', IT.lang, hm, ord ? 1 : 0, hints ? 1 : 0].join('|');
+    if (ca.rkCk !== ck) { ca.rkCk = ck; buildScenario(R, rk, sc, hm, ord, hints); }
+    if (hm === 'steps') updTimeline(R, dt || 0);
   };
 
   H.update = function (dt) {
@@ -539,7 +903,9 @@
       R.aim.style.display = armed ? '' : 'none';
     }
     // selected unit (IT.Input.selected) replaces the hero bar; hero bar returns when null
-    const sel = IT.Input.selected != null ? w.get(IT.Input.selected) : null, U = sel && sel !== hero && !sel.dead ? sel : null;
+    const In = IT.Input, sid = In.selected != null ? In.selected : (In.sel && In.sel.units && In.sel.units.length === 1 && In.sel.units[0] !== hero.id ? In.sel.units[0] : null);
+    const sel = sid != null ? w.get(sid) : null, U = sel && sel !== hero && !sel.dead ? sel : null;
+    if (!U) H.unit = null;
     const um = U ? U.id : null;
     if (ca.umode !== um) {
       ca.umode = um; ca.uid = null;
@@ -547,7 +913,7 @@
     }
     if (U) H.updUnit(U, R, ca, w);
     // ranked panel
-    H.updRanked(R, ca);
+    H.updRanked(R, ca, dt);
     H.updHood(R, ca, w.loadout || {}, dt);
     // orbs (a status) sit centred over the ability row; other statuses take slots to their right
     const lk = innerWidth + 'x' + innerHeight + ':' + (U ? 1 : 0);
@@ -564,9 +930,10 @@
       for (const s of sts) {
         const src = s.src != null ? w.get(s.src) : null, foe = src && src.team !== bu.team;
         const nm = IT.hasT('status.' + s.type) ? t('status.' + s.type) : s.type;
-        const chip = IT.UI.h('div', { class: 'buff ' + (foe ? 'bad' : 'good'), 'data-tip': nm },
+        const chip = IT.UI.h('div', { class: 'buff ' + (foe ? 'bad' : 'good') },
           s.ability && hasIcon(s.ability) ? IT.UI.icon(s.ability) : (s.type && hasIcon(s.type) ? IT.UI.icon(s.type) : IT.UI.h('b', { class: 'ab', text: nm.slice(0, 3).toUpperCase() })),
           IT.UI.h('span', { class: 'bt' }));
+        tipOf(chip, () => statusTip(s, w));
         R.buffs.appendChild(chip); R.bchips.push({ chip, s, tx: chip.lastChild });
       }
     }
@@ -578,10 +945,12 @@
       setText(R.dpsN, String(Math.round(sum / 5)), ca, 'dps'); setText(R.totN, String(Math.round(H.total)), ca, 'tot');
     }
     if (H.statsOn) { H.accT += dt; if (H.accT > 0.4) { H.accT = 0; H.buildLive(); } }
+    refreshTip();
     if (IT.ComboBar) IT.ComboBar.update(dt);
     if (IT.DummyChat && IT.DummyChat.update) IT.DummyChat.update(dt);
   };
   H.resetMeter = function () { H.dps = []; H.total = 0; };
 
+  H.isFoe = foe; H.planOrbs = planOrbs; H.normSteps = normSteps; H.hudMode = hudMode; H.diffId = diffId;   // exposed for tests
   IT.HUD = H;
 })(typeof window !== 'undefined' ? window : globalThis);

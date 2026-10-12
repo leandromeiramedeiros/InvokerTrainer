@@ -12,17 +12,27 @@
     return normalize(Object.assign(l, { items: [], skin: IT.GAME.SKINS[0], preset: 'standard', mode: 'free' }));
   }
 
+  // Spells that can be handed to the hero already invoked (scenario `hero.preinvoked`), max 2, deduped, in slot order.
+  function fixPreinvoked(p) {
+    const ids = IT.Values.SPELL_IDS, out = [];
+    if (typeof p === 'string') p = [p];
+    for (const s of Array.isArray(p) ? p : []) if (typeof s === 'string' && ids[s] && !out.includes(s)) out.push(s);
+    return out.slice(0, 2);
+  }
+
+  // Auto-fixes anything illegal (plan G2-G4): orbs clamped to the gate (orb level N needs hero level >= 2N-1 until lvl 13) and
+  // to the points available (unspent points just bank), max 7 per orb; talents limited to what the level allows (all 8 at 30).
   function normalize(l) {
     l = l || {};
-    const o = l.orbs || {};
-    const lvl = Math.max(1, Math.min(IT.RULES.maxHeroLevel, Math.round(Number(l.heroLevel)) || 1));
+    const lvl = Math.max(1, Math.min(IT.RULES.maxHeroLevel, Math.round(Number(l.heroLevel != null ? l.heroLevel : l.lvl)) || 1));
+    const o = IT.RULES.fixOrbs(lvl, l.orbs);
     let scepterOrb = l.scepterOrb || null;
     let scepter = !!l.scepter;
     if (typeof l.scepter === 'string') { scepter = true; scepterOrb = scepterOrb || l.scepter; }
     return {
       heroLevel: lvl,
-      orbs: { quas: o.quas | 0, wex: o.wex | 0, exort: o.exort | 0 },
-      talents: Array.isArray(l.talents) ? l.talents.slice() : [],
+      orbs: { quas: o.quas, wex: o.wex, exort: o.exort },
+      talents: IT.RULES.fixTalents(lvl, l.talents),
       scepter, scepterOrb: scepter ? scepterOrb : null,
       shard: !!l.shard || SHARD_SPELLS.includes(l.shard),
       shardSpell: (l.shard || l.shardSpell) ? (SHARD_SPELLS.includes(l.shardSpell) ? l.shardSpell : SHARD_SPELLS.includes(l.shard) ? l.shard : null) : null,
@@ -30,6 +40,7 @@
       skin: l.skin || IT.GAME.SKINS[0],
       preset: l.preset || 'standard',
       mode: l.mode || 'free',
+      preinvoked: fixPreinvoked(l.preinvoked),
     };
   }
 
@@ -56,5 +67,5 @@
     return { ok: errors.length === 0, errors };
   }
 
-  IT.Loadout = { default: def, normalize, validate, ctx: l => IT.Values.ctx(l), MAX_ITEMS, BOOTS, SHARD_SPELLS };
+  IT.Loadout = { default: def, normalize, validate, fixPreinvoked, ctx: l => IT.Values.ctx(l), MAX_ITEMS, BOOTS, SHARD_SPELLS };
 })(typeof window !== 'undefined' ? window : globalThis);

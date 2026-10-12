@@ -1,14 +1,14 @@
-// Items: refresher, atos, vyse, shiva, meteorhammer, bkb, orchid, gleipnir, blink, boots/travels. Pure. See CONTRACT.md + DECISIONS.md "Items".
+// Items: refresher, atos, vyse, shiva, meteorhammer, bkb, orchid, gleipnir, blink, boots/travels, forcestaff, dust, euls, shadowblade. Pure. See CONTRACT.md + DECISIONS.md "Items".
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
   const A = IT.Abilities, S = IT.Status;
   const DOTA = id => IT.GAME.ITEM_DOTA[id];
   const iv = (id, key, lvl) => IT.Values.item(DOTA(id), key, lvl);
-  const UNITS = { hero: 1, dummy: 1, spirit: 1 };
+  const UNITS = { hero: 1, dummy: 1, enemy: 1, spirit: 1 };
   const ATOS_SPEED = 1900;          // not in KV AbilityValues (ProjectileSpeed is not baked): Dota value
   const BOOTS = ['travels', 'boots'];   // priority; only one counts
-  const ids = ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir', 'blink', 'boots', 'travels'];
+  const ids = ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir', 'blink', 'boots', 'travels', 'forcestaff', 'dust', 'euls', 'shadowblade'];
 
   const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
   const slotOf = (c, id) => c.items && c.items.find(s => s && s.id === id);
@@ -161,7 +161,9 @@
       const dur = iv('bkb', 'duration', n);
       it.charges = n + 1;
       for (const t of BKB_DISPEL) S.remove(w, c, t);
-      S.add(w, c, 'magicImmune', dur, { src: c.id, ability: 'bkb' });
+      // Enemy-NPC BKB: CC immunity + KV spell_reduce % less magic damage (instead of full immunity). Hero / legacy-AI dummies: full immunity.
+      const reduce = c.kind === 'enemy' && !c.legacy ? iv('bkb', 'spell_reduce') / 100 : null;
+      S.add(w, c, 'magicImmune', dur, { src: c.id, ability: 'bkb', data: reduce != null ? { reduce } : undefined });
       w.emit('fx', { name: 'bkb', x: c.x, y: c.y, unit: c.id, dur, use: n + 1 });
     },
   });
@@ -265,6 +267,91 @@
     },
   });
 
+  // ---- Force Staff: pushes the target `push_length` along its facing over `push_time` (self or any visible unit). The unit can
+  // still cast; the push stops at walls (nav slide). Not blocked by BKB (displacement, no src status).
+  item('forcestaff', {
+    target: 'unit',
+    filter(w, c, t) {
+      return !!t && !t.dead && !t.building && t.kind !== 'thinker' && t.kind !== 'proj' && !S.has(t, 'lift') &&
+        (t.team === c.team || c.team !== 0 || !w.fog || t.visible);
+    },
+    cast(w, c, o) {
+      const t = (o.target != null && w.get(o.target)) || c;
+      const len = iv('forcestaff', 'push_length'), dur = iv('forcestaff', 'push_time') || 0.5;
+      const fx = t.x, fy = t.y;
+      IT.Combat.push(w, t, Math.cos(t.facing) * len, Math.sin(t.facing) * len, dur);
+      w.emit('fx', { name: 'forceStaff', x: fx, y: fy, unit: t.id, dir: t.facing, len, dur });
+      w.emit('hit', { src: c.id, target: t.id, ability: 'forcestaff' });
+    },
+  });
+
+  // ---- Dust of Appearance: reveals (and slows) every enemy in `radius` for `duration` -> Status.revealed(e); invisible units become visible.
+  item('dust', {
+    target: 'none',
+    range() { return 0; },
+    cast(w, c) {
+      const R = iv('dust', 'radius'), dur = iv('dust', 'duration'), slow = -iv('dust', 'movespeed') / 100;
+      const hit = enemies(w, c, u => dist(c, u) <= R + (u.radius || 0));
+      w.emit('fx', { name: 'dustBlast', x: c.x, y: c.y, r: R, unit: c.id, dur });
+      for (const u of hit) {
+        S.add(w, u, 'revealed', dur, { src: c.id, ability: 'dust', pierce: true });
+        if (slow > 0) S.add(w, u, 'slow', dur, { src: c.id, ability: 'dust', pierce: true, data: { pct: slow } });
+        w.emit('hit', { src: c.id, target: u.id, ability: 'dust' });
+      }
+    },
+  });
+
+  // ---- Eul's Scepter (enemy item): self cyclone. Invulnerable + airborne for cyclone_duration, basic dispel on use. While 'lift'
+  // the unit cannot act and ignores enemy statuses/damage (same rules as Tornado's victims).
+  const EULS_DISPEL = ['slow', 'atosRoot', 'root', 'silence', 'disarm', 'burn'];
+  item('euls', {
+    target: 'none',
+    range() { return 0; },
+    cast(w, c) {
+      const dur = iv('euls', 'cyclone_duration');
+      for (const t of EULS_DISPEL) S.remove(w, c, t);
+      const s = S.add(w, c, 'lift', dur, { src: c.id, ability: 'euls', data: { euls: true } });
+      if (!s) return;
+      s.from = w.t;
+      w.emit('fx', { name: 'eulsCyclone', x: c.x, y: c.y, unit: c.id, dur });
+      w.thinker({
+        x: c.x, y: c.y, team: c.team, ability: 'euls',
+        upd(w2, e) {
+          const u = w2.get(c.id); if (!u) return true;
+          e.x = u.x; e.y = u.y;
+          if (S.find(u, 'lift') !== s) { u.z = 0; return true; }
+          const a = Math.min(1, (w2.t - s.from) / 0.25, (s.until - w2.t) / 0.25);
+          u.z = (IT.Spells ? IT.Spells.LIFT_HEIGHT : 120) * Math.max(0, a);
+          return false;
+        },
+      });
+    },
+  });
+
+  // ---- Shadow Blade (enemy item): fades for windwalk_fade_time, then 'invisible' (hidden from the other team unless dusted /
+  // true-sighted, see IT.Vision) for the rest of windwalk_duration with +windwalk_movement_speed %. Breaks on the wearer's attack.
+  item('shadowblade', {
+    target: 'none',
+    range() { return 0; },
+    cast(w, c) {
+      const fade = iv('shadowblade', 'windwalk_fade_time'), dur = iv('shadowblade', 'windwalk_duration'), ms = iv('shadowblade', 'windwalk_movement_speed');
+      w.emit('fx', { name: 'shadowFade', x: c.x, y: c.y, unit: c.id, dur: fade });
+      S.add(w, c, 'invisFade', Math.max(fade, w.dt), { src: c.id, ability: 'shadowblade' });   // render hint: fading out
+      w.thinker({
+        x: c.x, y: c.y, team: c.team, ability: 'shadowblade',
+        upd(w2, e) {
+          const u = w2.get(c.id); if (!u) return true;
+          e.x = u.x; e.y = u.y;
+          if (e.age < fade - 1e-9) return false;
+          S.remove(w2, u, 'invisFade');
+          S.add(w2, u, 'invisible', Math.max(w2.dt, dur - fade), { src: c.id, ability: 'shadowblade', data: { stats: { msPct: ms } } });
+          w2.emit('fx', { name: 'shadowOn', x: u.x, y: u.y, unit: u.id });
+          return true;
+        },
+      });
+    },
+  });
+
   // ---- boots family: passive stats merged into one permanent 'itemStats' status.
   for (const id of BOOTS) item(id, { target: 'none', range: () => 0, manaCost: () => 0, cooldown: () => 0 });
 
@@ -294,8 +381,8 @@
     w._itemsHook = true;
     w.on('damage', p => {
       const t = w.get(p.target), s = p.src != null ? w.get(p.src) : null;
-      if (!t || t.kind !== 'hero' || !s || s.team === t.team || !(p.dealt > 0)) return;
-      t._blinkLock = w.t + iv('blink', 'blink_damage_cooldown');
+      if (!t || (t.kind !== 'hero' && t.kind !== 'enemy') || !s || s.team === t.team || !(p.dealt > 0)) return;
+      t._blinkLock = w.t + iv('blink', 'blink_damage_cooldown');   // Blink Dagger: unusable for 3 s after damage from an enemy unit
     });
   }
 
@@ -318,5 +405,20 @@
     return true;
   }
 
-  IT.Items = { applyPassives, ids, swap };
+  // AoE / range preview data for the input layer (all numbers from the baked KV).
+  // -> { shape:'circle', around:'self'|'point', r, range } | { shape:'line', around:'unit', len, range } | { shape:'range', range } | null
+  function preview(id) {
+    if (!DOTA(id)) return null;
+    switch (id) {
+      case 'shiva': return { shape: 'circle', around: 'self', r: iv(id, 'blast_radius'), speed: iv(id, 'blast_speed'), aura: iv(id, 'aura_radius'), range: 0 };
+      case 'gleipnir': return { shape: 'circle', around: 'point', r: iv(id, 'radius_tooltip') || iv(id, 'radius'), range: iv(id, 'castRange') };
+      case 'meteorhammer': return { shape: 'circle', around: 'point', r: iv(id, 'impact_radius'), range: iv(id, 'castRange') };
+      case 'dust': return { shape: 'circle', around: 'self', r: iv(id, 'radius'), range: 0 };
+      case 'forcestaff': return { shape: 'line', around: 'unit', len: iv(id, 'push_length'), range: iv(id, 'castRange') };
+      case 'blink': return { shape: 'range', range: iv(id, 'blink_range'), clamp: iv(id, 'blink_range_clamp') };
+      default: return null;
+    }
+  }
+
+  IT.Items = { applyPassives, ids, swap, preview };
 })(typeof window !== 'undefined' ? window : globalThis);

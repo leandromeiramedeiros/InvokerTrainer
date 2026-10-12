@@ -19,7 +19,7 @@
   // seconds of life -> per-tick age-step probability (60 Hz)
   const life = s => 255 / (s * 60);
   const AGEP = new Float32Array(16);
-  AGEP[STONE] = life(2.4); AGEP[ASH] = life(2.8); AGEP[GLASS] = life(4.2); AGEP[DUSTP] = life(7); AGEP[DUSTW] = life(6); AGEP[DUSTG] = life(7); AGEP[DUSTC] = life(6); AGEP[FROST] = life(5.5); AGEP[MELT] = life(1.6);
+  AGEP[STONE] = life(0.9); AGEP[ASH] = life(1.0); AGEP[GLASS] = life(1.5); AGEP[DUSTP] = life(2.4); AGEP[DUSTW] = life(2.0); AGEP[DUSTG] = life(2.4); AGEP[DUSTC] = life(2.0); AGEP[FROST] = life(2.0); AGEP[MELT] = life(0.7);   // ~1/3 of v3: settled sand must not linger
   const FLOWTO = new Uint8Array(16);   // magma may displace these
   for (const m of [E, MAGMA, ASH, EMBER, DUSTP, DUSTW, DUSTG, DUSTC, FROST, MELT, GLASS]) FLOWTO[m] = 1;
   const isDust = m => m === DUSTP || m === DUSTW || m === DUSTG || m === DUSTC || m === GLASS;
@@ -445,7 +445,7 @@
           }
           if (m !== MAGMA && m !== EMBER) {
             const a = age[i];
-            if (a > 170 && B4[((wy & 3) << 2) | (wx & 3)] < (a - 170) / 85) continue;
+            if (a > 90 && B4[((wy & 3) << 2) | (wx & 3)] < (a - 90) / 165) continue;   // dither away over the last ~65% of its life
           }
           u[sy * VW + sx] = col; any = true;
           if (sy < lo) lo = sy; if (sy > hi) hi = sy;
@@ -1009,7 +1009,7 @@
           }
           default: break;
         }
-      } else if (kind === 'spirit' || kind === 'hero' || kind === 'dummy') {
+      } else if (kind === 'spirit' || kind === 'hero' || kind === 'dummy' || kind === 'enemy') {
         const x = wp(e.x), y = wp(e.y);
         if (kind === 'spirit') {
           if (!lit(e.x, e.y)) continue;

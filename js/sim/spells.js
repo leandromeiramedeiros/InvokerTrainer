@@ -14,8 +14,8 @@
   const KNOCK_SPEED = 150;          // Deafening Blast knockback distance = knockback_duration * KNOCK_SPEED (no KV distance)
   const METEOR_SPACING = 1.5;       // extra meteors are spread perpendicular, METEOR_SPACING * area_of_effect apart
   const SPIRIT_RING = 90;           // forge spirit spawn ring radius
-  const COMBATANT = { dummy: 1, hero: 1, spirit: 1 };
-  const HEROISH = { dummy: 1, hero: 1 };   // 'enemy heroes' for shard effects (dummies stand in for heroes)
+  const COMBATANT = { dummy: 1, enemy: 1, hero: 1, spirit: 1 };
+  const HEROISH = { dummy: 1, enemy: 1, hero: 1 };   // 'enemy heroes' for shard effects (dummies stand in for heroes)
 
   // living, targetable (not lifted) enemies of caster `c`
   const foes = (w, c) => w.query(u => u.team !== c.team && COMBATANT[u.kind] && u.hp > 0 && !IT.Status.has(u, 'lift'));

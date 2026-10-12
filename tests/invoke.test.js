@@ -16,7 +16,7 @@ test('orb queue drops oldest', () => {
 test('unlearned orb fails', () => {
   const { w, h } = mk(IT.Loadout.normalize({ heroLevel: 1, orbs: { quas: 1 } }));
   assert.equal(IT.Invoke.orb(w, h, 'W'), false);
-  assert.deepEqual(fails(w), ['orbNotLearned']);
+  assert.deepEqual(fails(w), ['locked']);
   assert.deepEqual(h.inv.orbs, []);
 });
 test('disabled/silenced block orbs', () => {
@@ -59,7 +59,7 @@ test('noRecipe with fewer than 3 orbs; unlearned orb in recipe', () => {
   assert.deepEqual(fails(w), ['noRecipe']);
   const l = mk(IT.Loadout.normalize({ heroLevel: 1, orbs: { quas: 1 } }));
   l.h.inv.orbs = ['Q', 'W', 'E']; IT.Invoke.invoke(l.w, l.h);
-  assert.deepEqual(fails(l.w), ['orbNotLearned']);
+  assert.deepEqual(fails(l.w), ['locked']);
 });
 test('invoke cooldown shrinks with orb levels', () => {
   const lo = IT.Loadout.normalize({ heroLevel: 13, orbs: { quas: 4, wex: 3, exort: 3 } });
@@ -68,7 +68,7 @@ test('invoke cooldown shrinks with orb levels', () => {
   orbs(a.w, a.h, 'QQQ'); IT.Invoke.invoke(a.w, a.h);
   orbs(b.w, b.h, 'QQQ'); IT.Invoke.invoke(b.w, b.h);
   assert.ok(a.h.inv.invokeCd > b.h.inv.invokeCd);
-  assert.ok(Math.abs(b.h.inv.invokeCd - 4) < 1e-6);
+  assert.ok(Math.abs(b.h.inv.invokeCd - 3.6) < 1e-6   /* sum 10: 4.0 -> 2.8 between anchors 9 and 12 */);
   assert.ok(Math.abs(a.h.inv.invokeCd - 6.7) < 1e-6);
 });
 test('orb passives change stats', () => {

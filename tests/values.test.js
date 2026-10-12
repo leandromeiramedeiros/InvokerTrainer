@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const load = require('./_load.js');
-const fresh = () => load(['js/data/dota.js', 'js/sim/values.js']);
+const fresh = () => load(['js/data/dota.js', 'js/data/rules.js', 'js/sim/values.js']);
 const IT = fresh();
 const V = IT.Values;
 const L = (o, extra) => V.ctx(Object.assign({ heroLevel: 1, talents: [], scepter: false, shard: false }, extra,
@@ -64,8 +64,10 @@ test('misc spell numbers + mod ops', () => {
 
 test('invoke cooldown', () => {
   assert.strictEqual(V.invokeCooldown(L({})), 7);
-  near(V.invokeCooldown(L({ quas: 3, wex: 3, exort: 3 })), 7 - 0.3 * 9);
-  assert.strictEqual(V.invokeCooldown(L({ quas: 8, wex: 8, exort: 8 })), 0);
+  near(V.invokeCooldown(L({ quas: 3, wex: 3, exort: 3 })), 4.0);   // plan G1: keyed by orb-level sum (9 -> 4.0)
+  near(V.invokeCooldown(L({ quas: 1, wex: 1, exort: 1 })), 6.1);
+  near(V.invokeCooldown(L({ quas: 1, wex: 1, exort: 1 }, { scepter: true })), 5.8);
+  assert.strictEqual(V.invokeCooldown(L({ quas: 7, wex: 7, exort: 7 })), 0);
   assert.strictEqual(V.get('invoker_invoke', 'max_invoked_spells', L({})), 2);
 });
 

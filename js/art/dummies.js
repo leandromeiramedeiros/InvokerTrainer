@@ -3399,4 +3399,108 @@
     ]
     }
   });
+  // ---- Scarecrow (training dummy): burlap head, patched shirt on a crossbar, straw, stake in the ground. 24x32, anchor = stake base. ----
+  (function scarecrow() {
+    const W = 24, H = 32;
+    const pal = {
+      k: '#1e1408', w: '#4a2f14', W: '#7a4f24', h: '#a8723a',
+      b: '#c4a462', B: '#e0c883', n: '#977a42', s: '#2a1a0c',
+      y: '#e0b840', Y: '#f6dc78', o: '#a87a20',
+      r: '#8a2e2a', R: '#b84a40', c: '#5a1a1a', p: '#3a5a8a', P: '#6a8ac0',
+      g: '#c8a060', e: '#5a3e22', E: '#7a5a34', f: '#4a7a2a',
+      a: '#4a3a2a', A: '#6e553a', q: '#a03030',
+    };
+    const SKIP = 'yYoeEf';
+    const grid = () => Array.from({ length: H }, () => Array(W).fill('.'));
+    const put = (g, x, y, c) => { if (x >= 0 && x < W && y >= 0 && y < H) g[y][x] = c; };
+    const rect = (g, x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) put(g, x, y, c); };
+    function outline(g) {
+      const o = g.map(r => r.slice());
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (g[y][x] !== '.') continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const c = (g[y + dy] || [])[x + dx];
+          if (c && c !== '.' && SKIP.indexOf(c) < 0) { o[y][x] = 'k'; break; }
+        }
+      }
+      return o;
+    }
+    function tuft(g, x, y, len, dx, sw) {         // a strand of straw
+      for (let k = 0; k <= len; k++) put(g, x + (k > 1 ? dx * sw : 0) + (k > 0 ? dx * (k >> 1) : 0), y + k, k === len ? 'o' : ((x + k) & 1 ? 'y' : 'Y'));
+    }
+    function ground(g) {
+      rect(g, 8, 29, 15, 29, 'e'); rect(g, 6, 30, 17, 30, 'e'); rect(g, 9, 31, 14, 31, 'e');
+      rect(g, 8, 29, 10, 29, 'E'); rect(g, 6, 30, 8, 30, 'E');
+      put(g, 6, 29, 'f'); put(g, 17, 30, 'f'); put(g, 16, 29, 'f'); put(g, 5, 30, 'f');
+    }
+    function stakeAndBar(g, view) {
+      rect(g, 11, 15, 12, 29, 'W'); rect(g, 12, 15, 12, 29, 'w');
+      if (view === 'e') { rect(g, 6, 15, 17, 15, 'W'); rect(g, 6, 16, 17, 16, 'w'); }
+      else { rect(g, 1, 15, 22, 15, 'W'); rect(g, 1, 16, 22, 16, 'w'); rect(g, 1, 15, 3, 15, 'h'); }
+    }
+    function hands(g, sw, lx, rx) {     // straw hands poking out of the cuffs
+      for (const [x0, d] of [[lx, -1], [rx, 1]]) {
+        tuft(g, x0, 18, 4, d, sw); tuft(g, x0 + d, 18, 3, d, sw); tuft(g, x0 + d * 2, 18, 4, d, sw);
+      }
+    }
+    function sleeves(g, view) {
+      if (view === 'e') {
+        rect(g, 3, 14, 8, 18, 'r'); rect(g, 15, 14, 20, 18, 'r');
+        rect(g, 3, 17, 8, 18, 'c'); rect(g, 15, 17, 20, 18, 'c'); rect(g, 3, 14, 8, 14, 'R'); rect(g, 15, 14, 20, 14, 'R');
+        return;
+      }
+      rect(g, 2, 14, 8, 18, 'r'); rect(g, 15, 14, 21, 18, 'r');
+      rect(g, 2, 14, 8, 14, 'R'); rect(g, 15, 14, 21, 14, 'R');
+      rect(g, 2, 17, 8, 18, 'c'); rect(g, 15, 17, 21, 18, 'c');
+      put(g, 5, 16, 'p'); put(g, 6, 16, 'p'); put(g, 18, 16, 'P'); put(g, 17, 16, 'P');
+    }
+    function torso(g, view, sw) {
+      const x0 = view === 'e' ? 9 : 8, x1 = view === 'e' ? 14 : 15;
+      rect(g, x0, 15, x1, 25, 'r'); rect(g, x0, 15, x0 + 1, 24, 'R'); rect(g, x1 - 1, 15, x1, 25, 'c');
+      rect(g, x0, 22, x1, 22, 'g'); put(g, x0 + 3, 23, 'h'); put(g, x0 + 4, 23, 'g');
+      if (view === 'n') { rect(g, 9, 17, 14, 20, 'p'); rect(g, 9, 17, 14, 17, 'P'); for (let x = 9; x <= 14; x += 2) { put(g, x, 18, 's'); put(g, x, 20, 's'); } }
+      else if (view === 's') { rect(g, 10, 17, 12, 19, 'p'); rect(g, 10, 17, 12, 17, 'P'); put(g, 10, 18, 's'); put(g, 12, 18, 's'); put(g, 13, 20, 's'); put(g, 14, 18, 'c'); }
+      else { rect(g, 10, 17, 12, 19, 'p'); rect(g, 10, 17, 12, 17, 'P'); }
+      for (let x = x0; x <= x1; x++) if ((x + sw) & 1) put(g, x, 25, 'o');
+      for (let x = x0; x <= x1; x++) tuft(g, x, 25, 1 + ((x * 7 + sw * 3) % 3), 0, sw);
+    }
+    function head(g, view, ox, oy, sw) {
+      const P = (x, y, c) => put(g, x + ox, y + oy, c);
+      const R2 = (x0, y0, x1, y1, c) => rect(g, x0 + ox, y0 + oy, x1 + ox, y1 + oy, c);
+      const hx0 = 7, hx1 = view === 'e' ? 15 : 16;
+      R2(hx0 + 1, 6, hx1 - 1, 6, 'b'); R2(hx0, 7, hx1, 11, 'b'); R2(hx0 + 1, 12, hx1 - 1, 12, 'b');
+      R2(hx0, 7, hx0 + 1, 10, 'B'); R2(hx1 - 1, 7, hx1, 11, 'n'); R2(hx0 + 2, 12, hx1 - 1, 12, 'n');
+      R2(hx0 + 1, 13, hx1 - 1, 13, 'g'); P(hx0 + 3, 14, 'g'); P(hx0 + 4, 14, 'h');         // neck rope
+      if (view === 's') {
+        for (const cxp of [9, 14]) { P(cxp - 1, 8, 's'); P(cxp + 1, 8, 's'); P(cxp, 9, 's'); P(cxp - 1, 10, 's'); P(cxp + 1, 10, 's'); }
+        P(11, 10, 'n'); P(12, 10, 'n');
+        for (let x = 9; x <= 14; x++) P(x, 11 + (x & 1), 's');
+      } else if (view === 'e') {
+        P(12, 8, 's'); P(14, 8, 's'); P(13, 9, 's'); P(12, 10, 's'); P(14, 10, 's');
+        P(16, 9, 'b'); P(16, 10, 'b'); P(17, 10, 'n'); P(16, 11, 'n');
+        for (let x = 10; x <= 14; x++) P(x, 11 + (x & 1), 's');
+      } else {
+        for (let y = 7; y <= 12; y += 2) P(12, y, 's');
+        P(10, 9, 'n'); P(13, 8, 'n');
+      }
+      // hat: dark felt, red band, torn brim, straw poking out
+      R2(9, 2, 14, 4, 'a'); R2(9, 2, 10, 3, 'A'); R2(10, 1, 13, 1, 'a'); R2(8, 4, 15, 4, 'q');
+      R2(5, 5, 18, 5, 'a'); R2(6, 5, 8, 5, 'A'); P(5, 6, 'a'); P(18, 6, 'a');
+      P(13 + sw, 0, 'y'); P(14 + sw, 0, 'Y'); P(14 + sw, 1, 'o');
+      P(hx0 - 1, 11 + sw, 'y'); P(hx0 - 2, 12 + sw, 'Y'); P(hx1 + 1, 13 - sw, 'y'); P(hx1 + 2, 13, 'o');   // hair
+    }
+    function build(view, f, st) {
+      const g = grid(), sw = f & 1;
+      ground(g); stakeAndBar(g, view); sleeves(g, view); torso(g, view, sw);
+      if (view === 'e') hands(g, sw, 3, 20); else hands(g, sw, 2, 21);
+      head(g, view, st ? 1 : 0, st ? 1 : 0, sw);
+      return outline(g).map(r => r.join(''));
+    }
+    const frames = {};
+    for (const v of ['s', 'e', 'n']) {
+      for (let f = 0; f < 2; f++) { frames[`idle_${v}_${f}`] = build(v, f, false); frames[`stunned_${v}_${f}`] = build(v, f, true); }
+    }
+    frames.portrait = build('s', 0, false).map(r => '....' + r + '....');
+    IT.Art.sheet('scarecrow', { pal, anchor: [12, 30], frames });
+  })();
 })(typeof window !== 'undefined' ? window : globalThis);

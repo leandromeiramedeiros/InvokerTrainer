@@ -3,7 +3,7 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const PX = IT.Pixel;
-  const CAP = 2200, GRAV = 190;
+  const CAP = 2200, GRAV = 190, REST_K = 0.33;   // settled grains linger ~1/3 as long as v3
   const x = new Float32Array(CAP), y = new Float32Array(CAP), z = new Float32Array(CAP);
   const vx = new Float32Array(CAP), vy = new Float32Array(CAP), vz = new Float32Array(CAP);
   const age = new Float32Array(CAP), life = new Float32Array(CAP), rest = new Float32Array(CAP), c0 = new Float32Array(CAP);
@@ -34,7 +34,7 @@
       const rr = spread * Math.sqrt(Math.random()), ra = Math.random() * 6.2832;
       x[i] = o.x / p + Math.cos(ra) * rr; y[i] = o.y / p + Math.sin(ra) * rr; z[i] = (o.z || 0) / p + Math.random() * (o.zr || 0);
       vx[i] = Math.cos(a) * s + (o.vx || 0); vy[i] = Math.sin(a) * s * 0.7 + (o.vy || 0); vz[i] = up * (0.4 + Math.random() * 0.9);
-      age[i] = 0; life[i] = (o.life || 1.2) * (0.6 + Math.random() * 0.8); rest[i] = (o.rest == null ? 3.5 : o.rest) * (0.6 + Math.random() * 0.8);
+      age[i] = 0; life[i] = (o.life || 1.2) * (0.6 + Math.random() * 0.8); rest[i] = (o.rest == null ? 3.5 : o.rest) * REST_K * (0.6 + Math.random() * 0.8);
       c0[i] = Math.random() * 2; ramp[i] = ri; st[i] = 1;
       if (o.settle === false) { rest[i] = 0.01; }
     }
@@ -75,7 +75,7 @@
         col = pal[Math.min(5, (c0[i] + t * (4 - c0[i])) | 0)];
       } else {
         const t = age[i] / rest[i];
-        if (t > 0.55 && PX.bayer(sx + cx, sy + cy) < (t - 0.55) / 0.45) continue;   // dither away
+        if (t > 0.3 && PX.bayer(sx + cx, sy + cy) < (t - 0.3) / 0.7) continue;   // dither away
         col = pal[Math.min(5, (c0[i] + 1 + t * (5 - c0[i])) | 0)];
       }
       u[sy * VW + sx] = col; any = true;

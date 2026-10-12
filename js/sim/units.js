@@ -1,4 +1,4 @@
-// Dummies (training targets) + forge spirits: spawn, respawn, AI. Pure. See CONTRACT.md.
+// Dummies (scarecrows), enemies (NPC heroes; AI in enemy.js) + forge spirits: spawn, respawn. Pure. See CONTRACT.md + docs/PLAN-v4.md.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -27,7 +27,10 @@
     if (w.map && IT.Nav && IT.Nav.nearestWalkable) { const p = IT.Nav.nearestWalkable(w.map, x, y); if (p && walkable(w, p.x, p.y)) return p; }
     return null;
   }
+  const isFoe = e => !!e && (e.kind === 'dummy' || e.kind === 'enemy');   // any target unit the player fights
   const dummies = w => w.query(e => e.kind === 'dummy');
+  const enemies = w => w.query(e => e.kind === 'enemy');
+  const foes = w => w.query(isFoe);
   const disabled = e => !IT.Status.canAct(e) || hasS(e, 'hex') || hasS(e, 'knockback');
   const canBlink = e => IT.Status.canAct(e) && !hasS(e, 'root') && !hasS(e, 'atosRoot') && !hasS(e, 'hex');
 
@@ -36,7 +39,8 @@
     return { behavior, home: { x, y }, mode: 'idle', moving: false, pauseUntil: 0, nextPeek: 0, peekUntil: 0,
       hideSpot: null, nextThink: 0, dodgeId: 0, dodgeUntil: 0, useBkb: false, bkbAt: null,
       bolt: { readyAt: t, active: false, castEnd: 0 },
-      blink: { used: false, pending: false, tellEnd: 0, t0: t } };
+      blink: { used: false, pending: false, tellEnd: 0, t0: t },
+      pend: [], handled: {}, fleeAt: 0 };   // v4 enemy AI: queued threats {ability, kind, at, lands, shape}, danger thinker ids reacted to
   }
 
   // Disables a bkb-using dummy reacts to (cast START by the hero): ability -> how it is aimed.
@@ -57,46 +61,72 @@
     return along >= -d.radius && along <= len + d.radius && side <= r + d.radius;
   }
 
-  function hook(w) {   // first-hit trigger for blink_on_first_hit; hero disable casts -> bkb reaction timer
-    if (w._unitsHook) return;
-    w._unitsHook = true;
-    w.on('castStart', (p) => {
-      if (!DISABLES[p.ability]) return;
-      const c = w.get(p.unit);
-      if (!c) return;
-      for (const d of w.ents) {
-        if (d.dead || d.kind !== 'dummy' || !d.ai || !d.ai.useBkb || d.team === c.team || d.ai.bkbAt != null || !aimedAt(w, c, d, p)) continue;
-        d.ai.bkbAt = w.t + (d.reaction || 0);
-      }
-    });
-    w.on('damage', (p) => {
-      const d = w.get(p.target);
-      if (!d || d.kind !== 'dummy' || !d.ai || !d.scenario) return;
-      if (d.scenario.dummyEscape === 'blink_on_first_hit' && !d.ai.blink.used) d.ai.blink.pending = true;
-    });
-  }
-
-  function spawnDummy(w, o) {
-    hook(w);
-    const G_ = GM(), p = G_.DUMMY_PRESETS[o.preset || 'training'], D = G_.DUMMY;
-    const sc = Object.assign({ stunBolt: false, dummyEscape: 'none', blinkAfter: 3 }, o.scenario || {});
-    const behavior = o.behavior || p.behavior;
+  // Shared body of dummy + enemy (hero-shaped stats; AI state in e.ai).
+  function body(w, o, kind, st) {
+    const G_ = GM(), D = G_.DUMMY;
     const e = {
-      kind: 'dummy', team: 1, x: o.x, y: o.y, radius: D.radius, vision: D.vision, visible: false,
+      kind, team: 1, x: o.x, y: o.y, radius: st.radius || D.radius, vision: st.vision != null ? st.vision : D.vision, visible: false,
       lastSeen: { x: o.x, y: o.y, t: 0 },
-      hp: p.hp, maxHp: p.hp, mana: p.mana, maxMana: p.mana, hpRegen: p.hpRegen, manaRegen: p.manaRegen,
-      armor: p.armor, magicRes: p.magicRes, ms: p.ms, turnRate: 10, attack: null,
-      base: { ms: p.ms, armor: p.armor, magicRes: p.magicRes, hpRegen: p.hpRegen, manaRegen: p.manaRegen, as: 100, dmgMin: 0, dmgMax: 0, bat: 1.7, attackRange: 0 },
+      hp: st.hp, maxHp: st.hp, mana: st.mana, maxMana: st.mana, hpRegen: st.hpRegen, manaRegen: st.manaRegen,
+      armor: st.armor, magicRes: st.magicRes, ms: st.ms, turnRate: 10, attack: null,
+      base: { ms: st.ms, armor: st.armor, magicRes: st.magicRes, hpRegen: st.hpRegen, manaRegen: st.manaRegen, as: 100, dmgMin: 0, dmgMax: 0, bat: 1.7, attackRange: 0 },
       skin: o.skin, name: G_.SKIN_NAMES[o.skin] || o.skin, preset: o.preset || 'training',
-      reaction: p.reaction, scenario: sc,
+      reaction: st.reaction, scenario: Object.assign({ stunBolt: false, dummyEscape: 'none', blinkAfter: 3 }, o.scenario || {}),
     };
-    e.ai = newAI(behavior, o.x, o.y, w.t);
-    e.ai.useBkb = !!o.useBkb;   // activates its BKB (if carried + ready) `reaction` s after the hero starts casting a disable at it
     e.cd = {};
     if (Array.isArray(o.items)) {   // same slot shape as the hero (HUD can show them)
       e.items = [];
       for (let i = 0; i < 6; i++) e.items.push(typeof o.items[i] === 'string' ? { id: o.items[i], cd: 0, charges: 0 } : null);
     }
+    return e;
+  }
+
+    // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, behavior, items, awareness, reaction, telegraph, preset, mana,
+  // killFrac / refillBelow (legacy), legacy (old dummy-AI flow: stun bolt, scripted blink, bkb timer, evasive).
+  function spawnEnemy(w, o) {
+    const G_ = GM(), E = G_.ENEMY, p = o.preset ? G_.DUMMY_PRESETS[o.preset] : null;
+    const pick = (k) => o[k] != null ? o[k] : p && p[k] != null ? p[k] : E[k];
+    const hp = pick('hp');
+    const behavior = o.behavior || (p && p.behavior) || 'stationary';
+    const items = Array.isArray(o.items) ? (o.legacy ? o.items : o.items.filter(id => G_.ENEMY_ITEMS.includes(id))) : undefined;
+    const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
+      hp, mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
+      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: E.vision,
+    });
+    e.ai = newAI(behavior, o.x, o.y, w.t);
+    e.ai.useBkb = !!o.useBkb;
+    e.behavior = behavior;
+    e.legacy = !!o.legacy;
+    e.telegraph = o.telegraph != null ? o.telegraph : E.telegraph;   // lead (s) between the telegraph event and the item firing
+    e.awareness = o.awareness != null ? o.awareness : E.awareness;
+    e.aware = false; e.tele = null; e.lastHit = -99;
+    if (o.killFrac) e.killFrac = o.killFrac;
+    if (o.refillBelow) e.refillBelow = o.refillBelow;
+    w.add(e);
+    if (IT.Enemy) IT.Enemy.init(w, e);
+    return e;
+  }
+
+  // Dummy = scarecrow: stationary, no AI, never dies (hp refills below the refill threshold), no hp bar.
+  // Backward compatible: callers passing AI options (non-stationary behavior, stun bolt, scripted blink, bkb reaction) get an enemy
+  // through spawnEnemy (legacy flow, no telegraph); a scenario-driven one dies below 25% hp like the old ranked kill rule.
+  function spawnDummy(w, o) {
+    const G_ = GM(), p = G_.DUMMY_PRESETS[o.preset || 'training'];
+    const sc = o.scenario || {};
+    const behavior = o.behavior || p.behavior;
+    const hasAI = behavior !== 'stationary' || sc.stunBolt || (sc.dummyEscape && sc.dummyEscape !== 'none') || o.useBkb;
+    if (hasAI) {
+      const legacy = !(behavior === 'escape' || behavior === 'disable_escape' || behavior === 'defend');   // wander/evasive = old flow
+      return spawnEnemy(w, Object.assign({}, o, {
+        behavior, legacy, preset: o.preset || 'training',
+        telegraph: legacy ? 0 : o.telegraph, killFrac: o.scenario ? 0.25 : 0, refillBelow: o.scenario ? 0 : 0.25,
+      }));
+    }
+    const e = body(w, o, 'dummy', p);
+    e.noHpBar = true;
+    e.ai = newAI('stationary', o.x, o.y, w.t);
+    e.ai.useBkb = false;
+    e.behavior = 'stationary';
     return w.add(e);
   }
 
@@ -153,6 +183,7 @@
     d.x = spot.x; d.y = spot.y; d.z = 0;
     d.hp = d.maxHp; d.mana = d.maxMana;
     d.statuses.length = 0; d.orders.length = 0; d.path.length = 0;
+    d.tele = null; d.z = 0;
     setAnim(d, 'idle');
     const ub = d.ai.useBkb;
     d.ai = newAI(d.ai.behavior, spot.x, spot.y, w.t);
@@ -213,7 +244,7 @@
   function spiritAction(w, s) {
     const owner = w.get(s.owner);
     if (!owner) return null;
-    const ok = t => t && !t.dead && t.team !== s.team && (t.kind === 'dummy' || t.kind === 'hero' || t.kind === 'spirit') &&
+    const ok = t => t && !t.dead && t.team !== s.team && (isFoe(t) || t.kind === 'hero' || t.kind === 'spirit') &&
       !hasS(t, 'lift') && (!w.fog || t.visible);
     const auto = !w.opts || w.opts.autoAttack !== false;   // setting autoAttack: OFF = spirits only help with attacks the hero orders
     const oo = owner.orders && owner.orders[0], at = owner.attack;
@@ -240,199 +271,6 @@
     return null;
   }
 
-  // ---------- AI ----------
-  function cancelBolt(w, d, reason) {
-    const b = d.ai.bolt;
-    if (!b.active) return;
-    b.active = false; b.readyAt = w.t + 2;
-    if (d.anim.name === 'cast') setAnim(d, 'idle');
-    w.emit('bolt', { unit: d.id, phase: 'cancel', target: w.hero && w.hero.id, reason });
-  }
-
-  function launchBolt(w, d, h) {
-    const B = GM().DUMMY.bolt;
-    w.thinker({
-      kind: 'proj', team: d.team, fx: 'bolt', x: d.x, y: d.y, z: 0, src: d.id, target: h.id, speed: B.speed, radius: 8,
-      upd(w2, p, dt) {
-        const t = w2.get(p.target);
-        if (!t || p.age > 5) return true;
-        const dx = t.x - p.x, dy = t.y - p.y, dist = Math.hypot(dx, dy), step = p.speed * dt;
-        p.facing = Math.atan2(dy, dx);
-        if (dist > step + t.radius * 0.5) { p.x += dx / dist * step; p.y += dy / dist * step; return false; }
-        p.x = t.x; p.y = t.y;
-        if (hasS(t, 'lift')) { w2.emit('miss', { src: p.src, ability: 'stunbolt', x: p.x, y: p.y }); w2.emit('fx', { name: 'boltDodged', x: p.x, y: p.y }); return true; }
-        if (hasS(t, 'magicImmune')) {
-          w2.emit('bolt', { unit: p.src, phase: 'blocked', target: t.id });
-          w2.emit('fx', { name: 'boltBlocked', x: p.x, y: p.y });
-          return true;
-        }
-        IT.Status.add(w2, t, 'stun', B.stun, { src: p.src, ability: 'stunbolt' });
-        IT.Combat.damage(w2, { src: p.src, target: t, ability: 'stunbolt', type: 'magical', amount: B.damage });
-        w2.emit('hit', { src: p.src, target: t.id, ability: 'stunbolt' });
-        w2.emit('bolt', { unit: p.src, phase: 'hit', target: t.id });
-        w2.emit('fx', { name: 'boltHit', x: p.x, y: p.y });
-        return true;
-      },
-    });
-  }
-
-  function tickBolt(w, d) {
-    const B = GM().DUMMY.bolt, b = d.ai.bolt, h = w.hero;
-    if (!d.scenario.stunBolt) return;
-    if (b.active) {
-      if (disabled(d)) return cancelBolt(w, d, 'disabled');
-      if (!h || U.dist(d, h) > B.range + 200) return cancelBolt(w, d, 'range');
-      d.facing = U.angle(d, h);
-      if (w.t >= b.castEnd - 1e-9) {
-        b.active = false; b.readyAt = w.t + B.cooldown;
-        setAnim(d, 'idle');
-        launchBolt(w, d, h);
-      }
-      return;
-    }
-    if (!h || w.t < b.readyAt || disabled(d) || hasS(d, 'silence')) return;
-    if (hasS(h, 'lift') || U.dist(d, h) > B.range || !canSee(w, d, h)) return;
-    issueStop(w, d);
-    d.ai.moving = false;
-    b.active = true; b.castEnd = w.t + B.castTime;
-    d.facing = U.angle(d, h);
-    setAnim(d, 'cast');
-    w.emit('bolt', { unit: d.id, phase: 'start', target: h.id });
-    w.emit('fx', { name: 'boltTelegraph', x: d.x, y: d.y, unit: d.id, target: h.id, dur: B.castTime });
-  }
-
-  // returns true while the dummy is busy blinking (tell active)
-  function tickBlink(w, d) {
-    const bl = d.ai.blink, sc = d.scenario, tell = GM().DUMMY.blink.tell;
-    if (bl.used) return false;
-    if (!bl.pending && sc.dummyEscape === 'blink_after_seconds' && w.t - bl.t0 >= sc.blinkAfter) bl.pending = true;
-    if (!bl.pending) return false;
-    if (!canBlink(d)) { if (bl.tellEnd) { bl.tellEnd = 0; setAnim(d, 'idle'); } return false; }
-    if (!bl.tellEnd) {
-      bl.tellEnd = w.t + tell;
-      cancelBolt(w, d, 'blink');
-      issueStop(w, d); d.ai.moving = false;
-      setAnim(d, 'blink');
-      w.emit('fx', { name: 'blinkTell', x: d.x, y: d.y, unit: d.id, dur: tell });
-      return true;
-    }
-    if (w.t < bl.tellEnd - 1e-9) return true;
-    const sp = blinkSpot(w, d), fx = d.x, fy = d.y;
-    d.x = sp.x; d.y = sp.y;
-    d.orders.length = 0; d.path.length = 0;
-    bl.used = true; bl.pending = false; bl.tellEnd = 0;
-    d.ai.home = { x: sp.x, y: sp.y };
-    setAnim(d, 'idle');
-    w.emit('blink', { unit: d.id, fromX: fx, fromY: fy, x: sp.x, y: sp.y });
-    return false;
-  }
-
-  function tickWander(w, d) {
-    const a = d.ai;
-    if (!(d.ms > 0)) return;
-    if (a.moving) {
-      if (d.orders.length) return;
-      a.moving = false; a.pauseUntil = w.t + 1 + w.rng() * 1.5; return;
-    }
-    if (w.t < a.pauseUntil) return;
-    for (let i = 0; i < 8; i++) {
-      const ang = w.rng() * U.TAU, r = Math.sqrt(w.rng()) * 500;
-      const p = fixPoint(w, a.home.x + Math.cos(ang) * r, a.home.y + Math.sin(ang) * r);
-      if (p && Math.hypot(p.x - a.home.x, p.y - a.home.y) <= 500) { issueMove(w, d, p.x, p.y); a.moving = true; return; }
-    }
-    a.pauseUntil = w.t + 1;
-  }
-
-  function coverSpots(w, d, h) {
-    const cover = (w.map && w.map.cover) || [], out = [];
-    for (const c of cover) {
-      if (U.dist(c, d.ai.home) > 900) continue;
-      if (h && los(w, c.x, c.y, h.x, h.y)) continue;
-      out.push(c);
-    }
-    return out;
-  }
-
-  function tickDodge(w, d) {
-    const a = d.ai;
-    if (a.behavior !== 'evasive' || !IT.Status.canMove(d)) return false;
-    for (const t of w.ents) {
-      if (t.dead || !t.danger || t.age < d.reaction) continue;
-      if (t.id === a.dodgeId && a.dodgeUntil > w.t) return true;
-      if (t.id === a.dodgeId) continue;
-      const dest = dodgeTarget(d, t.danger, w.map, w.t);
-      if (!dest) continue;
-      issueMove(w, d, dest.x, dest.y);
-      a.dodgeId = t.id; a.dodgeUntil = w.t + Math.hypot(dest.x - d.x, dest.y - d.y) / d.ms + 0.1;
-      a.moving = false; a.mode = 'dodge'; a.hideSpot = null;
-      w.emit('fx', { name: 'dodge', x: d.x, y: d.y, unit: d.id });
-      return true;
-    }
-    if (a.dodgeUntil > w.t && d.orders.length) return true;
-    if (a.mode === 'dodge') { a.mode = 'idle'; a.nextThink = 0; }
-    return false;
-  }
-
-  function tickEvasive(w, d) {
-    const a = d.ai, h = w.hero;
-    if (!(d.ms > 0) || !h) return;
-    if (!w.map || !w.map.cover || !w.map.cover.length) return tickWander(w, d);
-    if (a.mode === 'peek') {
-      if (w.t >= a.peekUntil) { a.mode = 'hide'; a.nextPeek = w.t + 3 + w.rng() * 2; a.hideSpot = null; a.nextThink = 0; }
-      return;
-    }
-    if (a.mode !== 'hide') { a.mode = 'hide'; a.nextPeek = w.t + 3 + w.rng() * 2; a.nextThink = 0; }
-    if (w.t >= a.nextPeek) {
-      let best = null, bd = Infinity;
-      for (let i = 0; i < 16; i++) {
-        const ang = w.rng() * U.TAU, r = Math.sqrt(w.rng()) * 900;
-        const p = fixPoint(w, a.home.x + Math.cos(ang) * r, a.home.y + Math.sin(ang) * r);
-        if (!p || !los(w, p.x, p.y, h.x, h.y)) continue;
-        const dd = U.dist(p, d);
-        if (dd < bd) { bd = dd; best = p; }
-      }
-      if (best) { issueMove(w, d, best.x, best.y); a.mode = 'peek'; a.peekUntil = w.t + 1.5; }
-      else a.nextPeek = w.t + 3 + w.rng() * 2;
-      return;
-    }
-    if (w.t < a.nextThink) return;
-    a.nextThink = w.t + 0.5;
-    if (a.hideSpot && !los(w, a.hideSpot.x, a.hideSpot.y, h.x, h.y)) {
-      if (!d.orders.length && U.dist(d, a.hideSpot) > 20) issueMove(w, d, a.hideSpot.x, a.hideSpot.y);
-      return;
-    }
-    let best = null, bd = Infinity;
-    for (const c of coverSpots(w, d, h)) { const dd = U.dist(c, d); if (dd < bd) { bd = dd; best = c; } }
-    a.hideSpot = best;
-    if (best && U.dist(d, best) > 20) issueMove(w, d, best.x, best.y);
-  }
-
-  // BKB reaction: fires once the timer set by the hero's disable cast elapses; vetoed while stunned/hexed/on cd.
-  function tickBkb(w, d) {
-    const a = d.ai;
-    if (a.bkbAt == null || w.t < a.bkbAt - 1e-9) return;
-    a.bkbAt = null;
-    const A = IT.Abilities, def = A && A.get('bkb');
-    if (!def || !d.items || A.check(w, d, 'bkb')) return;
-    A.spend(w, d, 'bkb');
-    const it = d.items.find(x => x && x.id === 'bkb'); if (it) it.cd = d.cd.bkb;
-    w.emit('itemUse', { unit: d.id, ability: 'bkb' });
-    def.cast(w, d, {});
-  }
-
-  function tickDummy(w, d) {
-    const a = d.ai;
-    tickBkb(w, d);
-    if (tickBlink(w, d)) return;
-    if (disabled(d)) { if (a.bolt.active) cancelBolt(w, d, 'disabled'); return; }
-    tickBolt(w, d);
-    if (a.bolt.active) return;
-    if (tickDodge(w, d)) return;
-    if (!IT.Status.canMove(d)) return;
-    if (a.behavior === 'wander') tickWander(w, d);
-    else if (a.behavior === 'evasive') tickEvasive(w, d);
-  }
-
   function tickSpirit(w, s) {
     if (w.t >= s.expires) { w.emit('fx', { name: 'spiritExpire', x: s.x, y: s.y, unit: s.id }); w.remove(s); return; }
     if (!w.get(s.owner)) { w.remove(s); return; }
@@ -451,12 +289,12 @@
   }
 
   IT.World.system('unitsAI', 60, (w) => {
-    for (const e of w.ents) {
-      if (e.dead) continue;
-      if (e.kind === 'dummy' && e.ai) tickDummy(w, e);
-      else if (e.kind === 'spirit' && e.ai) tickSpirit(w, e);
-    }
+    for (const e of w.ents) if (!e.dead && e.kind === 'spirit' && e.ai) tickSpirit(w, e);
   });
 
-  IT.Units = { spawnDummy, spawnSpirit, respawn, resetCombo, dummies, dodgeTarget, blinkSpot, spiritAction };
+  IT.Units = {
+    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, dummies, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    // internals shared with enemy.js (not API)
+    _h: { newAI, DISABLES, aimedAt, walkable, los, canSee, seenByHero, setAnim, issueMove, issueStop, fixPoint, disabled, canBlink, resetItems },
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -45,7 +45,7 @@ function rig(o) {
   const casts = [], fails = [];
   w.on('cast', e => { if (e.unit === h.id) casts.push(e.ability); });
   w.on('fail', e => fails.push(e.reason));
-  const g2 = { clearRect() {} };
+  const g2 = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
   const r = {
     IT, In, w, h, dummy, mw, cam, casts, fails, T, L,
     at(ms) {   // advance sim (30 Hz) + frame hook (60 Hz) to absolute time ms

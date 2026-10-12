@@ -3,7 +3,7 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const U = () => IT.U;
-  const UNITS = { hero: 1, dummy: 1, spirit: 1 };
+  const UNITS = { hero: 1, dummy: 1, enemy: 1, spirit: 1 };
   const ORBN = { Q: ['quas', 'invoker_quas'], W: ['wex', 'invoker_wex'], E: ['exort', 'invoker_exort'] };
 
   function attrs(ctx) {
@@ -30,6 +30,19 @@
     return { attr: a, base, maxHp: h.StatusHealth + 22 * Math.floor(a.str + 1e-9), maxMana: h.StatusMana + 12 * Math.floor(a.int + 1e-9) };
   }
 
+  // Scenario `preinvoked:[spell, spell?]` (C3): put those spells in the invoke slots (slot 0 = the "last invoked" one) and set the
+  // orb row to the first spell's recipe when every one of its orbs is unlocked at this loadout. Also used by ranked.apply().
+  function applyPreinvoked(hero, lo) {
+    const pre = IT.Loadout.fixPreinvoked(lo && lo.preinvoked);
+    hero.inv.slots = [pre[0] || null, pre[1] || null];
+    hero.inv.orbs = [];
+    for (const s of pre) {
+      const rec = IT.GAME.SPELL_ORBS[s];
+      if (rec && rec.split('').every(k => hero.ctx.eff[ORBN[k][0]] >= 1)) { hero.inv.orbs = rec.split(''); break; }
+    }
+    return hero;
+  }
+
   function create(w, loadout, x, y) {
     const lo = IT.Loadout.normalize(loadout || IT.Loadout.default());
     const ctx = IT.Loadout.ctx(lo), b = build(ctx), h = IT.DOTA.hero, bs = b.base;
@@ -46,6 +59,7 @@
       skin: lo.skin, name: 'Invoker',
     });
     w.hero = e; w.ctx = ctx; w.loadout = lo;
+    if (lo.preinvoked && lo.preinvoked.length) applyPreinvoked(e, lo);
     return e;
   }
 
@@ -114,5 +128,9 @@
     }
   });
 
-  IT.Hero = { create, refresh, attackTime, attackPoint, attrs, maxHp: ctx => build(ctx).maxHp, maxMana: ctx => build(ctx).maxMana };
+  // Level-up rules view (plan G2-G4): IT.Hero.levelInfo(lvl, {quas,wex,exort}, scepter) -> { points, spent, bank, maxPerOrb, orbCap,
+  // invokeCd, canRaise:{}, locked:{}, talentsAllowed:{}, ... } (see IT.RULES.levelInfo)
+  const levelInfo = (lvl, orbs, scepter) => IT.RULES.levelInfo(lvl, orbs, scepter);
+
+  IT.Hero = { create, refresh, levelInfo, applyPreinvoked, attackTime, attackPoint, attrs, maxHp: ctx => build(ctx).maxHp, maxMana: ctx => build(ctx).maxMana };
 })(typeof window !== 'undefined' ? window : globalThis);

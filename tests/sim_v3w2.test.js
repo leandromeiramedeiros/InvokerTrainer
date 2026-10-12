@@ -346,12 +346,15 @@ test('issue() never silently rejects: always emits fail with a reason', () => {
   assert.equal(e.evs('fail').length, n + 1);
   assert.equal(e.evs('fail').pop().reason, 'disabled');
 });
-test('move during wind-up cancels it immediately', () => {
+test('A3: move during wind-up keeps the swing; Stop cancels it immediately', () => {
   const e = env();
   e.dummy(300, 0);
   e.run(0.1);
   assert.ok(e.h._wind);
   e.IT.Orders.issue(e.w, e.h, { type: 'move', x: -500, y: 0 });
+  assert.ok(e.h._wind);                      // the wind-up survives a move order (it lands, then the hero walks)
+  assert.ok(e.h.attack.next > 0);
+  e.IT.Orders.issue(e.w, e.h, { type: 'stop' });
   assert.equal(e.h._wind, null);
   assert.equal(e.h.attack.next, 0);
 });
