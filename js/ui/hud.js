@@ -207,7 +207,7 @@
     const { h } = IT.UI, t = IT.t;
     R.rkNum = h('div', { class: 'rknum' });
     R.rkName = h('b', { class: 'rkname' }); R.rkObj = h('span', { class: 'rkobj' });
-    R.rkBadge = h('span', { class: 'rkdiff' }); R.rkTip = h('span', { class: 'rktip' });
+    R.rkBadge = h('span', { class: 'rkdiff' }); R.rkTip = h('span', { class: 'rktip' }); R.rkMeta = h('span', { class: 'rkmeta' });
     R.rkGo = h('div', { class: 'rkhint', text: t('hud.rkHint') });   // countdown ends on the first gameplay action (no button)
     R.rkCombo = h('div', { class: 'rkcombo' });
     R.rkTl = h('div', { class: 'rktl', style: { display: 'none' } });   // F1 step-by-step timeline
@@ -219,7 +219,7 @@
     R.rkRn = h('div', { class: 'rkt' }, R.rkRl, R.rkRv);
     R.rkSc = h('div', { class: 'rkt sc' }, h('span', { text: t('hud.score') }), R.rkSv, R.rkMed);
     R.rkRow = h('div', { class: 'rkrow' }, R.rkTm, R.rkSc, R.rkRn);
-    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkGo, h('div', { class: 'rkscen' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkObj, R.rkTip), R.rkInfo, R.rkCombo, R.rkTl, R.rkRow);
+    return h('div', { class: 'rkp', style: { display: 'none' } }, R.rkNum, R.rkGo, h('div', { class: 'rkscen' }, h('div', { class: 'rknm' }, R.rkName, R.rkBadge), R.rkMeta, R.rkObj, R.rkTip), R.rkInfo, R.rkCombo, R.rkTl, R.rkRow);
   }
   // ordered action list of the running combo / scenario: [{ k:'spell'|'item'|'attack'|'move'|'pos', id }]
   function rkActions(rk) {
@@ -578,6 +578,9 @@
     R.rkRn.style.display = rk.runLeft == null && rk.turns == null ? 'none' : '';
     R.rkSc.style.display = rk.score == null ? 'none' : '';   // practice: no score
     setText(R.rkName, txt(rk.scenario), ca, 'rkname'); setText(R.rkObj, txt(rk.objective), ca, 'rkobj');
+    // scenario level, v5 map name, ranked twist (when present)
+    const meta = [rk.level ? IT.t('hud.rkLevel', { n: rk.level }) : '', txt(rk.mapName), rk.twistName ? IT.t('hud.rkTwist') + ' ' + txt(rk.twistName) : ''].filter(Boolean).join('  |  ');
+    setText(R.rkMeta, meta, ca, 'rkmeta'); R.rkMeta.style.display = meta ? '' : 'none';
     const hints = !!(rk.hints && S.hints), ord = !!S.comboOrder, def = H.c.w.combo && H.c.w.combo.def, hm = hudMode();
     const tk = rk.id + '|' + rk.n + '|' + (H.scnSeq || 0) + '|' + (def ? def.id : '');
     if (!H.trk || H.trk.key !== tk) { rkStartTracker(rk, tk); ca.rkCk = null; }   // new scenario / redo: restart step progress
@@ -589,7 +592,9 @@
       if (hm === 'steps') { rkBuildTimeline(R, hints); R.rkTlKey = null; } else { R.rkTl.textContent = ''; R.rkTls = []; R.rkTl.style.display = 'none'; }
       // all modes: win (scenario `win` text; the objective line already states the goal) + lose conditions
       const sc = IT.SCENARIOS && IT.SCENARIOS.get ? IT.SCENARIOS.get(rk.id) : null, HS = IT.HudSteps;
-      const win = sc && sc.win ? locT(sc.win) : '', lose = sc && sc.lose ? locT(sc.lose) : HS.loseKeys(sc, rk.timeLeft != null).filter(k => IT.hasT('f1.lose.' + k)).map(k => t('f1.lose.' + k)).join(', ');
+      // lose: the scenario's own line (the 'method' rule in words) + the generic fail keys
+      const gen = HS.loseKeys(sc, rk.timeLeft != null).filter(k => !(sc && sc.lose && k === 'method') && IT.hasT('f1.lose.' + k)).map(k => t('f1.lose.' + k));
+      const win = sc && sc.win ? locT(sc.win) : '', lose = (sc && sc.lose ? [locT(sc.lose)] : []).concat(gen).filter(Boolean).join(', ');
       R.rkWin.textContent = win ? t('f1.win') + ' ' + win : '';
       R.rkLoseL.textContent = lose ? t('f1.lose') + ' ' + lose : '';
       R.rkWin.style.display = win ? '' : 'none'; R.rkLoseL.style.display = lose ? '' : 'none';

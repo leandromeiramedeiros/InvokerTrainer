@@ -66,6 +66,7 @@
 .dchat.dc-hurt,.dchat.dc-comboFail{border-color:var(--bad)}.dchat.dc-hurt::after,.dchat.dc-comboFail::after{border-top-color:var(--bad)}
 
 .rknm{display:flex;align-items:center;justify-content:center;gap:calc(var(--g)*.6)}
+.rkmeta{display:block;color:var(--dim);font-size:max(calc(var(--g)*.85),10px);letter-spacing:.06em;text-transform:uppercase}
 .rkdiff{pointer-events:auto;cursor:help;padding:.1em .5em;border:.15em solid var(--dim);background:#1d1236;color:var(--ink);font-size:max(calc(var(--g)*.85),9px);letter-spacing:.08em;text-transform:uppercase}
 .rkdiff.d-ian,.rkdiff.d-easy{border-color:var(--good)}.rkdiff.d-common{border-color:var(--gold)}.rkdiff.d-hard,.rkdiff.d-bambam{border-color:var(--bad)}
 .rktip{color:var(--ink);font-size:max(calc(var(--g)*1.35),13px);font-style:italic}

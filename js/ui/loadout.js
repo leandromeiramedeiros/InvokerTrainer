@@ -17,7 +17,8 @@
   const scenarios = () => IT.SCENARIOS || [];
   const scnOf = id => (id == null ? null : scenarios().find(s => s.id === id) || null);
   const scnName = s => (s.name && typeof s.name === 'object' ? (s.name[IT.lang] || s.name.en) : s.name) || IT.t(s.nameKey || ('scn.' + s.id));
-  const scnTip = s => (s.descKey ? IT.t(s.descKey) : '');
+  const scnLoc = v => (v && typeof v === 'object' ? (v[IT.lang] || v.en) : v) || '';
+  const scnTip = s => scnLoc(s.desc || s.goal || s.tip) || (s.descKey ? IT.t(s.descKey) : '');
 
   const mapOk = id => !!(id && IT.Maps && IT.Maps.ids && IT.Maps.ids().indexOf(id) >= 0);
   function fresh() {
@@ -334,11 +335,11 @@
     function renderScenario() {
       scnBox.textContent = '';
       const list = scenarios();
-      const opts = [{ id: null, name: t('lo.freePlay'), tip: t('lo.freePlay.d') }].concat(list.map(s => ({ id: s.id, name: scnName(s), tip: scnTip(s) })));
+      const opts = [{ id: null, name: t('lo.freePlay'), tip: t('lo.freePlay.d') }].concat(list.map(s => ({ id: s.id, name: scnName(s), tip: scnTip(s), lvl: s.level })));
       scnBox.appendChild(h('div', { class: 'row wrap scns' }, opts.map(o => h('button', {
-        type: 'button', class: 'chipb' + (st.scenario === o.id ? ' on' : ''), 'data-tip': o.tip, text: o.name,
+        type: 'button', class: 'chipb' + (st.scenario === o.id ? ' on' : ''), 'data-tip': o.tip,
         onclick: () => { st.scenario = o.id; changed(); },
-      }))));
+      }, o.lvl ? h('span', { class: 'lvb', text: String(o.lvl) }) : null, o.name))));
       if (!list.length) scnBox.appendChild(h('p', { class: 'fine', text: t('lo.noScenarios') }));
       const n = avail();
       if (n >= 0) scnBox.appendChild(h('p', { class: 'fine ' + (n ? 'ok' : 'warn'), text: n ? t('lo.combosAvail', { n }) : t('lo.noCombos') }));

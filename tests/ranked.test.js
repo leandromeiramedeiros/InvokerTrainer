@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const load = require('./_load.js');
-const FILES = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/difficulty.js', 'js/data/scenarios.js', 'js/data/ranks.js',
+const FILES = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/difficulty.js', 'js/data/scenarios.js', 'js/data/ranks.js', 'js/data/i18n.js', 'js/data/i18n/s3.js', 'js/data/i18n/f1.js', 'js/data/i18n/scn.js',
   'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js',
   'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js',
   'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/sim/stats.js', 'js/sim/ranked.js'];
@@ -109,7 +109,7 @@ test('run: 10 s countdown freezes the world, then play; solving moves on to the 
     assert.ok(m.events.some(e => e[0] === 'comboDone' && e[1].id === id0));
     assert.ok(m.events.some(e => e[0] === 'scnResult' && e[1].ok));
     assert.equal(R.hud(w).phase, 'result');
-    thaw(run, 20);   // result hold, then the next scenario starts in a countdown
+    thaw(run, Math.ceil(R.RESULT_HOLD * 30) + 2);   // result hold, then the next scenario starts in a countdown
     assert.equal(run.n, 1); assert.equal(run.phase, 'countdown');
     assert.equal(w.hero.hp, w.hero.maxHp);
     assert.ok(run.dummies.length > 0 && run.dummies.every(d => !d.dead));

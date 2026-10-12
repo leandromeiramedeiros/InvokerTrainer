@@ -218,6 +218,7 @@ h3{margin:0 0 .5em;color:var(--mag);font-size:.9em;text-transform:uppercase;lett
 .iopt:hover{border-color:var(--mag)}.iopt.on{border-color:var(--gold);background:#3a2810}.iopt.dis{opacity:.4;cursor:not-allowed}
 .chipb{padding:.35em .9em;background:var(--panel2);border:2px solid var(--line);font-size:.85em}
 .chipb.on{border-color:var(--gold);background:#3a2810;color:var(--gold)}
+.chipb .lvb{display:inline-block;min-width:1.5em;margin-right:.45em;padding:0 .3em;border:1px solid var(--line);color:var(--gold);font-size:.85em;text-align:center}
 .skins{gap:.6em}
 .skin{display:flex;flex-direction:column;align-items:center;gap:.3em;padding:.4em;background:var(--panel2);border:2px solid var(--line);font-size:.8em}
 .skin .por{width:4.2em;height:4.2em}.skin.on{border-color:var(--gold);color:var(--gold)}
