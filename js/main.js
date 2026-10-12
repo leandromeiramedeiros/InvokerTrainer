@@ -225,7 +225,7 @@
     },
     spawn() {
       if (!g || g.mode !== 'sandbox') return;
-      const alive = g.w.query(e => e.kind === 'dummy');
+      const alive = IT.Units.trainers(g.w);
       if (alive.length >= 8 || g.run) return;
       const spots = g.w.map.spawns.dummies;
       for (const s of spots) if (!alive.some(d => Math.hypot(d.x - s.x, d.y - s.y) < 150)) {
@@ -242,7 +242,7 @@
     placeEnemy(p) {
       if (!g || g.mode !== 'sandbox' || g.run || !p) return false;
       const EC = IT.EnemyCard;
-      if (g.w.query(e => e.kind === 'enemy').length >= EC.WORLD_CAP) { UI.toast(IT.t('toast.enemyFull', { n: EC.WORLD_CAP }), 'bad'); return false; }
+      if (g.w.query(e => e.kind === 'enemy' && !e.refill).length >= EC.WORLD_CAP) { UI.toast(IT.t('toast.enemyFull', { n: EC.WORLD_CAP }), 'bad'); return false; }
       if (!EC.place(g.opts.enemy, g.w, g.placed, p.x, p.y, g.lo.skin)) { UI.toast(IT.t('toast.enemyBad'), 'bad'); return false; }
       g.placed++; UI.toast(IT.t('toast.enemyPlaced'), 'good'); return true;
     },
@@ -250,7 +250,7 @@
       if (!g || g.mode !== 'sandbox') return;
       if (g.run) { g.run.redo(); UI.toast(IT.t('toast.dummiesReset'), 'info'); return; }   // scenario sandbox: replay it
       if (g.R && g.R.clearVfx) g.R.clearVfx();
-      const ds = g.w.query(e => e.kind === 'dummy');
+      const ds = IT.Units.trainers(g.w);
       ds.forEach((d, i) => {
         if (i >= g.nDummies) { g.w.remove(d); return; }
         const dl = g.w.map.spawns.dummies, sp = dl[i % dl.length];

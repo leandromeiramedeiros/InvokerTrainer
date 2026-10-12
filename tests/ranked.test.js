@@ -137,7 +137,7 @@ test('run: the optional runSeconds clock ends the run, emits modeEnd, records th
   const m = mk({ runSeconds: 70 }), { run, w } = m;
   for (let i = 0; i < 3000 && !run.ended; i++) { if (run.frozen()) run.tick(1 / 30); else w.step(); }
   assert.equal(run.ended, true);
-  assert.equal(R.RUN_SECONDS, 300);
+  assert.equal(R.RUN_SECONDS, undefined, 'dead constant gone');
   const end = m.events.filter(e => e[0] === 'modeEnd');
   assert.equal(end.length, 1);
   const s = end[0][1];

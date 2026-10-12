@@ -15,6 +15,7 @@
   const REPICK_GAP = 2.5;
   const TARGET_KINDS = { hero: 1, spirit: 1, enemy: 1 };   // dummies are scarecrows: towers ignore them
   const ALLY_HEROES = { hero: 1, enemy: 1 };
+  const allyHero = e => !!ALLY_HEROES[e.kind] && !e.refill;   // training dummies (refill flag) are scarecrows to towers: no aura, no aggro, no target
 
   function spawn(w, o) {
     const tier = Math.max(1, Math.min(4, o.tier | 0 || 1)), T = TIERS[tier];
@@ -59,7 +60,7 @@
       for (const tw of w.ents) {
         if (tw.dead || tw.kind !== 'tower' || tw.destroyed) continue;
         // aggro: an enemy hero attacks a hero allied to this tower within 500 of it -> switch at once
-        if (s.team !== tw.team && ALLY_HEROES[s.kind] && t.team === tw.team && ALLY_HEROES[t.kind] && !t.building &&
+        if (s.team !== tw.team && ALLY_HEROES[s.kind] && t.team === tw.team && allyHero(t) && !t.building &&
           Math.hypot(t.x - tw.x, t.y - tw.y) <= AGGRO_R && valid(w, tw, s)) tw.attack.target = s.id;
         // de-aggro: current target attacks one of its own allies -> re-pick (at most once per 2.5 s)
         else if (tw.attack.target === s.id && t.team === s.team && !t.building && w.t - tw._lastRepick >= REPICK_GAP) { tw._lastRepick = w.t; tw.attack.target = null; }
@@ -73,7 +74,7 @@
     return !(IT.Status && IT.Status.has && IT.Status.has(e, 'lift'));
   }
   function valid(w, tw, e) {
-    if (!e || e.team === tw.team || !TARGET_KINDS[e.kind] || !attackable(e)) return false;
+    if (!e || e.team === tw.team || !TARGET_KINDS[e.kind] || e.refill || !attackable(e)) return false;
     if (Math.hypot(e.x - tw.x, e.y - tw.y) > tw.attack.range + (e.radius || 0)) return false;
     return !IT.Vision || IT.Vision.canSee(w, tw, e);
   }
@@ -118,7 +119,7 @@
     for (const tw of w.ents) if (!tw.dead && tw.kind === 'tower' && !tw.destroyed) { any = true; break; }
     if (!any) return;
     for (const e of w.ents) {
-      if (e.dead || !ALLY_HEROES[e.kind] || !(e.hp > 0)) continue;
+      if (e.dead || !allyHero(e) || !(e.hp > 0)) continue;
       let ba = 0, br = 0;
       for (const tw of w.ents) {
         if (tw.dead || tw.kind !== 'tower' || tw.destroyed || tw.team !== e.team) continue;

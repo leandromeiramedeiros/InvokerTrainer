@@ -10,13 +10,13 @@ test('spawnDummy stats per preset', () => {
   for (const p of ['training', 'standard', 'expert']) {
     const P = IT.GAME.DUMMY_PRESETS[p];
     const d = IT.Units.spawnDummy(w, { x: 100, y: 200, preset: p, skin: 'renan' });
-    assert.strictEqual(d.kind, 'dummy'); assert.strictEqual(d.team, 1);
+    assert.strictEqual(d.kind, p === 'training' ? 'dummy' : 'enemy'); assert.strictEqual(d.refill, true); assert.strictEqual(d.team, 1);   // mobile presets run on the enemy path
     assert.strictEqual(d.maxHp, P.hp); assert.strictEqual(d.armor, P.armor); assert.strictEqual(d.base.ms, P.ms);
     assert.strictEqual(d.magicRes, P.magicRes); assert.strictEqual(d.name, 'Renan');
     assert.strictEqual(d.ai.behavior, P.behavior); assert.strictEqual(JSON.stringify(d.ai.home), JSON.stringify({ x: 100, y: 200 }));
     assert.strictEqual(d.scenario.dummyEscape, 'none'); assert.strictEqual(d.vision, IT.GAME.DUMMY.vision);
   }
-  assert.strictEqual(IT.Units.dummies(w).length, 3);
+  assert.strictEqual(IT.Units.trainers(w).length, 3); assert.strictEqual(IT.Units.dummies(w).length, 1);
 });
 
 test('spawnSpirit stats at exort/quas 1 and 8', () => {

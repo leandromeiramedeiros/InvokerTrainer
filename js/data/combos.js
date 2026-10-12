@@ -76,6 +76,8 @@
   const ssW = T => Math.max(0, T.lift - T.ss + MARGIN), metW = T => Math.max(0, T.lift - T.meteor + MARGIN), zero = () => 0;
   const tornadoBlast = W.blastDrop(0, metW);
   const afterHit = (T, w) => (w < 0.05 ? L('right as the Tornado hits', 'assim que o Tornado acertar') : L(`${fE(w)} s after the Tornado hits`, `${fP(w)} s após o Tornado acertar`));
+  // Tornado after a Sun Strike: the lift starts when the tornado is within its radius of the target, so it must hit just after the strike lands
+  const sunTornadoW = (T, env) => Math.max(0, T.ss - Math.max(0, dist(env) - T.tornadoRadius) / T.tornadoSpeed + MARGIN);
   const metBlastW = T => Math.max(0.2, T.meteor - travel(T) + MARGIN);
 
   const COMBOS = [
@@ -164,6 +166,11 @@
       L('The wall only covers the dummy from 150 to 260 units away: step into range, then Ice Wall and EMP.',
         'A parede só cobre o alvo entre 150 e 260 de distância: entre no alcance, use Ice Wall e depois EMP.'),
       14, [pos(150, 260), hit('icewall', { within: 6 }), hit('emp', { at: W.after(1, 0.3, 2.0) })]),
+    C('i_sunstrike_tornado', 'intermediate', L('Sun Strike → Tornado after the landing', 'Sun Strike → Tornado após a queda'),
+      T => { const w = sunTornadoW(T); return L(
+        `Sun Strike first: it needs ${fE(T.ss)} s and cannot hit a lifted unit. Cast the Tornado about ${fE(w)} s after it so the lift starts just after the strike lands, then the target cannot walk out of your follow-up.`,
+        `Sun Strike primeiro: ele demora ${fP(T.ss)} s e não acerta alvos no ar. Lance o Tornado cerca de ${fP(w)} s depois para o alvo subir logo após a queda do raio, sem poder sair do seu follow-up.`); },
+      14, [hit('sunstrike'), hit('tornado', { at: (T, env) => ({ ref: 0, wait: sunTornadoW(T, env), early: 0.1, late: 0.7 }) })]),
     C('i_sunstrike_chain', 'intermediate', L('Sun Strike → Cold Snap on landing', 'Sun Strike → Cold Snap ao cair'),
       T => L(
         `Sun Strike lands ${fE(T.ss)} s after the cast. Cold Snap stuns for ${fE(T.csFreeze)} s, so cast it about ${fE(T.ss - T.csFreeze)} s after the Sun Strike: the freeze then holds the target in the beam.`,
@@ -291,6 +298,14 @@
         'Dê Blink de fora do alcance, depois Chaos Meteor e Deafening Blast antes de ele reagir.'),
       16, [item('blink'), hit('chaosmeteor', { at: W.after(0, 0.1, 1.5, { early: 0.1 }) }),
         hit('deafeningblast', { at: (T, env) => ({ ref: 1, wait: metBlastW(T), early: 0.4, late: 1.0 }) })]),
+    C('t_blink_full_refresher', 'items', L('Blink → full combo → Refresher', 'Blink → combo completo → Refresher'),
+      T => L(
+        `The full pro opener: Blink in, Tornado, EMP at once, Meteor (${fE(metW(T))} s after the hit), Blast as the dummy lands (${fE(T.lift)} s lift), then Refresher and fire the Meteor and Blast again.`,
+        `A abertura completa dos pros: Blink, Tornado, EMP na hora, Meteor (${fP(metW(T))} s após o acerto), Blast quando o alvo cair (Tornado de ${fP(T.lift)} s), depois Refresher e dispare Meteor e Blast de novo.`),
+      38, [item('blink'), hit('tornado', { at: W.after(0, 0.1, 1.5, { early: 0.1 }) }), hit('emp', { at: W.emp(1) }), hit('chaosmeteor', { at: W.drop('meteor', 1) }), hit('deafeningblast', { at: W.blastDrop(1, metW) }),
+        item('refresher', { at: W.after(4, 0.3, 2.0, { early: 0.3 }) }),
+        hit('chaosmeteor', { at: W.after(5, 0.2, 2.0, { early: 0.2 }) }),
+        hit('deafeningblast', { at: (T, env) => ({ ref: 6, wait: metBlastW(T), early: 0.4, late: 1.0 }) })]),
   ];
 
   // Tier base points rise with difficulty: items (the hardest: timing + an item) pays more than advanced.

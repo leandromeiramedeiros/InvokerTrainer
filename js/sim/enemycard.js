@@ -101,9 +101,9 @@
   // place the k-th enemy of the session at (x, y): card row k % max(count,1); null when the point is not walkable or the world is full
   function place(card, w, k, x, y, dummySkin) {
     if (!w.map.walkable(x, y)) return null;
-    if (w.query(e => e.kind === 'enemy').length >= WORLD_CAP) return null;
+    if (w.query(e => e.kind === 'enemy' && !e.refill).length >= WORLD_CAP) return null;
     const c = normalize(card), i = k % Math.max(1, c.count), s0 = spec(c, i, x, y, dummySkin, null, k);
-    const nth = w.query(e => e.kind === 'enemy' && e.skin === s0.skin).length;
+    const nth = w.query(e => e.kind === 'enemy' && !e.refill && e.skin === s0.skin).length;
     return IT.Units.spawnEnemy(w, nth ? spec(c, i, x, y, dummySkin, nth, k) : s0);
   }
 

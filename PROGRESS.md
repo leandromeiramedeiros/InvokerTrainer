@@ -1,8 +1,8 @@
-## ROADMAP v5 (2026-10-12, overnight run) -- see docs/AUDIT-v5.md for the batch table
-Done+pushed: MAPS v5 real Dota map (tools/dota_extract.py -> js/data/dotaworld.js; 28 windows + 'dota'), B enemies, A 39 scenarios on v5 maps, C end splash/PNG/infinite.
-D (done, uncommitted): combo timing windows from KV (step.at), early/late/order feedback (comboHint + cfail.early/late), anyOrder groups, 6 new combos, items tier base 750; tests/combo_v5.test.js.
-Next in order (one Sonnet agent each; tests + browser smoke + push after each; stop at 96% usage): E hood picker F3 + Free Play enemy card + picker difficulty badge; D combos; F HUD chips/Shiva 900/'dota' perf/map name; S sounds closer to Dota 2; P points system (single pool, talents 1 pt, 0 left at 30 -- research real rules first); G dead code; then FINAL Fable holistic audit (plan vs built) -> fix batches -> PROGRESS.
-Known: hero auto-attack (800 acquire) can steal 'kill with X' kills; splash burst overlaps title briefly; scenario WIP branch wip/scenarios-oldmap is now obsolete (salvaged in A).
+## ROADMAP v5 (2026-10-12, overnight run) -- COMPLETE. Batch table: docs/AUDIT-v5.md
+Pushed: MAPS v5 (real Dota map via tools/dota_extract.py), B enemies in scenarios, A scenarios on v5 maps, C end splash/PNG/infinite, E hood picker + Free Play enemy card + badges, D combo timing windows/feedback/staples, F HUD chips/Shiva 900/'dota' perf, S Dota-like SFX (IT.SFX.board()), P single point pool (29 at lvl 30, 0 left), G dead code.
+Final Fable audit -> H1 (kill-steal, hero BKB KV reduce, bolt combo), H2 (vision 1800/800 + notice delay, 4 hold/escape scenarios -> 43, jit lvl 1-4, splash), H3 (one enemy AI path incl. Free Play presets, +2 staples -> 51 combos).
+Not taken (user rules): Invoke CD table (PLAN-min G1) vs KV 7-0.3*sum; orb cap 7 / 29 pts vs Dota 8 / 33.
+Open: naive test bot fails some hard/bambam seeds; forge spirits still auto-attack in kill_with; levelUp SFX unwired (no in-run level-up); SFX tuned by measurement, not by ear; enemies share vision with Dire towers.
 
 # PROGRESS (v4 run, 2026-10-12)
 Plan: docs/PLAN-min.md (user plan + addenda). Contract: docs/PLAN-v4.md. Maps contract: docs/MAPS-v3.md.

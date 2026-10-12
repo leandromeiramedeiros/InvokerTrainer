@@ -1,4 +1,4 @@
-// Dummies (scarecrows), enemies (NPC heroes + their AI) + forge spirits: spawn, respawn, AI. Pure. See CONTRACT.md + docs/PLAN-v4.md.
+// Dummies (scarecrows), enemies (NPC heroes + their AI; Free Play training dummies are refill-flagged enemies) + forge spirits: spawn, respawn, AI. Pure. See CONTRACT.md + docs/PLAN-v4.md.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -28,8 +28,8 @@
     return null;
   }
   const isFoe = e => !!e && (e.kind === 'dummy' || e.kind === 'enemy');   // any target unit the player fights
-  const looksEnemy = e => !!e && (e.kind === 'enemy' || (e.kind === 'dummy' && !e.scarecrow));   // hero skin + name tag + dummychat
   const dummies = w => w.query(e => e.kind === 'dummy');
+  const trainers = w => w.query(e => !!e.refill);   // training dummies: scarecrows (kind 'dummy') + Free Play Standard / Expert foes (kind 'enemy', refill flag)
   const enemies = w => w.query(e => e.kind === 'enemy');
   const foes = w => w.query(isFoe);
   const disabled = e => !IT.Status.canAct(e) || hasS(e, 'hex') || hasS(e, 'knockback');
@@ -85,7 +85,8 @@
   const isNight = w => !!(w && (w.night || (w.map && w.map.night)));   // night: enemy hero vision 800 instead of 1800
 
   // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, mana, behavior, items, awareness, reaction, telegraph, preset,
-  // scenario ({stunBolt, ...} legacy hooks), useBkb. Dies at 0 hp (combat.js emits 'kill').
+  // scenario ({stunBolt, ...} hooks), useBkb, refill. Dies at 0 hp (combat.js emits 'kill') unless opts.refill (training dummy: refills
+  // below 25% hp instead, always aware, no auto-attack, 800 vision, ignored by towers; Free Play Standard / Expert go through spawnDummy).
   function spawnEnemy(w, o) {
     hook(w);
     const G_ = GM(), E = G_.ENEMY, p = o.preset ? G_.DUMMY_PRESETS[o.preset] : null;
@@ -94,7 +95,7 @@
     const items = Array.isArray(o.items) ? o.items.filter(id => G_.ENEMY_ITEMS.includes(id)) : undefined;
     const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
       hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
-      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: isNight(w) ? E.visionNight : E.vision,
+      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : isNight(w) ? E.visionNight : E.vision,
     });
     e.ai = newAI(behavior, o.x, o.y, w.t);
     e.ai.useBkb = !!o.useBkb;
@@ -103,10 +104,10 @@
     e.telegraph = o.telegraph != null ? o.telegraph : E.telegraph;   // lead (s) between the 'telegraph' event and the item firing
     e.awareness = o.awareness != null ? o.awareness : E.awareness;
     e.notice = o.notice != null ? o.notice : E.notice;   // s of plain sight an awareness-0 enemy needs to register the hero
-    e.aware = false; e.tele = null; e.lastHit = -99;
+    e.refill = !!o.refill; e.aware = e.refill; e.tele = null; e.lastHit = -99;
     if (o.name) e.name = o.name;
     // hero auto-attack (opts.attack: 'ranged'|'melee' override, false = none). Never auto-acquires: the AI orders it (see fightHero).
-    const kind = o.attack === false ? null : (typeof o.attack === 'string' ? o.attack : G_.ENEMY_ATTACK_KIND[o.skin] || 'ranged'), AT = kind && G_.ENEMY_ATTACK[kind];
+    const kind = o.attack === false || e.refill ? null : (typeof o.attack === 'string' ? o.attack : G_.ENEMY_ATTACK_KIND[o.skin] || 'ranged'), AT = kind && G_.ENEMY_ATTACK[kind];
     if (AT) {
       const m = o.dmgMul != null ? o.dmgMul : 1, mn = Math.round(AT.min * m), mx = Math.max(mn, Math.round(AT.max * m));
       e.attack = { min: mn, max: mx, bat: AT.bat, point: AT.point, range: AT.range, projSpeed: AT.projSpeed, next: 0, target: null };
@@ -118,20 +119,21 @@
     return w.add(e);
   }
 
-  // Dummy = scarecrow: stationary, no AI, never dies (combat.js refills it), no hp bar.
-  // Backward compatible (ranked/main): AI options (non-stationary preset behavior, stun bolt, scripted blink, bkb reaction) keep the
-  // old dummy AI on a kind:'dummy' unit (it keeps its hp bar).
+  // Training dummy: never dies (combat.js refills it). A plain one is a scarecrow (kind 'dummy': stationary, no hp bar, no name/speech);
+  // a mobile / scripted one (non-stationary preset behavior, stun bolt, scripted blink, bkb reaction: Free Play Standard / Expert) is a real
+  // enemy NPC (spawnEnemy, kind 'enemy') with the refill flag, so it runs the one enemy behaviour system.
   function spawnDummy(w, o) {
     hook(w);
     const G_ = GM(), p = G_.DUMMY_PRESETS[o.preset || 'training'];
     const sc = o.scenario || {};
     const behavior = o.behavior || p.behavior;
     const hasAI = behavior !== 'stationary' || sc.stunBolt || (sc.dummyEscape && sc.dummyEscape !== 'none') || o.useBkb;
+    if (hasAI) return spawnEnemy(w, Object.assign({}, o, { preset: o.preset || 'training', behavior, refill: true }));
     const e = body(w, o, 'dummy', p);
     e.ai = newAI(behavior, o.x, o.y, w.t);
-    e.ai.useBkb = !!o.useBkb;   // activates its BKB (if carried + ready) `reaction` s after the hero starts casting a disable at it
     e.behavior = behavior;
-    if (!hasAI) { e.noHpBar = true; e.scarecrow = true; }   // plain target: scarecrow look, no name/speech
+    e.refill = true; e.aware = true;   // combos may script a scarecrow (combo.js begin): it then runs the same enemy tick
+    e.noHpBar = true; e.scarecrow = true;
     return w.add(e);
   }
 
@@ -285,8 +287,8 @@
       if (!c) return;
       for (const d of w.ents) {
         if (d.dead || !isFoe(d) || !d.ai || d.team === c.team || !aimedAt(w, c, d, p)) continue;
-        if (d.kind === 'enemy') { if (d.ai.pend.length < 8) d.ai.pend.push({ type: 'disable', ability: p.ability, at: w.t + reactionOf(d) }); }
-        else if (d.ai.useBkb && d.ai.bkbAt == null) d.ai.bkbAt = w.t + (d.reaction || 0);
+        if (d.kind === 'enemy' && !d.refill) { if (d.ai.pend.length < 8) d.ai.pend.push({ type: 'disable', ability: p.ability, at: w.t + reactionOf(d) }); }
+        else if (d.ai.useBkb && d.ai.bkbAt == null) d.ai.bkbAt = w.t + (d.reaction || 0);   // training dummy: BKB `reaction` s after the disable cast starts
       }
     });
     w.on('damage', (p) => {
@@ -480,19 +482,6 @@
     def.cast(w, d, {});
   }
 
-  function tickDummy(w, d) {
-    const a = d.ai;
-    tickBkb(w, d);
-    if (tickBlink(w, d)) return;
-    if (disabled(d)) { if (a.bolt.active) cancelBolt(w, d, 'disabled'); return; }
-    tickBolt(w, d);
-    if (a.bolt.active) return;
-    if (tickDodge(w, d)) return;
-    if (!IT.Status.canMove(d)) return;
-    if (a.behavior === 'wander') tickWander(w, d);
-    else if (a.behavior === 'evasive') tickEvasive(w, d);
-  }
-
   // ---------- enemy NPC AI (v4) ----------
   // reaction time: x2.5 while the enemy is unaware of the hero (assumption, no Dota analogue)
   const reactionOf = e => (e.reaction || 0) * (e.aware ? 1 : GM().ENEMY.unawareMul);
@@ -597,6 +586,12 @@
     if (disabled(e)) { if (a.bolt.active) cancelBolt(w, e, 'disabled'); return; }
     tickBolt(w, e);
     if (a.bolt.active) return;
+    if (e.refill) {   // training dummy (Free Play Standard / Expert, scripted combo dummy): per-tick dodge + wander / evasive, no awareness or item logic
+      if (tickDodge(w, e) || !IT.Status.canMove(e)) return;
+      if (a.behavior === 'wander') tickWander(w, e);
+      else if (a.behavior === 'evasive') tickEvasive(w, e);
+      return;
+    }
     // queued threats (hero disable casts aimed at us), acted on after the reaction time
     if (a.pend.length && !e.tele) {
       for (let i = 0; i < a.pend.length; i++) {
@@ -657,13 +652,12 @@
   IT.World.system('unitsAI', 60, (w) => {
     for (const e of w.ents) {
       if (e.dead || !e.ai) continue;
-      if (e.kind === 'dummy') tickDummy(w, e);
-      else if (e.kind === 'enemy') tickEnemy(w, e);
+      if (e.kind === 'enemy' || e.kind === 'dummy') tickEnemy(w, e);
       else if (e.kind === 'spirit') tickSpirit(w, e);
     }
   });
 
   IT.Units = {
-    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, looksEnemy, reactionOf, dummies, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

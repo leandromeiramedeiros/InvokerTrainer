@@ -797,7 +797,7 @@
     }
     // hidden dummies: last seen "?"
     if (w.fog !== false) for (const e of w.ents) {
-      if (e.dead || e.kind !== 'dummy' || e.visible || !e.lastSeen) continue;
+      if (e.dead || !(e.kind === 'dummy' || e.refill) || e.visible || !e.lastSeen) continue;
       const age = w.t - e.lastSeen.t, a = clamp(1 - age / 30, 0.35, 1);
       const x = pxs(R, e.lastSeen.x), y = pys(R, e.lastSeen.y);
       if (x < -2 || y < -2 || x >= VW + 2 || y >= VH + 2) { R.edgeArrow(x, y, '#9a98b0', '?'); continue; }

@@ -29,11 +29,11 @@
     t.hp -= dealt;
     if (dealt > 0 && t.kind === 'enemy') t.lastHit = w.t;   // awareness: hit in the last 2 s => aware
     w.emit('damage', { src: srcId, target: t.id, ability: o.ability, dmgType: type, raw, dealt, prevented: raw - dealt });
-    if (t.kind === 'dummy') {
+    if (t.refill || t.kind === 'dummy') {   // training dummy (scarecrow or Free Play Standard / Expert enemy): never dies, refills below 25%
       const k = (IT.GAME && IT.GAME.DUMMY.refillBelow) || 0.25;
       if (t.hp < t.maxHp * k) { t.hp = t.maxHp; t.mana = t.maxMana; w.emit('refill', { unit: t.id }); }
     } else if (t.kind === 'enemy') {
-      // enemies are real units: they die at 0 hp (only scarecrow dummies refill)
+      // enemies are real units: they die at 0 hp (only refill-flagged training dummies refill)
       if (t.hp <= 0) {
         t.hp = 0; t.killed = true;
         w.emit('kill', { unit: t.id, by: srcId });

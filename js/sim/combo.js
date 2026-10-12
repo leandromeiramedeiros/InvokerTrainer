@@ -24,7 +24,7 @@
     ctx = ctx || V.ctx(IT.Loadout.default());
     const g = (a, k) => V.get(S[a], k, ctx), it = (id, k) => V.item(IT.GAME.ITEM_DOTA[id], k, 1);
     return {
-      lift: g('tornado', 'lift_duration'), tornadoSpeed: g('tornado', 'travel_speed') || 1000,
+      lift: g('tornado', 'lift_duration'), tornadoSpeed: g('tornado', 'travel_speed') || 1000, tornadoRadius: g('tornado', 'area_of_effect') || 0,
       emp: g('emp', 'delay'), ss: g('sunstrike', 'delay'), meteor: g('chaosmeteor', 'land_time'),
       blastSpeed: g('deafeningblast', 'travel_speed') || 1100, blastCast: BLAST_CAST,
       csDur: g('coldsnap', 'duration'), csFreeze: g('coldsnap', 'freeze_duration'),
@@ -178,7 +178,7 @@
   }
 
   function pickDummy(w) {
-    let d = w.query(e => e.kind === 'dummy')[0];
+    let d = IT.Units.trainers(w)[0];   // the session's training dummy: scarecrow or the Free Play Standard / Expert enemy (refill flag)
     if (!d) {
       const sp = (w.map && w.map.spawns && w.map.spawns.dummies && w.map.spawns.dummies[0]) || { x: (w.hero ? w.hero.x : 0) + 1200, y: w.hero ? w.hero.y : 0 };
       d = IT.Units.spawnDummy(w, { x: sp.x, y: sp.y, preset: 'training', skin: IT.GAME.SKINS[0] });
@@ -204,7 +204,7 @@
     // dummy: behavior + stat preset for mobile behaviors, then respawn out of the way
     const beh = sc.dummyBehavior || 'stationary';
     const preset = G_.DUMMY_PRESETS[beh === 'evasive' ? 'expert' : beh === 'wander' ? 'standard' : 'training'];
-    d.ai.behavior = beh;
+    d.ai.behavior = beh; d.behavior = beh;
     d.base.ms = preset.ms; d.ms = preset.ms; d.reaction = preset.reaction;
     const hidden = c.steps.some(s => s.targetVisibility === 'hidden');
     IT.Units.respawn(w, d, { outsideVision: !!(w.fog && hidden) });

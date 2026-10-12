@@ -56,14 +56,14 @@
   function speaker(pref) {
     const w = D.w, cam = D.g.cam, hero = D.g.hero, P = IT.GAME.UNIT_PX, VW = IT.GAME.VIEW_W, VH = IT.GAME.VIEW_H;
     const ok = d => {
-      if (!d || !IT.Units.looksEnemy(d)) return false;
+      if (!d || d.kind !== 'enemy') return false;
       const sx = d.x / P - cam.px, sy = d.y / P - cam.py;
       return sx > 6 && sx < VW - 6 && sy > 14 && sy < VH - 4;
     };
     if (pref && ok(pref) && !pref.dead && pref.visible) return pref;
     let best = null, bd = Infinity;
     for (const d of w.ents) {
-      if (d.dead || !IT.Units.looksEnemy(d) || !d.visible || !ok(d)) continue;
+      if (d.dead || d.kind !== 'enemy' || !d.visible || !ok(d)) continue;
       const k = Math.hypot(d.x - hero.x, d.y - hero.y);
       if (k < bd) { bd = k; best = d; }
     }
@@ -88,7 +88,7 @@
     const gap = cat === 'praise' ? 1.5 : GAP;
     if (w.t - D.lastSay < gap) return false;
     if (o.p != null && Math.random() > o.p) return false;
-    const who = speaker(o.pref) || (o.fallback && IT.Units.looksEnemy(o.fallback) ? o.fallback : null);   // praise: the foe that just died
+    const who = speaker(o.pref) || (o.fallback && o.fallback.kind === 'enemy' ? o.fallback : null);   // praise: the foe that just died
     if (!who) return false;
     const txt = pick(cat); if (!txt) return false;
     const root = ensureEl(); if (!root) return false;

@@ -6,7 +6,7 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const KEY = 'it2.rank', IKEY = 'it2.inf';
-  const RUN_SECONDS = 300, TURNS = 8, COUNTDOWN = 10, PRACTICE_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
+  const TURNS = 8, COUNTDOWN = 10, SOLO_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lang = () => IT.lang || 'en';
   const loc = o => (o && typeof o === 'object' ? o[lang()] || o.en : o);
@@ -273,12 +273,12 @@
   }
 
   // ---------------------------------------------------------------- run
-  // opts: { mode:'ranked'|'practice'|'sandbox'|'infinite', diff:id (practice), scenario:id (sandbox, fixed), rating, seed, skin, runSeconds }
+  // opts: { mode:'ranked'|'sandbox'|'infinite' (default 'sandbox'; any other name is a neutral untimed-by-turns run, SOLO_COUNTDOWN s), diff:id, scenario:id (sandbox, fixed), rating, seed, skin, runSeconds }
   // 'infinite': bambam scenarios from the hard end of the pool in a seeded shuffled order (a fresh shuffle each lap, harder each lap, twists from the 3rd),
   //   until the first failed scenario; the summary carries cleared + the persisted best-ever.
   function create(opts) {
     opts = opts || {};
-    const mode = opts.mode || 'practice', ranked = mode === 'ranked', infinite = mode === 'infinite', fixed = opts.scenario ? IT.SCENARIOS.get(opts.scenario) : null;
+    const mode = opts.mode || 'sandbox', ranked = mode === 'ranked', infinite = mode === 'infinite', fixed = opts.scenario ? IT.SCENARIOS.get(opts.scenario) : null;
     const rating = opts.rating != null ? opts.rating : ranked ? profile().rating : 0;
     const rng = IT.U.mulberry32(opts.seed == null ? (Math.random() * 1e9) | 0 : opts.seed);
     const run = {
@@ -286,7 +286,7 @@
       runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
       pr: null, dummies: [], result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
-      countdown: ranked ? COUNTDOWN : infinite ? INF_COUNTDOWN : fixed && mode === 'sandbox' ? 0 : PRACTICE_COUNTDOWN,
+      countdown: ranked ? COUNTDOWN : infinite ? INF_COUNTDOWN : fixed && mode === 'sandbox' ? 0 : SOLO_COUNTDOWN,
     };
     const DF = () => IT.DIFFICULTY;
 
@@ -577,7 +577,7 @@
   }
 
   IT.Ranked = {
-    RUN_SECONDS, TURNS, COUNTDOWN, PRACTICE_COUNTDOWN, RESULT_HOLD,
+    TURNS, COUNTDOWN, RESULT_HOLD,
     streakMult, scenarioScore, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     profile, record, reset, load, prepare, apply, create, hud, spot, arenas, TWISTS,
