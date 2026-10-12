@@ -59,3 +59,5 @@ W1 launched (Sonnet, background), ids in session transcript:
 - 23f4209 difficulty tiers ian/easy/common/hard/bambam (+desc, migrate old ids).
 - e14e41c MODES core: B1 title, C4 8 turns, C2 10 s countdown + START, C7 badge.
 - Remaining (stash@{0}): HUD F1-F5 (hud.js/css), MAPS (maps.js/towers/terrain), scenario v4 content (scenarios.js), end splash/stats PNG/infinite run, B2 FP enemy card.
+- 2fc8b50 Free Play enemy section (count/behavior/items). F2: bigger scenario objective/tip text. Stopped at ~95 %.
+- Next: HUD F1 modes + F5 tooltips, MAPS, scenario v4 content, end splash/stats PNG/infinite run, F3 Aghs picker, F6 icons.

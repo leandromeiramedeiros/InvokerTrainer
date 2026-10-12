@@ -39,7 +39,7 @@
 .rknum{color:var(--gold);font-size:calc(var(--g)*6);line-height:1;text-shadow:0 .06em 0 #000,0 0 .5em #ffd23f88}
 .rkscen{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.15)}
 .rkname{color:var(--mag);font-size:max(calc(var(--g)*1.9),16px);line-height:1.1;text-transform:uppercase;letter-spacing:.04em;text-shadow:0 .08em 0 #000}
-.rkobj{color:var(--ink);font-size:max(calc(var(--g)*1.15),12px);font-weight:normal;line-height:1.2}
+.rkobj{color:var(--ink);font-size:max(calc(var(--g)*1.6),15px);font-weight:normal;line-height:1.2}
 .rkcombo{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:calc(var(--g)*.4)}
 .rkcombo .rka{position:relative;width:calc(var(--g)*3.6);height:calc(var(--g)*3.6);background:#0b0618;border:.2em solid var(--line);box-shadow:0 0 0 .12em #000;display:flex;align-items:center;justify-content:center}
 .rkcombo .rka canvas{width:100%;height:100%;image-rendering:pixelated}
@@ -68,5 +68,5 @@
 .rknm{display:flex;align-items:center;justify-content:center;gap:calc(var(--g)*.6)}
 .rkdiff{pointer-events:auto;cursor:help;padding:.1em .5em;border:.15em solid var(--dim);background:#1d1236;color:var(--ink);font-size:max(calc(var(--g)*.85),9px);letter-spacing:.08em;text-transform:uppercase}
 .rkdiff.d-ian,.rkdiff.d-easy{border-color:var(--good)}.rkdiff.d-common{border-color:var(--gold)}.rkdiff.d-hard,.rkdiff.d-bambam{border-color:var(--bad)}
-.rktip{color:var(--dim);font-size:max(calc(var(--g)*.95),10px);font-style:italic}
+.rktip{color:var(--ink);font-size:max(calc(var(--g)*1.35),13px);font-style:italic}
 .rkgo{pointer-events:auto;font-size:max(calc(var(--g)*1.1),11px)}
