@@ -76,3 +76,15 @@ W1 launched (Sonnet, background), ids in session transcript:
     DUMMY = scarecrow only: no skin, no name tag, no speech bubbles (dummychat only for kind 'enemy'). Ranked/scenario AI foes (spawnDummy with
     behavior/scenario/useBkb opts) must become kind 'enemy' (or render as enemy); plain stationary targets stay scarecrows. Check render/units.js,
     ui/dummychat.js, ranked.js apply(), main.js sandbox spawns, Free Play enemy section.
+
+## NEXT SESSION (start here)
+Stash work is also on branch `wip/v4-stash` (origin) — use `git checkout origin/wip/v4-stash -- <files>` instead of stash@{0} if the stash is missing.
+Rules: BE TERSE; no Claude co-author in commits; Opus orchestrates, max 1 Sonnet/Haiku agent at a time; tests green + browser smoke
+(launch config "invoker", port 8123; bypass cache) + commit + push after every step; check usage after every step, stop at 96 %.
+0. git status; finish/clean anything uncommitted.
+1. TODO 10 (enemies vs dummies flipped) — screenshot ranked + sandbox to verify.
+2. Render agent: TODO 2, 3, 6, 7, 8.
+3. Input/ranked agent: TODO 1, 5, 9.
+4. TODO 4 (Cataclysm vision), small, do directly.
+5. If budget: HUD F1 modes -> MAPS + towers (from stash) -> scenario content B3/C1/H -> end splash/stats/PNG + infinite run C5/C6 -> F3 Aghs picker -> F6 icons.
+6. Mark done items here, short status, commit, push.
