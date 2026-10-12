@@ -7,7 +7,7 @@
 
   // ---- generic
   D('app.title', 'INVOKER', 'INVOKER');
-  D('app.sub', 'TRAINER v3', 'TREINADOR v3');
+  D('app.sub', 'TRAINER v6', 'TREINADOR v6');
   D('app.tag', 'Quas, Wex, Exort. Learn the combos in a top-down arena.', 'Quas, Wex, Exort. Aprenda os combos em uma arena vista de cima.');
   D('ui.play', 'Play', 'Jogar');
   D('ui.stats', 'Stats', 'Estatísticas');
