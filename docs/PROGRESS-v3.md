@@ -33,3 +33,8 @@ After: H5 Haiku i18n sweep (#52), browser verify, code-review, commit (no co-aut
 Added mid-wave: #54 cast-while-moving (GW never cast during move spam; facing-cone casts while moving) -> S2 sim + S1 input. #55 Scepter/Shard hood emblem under orbs (refs images/24-32.png in session scratch) -> S3.
 Wave 2 results: S1/S2/S3/S4/S5/S7 DONE, tests 244/244. Browser: GL compositor active (webgl2), idle render 3.6 -> 1.1 ms; busy (tornado+emp+meteor+SS+blast) step+render 4.7 ms (sand 1.6, comp 1.3). New ranked panel verified (countdown/title/obj/icons, score hidden in practice). Orchestrator: gleipnir + orchid icons redrawn (scratchpad gleip.py/orchid.py), dchat font bump, default hair tweak.
 OPEN: user asked why default Invoker was recoloured (not explicitly requested; inferred from #35 ref) — awaiting keep/revert decision. H5 i18n sweep running. Then code-review + commit.
+
+## Wave 3 (maps/towers/ranked variety) — launched 2026-10-11
+Pushed 4c4f79e first (user wanted to play). Contract: docs/MAPS-v3.md. Stubs: js/data/maps.js, js/sim/towers.js, js/render/towers.js, js/data/i18n/m1-3.js (+ index.html tags). Tests 244/244 with stubs.
+Agents (Sonnet, background): A maps/vision/terrain/render (map.js, maps.js, vision.js, terrain/fog/camera/render.js), B towers (towers sim+render, combat/status/abilities/units, fx.js, sfx.js), C ranked/scenarios/combos/main.js/loadout picker/hud panel.
+After: integrate, browser-verify old checklist (PLAN-v3 Verification: ranked run, practice diffs, settings, ESC, cursors, edge-scroll, shard, alacrity/blink double-tap, drag-swap, CapsLock/Mouse4, select hero, forge 3 spirits) + maps/towers, docs, commit (no co-author), push.
