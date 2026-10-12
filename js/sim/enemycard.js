@@ -51,7 +51,7 @@
       x, y, skin, name: GM.SKIN_NAMES[skin] + (lap ? ' ' + (lap + 1) : ''),
       hp: Math.round(E.hp * (df.hpMul != null ? df.hpMul : 1)), armor: E.armor + (df.armorAdd || 0),
       behavior: r.behavior, items: r.items ? c.items.slice() : [],
-      telegraph: df.telegraph, awareness: df.awareness, reaction: df.reaction, dmgMul: df.dmgMul, fights: !!df.fights,
+      telegraph: df.telegraph, awareness: df.awareness, notice: df.notice, reaction: df.reaction, dmgMul: df.dmgMul, fights: !!df.fights,
       tier: r.tier,
     };
   }

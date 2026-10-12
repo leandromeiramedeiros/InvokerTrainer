@@ -37,6 +37,6 @@ GOOD: KV-derived combo windows + feedback, 39 scenarios on real maps, enemy AI r
 | # | Batch | Covers | Status |
 |---|---|---|---|
 | H1 | Fidelity/bugs: auto-attack kill steal (BAD-1), death fails at hard+ (BAD-4), hero BKB 50% magic res (BAD-6), i_bolt_cancel reachability (BAD-9) | high/med | done (BAD-4 already held: died fails every scenario; BKB uses KV spell_reduce 60) |
-| H2 | Scenarios: enemy vision 1800/800 + awareness as delay (BAD-5), hold/escape scenarios + jit on lvl 1-4 (BAD-7), splash burst overlap | med/low | todo |
+| H2 | Scenarios: enemy vision 1800/800 + awareness as delay (BAD-5), hold/escape scenarios + jit on lvl 1-4 (BAD-7), splash burst overlap | med/low | done (43 scenarios; naive bot still fails some hard/bambam seeds, pre-existing) |
 | H3 | Cleanup + staples: dummy AI -> spawnEnemy, drop practice constants (BAD-8); Blink->full->Refresher, SS-first staple | low | todo |
 Not taken: BAD-2 (Invoke CD table is user-specified plan G1, PLAN-min.md:57). BAD-3 (orb cap 8 / 33 points): user rule is 0 points left at 30 with talents costing 1; kept 7x3+8=29.

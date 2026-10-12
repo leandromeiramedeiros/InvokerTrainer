@@ -49,12 +49,14 @@
   }
 
   // ---------------------------------------------------------------- pixel ember / spark canvas (low-res, additive, trailing)
-  function embers(cv, tier, lvl) {
+  // origin(): burst centre as fractions [0..1] of the canvas (the medal / count stage, so the burst never starts under the title)
+  function embers(cv, tier, lvl, origin) {
     const W = cv.width, H = cv.height, c = cv.getContext('2d'), pal = PAL[Math.max(0, Math.min(7, tier))], R = Math.random;
     const P = [];
     let last = performance.now(), t0 = last, popped = false, acc = 0;
     const burst = n => {
-      const cx = W * 0.4, cy = H * 0.3;
+      let o = null; try { o = origin && origin(); } catch (e) { /* layout optional */ }
+      const cx = W * (o ? o.x : 0.4), cy = H * (o ? o.y : 0.55);
       for (let i = 0; i < n; i++) {
         const a = R() * 6.2832, sp = 25 + R() * (70 + lvl * 9);
         P.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.8 - 18, g: 60, life: 0.9 + R() * 1.6, age: 0, s: R() < 0.3 ? 2 : 1, c: pal[R() < 0.55 ? 0 : 1] });
@@ -175,7 +177,10 @@
       try { if (IT.Music) IT.Music.stinger(kind); } catch (e) { /* audio optional */ }
     }
     setTimeout(() => {
-      embers(fx, tier, cur.ornament);
+      embers(fx, tier, cur.ornament, () => {
+        const a = root.getBoundingClientRect(), b = stage.getBoundingClientRect();
+        return a.width > 0 && a.height > 0 ? { x: (b.left + b.width / 2 - a.left) / a.width, y: (b.top + b.height / 2 - a.top) / a.height } : null;
+      });
       if (count) tween(root, POP * 1000 + 150, 1100 + Math.min(1500, cur.cleared * 80), k => { count.textContent = String(Math.round(cur.cleared * k)); });
       if (rating && rk) tween(root, POP * 1000 + 350, 1400, k => { rating.textContent = String(Math.round(rk.before.rating + (rk.after.rating - rk.before.rating) * k)); });
     }, 0);

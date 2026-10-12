@@ -176,7 +176,20 @@
     const dd = Math.hypot(anchor.x - base.x, anchor.y - base.y) || 1, ux = (anchor.x - base.x) / dd, uy = (anchor.y - base.y) / dd;
     return { x: anchor.x + ux * (s.ahead || 0) - uy * (s.side || 0) + (s.dx || 0), y: anchor.y + uy * (s.ahead || 0) + ux * (s.side || 0) + (s.dy || 0) };
   }
-  // resolve a spot. pick = seeded choice among the best `pick` arenas (scenario rand.pick), jit = +-units of seeded jitter
+  // seeded jitter of a resolved spot: up to 6 draws, each must stay walkable on the same elevation, keep (or not enter) the tower rules
+  // and keep the line of sight to base; none fits -> the spot stays put
+  function jitter(w, p, base, o, s) {
+    const map = w.map, V = IT.Vision, e0 = map.elevAt(p.x, p.y), los0 = V && V.los ? V.los(map, base.x, base.y, p.x, p.y) : true;
+    for (let k = 0; k < 6; k++) {
+      const q = { x: p.x + (w.rng() * 2 - 1) * o.jit, y: p.y + (w.rng() * 2 - 1) * o.jit };
+      if (!map.walkable(q.x, q.y) || map.elevAt(q.x, q.y) !== e0) continue;
+      if (!s.towers && nearTower(map, q, o.role === 'hero' ? 1 : 0) && !nearTower(map, p, o.role === 'hero' ? 1 : 0)) continue;
+      if (V && V.los && V.los(map, base.x, base.y, q.x, q.y) !== los0) continue;
+      return q;
+    }
+    return p;
+  }
+  // resolve a spot. pick = seeded choice among the best `pick` arenas (scenario rand.pick), jit = +-units of seeded jitter (see jitter)
   function spot(w, s, base, placed, o) {
     o = o || {};
     const map = w.map;
@@ -191,7 +204,7 @@
     else if (s.struct) { const t = structOf(map, base, s.struct); if (t) p = around(t, base, s); }
     else if (s.gate && w.gate) p = around(w.gate, base, s);
     else if (s.of != null && placed[s.of]) p = around(placed[s.of], base, s);
-    if (o.jit) { p.x += (w.rng() * 2 - 1) * o.jit; p.y += (w.rng() * 2 - 1) * o.jit; }
+    if (o.jit) p = jitter(w, p, base, o, s);
     return nearWalk(w, p.x, p.y);
   }
 
@@ -239,14 +252,14 @@
       // real enemy NPC: hp = the damage the scenario needs to kill it (d.hp = start fraction on the old 25% kill line) x tier hpMul; dies at 0 hp
       const need = d.hp != null && d.hp < 1 ? Math.max(0.05, d.hp - 0.25) : 0.75;
       const hp = Math.round(Math.max(100, need * E.hp * (df.hpMul != null ? df.hpMul : 1) * (tw === 'tough' ? 1.15 : 1)));
-      // per-unit awareness is the scenario's base, nudged by the tier (+-0.2); 'alert' twist adds 0.3
+      // per-unit awareness (a notice delay of df.notice x (1 - aw) s) is the scenario's base, nudged by the tier (+-0.2); 'alert' twist adds 0.3
       const aw = clamp((d.aware != null ? d.aware + (df.awareness - 0.6) * 0.5 : df.awareness) + (tw === 'alert' ? 0.3 : 0), 0, 1);
       const e = IT.Units.spawnEnemy(w, {
         x: p.x, y: p.y, skin, name: IT.GAME.SKIN_NAMES[skin] + (lap ? ' ' + (lap + 1) : ''), hp, armor: E.armor + (df.armorAdd || 0),
         behavior: d.behavior || (mot ? 'stationary' : ENEMY_BEHAVIOR[df.behavior] || 'stationary'),
         scenario: { stunBolt: df.stunBolt, dummyEscape: mot ? 'none' : df.escape, blinkAfter: df.blinkAfter },
         useBkb: !!(df.useBkb || d.useBkb), items,
-        telegraph: df.telegraph, awareness: aw, reaction: mot === 'still' ? 99 : df.reaction,
+        telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction,
         dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
       });
       e.hpRegen = 0; e.base.hpRegen = 0;

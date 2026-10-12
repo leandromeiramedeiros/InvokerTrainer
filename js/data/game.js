@@ -44,8 +44,12 @@
     },
     // Enemy NPC defaults (v4 spawnEnemy). reaction/telegraph/awareness are normally overridden by the difficulty tier.
     ENEMY: {
-      hp: 2200, mana: 900, armor: 5, magicRes: 0.25, ms: 300, hpRegen: 4, manaRegen: 2, radius: 24, vision: 800,
+      hp: 2200, mana: 900, armor: 5, magicRes: 0.25, ms: 300, hpRegen: 4, manaRegen: 2, radius: 24, vision: 1800,   // Dota hero vision: 1800 by day, 800 by night (visionNight, used when w.night / map.night)
+      visionNight: 800,
       reaction: 0.5, telegraph: 0.3, awareness: 0.5,
+      notice: 3,             // awareness is a notice DELAY: seconds of plain sight an awareness-0 enemy needs before it registers the hero (x (1 - awareness); per tier: difficulty.js notice)
+      noticeNear: 350, noticeNearMul: 3,   // closer than this it notices x3 faster
+      noticeDecay: 2,        // the notice timer drains this many times faster than it fills while the hero is out of sight
       unawareMul: 2.5,       // unaware (hero not seen, not hit in the last 2 s): reaction x2.5 (assumption: no Dota analogue)
       hitAwareFor: 2,        // s an enemy stays aware after taking damage
       flee: { range: 1100, step: 500, think: 0.4 },   // 'escape' behaviour: keeps this far from the hero

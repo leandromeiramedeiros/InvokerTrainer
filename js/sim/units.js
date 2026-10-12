@@ -82,6 +82,8 @@
     return e;
   }
 
+  const isNight = w => !!(w && (w.night || (w.map && w.map.night)));   // night: enemy hero vision 800 instead of 1800
+
   // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, mana, behavior, items, awareness, reaction, telegraph, preset,
   // scenario ({stunBolt, ...} legacy hooks), useBkb. Dies at 0 hp (combat.js emits 'kill').
   function spawnEnemy(w, o) {
@@ -92,7 +94,7 @@
     const items = Array.isArray(o.items) ? o.items.filter(id => G_.ENEMY_ITEMS.includes(id)) : undefined;
     const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
       hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
-      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: E.vision,
+      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: isNight(w) ? E.visionNight : E.vision,
     });
     e.ai = newAI(behavior, o.x, o.y, w.t);
     e.ai.useBkb = !!o.useBkb;
@@ -100,6 +102,7 @@
     e.behavior = behavior;
     e.telegraph = o.telegraph != null ? o.telegraph : E.telegraph;   // lead (s) between the 'telegraph' event and the item firing
     e.awareness = o.awareness != null ? o.awareness : E.awareness;
+    e.notice = o.notice != null ? o.notice : E.notice;   // s of plain sight an awareness-0 enemy needs to register the hero
     e.aware = false; e.tele = null; e.lastHit = -99;
     if (o.name) e.name = o.name;
     // hero auto-attack (opts.attack: 'ranged'|'melee' override, false = none). Never auto-acquires: the AI orders it (see fightHero).
@@ -495,14 +498,24 @@
   const reactionOf = e => (e.reaction || 0) * (e.aware ? 1 : GM().ENEMY.unawareMul);
   const away = (from, e) => (from.x === e.x && from.y === e.y) ? (e.facing || 0) : Math.atan2(e.y - from.y, e.x - from.x);
 
+  // awareness 0..1 is a notice DELAY, not a radius: s of unbroken plain sight before the enemy registers the hero = notice x (1 - awareness)
+  // (assumption, no Dota analogue). Fog / line of sight / high ground / Ghost Walk / Shadow Blade still decide whether it SEES the hero at all.
+  const noticeDelay = e => (e.notice != null ? e.notice : GM().ENEMY.notice) * (1 - Math.max(0, Math.min(1, e.awareness != null ? e.awareness : 0)));
+
   function updateAware(w, e) {
-    const h = w.hero, E = GM().ENEMY;
+    const h = w.hero, E = GM().ENEMY, a = e.ai;
+    const dt = a.awareT == null ? 0 : Math.max(0, Math.min(0.5, w.t - a.awareT));
+    a.awareT = w.t;
     let sees = false;
     if (h && !h.dead) {
       sees = IT.Vision && IT.Vision.teamSees && w.map ? IT.Vision.teamSees(w, e.team, h) : canSee(w, e, h);
-      // awareness 0..1 = share of its vision it actually pays attention to (assumption): 0 -> only noticed when hit / very close
-      if (sees && e.awareness < 1 && U.dist(e, h) > e.vision * (0.25 + 0.75 * e.awareness)) sees = false;
-    }
+      const need = noticeDelay(e);
+      if (sees) {
+        a.notice = Math.min(need, (a.notice || 0) + dt * (U.dist(e, h) <= E.noticeNear ? E.noticeNearMul : 1));
+        if (a.notice < need - 1e-9) sees = false;   // in sight but not registered yet
+      } else a.notice = Math.max(0, (a.notice || 0) - dt * E.noticeDecay);
+    } else a.notice = 0;
+    if (w.t - e.lastHit < E.hitAwareFor) a.notice = noticeDelay(e);   // being hit makes it notice at once
     const was = e.aware;
     e.aware = sees || (w.t - e.lastHit) < E.hitAwareFor;
     e.ai.awareSince = e.aware ? (was ? e.ai.awareSince : w.t) : null;
