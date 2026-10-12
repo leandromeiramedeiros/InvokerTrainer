@@ -3,7 +3,7 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const FACE = 0.2;
-  const UNITS = { hero: 1, dummy: 1, spirit: 1 };
+  const UNITS = { hero: 1, dummy: 1, enemy: 1, spirit: 1 };
   const S = () => IT.Status, A = () => IT.Abilities, U = () => IT.U;
   const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 
@@ -17,6 +17,7 @@
   }
 
   const STOP_ACQ_BLOCK = 0.2;   // idle auto-acquire is suppressed this long after Stop so the cancel is visible
+  const NEAR_TARGET = 120;      // A3: a move this close (beyond the target's radius) to the unit we are attacking is absorbed, not a cancel
   const DEFER_POINT = 0.1;      // a cast this close to firing is not erased by a new (non-stop/hold) order; it finishes, the order follows
   const KNOWN = { move: 1, attack: 1, cast: 1, stop: 1, hold: 1 };
   const num = v => typeof v === 'number' && isFinite(v);
@@ -35,6 +36,8 @@
   function issue(w, u, order) {
     if (!u) return false;
     if (u.dead) { if (u.id != null) fail(w, u, 'dead'); return false; }
+    // B4/E1: a spirit the player has taken over (issueGroup) is never reassigned by its AI (units.js tickSpirit has no player flag)
+    if (u._playerCmd && !(order && order.player)) return false;
     const o = Object.assign({}, order); o.queued = !!order.queued;
     if (!KNOWN[o.type]) { fail(w, u, 'unknown'); return false; }
     if (!S().canAct(u)) { fail(w, u, 'disabled', o.ability); return false; }
@@ -63,11 +66,26 @@
       w.emit('order', { unit: u.id, order: o });
       return true;
     }
+    // A3: spamming RMB on / next to the target (or A-click on the same point) must not restart the chase or the wind-up
+    if (!o.queued && u.orders.length === 1 && head.type === 'attack') {
+      let same = false;
+      if (o.type === 'attack') same = o.target != null ? head.target === o.target : head.target == null && Math.hypot(head.x - o.x, head.y - o.y) < 1e-6;
+      else if (o.type === 'move' && head.target != null) {
+        const t = w.get(head.target);
+        same = !!t && !t.dead && Math.hypot(o.x - t.x, o.y - t.y) <= t.radius + NEAR_TARGET;
+      }
+      if (same) { w.emit('order', { unit: u.id, order: o }); return true; }
+    }
     let deferred = false;
     if (!o.queued) {
       const hd = head && head.type === 'cast' && head._ph === 'point' && head._t <= DEFER_POINT + 1e-9 ? A().get(head.ability) : null;
       if (hd && !hd.channel && o.type !== 'stop' && o.type !== 'hold') { u.orders.length = 1; deferred = true; }
-      else dropAll(w, u);
+      else if (o.type === 'move' && u._wind) {
+        // A3: a move during the attack wind-up does not cancel the swing (only Stop/Hold/casts/other targets do): it lands, then we walk
+        const wind = u._wind, nxt = u.attack.next;
+        dropAll(w, u);
+        wind.keep = true; u._wind = wind; u.attack.next = nxt;
+      } else dropAll(w, u);
       if (o.type === 'stop') u._acqBlock = w.t + STOP_ACQ_BLOCK;
     } else if (head && head.type === 'hold') {   // any new order ends Hold
       w.emit('orderDone', { unit: u.id, order: head, ok: true });
@@ -323,7 +341,7 @@
       if (u.dead || !u.attack) continue;
       const a = u.attack;
       if (a.next > 0) a.next = Math.max(0, a.next - dt);
-      if (u._wind && (!S().canAttack(u) || u._wantAtk !== u._wind.target)) { u._wind = null; a.next = 0; continue; }
+      if (u._wind && (!S().canAttack(u) || (u._wantAtk !== u._wind.target && !u._wind.keep))) { u._wind = null; a.next = 0; continue; }
       if (u._wind) {
         u._wind.t -= dt;
         if (u._wind.t <= 1e-9) { const t = w.get(u._wind.target); u._wind = null; if (t) launch(w, u, t); }
@@ -353,5 +371,30 @@
     }
   });
 
-  IT.Orders = { issue, current, clear, waypoints };
+  // B4/E1: one order for several of the player's units (hero + forge spirits). order: { type:'move'|'attack'|'stop'|'hold', x, y, target, queued };
+  // attack with x,y (no target) = attack-move. Spirits given a command stop obeying their AI for good. Several movers get a small spread
+  // around the click point. Returns true if at least one unit accepted it.
+  const GROUP_SPREAD = 48;
+  function issueGroup(w, units, order) {
+    if (!w || !order) return false;
+    const us = [];
+    for (const x of units || []) { const u = typeof x === 'object' ? x : w.get(x); if (u && !u.dead && UNITS[u.kind] && !us.includes(u)) us.push(u); }
+    if (!us.length) return false;
+    const base = Object.assign({}, order, { player: true });
+    if (base.type === 'attackMove') base.type = 'attack';
+    const spread = us.length > 1 && num(base.x) && num(base.y) && base.target == null && (base.type === 'move' || base.type === 'attack');
+    let ok = false;
+    us.forEach((u, i) => {
+      const o = Object.assign({}, base);
+      if (spread && i > 0) {
+        const a = Math.PI * 2 * (i - 1) / (us.length - 1);
+        o.x += Math.cos(a) * GROUP_SPREAD; o.y += Math.sin(a) * GROUP_SPREAD;
+      }
+      if (u.kind === 'spirit') u._playerCmd = true;
+      ok = issue(w, u, o) || ok;
+    });
+    return ok;
+  }
+
+  IT.Orders = { issue, issueGroup, current, clear, waypoints };
 })(typeof window !== 'undefined' ? window : globalThis);

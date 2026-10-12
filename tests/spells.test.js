@@ -14,7 +14,7 @@ const ID = { coldsnap: 'invoker_cold_snap', ghostwalk: 'invoker_ghost_walk', ice
 // orbs: {quas,wex,exort}; extra: ctx loadout fields (scepter, scepterOrb, shard, talents)
 function env(orbs, extra, opts) {
   const IT = load(FILES);
-  const lo = Object.assign({ heroLevel: 30, orbs: orbs || { quas: 4, wex: 4, exort: 4 } }, extra || {});
+  const lo = Object.assign({ heroLevel: 29, talents: [], orbs: orbs || { quas: 4, wex: 4, exort: 4 } }, extra || {});
   const w = IT.World.create(Object.assign({ seed: 5, fog: false, autoAttack: false }, opts || {}));
   const h = IT.Hero.create(w, Object.assign(IT.Loadout.default(), lo), 0, 0);
   h.facing = 0; h.maxMana = h.mana = 9999;
@@ -52,7 +52,7 @@ test('cold snap: freeze + damage from Values; blind flag; no miss', () => {
 });
 
 test('cold snap re-triggers on forge spirit hits', () => {
-  const e = env({ quas: 1, wex: 1, exort: 8 }, null, { autoAttack: true });
+  const e = env({ quas: 1, wex: 1, exort: 7 }, null, { autoAttack: true });
   const d = e.dummy(250, 0);
   e.cast('coldsnap', { target: d.id });
   e.run(0.3);
@@ -175,8 +175,8 @@ test('ice wall: geometry, slow, dps, expiry, miss when empty', () => {
 });
 
 test('ice wall: talent dps and facing', () => {
-  const e = env({ quas: 4, wex: 4, exort: 8 }, { talents: ['special_bonus_unique_invoker_ice_wall_dps'] });
-  assert.strictEqual(e.V('icewall', 'damage_per_second'), 72 + 50);
+  const e = env({ quas: 4, wex: 4, exort: 7 }, { talents: ['special_bonus_unique_invoker_ice_wall_dps'] });
+  assert.strictEqual(e.V('icewall', 'damage_per_second'), 50 + env({ quas: 4, wex: 4, exort: 7 }).V('icewall', 'damage_per_second'));   // talent adds 50 on top of the exort-7 base
   e.h.facing = Math.PI / 2;
   const d = e.dummy(0, 200);
   e.cast('icewall'); e.run(0.7);
@@ -267,17 +267,17 @@ test('sun strike shard: damaging an enemy hero spawns a forge spirit there witho
 
 test('forge spirit count = min(quas, exort) counts', () => {
   const cnt = (q, x) => { const e = env({ quas: q, wex: 1, exort: x }); e.cast('forgespirit'); e.run(0.1); return e.w.query(u => u.kind === 'spirit').length; };
-  assert.strictEqual(cnt(1, 1), 1); assert.strictEqual(cnt(8, 1), 1); assert.strictEqual(cnt(1, 8), 1);
-  assert.strictEqual(cnt(4, 4), 2); assert.strictEqual(cnt(8, 8), 3); assert.strictEqual(cnt(8, 4), 2);
+  assert.strictEqual(cnt(1, 1), 1); assert.strictEqual(cnt(7, 1), 1); assert.strictEqual(cnt(1, 7), 1);
+  assert.strictEqual(cnt(4, 4), 2); assert.strictEqual(cnt(7, 7), 2); assert.strictEqual(cnt(7, 4), 2);
 });
 
 test('tornado: lift, land damage, invulnerable while lifted, path vision, miss', () => {
-  const e = env({ quas: 8, wex: 4, exort: 1 });
+  const e = env({ quas: 7, wex: 4, exort: 1 });
   const d = e.dummy(600, 80), off = e.dummy(600, 600);
   e.cast('tornado', { x: 2000, y: 0 }); e.run(0.1);
   const th = e.w.query(t => t.ability === 'tornado')[0];
   assert.ok(th); assert.strictEqual(th.vision, e.V('tornado', 'vision_distance'));
-  e.run(0.7 + 0.3);
+  e.run(0.7 + 0.15);   // quas 7 lifts shorter: the Sun Strike below must still land inside the lift
   assert.ok(e.IT.Status.has(d, 'lift'), 'lifted'); assert.ok(d.z > 0);
   assert.ok(!e.IT.Status.has(off, 'lift'));
   const lift = e.V('tornado', 'lift_duration');

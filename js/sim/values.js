@@ -116,13 +116,12 @@
   Values.castPoint = (ab, ctx) => top(ab, 'castPoint', 'AbilityCastPoint', ctx);
   Values.channelTime = (ab, ctx) => top(ab, 'channelTime', 'AbilityChannelTime', ctx);
 
-  // Invoke cooldown = invoker_invoke.AbilityCooldown (7) - cooldown_reduction_per_orb (0.3) * (sum of effective orb
-  // levels), floored at 0. Key names verified in KV; the per-orb-LEVEL (not per-orb-count) reading and floor are
-  // assumptions about engine behaviour.
+  // Invoke cooldown (plan G1) = IT.RULES.invokeCooldown(Q+W+E spent orb levels, scepter): anchors 3:6.1 6:4.9 9:4.0 12:2.8
+  // 15:1.9 18:0.7 21:0 (linear between), Aghanim's Scepter = flat -0.3. See the NOTE in rules.js for how this differs from
+  // the raw KV rule (7 - 0.3 * sum, cooldown_reduction_per_orb 0.3), which the plan's anchors match only per HERO level.
   Values.invokeCooldown = function (ctx) {
-    const base = top('invoker_invoke', 'cooldown', 'AbilityCooldown', ctx);
-    const per = Values.get('invoker_invoke', 'cooldown_reduction_per_orb', ctx);
-    return Math.max(0, base - per * (ctx.eff.quas + ctx.eff.wex + ctx.eff.exort));
+    const sum = ctx.orbs.quas + ctx.orbs.wex + ctx.orbs.exort;
+    return IT.RULES.invokeCooldown(sum, ctx.scepter);
   };
 
   // items: value by key (AbilityValues first, then top-level numeric field e.g. cost/cooldown/castRange). idx = level index.

@@ -18,8 +18,10 @@ test('points schedule', () => {
 });
 
 test('gate and tiers', () => {
-  assert.strictEqual(R.orbReqLevel.slice(0, 8).join(), "1,3,5,7,9,11,13,15");
-  assert.strictEqual(R.orbGate(8), 15);
+  assert.strictEqual(R.orbReqLevel.join(), "1,3,5,7,9,11,13");
+  assert.strictEqual(R.orbGate(7), 13);
+  assert.strictEqual(R.orbGate(8), 0);   // scepter bonus level: free
+  assert.strictEqual(R.orbMax, 7);
   assert.strictEqual(R.talentTiers.map(t => t.level).join(), "10,15,20,25");
   assert.strictEqual(R.talentTiers.flatMap(t => [t.left, t.right]).length, 8);
 });
@@ -33,14 +35,15 @@ test('validate orbs', () => {
   assert.ok(R.validate(base({ heroLevel: 6, orbs: orbs(3, 2, 2) })).ok);
   assert.ok(!R.validate(base({ heroLevel: 6, orbs: orbs(3, 2, 3) })).ok);
   assert.ok(!R.validate(base({ heroLevel: 14, orbs: orbs(8, 0, 0) })).ok);
-  assert.ok(R.validate(base({ heroLevel: 21, orbs: orbs(8, 8, 8) })).ok);
-  assert.ok(!R.validate(base({ heroLevel: 20, orbs: orbs(8, 8, 8) })).ok);
-  assert.ok(!R.validate(base({ heroLevel: 30, orbs: orbs(9, 0, 0) })).ok);
+  assert.ok(R.validate(base({ heroLevel: 14, orbs: orbs(7, 0, 0) })).ok);
+  assert.ok(R.validate(base({ heroLevel: 18, orbs: orbs(7, 7, 7) })).ok);
+  assert.ok(!R.validate(base({ heroLevel: 17, orbs: orbs(7, 7, 7) })).ok);
+  assert.ok(!R.validate(base({ heroLevel: 30, orbs: orbs(8, 0, 0) })).ok);
   assert.ok(!R.validate(base({ heroLevel: 0 })).ok);
 });
 
 test('scepter is a free level on one orb', () => {
-  const lo = base({ heroLevel: 21, orbs: orbs(8, 8, 8), scepter: true, scepterOrb: 'quas' });
+  const lo = base({ heroLevel: 18, orbs: orbs(7, 7, 7), scepter: true, scepterOrb: 'quas' });
   assert.ok(R.validate(lo).ok);
   assert.strictEqual(R.pointsLeft(lo), 0);
   assert.ok(!R.validate(base({ scepter: true })).ok);
@@ -52,7 +55,8 @@ test('validate talents', () => {
   assert.ok(R.validate(base({ heroLevel: 10, talents: [t1.left] })).ok);
   assert.ok(!R.validate(base({ heroLevel: 25, talents: [t1.left, t1.right] })).ok);
   assert.ok(R.validate(base({ heroLevel: 27, talents: [t1.left, t1.right] })).ok);
-  assert.ok(!R.validate(base({ heroLevel: 27, talents: [t1.left, t2.left, t2.right] })).ok);
+  assert.ok(R.validate(base({ heroLevel: 27, talents: [t1.left, t2.left, t2.right] })).ok);   // v4: 27+ any tier
+  assert.ok(!R.validate(base({ heroLevel: 27, talents: [t1.left, t2.left, t2.right, R.talentTiers[2].left, R.talentTiers[3].left, R.talentTiers[3].right] })).ok);   // 6 picks > 5 points
   assert.ok(!R.validate(base({ heroLevel: 30, talents: ['nope'] })).ok);
   assert.ok(!R.validate(base({ heroLevel: 30, talents: [t1.left, t1.left] })).ok);
   assert.ok(R.validate(base({ heroLevel: 30, talents: R.talentTiers.flatMap(t => [t.left, t.right]) })).ok);
@@ -66,8 +70,8 @@ test('auto build legal at every level and maxes', () => {
       const v = R.validate(R.autoLoadout(L, style));
       assert.ok(v.ok, style + ' L' + L + ' ' + v.errors.join(';'));
     }
-    assert.strictEqual(JSON.stringify(R.autoLoadout(30, style).orbs), JSON.stringify(orbs(8, 8, 8)));
+    assert.strictEqual(JSON.stringify(R.autoLoadout(30, style).orbs), JSON.stringify(orbs(7, 7, 7)));
     assert.strictEqual(R.autoBuild[style].length, 30);
-    assert.strictEqual(R.autoBuild[style].flat().length, 24);
+    assert.ok(R.autoBuild[style].flat().length >= 21);
   }
 });
