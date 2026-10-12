@@ -1,6 +1,7 @@
 // Tower sprites: pixel-art Radiant (allied, pale stone + gold/green) and Dire (enemy, dark stone + red) towers, baked once per
 // team x tier. API: IT.TowerDraw.draw(R, e, sx, sy) sprite (y-sorted pass; sx, sy = screen px of the base centre),
 // .hud(R, e, sx, sy) hp bar, .ground(R) selection + range rings, .lights(R), .proj(R, e, x, y, gy) tower shot, .reset().
+// Static non-attacking buildings (map.structures: barracks, fort, filler, fountain, shop, outpost): .struct(R, s, sx, sy) (sx, sy = footprint centre), .structLights(R).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -11,6 +12,7 @@
   // ramps: [hi, light, mid, dark, deep]
   const PAL = {
     0: { st: ['#d7d2bd', '#b3ad98', '#8c8774', '#665f55', '#43403c'], trim: '#e0b84a', trimD: '#8a6a22', roof: ['#5aa05a', '#3e7a44', '#285a30'], orb: '#9dff9d', orbC: [150, 255, 150], glow: '#7dff8a', bar: '#5dff7a' },
+    2: { st: ['#cfc4a8', '#aa9f86', '#857b66', '#5e5646', '#3c372e'], trim: '#d4a640', trimD: '#7a5a1c', roof: ['#9a7a44', '#74582e', '#503a1e'], orb: '#ffe08a', orbC: [255, 220, 140], glow: '#ffd070', bar: '#ffd070' },
     1: { st: ['#6d6470', '#524a58', '#3d3644', '#2a242f', '#191520'], trim: '#a63a2a', trimD: '#5a1c16', roof: ['#7a2a2a', '#561c20', '#3a1216'], orb: '#ff7a4a', orbC: [255, 110, 60], glow: '#ff6a3a', bar: '#ff5a4a' },
   };
   const sprites = {};    // 'team:tier' -> canvas
@@ -30,25 +32,27 @@
     for (let i = 0; i < out.length; i += 2) x.fillRect(out[i], out[i + 1], 1, 1);
   }
 
+  // stone block span: light from the upper left, brick joints, per-pixel dither. Centre column ax, rows y0..y1, half-width hwTop -> hwBot
+  function stone(x, P, ax, y0, y1, hwTop, hwBot, seed) {
+    const st = P.st;
+    for (let y = y0; y <= y1; y++) {
+      const k = y1 === y0 ? 0 : (y - y0) / (y1 - y0), hw = Math.round(hwTop + (hwBot - hwTop) * k), x0 = ax - hw, x1 = ax + hw - 1, w = x1 - x0 + 1;
+      for (let px = x0; px <= x1; px++) {
+        const u = (px - x0) / Math.max(1, w - 1);
+        let i = u < 0.16 ? 1 : u < 0.5 ? 2 : u < 0.8 ? 3 : 4;
+        if (u < 0.05) i = 0;
+        if (i === 1 && PX.bayer(px, y) > 0.55 + u) i = 2;
+        const row = (y - y0) % 5;
+        if (row === 4) i = Math.min(4, i + 1);                                           // horizontal mortar
+        else if (((px + (((y - y0) / 5 | 0) & 1) * 3 + seed) % 6) === 0 && row !== 0) i = Math.min(4, i + 1);   // vertical joint
+        x.fillStyle = st[i]; x.fillRect(px, y, 1, 1);
+      }
+    }
+  }
+
   function bake(team, tier) {
     const P = PAL[team], c = canvas(SW, SH), x = c.getContext('2d');
-    const st = P.st;
-    // stone block span: light from the upper left, brick joints, per-pixel dither
-    const block = (y0, y1, hwTop, hwBot, seed) => {
-      for (let y = y0; y <= y1; y++) {
-        const k = y1 === y0 ? 0 : (y - y0) / (y1 - y0), hw = Math.round(hwTop + (hwBot - hwTop) * k), x0 = AX - hw, x1 = AX + hw - 1, w = x1 - x0 + 1;
-        for (let px = x0; px <= x1; px++) {
-          const u = (px - x0) / Math.max(1, w - 1);
-          let i = u < 0.16 ? 1 : u < 0.5 ? 2 : u < 0.8 ? 3 : 4;
-          if (u < 0.05) i = 0;
-          if (i === 1 && PX.bayer(px, y) > 0.55 + u) i = 2;
-          const row = (y - y0) % 5;
-          if (row === 4) i = Math.min(4, i + 1);                                           // horizontal mortar
-          else if (((px + (((y - y0) / 5 | 0) & 1) * 3 + seed) % 6) === 0 && row !== 0) i = Math.min(4, i + 1);   // vertical joint
-          x.fillStyle = st[i]; x.fillRect(px, y, 1, 1);
-        }
-      }
-    };
+    const block = (y0, y1, hwTop, hwBot, seed) => stone(x, P, AX, y0, y1, hwTop, hwBot, seed);
     const band = (y, hw, col) => { x.fillStyle = col; x.fillRect(AX - hw, y, hw * 2, 1); };
     const hT = { 1: 0, 2: 3, 3: 6, 4: 9 }[tier];   // taller shaft for higher tiers (shaft top shifts up)
     const top = AY - 32 - hT;                          // y of the shaft top
@@ -103,6 +107,107 @@
     x.fillStyle = P.trim; x.fillRect(8, 12, 2, 1); x.fillRect(22, 11, 3, 1); x.fillRect(15, 15, 2, 1);
     outline(c);
     return c;
+  }
+
+  // ---- static structures (map.structures): baked per kind x team; footprint half-size hw tiles (3x3 -> hw 1, fort 5x5 -> hw 2)
+  const SDIM = { barracks: [44, 44], fort: [72, 80], filler: [32, 44], fountain: [44, 40], shop: [44, 40], outpost: [32, 52] };
+  const structSpr = {};
+
+  function bakeStruct(kind, team) {
+    const P = PAL[team < 0 ? 2 : team], d = SDIM[kind] || SDIM.filler, w = d[0], h = d[1], ax = w >> 1, base = h - 1, c = canvas(w, h), x = c.getContext('2d');
+    const blk = (y0, y1, a, b, seed) => stone(x, P, ax, y0, y1, a, b, seed);
+    const rect = (px, py, rw, rh, col) => { x.fillStyle = col; x.fillRect(px, py, rw, rh); };
+    // hip roof: rows y0..y1, half-width a -> b, shingle lines every 3 rows
+    const roof = (y0, y1, a, b) => {
+      for (let y = y0; y <= y1; y++) {
+        const k = (y - y0) / Math.max(1, y1 - y0), hw = Math.round(a + (b - a) * k), line = (y - y0) % 3 === 2;
+        x.fillStyle = line ? P.roof[2] : k < 0.25 ? P.roof[0] : P.roof[1]; x.fillRect(ax - hw, y, hw * 2, 1);
+        x.fillStyle = P.roof[0]; x.fillRect(ax - hw, y, 1, 1);
+      }
+    };
+    const door = (cx, y0, dw, dh) => { rect(cx - dw / 2 - 1, y0 - 1, dw + 2, dh + 1, P.trimD); rect(cx - dw / 2, y0, dw, dh, '#120d18'); };
+    let orbY = null;
+    if (kind === 'barracks') {
+      blk(28, base, 12, 12, 2); rect(ax - 12, 28, 24, 1, P.st[0]);
+      roof(11, 27, 3, 15); rect(ax - 3, 10, 6, 1, P.trim);
+      door(ax, 35, 4, 8);
+      for (const o of [-8, 6]) { rect(ax + o, 31, 2, 3, '#120d18'); rect(ax + o, 33, 2, 1, P.trimD); }
+      rect(ax - 12, 27, 24, 1, P.trim);
+    } else if (kind === 'fort') {
+      blk(62, base, 19, 20, 1); rect(ax - 19, 62, 38, 1, P.st[0]);
+      for (const sx of [-1, 1]) { blk(42, 62, 4, 5, 6 + sx); rect(ax + sx * 16 - 5, 40, 10, 2, P.trim); }   // flanking turrets
+      blk(38, 62, 15, 17, 3); rect(ax - 15, 38, 30, 2, P.trim);
+      blk(22, 38, 10, 11, 4); rect(ax - 11, 22, 22, 2, P.trim);
+      for (let i = -10; i < 10; i += 4) { rect(ax + i, 18, 3, 4, P.st[2]); rect(ax + i, 18, 3, 1, P.st[0]); }
+      if (team === 0) roof(9, 17, 2, 8); else for (let y = 0; y < 12; y++) rect(ax - Math.max(0, 4 - (y >> 1)), 6 + y, Math.max(0, 4 - (y >> 1)) * 2 + 1, 1, P.roof[y < 4 ? 0 : y < 8 ? 1 : 2]);
+      door(ax, 69, 9, 10);
+      for (const o of [-9, 5]) { rect(ax + o, 46, 3, 5, '#120d18'); rect(ax + o, 50, 3, 1, P.trimD); }
+      for (const o of [-6, 3]) { rect(ax + o, 28, 3, 5, '#120d18'); rect(ax + o, 32, 3, 1, P.trimD); }
+      orbY = 5;
+    } else if (kind === 'filler') {
+      blk(24, base, 8, 9, 2); rect(ax - 9, 30, 18, 1, P.trim);
+      roof(11, 23, 1, 10); rect(ax - 1, 9, 2, 3, P.trim);
+      rect(ax - 1, 34, 2, 4, '#120d18'); rect(ax - 1, 37, 2, 1, P.trimD);
+      orbY = 8;
+    } else if (kind === 'fountain') {
+      const cy = 31;
+      for (let yy = -9; yy <= 9; yy++) {
+        const hw = Math.round(20 * Math.sqrt(Math.max(0, 1 - (yy / 9.6) * (yy / 9.6))));
+        rect(ax - hw, cy + yy, hw * 2, 1, yy < -3 ? P.st[1] : yy > 4 ? P.st[3] : P.st[2]);
+      }
+      rect(ax - 17, cy + 7, 34, 1, P.st[4]);
+      for (let yy = -7; yy <= 6; yy++) {
+        const hw = Math.round(16 * Math.sqrt(Math.max(0, 1 - (yy / 7.2) * (yy / 7.2))));
+        for (let px = ax - hw; px < ax + hw; px++) rect(px, cy - 1 + yy, 1, 1, PX.bayer(px, yy + 40) > 0.55 ? '#6ad0ea' : yy < -2 ? '#2a86b0' : '#3aa8d0');
+      }
+      blk(13, cy, 3, 4, 1); rect(ax - 4, 24, 8, 2, P.trim);
+      orbY = 10;
+    } else if (kind === 'shop') {
+      blk(24, base, 12, 12, 3); rect(ax - 12, 24, 24, 1, P.st[0]);
+      roof(8, 23, 4, 15);
+      for (let px = -12; px < 12; px += 4) { rect(ax + px, 26, 4, 3, (px / 4 & 1) ? P.roof[1] : P.trim); }   // striped awning
+      door(ax, 33, 4, 6); rect(ax + 6, 31, 4, 4, P.trim); rect(ax + 7, 32, 2, 2, P.trimD);
+    } else {   // outpost: neutral watch post with a banner and a glowing crystal
+      blk(40, base, 10, 11, 2); rect(ax - 11, 40, 22, 1, P.st[0]);
+      blk(20, 40, 5, 6, 3); rect(ax - 7, 18, 14, 3, P.trim); blk(18, 19, 7, 7, 4);
+      rect(ax, 3, 1, 14, P.st[4]); rect(ax + 1, 3, 8, 5, P.roof[0]); rect(ax + 1, 7, 8, 1, P.roof[2]);
+      rect(ax - 1, 30, 2, 5, '#120d18');
+      orbY = 11;
+    }
+    outline(c);
+    c._ax = ax; c._ay = base; c._orbY = orbY;
+    return c;
+  }
+
+  const structFoot = s => (s.hw + 0.5) * 8 - 1;
+  const structSprite = s => { const k = s.kind + ':' + s.team; return structSpr[k] || (structSpr[k] = bakeStruct(s.kind, s.team)); };
+
+  // (sx, sy) = screen px of the footprint centre
+  function struct(R, s, sx, sy) {
+    const cx = R.cx, x = Math.round(sx), y = Math.round(sy) + structFoot(s), spr = structSprite(s);
+    if (x < -50 || x > R.VW + 50 || y < -10 || y - spr.height > R.VH + 10) return;
+    const rx = (s.hw + 0.5) * 8 + 2;
+    cx.fillStyle = 'rgba(0,0,0,0.3)';
+    for (let i = 0; i < 6; i++) { const hw = Math.round(rx * Math.sqrt(1 - Math.pow((i - 2.5) / 3.2, 2))); cx.fillRect(x - hw + 3, y - 5 + i, hw * 2, 1); }
+    cx.drawImage(spr, x - spr._ax, y - spr._ay);
+    if (spr._orbY != null) {
+      const P = PAL[s.team < 0 ? 2 : s.team], big = s.kind === 'fort', r = big ? 3 : 2, ox = x, oy = y - spr._ay + spr._orbY, pulse = 0.5 + 0.5 * Math.sin(R.time * 2.4 + s.tx);
+      cx.fillStyle = OUT; cx.fillRect(ox - r - 1, oy - r, 2 * r + 2, 2 * r + 1); cx.fillRect(ox - r, oy - r - 1, 2 * r, 2 * r + 3);
+      cx.fillStyle = s.kind === 'fountain' ? '#7ae8ff' : P.orb; cx.fillRect(ox - r, oy - r + 1, 2 * r, 2 * r - 1); cx.fillRect(ox - r + 1, oy - r, 2 * r - 2, 2 * r + 1);
+      cx.fillStyle = '#fff'; cx.fillRect(ox - 1, oy - 1, 1, 1);
+      R.glow(ox, oy, big ? 22 : 12, s.kind === 'fountain' ? '#6ad8ff' : P.glow, 0.3 + 0.2 * pulse);
+    }
+  }
+
+  function structLights(R) {
+    const sts = R.w.map.structures;
+    for (let i = 0; i < sts.length; i++) {
+      const s = sts[i], spr = structSprite(s); if (spr._orbY == null) continue;
+      const sx = s.x / R.P - R.camX, sy = s.y / R.P - R.camY;
+      if (sx < -60 || sx > R.VW + 60 || sy < -20 || sy - spr.height > R.VH + 60) continue;
+      const P = PAL[s.team < 0 ? 2 : s.team];
+      R.light(sx, sy + structFoot(s) - spr._ay + spr._orbY, s.kind === 'fort' ? 60 : 34, s.kind === 'fountain' ? [110, 220, 255] : P.orbC, s.kind === 'fort' ? 0.7 : 0.5);
+    }
   }
 
   // ---- per-render state: muzzle flashes
@@ -216,7 +321,7 @@
     R.glow(x, y, 14, dire ? '#ff6a2a' : '#8aff6a', 0.6);
   }
 
-  function reset() { for (const k in sprites) delete sprites[k]; for (const k in rubble) delete rubble[k]; }
+  function reset() { for (const k in sprites) delete sprites[k]; for (const k in rubble) delete rubble[k]; for (const k in structSpr) delete structSpr[k]; }
 
-  IT.TowerDraw = { draw, hud, ground, lights, proj, reset, SW, SH };
+  IT.TowerDraw = { draw, hud, ground, lights, proj, reset, struct, structLights, SW, SH };
 })(typeof window !== 'undefined' ? window : globalThis);

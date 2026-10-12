@@ -1,4 +1,6 @@
 // Terrain: whole map pre-rendered once into an offscreen canvas (8px tiles), trees as y-sortable sprites, water shimmer.
+// Maps with map.trees (real Dota tree entities, map-local units) get one true-scale sprite per tree (family palette, scale field);
+// maps without it (grounds) keep the old one-sprite-per-'T'-tile forest. map.direAt/map.world give the Dire-half ground theme.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -6,6 +8,8 @@
   const A = h => PX.abgrHex(h);
 
   const GRASS = ['#2b4b2b', '#345633', '#3d643a'].map(A), GRASS_TUFT = A('#4c7a47'), GRASS_DARK = A('#223d25');
+  const GRASS_D = ['#303624', '#393d26', '#44452b'].map(A), GRASS_D_TUFT = A('#5a5632'), GRASS_D_DARK = A('#242a1a');
+  const DIRT_D = ['#47302a', '#573b31', '#664839'].map(A), DIRT_D_PEB = A('#80624f');
   const FLOOR = ['#15251a', '#1b2f20'].map(A), FLOOR_LEAF = A('#27401f');
   const DIRT = ['#503f2b', '#5f4a33', '#6e583b'].map(A), DIRT_PEB = A('#8a7656');
   const WATER = ['#1b3f6a', '#214a7b', '#28558a'].map(A), SHORE = A('#3b6c98'), FOAM = A('#6ea0bc');
@@ -53,7 +57,94 @@
       }
     }
     x.putImageData(id, 0, 0);
+    c._ax = TAX; c._ay = TAY;
     return c;
+  }
+
+  // ---- true-scale trees: one baked sprite per (family, model variant, scale bucket)
+  const FAM_PAL = {
+    pine: { hi: '#58a04c', mid: '#3a7a3c', sh: '#285c32', dp: '#194228', ol: '#09180f' },
+    oak: { hi: '#86ac44', mid: '#5f8a36', sh: '#436a2e', dp: '#2d4a22', ol: '#0e1a0c' },
+    bamboo: { hi: '#94cc62', mid: '#64aa50', sh: '#418446', dp: '#2a5c34', ol: '#0a1c12' },
+  };
+  const DIRE_PALS = [
+    { hi: '#725c64', mid: '#524048', sh: '#3a2e3a', dp: '#261e2a', ol: '#0c080e' },
+    { hi: '#70584c', mid: '#523f38', sh: '#3a2c2c', dp: '#271d20', ol: '#0e0809' },
+    { hi: '#645a72', mid: '#483f55', sh: '#342e40', dp: '#221e2c', ol: '#09080e' },
+  ];
+  const famOf = m => /^dire_tree/.test(m) ? 'dire' : /pine/.test(m) ? 'pine' : /bamboo/.test(m) ? 'bamboo' : 'oak';
+  const strHash = str => { let h = 7; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; };
+  const treeCache = {};
+
+  function bakeTree(fam, v, kb) {
+    const k = kb / 10, hwMax = { pine: 16, oak: 18, bamboo: 13, dire: 18 }[fam], hMax = { pine: 52, oak: 50, bamboo: 54, dire: 54 }[fam];
+    const W = Math.ceil(hwMax * 2 * k) + 2, H = Math.ceil(hMax * k) + 2, cxm = W / 2, base = H - 2;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d'), id = x.createImageData(W, H), u = new Uint32Array(id.data.buffer);
+    const pal = fam === 'dire' ? DIRE_PALS[v % 3] : FAM_PAL[fam], col = {}; for (const q in pal) col[q] = A(pal[q]);
+    const trunk = fam === 'dire' ? A('#3a2c34') : A('#4a3322'), trunkD = fam === 'dire' ? A('#241a22') : A('#2c1e12'), sd = 400 + v * 7 + kb;
+    const put = (px, py, cc) => { px |= 0; py |= 0; if (px >= 0 && py >= 0 && px < W && py < H) u[py * W + px] = cc; };
+    const tone = (bl, xx, yy) => { const l = bl + (PX.bayer(xx, yy) - 0.5) * 0.45; return l > 0.5 ? col.hi : l > 0.1 ? col.mid : l > -0.3 ? col.sh : col.dp; };
+    const ell = (cx, cy, rx, ry) => {
+      for (let yy = Math.floor(cy - ry); yy <= Math.ceil(cy + ry); yy++) for (let xx = Math.floor(cx - rx); xx <= Math.ceil(cx + rx); xx++) {
+        const dx = (xx + 0.5 - cx) / rx, dy = (yy + 0.5 - cy) / ry, d = Math.hypot(dx, dy);
+        if (d < 1) put(xx, yy, tone(-0.55 * dx - 0.75 * dy - d * 0.25, xx, yy));
+      }
+    };
+    const tri = (cx, top, bot, hw) => {
+      for (let yy = Math.floor(top); yy < Math.ceil(bot); yy++) {
+        const wy = Math.max(1, hw * (yy + 0.5 - top) / (bot - top)) + (PX.hash2(yy, kb, sd) - 0.5) * 1.4, dy = (yy + 0.5 - (top + bot) / 2) / ((bot - top) / 2);
+        for (let xx = Math.floor(cx - wy); xx <= Math.ceil(cx + wy); xx++) {
+          const dx = (xx + 0.5 - cx) / wy; if (Math.abs(dx) >= 1) continue;
+          put(xx, yy, tone(-0.55 * dx - 0.6 * dy - Math.abs(dx) * 0.25, xx, yy));
+        }
+      }
+    };
+    const trk = (w, y0) => { for (let yy = Math.round(y0); yy <= base; yy++) for (let i = 0; i < w; i++) put(Math.round(cxm - w / 2) + i, yy, i < w / 2 ? trunk : trunkD); };
+    if (fam === 'pine') {
+      const cb = base - 7 * k, ch = 44 * k;
+      trk(Math.max(2, Math.round(3 * k)), cb - 3 * k);
+      const hws = [5, 8, 11, 13.5, 16];
+      for (let j = 0; j < 5; j++) { const top = cb - ch + j * ch * 0.19; tri(cxm, top, top + ch * 0.3, hws[j] * k); }
+    } else if (fam === 'oak') {
+      const cb = base - 8 * k, ym = cb - 19 * k, o = (v % 3 - 1) * 1.5 * k;
+      trk(Math.max(3, Math.round(4 * k)), cb - 6 * k);
+      ell(cxm, ym + 3 * k, 15 * k, 15 * k);
+      ell(cxm - 8 * k + o, ym + 5 * k, 8 * k, 9 * k); ell(cxm + 8 * k - o, ym + 4 * k, 8 * k, 9 * k);
+      ell(cxm - 5 * k, ym - 4 * k, 8 * k, 9 * k); ell(cxm + 5 * k + o, ym - 5 * k, 8 * k, 9 * k);
+      ell(cxm + o, ym - 9 * k, 11 * k, 11 * k);
+    } else if (fam === 'bamboo') {
+      const xs = [-8, -5, -2, 1, 4, 7], hs = [34, 46, 40, 48, 36, 42], st = A('#7cb858'), stD = A('#4a8040'), jn = A('#2c5a30');
+      for (let i = 0; i < 6; i++) {
+        const sx = Math.round(cxm + xs[i] * k + (v % 2)), h = hs[(i + v) % 6] * k;
+        for (let yy = Math.round(base - h); yy <= base; yy++) { put(sx, yy, ((base - yy) % 7) === 6 ? jn : st); put(sx + 1, yy, ((base - yy) % 7) === 6 ? jn : stD); }
+      }
+      for (let i = 0; i < 6; i++) {
+        const h = hs[(i + v) % 6] * k, sx = cxm + xs[i] * k;
+        ell(sx + 1, base - h + 3 * k, 6 * k, 2.6 * k); ell(sx - 4 * k, base - h * 0.7, 5 * k, 2.2 * k); ell(sx + 5 * k, base - h * 0.55, 5 * k, 2.2 * k);
+      }
+    } else {   // dire: gnarled, spiky, dark
+      const cb = base - 8 * k, ym = cb - 20 * k, o = (v % 3 - 1) * 2 * k;
+      trk(Math.max(2, Math.round(3 * k)), cb - 8 * k);
+      tri(cxm - 10 * k + o, ym - 12 * k, ym + 4 * k, 5 * k); tri(cxm + 10 * k - o, ym - 9 * k, ym + 6 * k, 5 * k);
+      ell(cxm, ym + 4 * k, 13 * k, 14 * k);
+      ell(cxm - 9 * k, ym + 8 * k, 7 * k, 8 * k); ell(cxm + 9 * k, ym + 7 * k, 7 * k, 8 * k);
+      tri(cxm + o, ym - 24 * k, ym - 4 * k, 8 * k);
+      ell(cxm + o, ym - 5 * k, 8 * k, 8 * k);
+    }
+    // outline
+    const solid = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) solid[i] = u[i] ? 1 : 0;
+    for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) {
+      const i = yy * W + xx; if (solid[i]) continue;
+      if ((xx > 0 && solid[i - 1]) || (xx < W - 1 && solid[i + 1]) || (yy > 0 && solid[i - W]) || (yy < H - 1 && solid[i + W])) u[i] = col.ol;
+    }
+    x.putImageData(id, 0, 0);
+    c._ax = Math.floor(cxm); c._ay = base; c._hh = base - 1; c._hw = Math.round(hwMax * k * 0.8);
+    return c;
+  }
+  function treeSprite(model, s) {
+    const fam = famOf(model), kb = Math.max(6, Math.min(10, Math.round(s * 10))), v = strHash(model) % 3, key = fam + v + ':' + kb;
+    return treeCache[key] || (treeCache[key] = bakeTree(fam, v, kb));
   }
 
   function build(map) {
@@ -62,15 +153,24 @@
     const bx = base.getContext('2d');
     const id = bx.createImageData(W, H), u = new Uint32Array(id.data.buffer);
     const at = (tx, ty) => map.at(tx, ty);
+    const ent = !!map.trees, UP = IT.GAME.UNIT_PX;                   // entity trees (true scale) vs legacy per-tile forest
+    const gox = map.world ? map.world.gx0 * T : 0, goy = map.world ? map.world.gy0 * T : 0;
+    // Dire half (Dota x + y > 0 <=> world x px > y px): dithered diagonal blend so the boundary is not a tile staircase
+    const direAt = map.world ? (x, y) => {
+      let dd = (gox + x) - (goy + y);
+      if (dd > 40) return true; if (dd < -40) return false;
+      dd += (PX.noise2(x, y, 9, 21) - 0.5) * 16;
+      return dd > 16 ? true : dd < -16 ? false : PX.bayer(x, y) < (dd + 16) / 32;
+    } : null;
 
     const el = (tx, ty) => map.elevTile(tx, ty);
     const wet = t => t === 3 || t === 5, drt = t => t === 4 || t === 6 || t === 5 || t === 3;
-    const grass = (x, y) => {
+    const grass = (x, y, dire) => {
       const n = PX.noise2(x, y, 14, 1) * 0.65 + PX.noise2(x, y, 5, 2) * 0.35;
-      const v = n + (PX.bayer(x, y) - 0.5) * 0.24;
-      if (PX.hash2(x, y, 9) < 0.014) return GRASS_TUFT;
-      if (PX.hash2(x, y, 11) < 0.008) return GRASS_DARK;
-      return v < 0.44 ? GRASS[0] : v < 0.57 ? GRASS[1] : GRASS[2];
+      const v = n + (PX.bayer(x, y) - 0.5) * 0.24, G = dire ? GRASS_D : GRASS;
+      if (PX.hash2(x, y, 9) < 0.014) return dire ? GRASS_D_TUFT : GRASS_TUFT;
+      if (PX.hash2(x, y, 11) < 0.008) return dire ? GRASS_D_DARK : GRASS_DARK;
+      return v < 0.44 ? G[0] : v < 0.57 ? G[1] : G[2];
     };
     const mul = (c, f) => {
       const r = (c & 255) * f | 0, g = ((c >> 8) & 255) * f | 0, b = ((c >> 16) & 255) * f | 0;
@@ -92,7 +192,8 @@
       for (let ly = 0; ly < T; ly++) for (let lx = 0; lx < T; lx++) {
         const x = x0 + lx, y = y0 + ly;
         let c;
-        if (t === 0) c = grass(x, y);
+        const dire = direAt !== null && (t === 0 || t === 4 || t === 1) && direAt(x, y);
+        if (t === 0) c = grass(x, y, dire);
         else if (t === 6) {
           const v = PX.noise2(x, y, 5, 14) + (PX.bayer(x, y) - 0.5) * 0.2;
           c = v < 0.4 ? STONE[0] : v < 0.6 ? STONE[1] : STONE[2];
@@ -111,16 +212,17 @@
           else if (d === 2 && PX.bayer(x, y) < 0.15) c = RIVER_FOAM;
         } else if (t === 1) {
           const v = PX.noise2(x, y, 6, 3) + (PX.bayer(x, y) - 0.5) * 0.3;
-          c = PX.hash2(x, y, 12) < 0.03 ? FLOOR_LEAF : v < 0.5 ? FLOOR[0] : FLOOR[1];
+          c = ent ? mul(grass(x, y, dire), 0.84) : PX.hash2(x, y, 12) < 0.03 ? FLOOR_LEAF : v < 0.5 ? FLOOR[0] : FLOOR[1];
         } else if (t === 4) {
           const v = PX.noise2(x, y, 7, 4) + (PX.bayer(x, y) - 0.5) * 0.26;
-          c = PX.hash2(x, y, 13) < 0.025 ? DIRT_PEB : v < 0.42 ? DIRT[0] : v < 0.58 ? DIRT[1] : DIRT[2];
+          const DR = dire ? DIRT_D : DIRT;
+          c = PX.hash2(x, y, 13) < 0.025 ? (dire ? DIRT_D_PEB : DIRT_PEB) : v < 0.42 ? DR[0] : v < 0.58 ? DR[1] : DR[2];
           let d = 99;
           if (!drt(up)) d = Math.min(d, ly);
           if (!drt(dn)) d = Math.min(d, T - 1 - ly);
           if (!drt(lf)) d = Math.min(d, lx);
           if (!drt(rt)) d = Math.min(d, T - 1 - lx);
-          if (d < 3 && PX.hash2(x, y, 5) < (3 - d) / 3 * 0.85) c = grass(x, y);
+          if (d < 3 && PX.hash2(x, y, 5) < (3 - d) / 3 * 0.85) c = grass(x, y, dire);
         } else if (t === 3) {
           const v = PX.noise2(x * 1.0, y * 1.8, 8, 6) * 0.7 + PX.noise2(x, y, 3, 8) * 0.3 + (PX.bayer(x, y) - 0.5) * 0.2;
           c = v < 0.4 ? WATER[0] : v < 0.56 ? WATER[1] : WATER[2];
@@ -148,27 +250,40 @@
         if (t !== 2 && up === 2) { if (ly === 0) c = mul(c, 0.6); else if (ly === 1) c = mul(c, 0.8); }
         u[y * W + x] = c;
       }
-      if (t === 1) {
+      if (t === 1 && !ent) {
         const h = PX.hash2(tx, ty, 77);
         const jx = (PX.hash2(tx, ty, 78) - 0.5) * 3, jy = (PX.hash2(tx, ty, 79) - 0.5) * 3;
-        const tr = { x: Math.round(tx * T + T / 2 + jx), y: Math.round(ty * T + T - 1 + jy), p: (h * 3) | 0, s: ((h * 97) | 0) % 3 };
+        const tr = { x: Math.round(tx * T + T / 2 + jx), y: Math.round(ty * T + T - 1 + jy), p: (h * 3) | 0, s: ((h * 97) | 0) % 3, k: 1 };
         treeRows[ty].push(tr); trees.push(tr);
       }
     }
     bx.putImageData(id, 0, 0);
 
-    // tree ground shadows (offset right/down, mostly under the trunk)
-    bx.fillStyle = 'rgba(2,10,6,0.38)';
-    for (const tr of trees) {
-      bx.fillRect(tr.x - 4, tr.y - 1, 11, 3);
-      bx.fillRect(tr.x - 2, tr.y - 2, 8, 1);
-      bx.fillRect(tr.x - 2, tr.y + 2, 8, 1);
+    if (ent) {
+      for (const e of map.trees) {
+        const c = treeSprite(e.m, e.s), tr = { x: Math.round(e.x / UP), y: Math.round(e.y / UP), c, k: Math.max(0.6, Math.min(1, e.s)), hh: c._hh, hw: c._hw };
+        const row = Math.max(0, Math.min(MH - 1, Math.floor(e.y / map.tile)));
+        treeRows[row].push(tr); trees.push(tr);
+      }
+      bx.fillStyle = 'rgba(2,10,6,0.36)';        // ellipse shadow, offset right/down of the trunk
+      for (const tr of trees) {
+        const sw = Math.round(11 * tr.k);
+        for (let dy = -2; dy <= 2; dy++) { const hw = Math.round(sw * Math.sqrt(1 - (dy / 2.8) * (dy / 2.8))); bx.fillRect(tr.x - hw + 3, tr.y + dy, hw * 2, 1); }
+      }
+    } else {
+      const spr = TREE_PAL.map(p => TREE_SHAPES.map(s => makeTree(p, s)));
+      for (const tr of trees) { tr.c = spr[tr.p][tr.s]; tr.hh = 22; tr.hw = 11; }
+      bx.fillStyle = 'rgba(2,10,6,0.38)';       // tree ground shadows (offset right/down, mostly under the trunk)
+      for (const tr of trees) {
+        bx.fillRect(tr.x - 4, tr.y - 1, 11, 3);
+        bx.fillRect(tr.x - 2, tr.y - 2, 8, 1);
+        bx.fillRect(tr.x - 2, tr.y + 2, 8, 1);
+      }
     }
     for (const r of treeRows) r.sort((a, b) => a.y - b.y);
 
-    const spr = TREE_PAL.map(p => TREE_SHAPES.map(s => makeTree(p, s)));
     const mm = buildMini(map);
-    return { map, base, W, H, T, trees, treeRows, spr, shimmer, waterIdx, mini: mm };
+    return { map, base, W, H, T, trees, treeRows, shimmer, waterIdx, mini: mm };
   }
 
   // minimap colour per mini pixel (covered tiles averaged); 135x75
@@ -180,7 +295,8 @@
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const x0 = Math.floor(x * map.w / w), x1 = Math.max(x0, Math.ceil((x + 1) * map.w / w) - 1), y0 = Math.floor(y * map.h / h), y1 = Math.max(y0, Math.ceil((y + 1) * map.h / h) - 1);
       let r = 0, g = 0, b = 0, n = 0;
-      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) { const c = MINI[map.at(tx, ty)] || MINI[0], k = ELEV_K[map.elevTile(tx, ty)] || 1; r += c[0] * k; g += c[1] * k; b += c[2] * k; n++; }
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) { const c = MINI[map.at(tx, ty)] || MINI[0], k = ELEV_K[map.elevTile(tx, ty)] || 1, d = map.direAt && map.direAt(tx, ty) && (map.at(tx, ty) === 0 || map.at(tx, ty) === 4);
+        r += c[0] * k * (d ? 1.12 : 1); g += c[1] * k * (d ? 0.9 : 1); b += c[2] * k * (d ? 0.72 : 1); n++; }
       const i = (y * w + x) * 3; rgb[i] = Math.min(255, r / n); rgb[i + 1] = Math.min(255, g / n); rgb[i + 2] = Math.min(255, b / n);
     }
     return { w, h, rgb };

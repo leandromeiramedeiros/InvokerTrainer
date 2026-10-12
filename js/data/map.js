@@ -1,7 +1,7 @@
 // Training-ground map: deterministic generator + hand-placed features -> IT.MAPDEF; IT.Map.build(def) -> map.
 // Tile types: 0 grass, 1 tree (blocks move+sight), 2 rock/cliff (blocks both), 3 deep water (blocks move), 4 dirt (cosmetic),
 // 5 river (walkable shallow water), 6 structure footprint (blocks move, not sight; 3x3 around each tower).
-// Optional def.elev (Uint8Array|row strings of '0'..'2'): 0 low, 1 ground, 2 high ground. def.ramp: Uint8Array mask. def.towers: [{tx,ty,team,tier}].
+// Optional def.elev (Uint8Array|row strings of '0'..'2'): 0 low, 1 ground, 2 high ground. def.ramp: Uint8Array mask. def.towers: [{tx,ty,team,tier}], def.structures: [{kind,tx,ty,hw,team}] (barracks, fort, filler, fountain, shop, outpost).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -191,9 +191,19 @@
       else elev.set(def.elev);
     }
     const towers = (def.towers || []).map(t => ({ x: t.tx * tile + tile / 2, y: t.ty * tile + tile / 2, team: t.team | 0, tier: t.tier || 1, tx: t.tx, ty: t.ty }));
-    for (const t of towers) for (let y = t.ty - 1; y <= t.ty + 1; y++) for (let x = t.tx - 1; x <= t.tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) grid[y * w + x] = 6;
+    // static non-attacking buildings: { kind, team (-1 neutral), tx, ty, hw } footprint = (2hw+1)^2 tiles
+    const structures = (def.structures || []).map(s => ({ kind: s.kind, team: s.team == null ? -1 : s.team, tx: s.tx, ty: s.ty, hw: s.hw || 1, x: s.tx * tile + tile / 2, y: s.ty * tile + tile / 2 }));
+    // footprints are structure tiles on one flat level (the centre tile's elevation, no ramp)
+    const stamp = (tx, ty, hw) => {
+      const el = (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 1 : elev[ty * w + tx];
+      for (let y = ty - hw; y <= ty + hw; y++) for (let x = tx - hw; x <= tx + hw; x++) if (x >= 0 && y >= 0 && x < w && y < h) {
+        grid[y * w + x] = 6; elev[y * w + x] = el; if (def.ramp) def.ramp[y * w + x] = 0;
+      }
+    };
+    for (const t of towers) stamp(t.tx, t.ty, 1);
+    for (const s of structures) stamp(s.tx, s.ty, s.hw);
     const map = {
-      tile, w, h, W: w * tile, H: h * tile, grid, elev, ramp: def.ramp || null, towers,
+      tile, w, h, W: w * tile, H: h * tile, grid, elev, ramp: def.ramp || null, towers, structures,
       spawns: def.spawns || { hero: { x: w * tile / 2, y: h * tile / 2 }, dummies: [] },
       cover: [],
       toTile: x => Math.floor(x / tile),

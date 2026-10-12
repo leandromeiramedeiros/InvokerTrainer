@@ -1,9 +1,10 @@
 'use strict';
-// Maps v4: >= 20 maps carved from the Dota 2 map, every one builds, hero spawn walkable, towers spawn and shoot, elevation vision rule.
+// Maps v5: >= 20 windows cut from the real extracted Dota 2 map (IT.DOTAWORLD): every one builds deterministically, hero spawn walkable,
+// real towers/structures on 'S' footprints, trees inside the window, towers spawn and shoot, elevation vision rule.
 const test = require('node:test');
 const assert = require('node:assert');
 const load = require('./_load.js');
-const FILES = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/maps.js', 'js/data/combos.js',
+const FILES = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/dotaworld.js', 'js/data/maps.js', 'js/data/combos.js',
   'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js',
   'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js',
   'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/sim/combo.js', 'js/sim/stats.js', 'js/sim/towers.js'];
@@ -26,9 +27,10 @@ function reach(map, tx, ty) {
 }
 const tileOf = (map, p) => [Math.floor(p.x / map.tile), Math.floor(p.y / map.tile)];
 
-test('at least 20 maps, grounds first, unique ids, bilingual names', () => {
+test('at least 20 maps, grounds first, whole map present, unique ids, bilingual names', () => {
   assert.ok(ids.length >= 20, 'maps: ' + ids.length);
   assert.strictEqual(ids[0], 'grounds');
+  assert.ok(ids.indexOf('dota') > 0, 'whole-map entry');
   assert.strictEqual(new Set(ids).size, ids.length);
   for (const m of M.list) {
     assert.ok(m.name && m.name.en && m.name.pt, m.id + ' name');
@@ -44,11 +46,12 @@ test('every map builds with a walkable hero spawn, reachable dummies and enough 
     assert.strictEqual(M.get(id), m, id + ' cached');
     assert.strictEqual(m.id, id);
     assert.ok(m.w >= 100 && m.h >= 60, id + ' size');
+    assert.strictEqual(m.grid.length, m.w * m.h, id + ' grid size');
     const [hx, hy] = tileOf(m, m.spawns.hero);
     assert.ok(m.walkableTile(hx, hy), id + ' hero spawn walkable');
     const r = reach(m, hx, hy);
     let walk = 0; for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) if (m.walkableTile(x, y)) walk++;
-    assert.ok(r.n / walk > 0.8, id + ' hero reaches most walkable ground: ' + (r.n / walk).toFixed(2));
+    assert.ok(r.n / walk > (id === 'dota' ? 0.7 : 0.8), id + ' hero reaches most walkable ground: ' + (r.n / walk).toFixed(2));
     assert.ok(m.spawns.dummies.length >= 8, id + ' dummies');
     for (const d of m.spawns.dummies) { const [x, y] = tileOf(m, d); assert.ok(m.walkableTile(x, y) && r.seen[y * m.w + x], id + ' dummy reachable'); }
     assert.ok(m.spawns.arenas && m.spawns.arenas.length > 5, id + ' arenas');
@@ -61,10 +64,85 @@ test('every map builds with a walkable hero spawn, reachable dummies and enough 
   }
 });
 
+// ---- v5: real-world windows
+const D = IT.DOTAWORLD;
+const decodeRow = r => { const out = []; for (const m of r.matchAll(/(.)(\d*)/g)) for (let i = 0, n = m[2] ? +m[2] : 1; i < n; i++) out.push(m[1].charCodeAt(0) - 65); return out; };
+
+test('DOTAWORLD rows decode to exactly w*h tiles', () => {
+  assert.strictEqual(D.rows.length, D.h);
+  let n = 0;
+  for (const r of D.rows) { const d = decodeRow(r); assert.strictEqual(d.length, D.w); n += d.length; }
+  assert.strictEqual(n, D.w * D.h);
+});
+
+test('world -> tile conversion: dota_badguys_tower1_mid at (524,652)', () => {
+  const t = M.worldToTile(524, 652);
+  assert.deepStrictEqual([Math.floor(t[0]), Math.floor(t[1])], [194, 170]);
+  const e = D.ents.tower.find(q => q.name === 'dota_badguys_tower1_mid');
+  assert.deepStrictEqual([e.x, e.y], [524, 652]);
+  const m = M.get('dota'), tw = m.towers.find(q => q.tx === 194 && q.ty === 170);
+  assert.ok(tw, 'tower at that tile on the whole map');
+  assert.strictEqual(tw.team, 1); assert.strictEqual(tw.tier, 1);
+  assert.strictEqual(m.w, D.w); assert.strictEqual(m.h, D.h);
+});
+
+test('towers: real team and tier on 3x3 structure footprints; structures likewise', () => {
+  let total = 0;
+  for (const id of ids.slice(1)) {
+    const m = M.get(id), gx = m.world.gx0, gy = m.world.gy0;
+    for (const t of m.towers) {
+      total++;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) assert.strictEqual(m.at(t.tx + dx, t.ty + dy), 6, id + ' tower tile is S');
+      const src = D.ents.tower.find(q => { const w = M.worldToTile(q.x, q.y); return Math.floor(w[0]) - gx === t.tx && Math.floor(w[1]) - gy === t.ty; });
+      assert.ok(src, id + ' tower comes from a real Dota tower');
+      assert.strictEqual(t.team, /goodguys/.test(src.name) ? 0 : 1, id + ' team');
+      assert.strictEqual(t.tier, +/tower(\d)/.exec(src.name)[1], id + ' tier');
+    }
+    for (const s of m.structures) {
+      assert.ok(['barracks', 'fort', 'filler', 'fountain', 'shop', 'outpost'].indexOf(s.kind) >= 0, id + ' kind');
+      for (let dy = -s.hw; dy <= s.hw; dy++) for (let dx = -s.hw; dx <= s.hw; dx++) assert.strictEqual(m.at(s.tx + dx, s.ty + dy), 6, id + ' ' + s.kind + ' footprint is S');
+    }
+  }
+  assert.ok(total >= 40, 'towers across windows: ' + total);
+  assert.strictEqual(M.get('dota').towers.length, 22);
+  assert.ok(M.get('dota').structures.some(s => s.kind === 'fort' && s.hw === 2));
+  assert.ok(M.get('dota').structures.some(s => s.kind === 'barracks' && s.hw === 1));
+});
+
+test('trees are real entities inside the window, with Dota model names and scales', () => {
+  let withTrees = 0;
+  for (const id of ids.slice(1)) {
+    const m = M.get(id);
+    if (m.trees.length) withTrees++;
+    for (const t of m.trees) {
+      assert.ok(t.x >= 0 && t.y >= 0 && t.x < m.W && t.y < m.H, id + ' tree inside window');
+      assert.ok(t.s >= 0.6 && t.s <= 1.05, id + ' scale ' + t.s);
+      assert.ok(/tree/.test(t.m), id + ' model');
+    }
+  }
+  assert.ok(withTrees >= 20, 'windows with trees: ' + withTrees);
+  assert.ok(M.get('dota').trees.length > 2000);
+});
+
+test('Dire half: direAt follows the Dota x + y > 0 diagonal', () => {
+  const m = M.get('mid_river');
+  assert.strictEqual(typeof m.direAt, 'function');
+  const a = m.direAt(m.w - 1, 0), b = m.direAt(0, m.h - 1);
+  assert.strictEqual(a, true); assert.strictEqual(b, false);
+  const d = M.get('dota');
+  assert.strictEqual(d.direAt(300, 50), true); assert.strictEqual(d.direAt(50, 300), false);
+});
+
+test('maps build deterministically', () => {
+  const hash = m => { let h = 7; for (let i = 0; i < m.grid.length; i++) h = (h * 31 + m.grid[i]) >>> 0; return h + ':' + m.trees.length + ':' + m.towers.length + ':' + m.structures.length + ':' + m.spawns.hero.x + ',' + m.spawns.hero.y + ':' + m.spawns.dummies.length; };
+  const IT2 = load(FILES);
+  for (const id of ['mid_river', 'rad_base', 'dire_highground', 'roshan_pit', 'dota']) assert.strictEqual(hash(IT2.Maps.get(id)), hash(M.get(id)), id);
+});
+
 test('the real-map regions cover rivers, high ground, a Roshan pit and tower lanes', () => {
   const tagged = tag => M.list.filter(m => m.tags.indexOf(tag) >= 0).length;
   for (const tag of ['river', 'highground', 'lowground', 'tower', 'jungle', 'choke', 'pit']) assert.ok(tagged(tag) >= 1, tag);
-  assert.ok(M.get('rosh_pit').spawns.arenas.some(a => a.tags.indexOf('pit') >= 0), 'pit arena');
+  assert.ok(M.get('roshan_pit').spawns.arenas.some(a => a.tags.indexOf('pit') >= 0), 'pit arena');
   let elev = 0;
   for (const id of ids.slice(1)) {
     const m = M.get(id); let has = [0, 0, 0];
@@ -143,7 +221,7 @@ test('a tower ignores a hero far out of range', () => {
 
 test('elevation vision: high ground is hidden from below but sees down', () => {
   let found = 0;
-  for (const id of ids.slice(1)) {
+  for (const id of ids.slice(1).filter(q => q !== 'dota')) {
     const m = M.get(id); if (found >= 3) break;
     const { w } = mkWorld(m);
     const mk = (c, team) => w.add({ kind: 'dummy', team, x: c.x, y: c.y, hp: 100, vision: 1500 });

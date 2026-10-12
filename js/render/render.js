@@ -131,22 +131,24 @@
 
     function drawTreesInto(camX, camY) {
       const T = ter.T, map = w.map;
-      const ty0 = Math.max(0, Math.floor(camY / T) - 1), ty1 = Math.min(map.h - 1, Math.floor((camY + VH) / T) + 4);
-      const tx0 = camX - 12, tx1 = camX + VW + 12;
+      const ty0 = Math.max(0, Math.floor(camY / T) - 1), ty1 = Math.min(map.h - 1, Math.floor((camY + VH) / T) + 7);   // canopies reach ~50 px above the trunk
+      const tx0 = camX - 22, tx1 = camX + VW + 22;
       for (let ty = ty0; ty <= ty1; ty++) {
         const row = ter.treeRows[ty];
         for (let i = 0; i < row.length; i++) {
           const t = row[i];
           if (t.x < tx0 || t.x > tx1) continue;
           const sy = t.y - camY;
-          if (sy < -4 || sy - IT.Terrain.TAY > VH) continue;
+          if (sy < -4 || sy - t.hh > VH) continue;
           push(sy, drawTree, t);
         }
       }
     }
-    function drawTower(e) { IT.TowerDraw.draw(R, e, R.ix / P - R.camX, R.iy / P - R.camY); }
+    // the y-sorted pass runs after every R.interp(), so position is captured at push time (R.ix/iy would be stale by then)
+    function drawTower(a) { IT.TowerDraw.draw(R, a.e, a.sx, a.sy); }
+    function drawStruct(a) { IT.TowerDraw.struct(R, a.s, a.sx, a.sy); }
     function drawTree(t) {
-      cx.drawImage(ter.spr[t.p][t.s], t.x - R.camX - IT.Terrain.TAX, t.y - R.camY - IT.Terrain.TAY);
+      cx.drawImage(t.c, t.x - R.camX - t.c._ax, t.y - R.camY - t.c._ay);
     }
 
     function minimap() {
@@ -231,7 +233,14 @@
       for (const e of w.ents) {      // towers: buildings, always visible once on the map
         if (e.dead || e.kind !== 'tower') continue;
         R.interp(e);
-        push(R.iy / P - R.camY, drawTower, e);
+        const sx = R.ix / P - R.camX, sy = R.iy / P - R.camY;
+        push(sy, drawTower, { e, sx, sy });
+      }
+      const sts = w.map.structures;      // static buildings (barracks, fort, fillers, fountain, shops, outposts)
+      for (let i = 0; i < sts.length; i++) {
+        const s = sts[i], sx = s.x / P - R.camX, sy = s.y / P - R.camY;
+        if (sx < -50 || sx > VW + 50 || sy < -40 || sy > VH + 90) continue;
+        push(sy, drawStruct, { s, sx, sy });
       }
       drawTreesInto(R.camX, R.camY);
       tm = performance.now();
@@ -247,7 +256,7 @@
         R.interp(h);
         const hx = R.ix / P, hy = R.iy / P;
         let behind = false;
-        for (const it of items) if (it.fn === drawTree && it.a.y > hy && it.a.y < hy + 22 && Math.abs(it.a.x - hx) < 11) { behind = true; break; }
+        for (const it of items) if (it.fn === drawTree && it.a.y > hy && it.a.y - it.a.hh < hy - 4 && Math.abs(it.a.x - hx) < it.a.hw) { behind = true; break; }
         if (behind) { cx.globalAlpha = 0.4; IT.UnitDraw.draw(R, h); cx.globalAlpha = 1; }
       }
 
@@ -265,6 +274,7 @@
       tm = performance.now();
       IT.FX.lights(R);
       IT.TowerDraw.lights(R);
+      IT.TowerDraw.structLights(R);
       const tl1 = performance.now();
       IT.Sand.lights(R);
       const tl2 = performance.now();
