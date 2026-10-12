@@ -237,7 +237,7 @@
       const S = 3, W = Math.ceil(G.innerWidth / S), Hh = Math.ceil(G.innerHeight / S);
       if (!fxCv) fxCv = h('canvas', { class: 'fx-sand' });
       if (!fxCv.isConnected) root.appendChild(fxCv);
-      if (!fxSand || fxCv.width !== W || fxCv.height !== Hh) { fxCv.width = W; fxCv.height = Hh; fxSand = IT.Hood.Sand(fxCv, { gravity: 120 }); }
+      if (!fxSand || fxCv.width !== W || fxCv.height !== Hh) { fxCv.width = W; fxCv.height = Hh; fxSand = IT.Hood.Sand(fxCv, { gravity: 120, glow: true, drain: 2.2, max: 140 }); }
       fxSand.burst((r.left + r.width / 2) / S, (r.top + r.height / 2) / S, n || 30, cols, { speed: 30, lift: 16, spread: 3, floor: (r.bottom + 12) / S });
       if (fxRaf) return;
       let last = performance.now();
@@ -257,7 +257,7 @@
     const mkCv = cls => h('canvas', { class: 'hh ' + cls, width: HD.W, height: HFH });
     const cvBase = mkCv('base'), cvSc = mkCv('scepter'), cvSh = mkCv('shard'), cvSand = mkCv('sand');
     cvBase.getContext('2d').drawImage(HD.layer('base'), 0, 0);
-    const sand = HD.Sand(cvSand, { floor: HFH, gravity: 90 });
+    const sand = HD.Sand(cvSand, { floor: HFH, gravity: 90, glow: true });
     const pc = (v, tot) => (v / tot * 100) + '%';
     const orbBtns = {};
     for (const k of ORBS) {
@@ -597,21 +597,149 @@
     return el;
   }
 
-  // ---- Scenarios screen (practice, no rating): a compact wrapped grid of small cards; a card starts that scenario alone (sandbox).
+  // ---- Scenarios filter (pure, headless-testable): IT.UI.ScnFilter. Tabs are categories derived from the scenario tags (a scenario can sit in several),
+  // tag chips narrow further (OR = any selected tag, AND = all of them), then text search, then a stable sort. Last choice kept in localStorage 'it2.scnfilter'.
+  const SCN_KEY = 'it2.scnfilter';
+  const SCN_CATS = ['all', 'basics', 'combo', 'escape', 'multi', 'items', 'terrain', 'vision', 'juke'];
+  const SCN_CAT_TAGS = {
+    basics: ['basics', 'movement'], combo: ['combo', 'burst'], escape: ['escape', 'invisible', 'blink'], multi: ['multi', 'hold', 'positioning'], items: ['items'],
+    terrain: ['river', 'highground', 'pit', 'towers', 'edge'], vision: ['fog', 'vision', 'awareness', 'prediction', 'reaction'], juke: ['juke'],
+  };
+  const SCN_PRIMARY = ['juke', 'escape', 'terrain', 'vision', 'multi', 'items', 'combo', 'basics'];   // category() picks the first of these a scenario belongs to
+  const SCN_SORTS = ['level', 'levelDesc', 'name', 'todo'];
+  const scnCats = tags => { const a = tags || []; return SCN_CATS.slice(1).filter(c => SCN_CAT_TAGS[c].some(g => a.indexOf(g) >= 0)); };
+  const scnFold = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const ScnFilter = {
+    CATS: SCN_CATS, SORTS: SCN_SORTS, CAT_TAGS: SCN_CAT_TAGS, KEY: SCN_KEY,
+    categories: scnCats,                                                           // every tab a tag list belongs to
+    category(tags) { const c = scnCats(tags); return SCN_PRIMARY.filter(p => c.indexOf(p) >= 0)[0] || 'basics'; },
+    defaults() { return { cat: 'all', tags: [], mode: 'or', sort: 'level', q: '' }; },
+    normalize(o) {
+      const d = ScnFilter.defaults();
+      if (!o || typeof o !== 'object') return d;
+      if (SCN_CATS.indexOf(o.cat) >= 0) d.cat = o.cat;
+      if (Array.isArray(o.tags)) d.tags = o.tags.filter((g, i, a) => typeof g === 'string' && g && a.indexOf(g) === i);
+      if (o.mode === 'and') d.mode = 'and';
+      if (SCN_SORTS.indexOf(o.sort) >= 0) d.sort = o.sort;
+      if (typeof o.q === 'string') d.q = o.q.slice(0, 40);
+      return d;
+    },
+    inCat: (tags, cat) => !cat || cat === 'all' || scnCats(tags).indexOf(cat) >= 0,
+    // tags used by the scenarios of a tab -> [{ tag, n }] (most used first, then A-Z)
+    tagsOf(list, cat) {
+      const n = {};
+      for (const s of list || []) if (ScnFilter.inCat(s.tags, cat)) for (const g of s.tags || []) n[g] = (n[g] || 0) + 1;
+      return Object.keys(n).map(tag => ({ tag, n: n[tag] })).sort((a, b) => b.n - a.n || (a.tag < b.tag ? -1 : 1));
+    },
+    // ctx = { name(s) -> string, cleared(s) -> bool, label(tag) -> string }; returns a new array, input untouched
+    apply(list, f, ctx) {
+      f = ScnFilter.normalize(f); ctx = ctx || {};
+      const name = ctx.name || (s => s.id), cleared = ctx.cleared || (() => false), label = ctx.label || (g => g);
+      const q = scnFold(f.q).trim();
+      const rows = [];
+      (list || []).forEach((s, i) => {
+        const tags = s.tags || [];
+        if (!ScnFilter.inCat(tags, f.cat)) return;
+        if (f.tags.length && !(f.mode === 'and' ? f.tags.every(g => tags.indexOf(g) >= 0) : f.tags.some(g => tags.indexOf(g) >= 0))) return;
+        if (q && scnFold([name(s), s.id].concat(tags.map(label)).join(' ')).indexOf(q) < 0) return;
+        rows.push({ s, i, nm: scnFold(name(s)), done: cleared(s) ? 1 : 0 });
+      });
+      const lv = r => r.s.level || 0;
+      const cmp = f.sort === 'levelDesc' ? (a, b) => lv(b) - lv(a)
+        : f.sort === 'name' ? (a, b) => (a.nm < b.nm ? -1 : a.nm > b.nm ? 1 : 0)
+        : f.sort === 'todo' ? (a, b) => a.done - b.done || lv(a) - lv(b)
+        : (a, b) => lv(a) - lv(b);
+      return rows.sort((a, b) => cmp(a, b) || a.i - b.i).map(r => r.s);   // ties keep the data order (stable on every engine)
+    },
+    save(f, store) { try { (store || G.localStorage).setItem(SCN_KEY, JSON.stringify(ScnFilter.normalize(f))); return true; } catch (e) { return false; } },
+    load(store) { try { return ScnFilter.normalize(JSON.parse((store || G.localStorage).getItem(SCN_KEY))); } catch (e) { return ScnFilter.defaults(); } },
+  };
+
+  // lifetime per-scenario progress: { cleared, best } (stats.js scn map; older blobs only have combos.best[id] = best time of a clear)
+  function scnProgress() {
+    let life = null;
+    try { life = IT.UI.Life && IT.UI.Life.load(); } catch (e) { life = null; }
+    const m = (life && life.scn) || {}, b = (life && life.combos && life.combos.best) || {};
+    return id => {
+      const r = m[id];
+      if (r && r.cleared > 0) return { cleared: r.cleared, best: r.best != null ? r.best : b[id] != null ? b[id] : null };
+      return b[id] != null ? { cleared: 1, best: b[id] } : null;
+    };
+  }
+  const lvColor = lv => 'hsl(' + Math.round(130 - (Math.max(1, Math.min(10, lv || 1)) - 1) * 14.4) + ',72%,58%)';   // level 1 green .. 10 red
+
+  // ---- Scenarios screen (practice, no rating): tabs + tag chips + search/sort over a grid of small cards; a card starts that scenario alone (sandbox).
   function buildScenarios() {
     const { h } = IT.UI, t = IT.t, EC = IT.EnemyCard;
-    const list = scenarios();
+    const list = scenarios(), prog = scnProgress();
+    const f = ScnFilter.load();
+    const tagLabel = g => (IT.hasT('tag.' + g) ? t('tag.' + g) : g);
+    const ctx = { name: scnName, cleared: s => !!prog(s.id), label: tagLabel };
+    const tabsEl = h('div', { class: 'sc-tabs' }), chipsEl = h('div', { class: 'sc-chips' }), countEl = h('span', { class: 'sc-count' });
+    const gridEl = h('div', { class: 'sc-grid' });
+    const modeBtn = h('button', { type: 'button', class: 'btn sm dim sc-mode', 'data-tip': t('sc.mode.d') });
+    const clearBtn = h('button', { type: 'button', class: 'btn sm dim', text: t('sc.clear'), 'data-tip': t('sc.clear.d') });
+    const search = h('input', { type: 'search', class: 'sc-search', placeholder: t('sc.search'), maxlength: '40', autocomplete: 'off', spellcheck: 'false' });
+    const sortEl = h('select', { class: 'mapsel sc-sort', 'aria-label': t('sc.sort') }, SCN_SORTS.map(k => h('option', { value: k, text: t(`sc.sort.${k}`) })));
+    search.value = f.q; sortEl.value = f.sort;
+    ['keydown', 'keyup', 'keypress'].forEach(ev => search.addEventListener(ev, e => e.stopPropagation()));
+    const dirty = () => ScnFilter.save(f);
+    const idle = () => { clearBtn.disabled = f.cat === 'all' && !f.tags.length && !f.q; };
+
     const card = s => {
-      const tags = (s.tags || []).filter(g => IT.hasT('tag.' + g)).slice(0, 3);
+      const tags = (s.tags || []).filter(g => IT.hasT('tag.' + g)).slice(0, 3), pr = prog(s.id);
       return h('button', {
-        type: 'button', class: 'scard', 'data-snd': 'start', 'data-tip': scnTip(s),
+        type: 'button', class: 'scard' + (pr ? ' done' : ''), 'data-snd': 'start', 'data-id': s.id,
+        'data-tip': scnTip(s) + (pr ? '\n' + t('sc.cleared', { n: pr.cleared }) + (pr.best != null ? ' | ' + t('sc.best', { time: pr.best.toFixed(1) }) : '') : ''),
+        style: { '--lv': lvColor(s.level) },
         onclick: () => IT.App.start(scenarioOpts(s.id)),
       },
         h('span', { class: 'lvb', 'data-tip': t('lo.lvTier', { n: s.level, tier: t('diff.' + EC.tierOfLevel(s.level)) }), text: String(s.level) }),
         h('span', { class: 'sctx' },
           h('b', { class: 'scn', text: scnName(s) }),
-          h('span', { class: 'sctags' }, tags.map(g => h('i', { text: t('tag.' + g) })))));
+          h('span', { class: 'sctags' }, tags.map(g => h('i', { text: tagLabel(g) })))),
+        pr ? h('span', { class: 'scok' }, h('em', { text: '✓' }), pr.best != null ? h('small', { text: pr.best.toFixed(1) + 's' }) : null) : null);
     };
+    // full = tabs + chips + controls too; otherwise only the count and the grid
+    const draw = full => {
+      if (full) {
+        tabsEl.textContent = '';
+        for (const c of SCN_CATS) {
+          const n = c === 'all' ? list.length : list.filter(s => ScnFilter.inCat(s.tags, c)).length;
+          tabsEl.appendChild(h('button', {
+            type: 'button', class: 'sc-tab' + (f.cat === c ? ' on' : '') + (n ? '' : ' empty'), 'data-cat': c, 'data-snd': 'click',
+            onclick: () => {
+              f.cat = c;
+              const ok = ScnFilter.tagsOf(list, c).map(x => x.tag);
+              f.tags = f.tags.filter(g => ok.indexOf(g) >= 0);
+              dirty(); draw(true);
+            },
+          }, h('span', { text: t(`sc.cat.${c}`) }), h('small', { text: String(n) })));
+        }
+        chipsEl.textContent = '';
+        for (const { tag, n } of ScnFilter.tagsOf(list, f.cat)) {
+          chipsEl.appendChild(h('button', {
+            type: 'button', class: 'sc-chip' + (f.tags.indexOf(tag) >= 0 ? ' on' : ''), 'data-tag': tag,
+            onclick: () => { const i = f.tags.indexOf(tag); if (i >= 0) f.tags.splice(i, 1); else f.tags.push(tag); dirty(); draw(true); },
+          }, tagLabel(tag), h('small', { text: String(n) })));
+        }
+        modeBtn.textContent = t(f.mode === 'and' ? 'sc.modeAnd' : 'sc.modeOr');
+        modeBtn.classList.toggle('on', f.mode === 'and');
+        modeBtn.disabled = f.tags.length < 2;
+        idle();
+      }
+      const rows = ScnFilter.apply(list, f, ctx);
+      countEl.textContent = t('sc.count', { n: rows.length, total: list.length });
+      gridEl.textContent = '';
+      if (rows.length) rows.forEach(s => gridEl.appendChild(card(s)));
+      else gridEl.appendChild(h('p', { class: 'fine sc-none', text: list.length ? t('sc.none') : t('lo.noScenarios') }));
+      gridEl.scrollTop = 0;
+    };
+    search.addEventListener('input', () => { f.q = search.value; dirty(); idle(); draw(false); });
+    sortEl.addEventListener('change', () => { f.sort = sortEl.value; dirty(); draw(false); });
+    modeBtn.addEventListener('click', () => { f.mode = f.mode === 'and' ? 'or' : 'and'; dirty(); draw(true); });
+    clearBtn.addEventListener('click', () => { Object.assign(f, ScnFilter.defaults(), { sort: f.sort }); search.value = ''; dirty(); draw(true); });
+    draw(true);
     return h('div', { class: 'scr loadout sc' },
       h('div', { class: 'lo-head' },
         h('button', { type: 'button', class: 'btn sm dim', text: t('ui.back'), onclick: () => IT.App.go('title') }),
@@ -619,7 +747,10 @@
         IT.UI.langToggle()),
       h('div', { class: 'sc-prac' },
         h('h3', { text: t('sc.practice') }), h('p', { class: 'fine', text: t('sc.practice.d') })),
-      list.length ? h('div', { class: 'sc-grid' }, list.map(card)) : h('p', { class: 'fine', text: t('lo.noScenarios') }));
+      tabsEl,
+      h('div', { class: 'sc-bar' }, search, sortEl, modeBtn, clearBtn, countEl),
+      chipsEl,
+      gridEl);
   }
 
   // the Free Play match
@@ -639,5 +770,6 @@
   function comboPreset(on) { st.combo = on !== false; if (st.combo) st.grant = true; }
 
   load();
+  IT.UI.ScnFilter = ScnFilter;
   IT.UI.LoadoutScreen = { state: st, build, buildScenarios, startOpts, scenarioOpts, comboPreset, save, load, derived, trim };
 })(typeof window !== 'undefined' ? window : globalThis);

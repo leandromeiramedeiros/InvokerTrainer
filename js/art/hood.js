@@ -3,6 +3,7 @@
 // Extracted from js/ui/hud.js so the loadout picker draws the SAME hood (hud.js can switch to these helpers; the constants are identical).
 //   IT.Hood.layer('base') / ('scepter', orb) / ('shard', orb) -> cached W x H canvas (draw it at 0,0)
 //   IT.Hood.Sand(canvas, { floor }) -> grain engine: setEmitters / burst / step(dt) / draw(); grains fall, pool on the floor, drain away.
+//     { glow: true } delegates to IT.Sand.createGlow (js/render/sand.js: additive hot grains + bloom + height-layer pile that disperses); same API.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -98,6 +99,7 @@
   // A burst grain with its own `floor` just rests there and fades instead (screen-sized fx canvases).
   function Sand(cv, o) {
     o = o || {};
+    if (o.glow && IT.Sand && IT.Sand.createGlow) return IT.Sand.createGlow(cv, o);   // opt-in glow mode; default stays the plain engine below
     const Wc = cv.width, floor = o.floor != null ? o.floor : cv.height, G0 = o.gravity || 70, MAXP = o.max || 90, PILE = o.pile || 5;
     const ps = [], pile = [], em = [];
     for (let x = 0; x < Wc; x++) pile.push([]);

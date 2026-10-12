@@ -18,6 +18,9 @@
     return name;
   }
   const rampIdx = n => Math.max(0, RAMP_ID.indexOf(n));
+  // v6 item 41 (Ice Wall): pale frost mist rolling off the shards, and meltwater during the melt-out
+  addRamp('frost', ['#ffffff', '#f0fbff', '#d6f1ff', '#b4defa', '#8cc2e6', '#6a9fc8']);
+  addRamp('meltwater', ['#eaf9ff', '#a8e0ff', '#6cc4f4', '#3f9be0', '#2a74c0', '#1f4f94']);
   let head = 0, live = 0;
 
   let layers = null;

@@ -160,3 +160,32 @@
 .items.rm .icat,.items.rm .islotbox{outline:0}
 .items.rm.dragging .icat{border-color:var(--bad);background:rgba(255,90,106,.08)}
 .fp .iopt{user-select:none}
+
+/* ---- scenarios: category tabs, tag chips, search/sort bar, level colour ramp (--lv set per card), cleared mark */
+.scr.sc .sc-prac{flex:none}
+.scr.sc .sc-prac p{margin-bottom:.4em}
+.sc-tabs,.sc-bar,.sc-chips{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:.3em;margin-bottom:.4em}
+.sc-tab{display:inline-flex;align-items:baseline;gap:.4em;padding:.25em .6em;background:var(--panel2);border:2px solid var(--line);color:var(--dim);font-size:.72em;letter-spacing:.06em;white-space:nowrap}
+.sc-tab small,.sc-chip small{font-size:.8em;opacity:.7;font-weight:normal}
+.sc-tab:hover{border-color:var(--mag);color:var(--ink)}
+.sc-tab.on{border-color:var(--gold);color:var(--gold);background:#3a2810;box-shadow:0 0 .5em rgba(242,196,68,.25)}
+.sc-tab.empty:not(.on){opacity:.45}
+.sc-bar{gap:.5em}
+.sc-search{flex:1 1 12em;min-width:8em;max-width:22em;background:#0b0618;color:var(--ink);border:2px solid var(--line);padding:.3em .5em;font:inherit;font-size:.8em}
+.sc-search:focus{outline:0;border-color:var(--gold)}
+.sc-sort{font-size:.8em}
+.sc-mode.on{border-color:var(--gold);color:var(--gold)}
+.sc-bar .btn:disabled{opacity:.4;cursor:default}
+.sc-count{margin-left:auto;color:var(--gold);font-size:.85em;letter-spacing:.08em;white-space:nowrap}
+.sc-chips{gap:.25em}
+.sc-chip{display:inline-flex;align-items:baseline;gap:.35em;padding:.1em .5em;background:transparent;border:1px solid var(--line);color:var(--dim);font-size:.66em;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.sc-chip:hover{border-color:var(--mag);color:var(--ink)}
+.sc-chip.on{border-color:var(--gold);color:#1a1020;background:var(--gold)}
+.sc-none{grid-column:1/-1;padding:1em;text-align:center}
+.scard{position:relative}
+.scard .lvb{border-color:var(--lv,var(--gold));color:var(--lv,var(--gold));background:rgba(0,0,0,.35);font-weight:bold}
+.scard:hover .lvb{background:var(--lv,var(--gold));color:#120a22}
+.scard.done{box-shadow:inset 3px 0 0 var(--lv,var(--good))}
+.scard .scok{flex:none;margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;line-height:1.05}
+.scard .scok em{font-style:normal;color:var(--good,#7bd88f);font-size:.9em;font-weight:bold}
+.scard .scok small{font-size:.6em;color:var(--dim)}

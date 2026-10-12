@@ -18,6 +18,7 @@
       cc: { uptime: 0, byStatus: {} },
       blindHits: 0, boltsCountered: 0, boltsBlocked: 0, boltsHit: 0, blinksPrevented: 0, blinks: 0,
       combos: { done: 0, byTier: {}, fails: 0, best: {}, score: 0 },
+      scn: {},                    // scenario id -> { cleared, best (s) } from scnResult ok (lifetime: Scenarios screen check + best time)
       relics: {},                 // relic id -> amount this run (scenario runs only)
     };
   }
@@ -139,6 +140,12 @@
       if (c.best[p.id] == null || p.time < c.best[p.id]) c.best[p.id] = p.time;
     });
     on('comboFail', () => { S.combos.fails++; });
+    on('scnResult', p => {
+      if (!p || !p.ok || p.id == null) return;
+      const r = S.scn[p.id] || (S.scn[p.id] = { cleared: 0, best: null });
+      r.cleared++;
+      if (typeof p.time === 'number' && isFinite(p.time) && p.time > 0 && (r.best == null || p.time < r.best)) r.best = round(p.time);
+    });
 
     const sys = (w2, dt) => {
       const d = dummy();
@@ -196,6 +203,12 @@
     const c = L.combos, d = s.combos;
     c.done += d.done; c.fails += d.fails; c.score += d.score; addMap(c.byTier, d.byTier);
     for (const id in d.best) if (c.best[id] == null || d.best[id] < c.best[id]) c.best[id] = d.best[id];
+    L.scn = L.scn || {};
+    if (s.scn) for (const id in s.scn) {
+      const a = L.scn[id] || (L.scn[id] = { cleared: 0, best: null }), b = s.scn[id];
+      a.cleared += b.cleared || 0;
+      if (b.best != null && (a.best == null || b.best < a.best)) a.best = b.best;
+    }
     L.relics = L.relics || {};
     if (s.relics) { addMap(L.relics, s.relics); for (const k in L.relics) L.relics[k] = round(L.relics[k]); }
     // s.run (main.js commitStats, ranked runs only): { mode, score, solved, turns, medal:{tier,stars,name,id} } -> runs count + best medal

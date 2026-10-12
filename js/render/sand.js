@@ -2,6 +2,7 @@
 // Ground: ring-buffer cellular automaton, 1 cell = 1 screen px, world-anchored (heightfield piles, magma flow, cooling, crumble).
 // Air: pooled "flyers" with height z (fire, sparks, embers, drops, grains, mist...) that land and deposit into the grid.
 // Emissive pixels feed the lightmap (light.js) and the bloom canvas; the colour layers are drawn BEFORE the fog multiply.
+// ALSO IT.Sand.createGlow(canvas, opts): standalone additive-glow + bloom sand engine for UI canvases (Aghanim hood picker, relic toast, end card); see "glow sand" below.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -1087,8 +1088,197 @@
     clear();
   }
 
+  // ---------------------------------------------------------------- glow sand (standalone, small pixel canvases; recovers the v1.0 look)
+  // v1.0 (b33caa6 js/sand.js + css .bloom): emissive cells (SPARK/LAVA/FIRE) went to a SECOND canvas, drawn again twice with CSS blur +
+  // brightness and mix-blend-mode:screen (b1 blur .55u x1.7, b2 blur 1.8u x2.1), while plain SAND stayed an opaque cell layer.
+  // Here: IT.Sand.createGlow(canvas, opts) -> engine on ANY canvas (grid unit = canvas pixel; scale it with CSS image-rendering:pixelated).
+  //   - height layer: settled grains stack per column (cap `pile`), topple down the angle of repose, drawn OPAQUE (source-over) so piles read solid;
+  //     the pile thins by itself (`drain`) and disperse() blows it away: cells lift off and drift downwind as fading embers.
+  //   - grains in flight are HOT (white-shifted, cooling to their colour) and drawn ADDITIVE (globalCompositeOperation 'lighter') on a grain layer
+  //     that also feeds a cheap bloom: grain layer -> downscale chain (divisors [4,8], [2,4] on tiny canvases; never above 1/4 res on big ones)
+  //     -> composited back 'lighter' at low alpha. The bloom is recomputed every `bloomEvery` (2) frames only.
+  // opts: seed (deterministic rng), floor (pile floor y, default canvas height), gravity (70), max (grains, 90), pile (column cap, 5),
+  //   drain (pile thinning scale, 1), wind (px/s drift of dispersing cells, 14), glow (false = plain source-over, no bloom), bloom (false = additive only),
+  //   bloomEvery (2), bloomAlpha (1 scales the bloom), makeCanvas(w,h) (offscreen factory; default document.createElement).
+  // api: setEmitters([{x0,x1,y,pal:{h,m},rate,vx}]), burst(x,y,n,cols,{speed,lift,spread,floor}) (floor = the pile floor of THAT burst while its column is empty),
+  //   step(dt), draw(), live(), disperse(sec), setWind(v), setGlow(b), clear(), heights(), pileCount(), grainCount(), stats.
+  const parseCol = c => {
+    if (Array.isArray(c)) return [c[0] | 0, c[1] | 0, c[2] | 0];
+    const s = String(c).trim();
+    let m = /^#([0-9a-f]{3})$/i.exec(s);
+    if (m) return [parseInt(m[1][0] + m[1][0], 16), parseInt(m[1][1] + m[1][1], 16), parseInt(m[1][2] + m[1][2], 16)];
+    m = /^#([0-9a-f]{6})/i.exec(s);
+    if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)];
+    m = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(s);
+    return m ? [+m[1], +m[2], +m[3]] : [255, 220, 120];
+  };
+  const rgbStr = (r, g, b) => 'rgb(' + (r < 0 ? 0 : r > 255 ? 255 : r | 0) + ',' + (g < 0 ? 0 : g > 255 ? 255 : g | 0) + ',' + (b < 0 ? 0 : b > 255 ? 255 : b | 0) + ')';
+  const SHADE = [0.78, 1, 0.9, 1.08];   // per-cell variation of a settled pile; the top cell is lit (1.3)
+
+  function createGlow(cv, o) {
+    o = o || {};
+    const W = cv.width | 0, H = cv.height | 0;
+    const floor0 = o.floor != null ? o.floor : H, G0 = o.gravity || 70, MAXP = o.max || 90, CAP = o.pile || 5;
+    const bloomEvery = o.bloomEvery || 2, bloomA = o.bloomAlpha != null ? o.bloomAlpha : 1;
+    let seed = o.seed != null ? (o.seed >>> 0) : ((Math.random() * 4294967296) >>> 0);
+    seed = seed || 0x9e3779b9;
+    const rand = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
+    let glow = o.glow !== false;
+    const bloomOn = o.bloom !== false;
+    let wind = o.wind != null ? o.wind : 14;
+    const pal = [], palIdx = new Map();   // colour table: index -> { rgb, shades (css strings), top }
+    const col = c => {
+      const k = Array.isArray(c) ? c.join() : String(c);
+      let i = palIdx.get(k);
+      if (i === undefined) {
+        const rgb = parseCol(c);
+        i = pal.length; palIdx.set(k, i);
+        pal.push({ rgb, sh: SHADE.map(f => rgbStr(rgb[0] * f, rgb[1] * f, rgb[2] * f)), top: rgbStr(rgb[0] * 1.3 + 14, rgb[1] * 1.3 + 14, rgb[2] * 1.3 + 14) });
+      }
+      return i;
+    };
+    const hgt = new Uint16Array(W), base = new Int16Array(W).fill(floor0), cells = new Uint16Array(W * CAP);   // height layer: cells[x*CAP+k] = palette idx + 1, bottom up
+    let nPile = 0, drain = 0, scatter = 0, frame = 0;
+    const ps = [], em = [];
+    const stats = { steps: 0, draws: 0, bloomFrames: 0, ops: 0 };
+    const mk = (w, h) => {
+      try {
+        const c = o.makeCanvas ? o.makeCanvas(w, h) : (G.document ? G.document.createElement('canvas') : null);
+        if (!c) return null;
+        c.width = w; c.height = h;
+        const x = c.getContext && c.getContext('2d');
+        return x ? { cv: c, cx: x, w, h } : null;
+      } catch (e) { return null; }
+    };
+    // lazily built (a mocked or absent DOM just means no bloom)
+    let layer = null, chain = [], built = false, chainDone = false;
+    const small = W * H < 4096, DIVS = o.bloomDivs || (small ? [2, 4] : [4, 8]), BA = small ? [0.28, 0.2] : [0.3, 0.3];
+    const build = () => {
+      layer = mk(W, H);
+      chain = layer ? DIVS.map(d => mk(Math.max(1, Math.ceil(W / d)), Math.max(1, Math.ceil(H / d)))) : [];
+      if (chain.some(c => !c)) chain = [];
+    };
+
+    const surfY = (x, fl) => (hgt[x] ? base[x] : fl) - hgt[x];
+    function settle(p) {   // a grain reached the pile: slide down the surface (angle of repose), then stack
+      let x = p.x < 0 ? 0 : p.x >= W ? W - 1 : p.x | 0;
+      const fl = p.floor != null ? p.floor : floor0;
+      for (let i = 0; i < 6; i++) {
+        const s0 = surfY(x, fl), sl = x > 0 ? surfY(x - 1, fl) : -1e9, sr = x < W - 1 ? surfY(x + 1, fl) : -1e9;
+        if (sl > s0 + 1 && sl >= sr) x--; else if (sr > s0 + 1) x++; else break;
+      }
+      if (hgt[x] >= CAP) return;
+      if (!hgt[x]) base[x] = fl;
+      cells[x * CAP + hgt[x]++] = p.ci + 1; nPile++;
+    }
+    function lift() {   // one random column loses its top cell: it becomes a fading ember carried by the wind
+      let n = 0, pick = -1;
+      for (let x = 0; x < W; x++) if (hgt[x]) { n++; if (rand() * n < 1) pick = x; }
+      if (pick < 0) return false;
+      const k = --hgt[pick], ci = cells[pick * CAP + k] - 1; nPile--;
+      if (ps.length < MAXP * 3) ps.push({ x: pick + 0.5, y: base[pick] - 1 - k, vx: wind * (0.5 + rand()) * (scatter > 0 ? 1.8 : 1), vy: -(6 + rand() * 12), ci, heat: 0.55, ghost: 1, life: 0, max: 0.5 + rand() * 0.5 });
+      return true;
+    }
+    function sub(dt) {
+      for (const e of em) {
+        e.acc += dt * e.rate;
+        while (e.acc >= 1 && ps.length < MAXP) {
+          e.acc -= 1;
+          ps.push({ x: e.x0 + rand() * (e.x1 - e.x0), y: e.y + rand() * 2, vx: (rand() - 0.5) * (e.vx || 6), vy: -1 - rand() * 4, ci: col(rand() < 0.4 ? e.pal.h : e.pal.m), heat: 0.7, life: 0, max: 99 });
+        }
+        if (e.acc > 1) e.acc = 1;
+      }
+      if (scatter > 0) scatter -= dt;
+      for (let i = ps.length - 1; i >= 0; i--) {
+        const p = ps[i];
+        p.heat -= dt * (p.ghost ? 0.5 : 1.4); if (p.heat < 0) p.heat = 0;
+        if (p.ghost) {   // dispersing cell: light, drifting with the wind, fading out
+          p.vy += G0 * 0.18 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life += dt;
+          if (p.life >= p.max || p.x < -2 || p.x > W + 2 || p.y < -4) ps.splice(i, 1);
+          continue;
+        }
+        p.vy += G0 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+        const cx = p.x < 0 ? 0 : p.x >= W ? W - 1 : p.x | 0, fl = p.floor != null ? p.floor : floor0;
+        if (p.y >= surfY(cx, fl) - 1) { settle(p); ps.splice(i, 1); }
+        else if (p.x < -2 || p.x > W + 2 || p.y > H + 8) ps.splice(i, 1);
+      }
+      // the pile thins out (faster once nothing feeds it); disperse() makes it a lot faster
+      drain += dt * (scatter > 0 ? 70 : (em.length ? 5 : 11)) * (o.drain != null ? o.drain : 1);
+      while (drain >= 1) { drain -= 1; if (!nPile || !lift()) { drain = 0; break; } }
+    }
+    const api = {
+      stats, glow: true,
+      setEmitters(list) { em.length = 0; for (const e of list || []) em.push(Object.assign({ acc: 0 }, e)); },
+      burst(x, y, n, cols, opt) {
+        opt = opt || {};
+        for (let i = 0; i < n && ps.length < MAXP * 3; i++) {
+          const a = rand() * Math.PI * 2, v = (opt.speed || 14) * (0.35 + rand());
+          ps.push({ x: x + (rand() - 0.5) * (opt.spread || 3), y: y + (rand() - 0.5) * (opt.spread || 3), vx: Math.cos(a) * v, vy: Math.sin(a) * v - (opt.lift || 8), ci: col(cols[(rand() * cols.length) | 0]), floor: opt.floor, heat: 1, life: 0, max: 99 });
+        }
+      },
+      live() { return ps.length > 0 || em.length > 0 || nPile > 0; },
+      step(dt) {
+        dt = Math.min(dt, 0.05); stats.steps++;
+        const n = Math.max(1, Math.ceil(dt / (1 / 60) - 1e-9)), h = dt / n;
+        for (let i = 0; i < n; i++) sub(h);
+      },
+      draw() {
+        const cx = cv.getContext('2d'); stats.draws++; frame++;
+        cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
+        cx.clearRect(0, 0, W, H);
+        for (let x = 0; x < W; x++) {   // height layer: opaque, normal blending
+          const n = hgt[x];
+          for (let k = 0; k < n; k++) {
+            const P = pal[cells[x * CAP + k] - 1];
+            cx.fillStyle = k === n - 1 && n > 1 ? P.top : P.sh[(x * 7 + k * 13) & 3];
+            cx.fillRect(x, base[x] - 1 - k, 1, 1);
+          }
+        }
+        if (!ps.length) { chainDone = false; return; }
+        if (!glow) {   // plain mode: source-over grains, no bloom
+          for (const p of ps) { cx.globalAlpha = p.ghost ? Math.max(0, 1 - p.life / p.max) : 0.95; cx.fillStyle = pal[p.ci].sh[1]; cx.fillRect(p.x | 0, p.y | 0, 1, 1); }
+          cx.globalAlpha = 1; return;
+        }
+        if (!built) { built = true; build(); }
+        const g = layer ? layer.cx : cx;   // grain layer (no offscreen available: grains go straight onto the target)
+        if (layer) { g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, W, H); }
+        g.globalCompositeOperation = 'lighter';
+        for (const p of ps) {   // hot grains: white-shifted while hot, additive so overlaps burn brighter
+          const P = pal[p.ci].rgb, hh = p.heat;
+          g.globalAlpha = p.ghost ? Math.max(0, 1 - p.life / p.max) * 0.7 : 0.8;
+          g.fillStyle = rgbStr(P[0] + (255 - P[0]) * hh * 0.4, P[1] + (255 - P[1]) * hh * 0.4, P[2] + (255 - P[2]) * hh * 0.4);
+          g.fillRect(p.x | 0, p.y | 0, 1, 1);
+        }
+        g.globalAlpha = 1;
+        cx.globalCompositeOperation = 'lighter';
+        if (layer) { cx.drawImage(layer.cv, 0, 0); stats.ops++; }
+        if (layer && bloomOn && chain.length) {
+          if (!chainDone || frame % bloomEvery === 0) {   // bloom: downscale chain (cheap blur), refreshed every other frame
+            let src = layer.cv;
+            for (const c of chain) {
+              c.cx.globalCompositeOperation = 'source-over'; c.cx.globalAlpha = 1; c.cx.clearRect(0, 0, c.w, c.h);
+              c.cx.imageSmoothingEnabled = true; c.cx.drawImage(src, 0, 0, c.w, c.h); src = c.cv;
+            }
+            chainDone = true; stats.bloomFrames++;
+          }
+          cx.imageSmoothingEnabled = true;
+          for (let i = 0; i < chain.length; i++) { cx.globalAlpha = Math.min(1, (BA[i] || 0.3) * bloomA); cx.drawImage(chain[i].cv, 0, 0, W, H); stats.ops++; }
+        }
+        cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
+      },
+      disperse(sec) { scatter = sec != null ? sec : 1; },   // blow the pile away (wind) for `sec` seconds
+      setWind(v) { wind = v; },
+      setGlow(b) { glow = !!b; },
+      clear() { ps.length = 0; hgt.fill(0); cells.fill(0); nPile = 0; drain = 0; scatter = 0; },
+      heights() { return Array.from(hgt); },
+      pileCount() { return nPile; },
+      grainCount() { return ps.length; },
+    };
+    return api;
+  }
+
   IT.Sand = {
-    init, clear, resize, update, drawGround, drawAir, lights, event, blink, fly, dep, discDep, bolt, strike,
+    createGlow, init, clear, resize, update, drawGround, drawAir, lights, event, blink, fly, dep, discDep, bolt, strike,
     get count() { return total + flive; }, get cells() { return total; }, get flyers() { return flive; },
     KIND: { FIRE: K_FIRE, SMOKE: K_SMOKE, EMBER: K_EMBER, SPARK: K_SPARK, DROP: K_DROP, GRAIN: K_GRAIN, SHARD: K_SHARD, MIST: K_MIST, MOTE: K_MOTE, ARC: K_ARC },
   };

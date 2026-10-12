@@ -76,6 +76,8 @@
       if (chans.length > 4) chans.shift();
     }
     if (IT.Sand && IT.Sand.event) IT.Sand.event(p);
+    if (name === 'iceWall' || name === 'iceFloe') { iwReg.set(x + '|' + y, { dur: p.dur, ax: p.ax, ay: p.ay, bx: p.bx, by: p.by }); if (iwReg.size > 8) iwReg.delete(iwReg.keys().next().value); }
+    else if (name === 'iceFloeRoot') { iwRoots.push({ unit: p.unit, t0: R_.time, dur: p.dur || 2.5, sx: 0, sy: 0, fade: 1 }); if (iwRoots.length > 12) iwRoots.shift(); }
     switch (name) {
       case 'meteorFall': {
         let c = findChan(x, y);
@@ -222,7 +224,7 @@
       }
       case 'cataclysm': addFx({ k: 'wave', x, y, r0: 20, r1: 300, dur: 0.6, color: '#ffd070' }); break;
       case 'blinkStart': case 'blinkEnd': break;
-      case 'iceWallEnd': burst(x, y, 'ice', 40, { spread: 80, speed: 40, up: 60 }); break;
+      case 'iceWallEnd': iceWallEnd(x, y); break;
       case 'ghostBreak': case 'ghostWalk': case 'alacrity': case 'forgeSpirit': burst(x, y, name === 'alacrity' ? 'gold' : 'white', 14, { spread: 20, speed: 30, up: 60 }); break;
       default: break;     // sunstrikeBeam/iceWall/tornado*/meteorFall/empCharge/shivaBlast/... handled by thinker drawers
     }
@@ -309,7 +311,7 @@
   const revT = new Map();          // start-reveal thinker id -> render time first drawn (the world is frozen in the countdown, so it animates on render time)
 
   // drop every one-shot / channel / telegraph / damage number / order path (scenario swap, restart)
-  function clear() { tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); }
+  function clear() { iwReg.clear(); iwLay.clear(); iwRoots.length = 0; tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); }
 
   // ---------- per-frame update ----------
   function update(R, dt) {
@@ -332,7 +334,7 @@
         case 'deafeningblast': rate = 40; ramp = 'ice'; o = { speed: 20, up: 40, spread: 90, life: 0.5, rest: 2 }; break;
         case 'emp': rate = 14; ramp = 'purple'; o = { speed: 20, up: 70, spread: (e.r || 100) * 0.6, life: 0.7, rest: 1.5 }; break;
         case 'sunstrike': rate = 10; ramp = 'gold'; o = { speed: 10, up: 60, spread: (e.r || 100) * 0.9, life: 0.8, rest: 1.5 }; break;
-        case 'icewall': rate = 5; ramp = 'ice'; o = { speed: 10, up: 20, spread: 80, life: 0.8, rest: 2 }; break;
+        case 'icewall': iceWallParticles(R, e, dt); break;
         default: break;
       }
       if (!rate) continue;
@@ -353,6 +355,7 @@
       R.interp(e);
       const sx = R.ix / R.P - R.camX, sy = R.iy / R.P - R.camY - R.iz / R.P;
       const c = spellRgb(e), key = e.fx || e.ability;
+      if (key === 'icewall') { iceWallLights(R, e); continue; }
       let r = Math.min(80, Math.max(26, (e.r || e.radius || 60) / R.P * 1.1)), inten = 0.55;
       if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; inten = 0.25 + 0.5 * clamp(1 - rem, 0, 1); }
       else if (key === 'startReveal') { r = 80; inten = 0.85 * (1 - clamp((e.age - 0.6) / 0.4, 0, 1)); c[0] = 255; c[1] = 210; c[2] = 90; }
@@ -377,6 +380,7 @@
       else if (f.k === 'swirl') R.light(sx, sy - 10, 45, [90, 255, 130], 0.7 * (1 - age));
       else if (f.k === 'chainring') R.light(sx, sy - 8, 30, f.dark ? [120, 90, 220] : [255, 200, 70], 0.7 * (1 - age));
     }
+    iceFloeRootLights(R);
     for (const c of chans) {
       const age = R.time - c.t0, fade = c.end != null ? 1 - clamp((R.time - c.end) / 0.3, 0, 1) : 1;
       R.light(pxs(R, c.x), pys(R, c.y), Math.min(120, c.r / R.P * 1.25), [40, 190, 255], (0.5 + 0.15 * Math.sin(R.time * 5) + (c.fall != null ? 0.25 : 0)) * fade * clamp(age / 0.25, 0, 1));
@@ -516,12 +520,14 @@
           cx.globalAlpha = 1;
           break;
         }
-        case 'bolt': case 'atos': case 'gleipnir': case 'tornado': case 'deafeningblast': case 'icewall': case 'meteorhammer': case 'stunbolt': break;
+        case 'icewall': iceWallGround(R, e); break;
+        case 'bolt': case 'atos': case 'gleipnir': case 'tornado': case 'deafeningblast': case 'meteorhammer': case 'stunbolt': break;
         default: {
           if (rr > 2) PX.ring(cx, x, y, rr, e.color && e.color[0] === '#' ? e.color : '#ffd24a', t * 0.1, 3);
         }
       }
     }
+    iceFloeRootsGround(R);
     // one-shot ground fx
     for (const f of fxs) {
       const age = (t - f.t0) / f.dur, x = pxs(R, f.x), y = pys(R, f.y);
@@ -574,9 +580,10 @@
       if (key !== 'tornado' && key !== 'icewall') continue;
       if (e.team === 1 && !lit(R, e.x, e.y)) continue;
       R.interp(e);
-      const fn = key === 'tornado' ? drawTornado : drawIceWall;
-      push(R.iy / R.P - R.camY, (a2, R2) => fn(R2, a2), e);
+      if (key === 'icewall') { pushIceWall(R, e, push); continue; }
+      push(R.iy / R.P - R.camY, (a2, R2) => drawTornado(R2, a2), e);
     }
+    pushIceFloeRoots(R, push);
   }
   function drawTornado(R, e) {
     R.interp(e);
@@ -594,23 +601,278 @@
       }
     }
   }
-  function drawIceWall(R, e) {
-    const cx = R.cx, list = [];
-    const len = e.ax != null ? Math.hypot(e.bx - e.ax, e.by - e.ay) / R.P : 8, n = Math.max(2, Math.round(len / 4));
-    for (let i = 0; i <= n; i++) list.push(e.ax != null ? { x: e.ax + (e.bx - e.ax) * i / n, y: e.ay + (e.by - e.ay) * i / n, i } : { x: e.x, y: e.y, i });
-    list.sort((a, b) => a.y - b.y);
-    const grow = clamp(e.age / 0.35, 0, 1), t = R.time;
-    for (const s of list) {
-      const x = Math.round(pxs(R, s.x)), y = Math.round(pys(R, s.y));
-      if (x < -10 || x > R.VW + 10 || y < -4 || y > R.VH + 20) continue;
-      const hh = Math.round((9 + ((PX.hash2(s.i, 3, 11) * 5) | 0)) * grow), ww = 8;
-      cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.fillRect(x - 4, y - 1, 10, 3);
-      cx.fillStyle = '#1a4a7a'; cx.fillRect(x - 4, y - hh - 1, ww + 1, hh + 2);
-      cx.fillStyle = '#3a9ad8'; cx.fillRect(x - 3, y - hh, ww - 1, hh);
-      cx.fillStyle = '#7fdcff'; cx.fillRect(x - 3, y - hh, ww - 1, Math.max(2, hh >> 2));
-      cx.fillStyle = '#d8f8ff'; cx.fillRect(x - 3, y - hh, 3, 1); cx.fillRect(x - 3, y - hh, 1, Math.min(4, hh));
-      cx.fillStyle = '#2a6ab0'; cx.fillRect(x + 2, y - (hh >> 1), 2, hh >> 1);
-      if (((t * 3 + s.i) | 0) % 7 === 0) { cx.fillStyle = '#fff'; cx.fillRect(x - 1, y - hh + 3, 1, 1); }
+  // ---------- Ice Wall (v6 item 41) ----------
+  // Same footprint as the sim (segment A-B, half-width r): shards stand in three rows along it (|offset| <= 0.4 r), seeded by the thinker id so
+  // the layout never changes between frames. Sprites are pre-rendered once per (h, w, variant); per frame is drawImage only.
+  // Timeline (thinker age minus the Ice Floe formation delay): shards rise centre-outward (IW.STAG + IW.RISE ~ 0.35 s), the last IW.MELT s melt out
+  // (shrink + fade + whiten, staggered). Floe: before the rise a dotted footprint outline closes in; a rooted unit gets an ice-spike ring + glow.
+  const IW = { RISE: 0.2, STAG: 0.15, MELT: 0.6, MELTD: 0.35, NCH: 14, HMIN: 8, HMAX: 22, WMIN: 3, WMAX: 8 };
+  const iwReg = new Map();     // 'x|y' -> { dur, ax, ay, bx, by } from the sim's iceWall / iceFloe fx events
+  const iwLay = new Map();     // thinker id -> { lay, dur, delay, life, acc, items[] }
+  const iwRoots = [];          // Ice Floe roots { unit, t0, dur, sx, sy, fade, front }
+  const iwSpr = new Map();
+  const IW_ROWS = [{ o: -0.3, st: 4.6, lo: 8, hi: 16 }, { o: 0.3, st: 4.6, lo: 8, hi: 16 }, { o: 0, st: 3.4, lo: 11, hi: 22 }];   // offset (x width), stride px, height range
+  const mulberry = a => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+
+  // pure: deterministic per seed. Positions in world units; s = along the wall from its centre (|s| <= L/2), o = across (|o| <= 0.4 width).
+  function iceWallLayout(seed, ax, ay, bx, by, width, P) {
+    P = P || 6;
+    const L = Math.hypot(bx - ax, by - ay), half = L / 2, ux = L > 0 ? (bx - ax) / L : 1, uy = L > 0 ? (by - ay) / L : 0, px = -uy, py = ux;
+    const mx = (ax + bx) / 2, my = (ay + by) / 2, rnd = mulberry((seed | 0) * 2654435761 + 1013904223), shards = [];
+    for (let ri = 0; ri < IW_ROWS.length; ri++) {
+      const row = IW_ROWS[ri], stride = row.st * P;
+      for (let s = -half + rnd() * stride * 0.4; s <= half; s += stride * (0.6 + 0.8 * rnd())) {
+        const taper = 1 - 0.3 * Math.abs(s) / (half || 1);
+        const h = clamp(Math.round((row.lo + (row.hi - row.lo) * Math.pow(rnd(), 1.3)) * taper), IW.HMIN, IW.HMAX);
+        const w = clamp(Math.round(h * 0.28 + 1.2 + rnd() * 2.6), IW.WMIN, IW.WMAX);
+        const o = (row.o + (rnd() - 0.5) * 0.2) * width;
+        shards.push({ i: shards.length, s, o, wx: mx + ux * s + px * o, wy: my + uy * s + py * o, h, w, v: (rnd() * 3) | 0, d: half > 0 ? Math.abs(s) / half : 0, jr: rnd(), jm: rnd(), row: ri });
+      }
+    }
+    const chunks = [], chunkY = [];
+    for (let k = 0; k < IW.NCH; k++) chunks.push([]);
+    for (const sh of shards) chunks[Math.min(IW.NCH - 1, Math.max(0, Math.floor((sh.s + half) / Math.max(L, 1) * IW.NCH)))].push(sh);
+    for (const c of chunks) { c.sort((a, b) => a.wy - b.wy || a.row - b.row); chunkY.push(c.length ? c.reduce((a, b) => a + b.wy, 0) / c.length : my); }
+    return { L, half, mx, my, shards, chunks, chunkY };
+  }
+  // pure: [rise 0..1, melt 0..1] of a shard at wall age `age` (s since the wall rose) for a wall lasting `dur`
+  function iceWallPhase(age, dur, sh) {
+    return [clamp((age - (IW.STAG * sh.d + 0.02 * sh.jr)) / IW.RISE, 0, 1), clamp((age - (dur - IW.MELT + (IW.MELT - IW.MELTD) * sh.jm)) / IW.MELTD, 0, 1)];
+  }
+
+  // pre-rendered shard: dithered dark-blue base -> pale cyan -> white tip, lit left facet / shaded right facet, bright facet edge, specular,
+  // cracks on the tall ones, dark-blue outline. glint = white silhouette (sheen / melt gleam / sparkle overlay).
+  const LIT = ['#1d5a9a', '#3a9ad8', '#7fdcff', '#c6f2ff', '#ffffff'], SHD = ['#173f78', '#2a78b8', '#4cb6ec', '#9be6ff', '#d4f6ff'];
+  function iceWallSprite(h, w, v) {
+    const key = (h << 8) | (w << 3) | v;
+    let sp = iwSpr.get(key);
+    if (sp) return sp;
+    const W = w + 2, H = h + 1, rng = mulberry(key * 7919 + 13), tc = clamp(v === 0 ? 1 : v === 2 ? w - 2 : w >> 1, 0, w - 1);
+    const grid = new Array(W * H).fill(null), top = [];
+    for (let c = 0; c < w; c++) {
+      const d = c === tc ? 0 : c < tc ? (tc - c) / Math.max(1, tc) : (c - tc) / Math.max(1, w - 1 - tc);
+      let hc = Math.round(h * (1 - 0.7 * Math.pow(d, 1.1)));
+      if (c !== tc && rng() < 0.4) hc--;
+      top.push(c === tc ? h : clamp(hc, 3, h));
+    }
+    for (let c = 0; c < w; c++) {
+      for (let r = 0; r < top[c]; r++) {
+        const y = H - 1 - r, x = c + 1, pal = c < tc ? LIT : SHD;
+        let idx = Math.floor(r / h * 5 + (PX.bayer(c, r) - 0.5) * 1.1);
+        if (r < 2) grid[y * W + x] = c < tc ? '#17487f' : '#123a6a';
+        else { if (c === tc) idx++; grid[y * W + x] = pal[clamp(idx, 0, 4)]; }
+      }
+    }
+    grid[(H - h) * W + tc + 1] = '#ffffff';
+    if (h >= 12 && tc + 2 < W) { grid[(H - h + 2) * W + tc + 2] = '#ffffff'; grid[(H - h + 3) * W + tc + 2] = '#e4faff'; }    // specular
+    if (h >= 15) {                                                                                                          // cracks
+      for (let n = 0, nn = 1 + (rng() < 0.5 ? 1 : 0); n < nn; n++) {
+        let x = 1 + clamp(Math.floor(rng() * w), 0, w - 1), r = Math.floor(h * (0.45 + 0.25 * rng()));
+        for (let st = 0, ln = 4 + Math.floor(rng() * 3); st < ln && r > 2; st++, r--) {
+          const y = H - 1 - r;
+          if (grid[y * W + x]) { grid[y * W + x] = '#2f7fc4'; if (x + 1 < W - 1 && grid[y * W + x + 1] && st % 2 === 0) grid[y * W + x + 1] = '#e4faff'; }
+          x = clamp(x + (rng() < 0.4 ? -1 : rng() < 0.5 ? 1 : 0), 1, w);
+        }
+      }
+    }
+    const out = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (grid[y * W + x]) continue;
+      if ((x > 0 && grid[y * W + x - 1]) || (x < W - 1 && grid[y * W + x + 1]) || (y < H - 1 && grid[(y + 1) * W + x])) out.push(y * W + x);
+    }
+    for (const i of out) grid[i] = '#12386a';
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c2 = cv.getContext('2d');
+    for (let i = 0; i < grid.length; i++) if (grid[i]) { c2.fillStyle = grid[i]; c2.fillRect(i % W, (i / W) | 0, 1, 1); }
+    const glint = document.createElement('canvas'); glint.width = W; glint.height = H;
+    const g2 = glint.getContext('2d');
+    g2.drawImage(cv, 0, 0); g2.globalCompositeOperation = 'source-in'; g2.fillStyle = '#ffffff'; g2.fillRect(0, 0, W, H);
+    sp = { cv, glint, w: W, h: H, ax: W >> 1, tip: tc + 1 };
+    iwSpr.set(key, sp);
+    return sp;
+  }
+
+  // blit a sprite standing on base line y, centred on x: rise 0..1 crops from the top (tip emerges first), hs < 1 squashes toward the base (melt)
+  function iwBlit(cx, sp, x, y, rise, hs, al, gl) {
+    const W = sp.w, H = sp.h, dx = x - sp.ax;
+    let sh = H, dh = H;
+    if (hs < 1) dh = Math.max(1, Math.round(H * hs)); else if (rise < 1) sh = dh = Math.max(1, Math.round(H * rise));
+    if (al < 1) cx.globalAlpha = al;
+    cx.drawImage(sp.cv, 0, 0, W, sh, dx, y - dh, W, dh);
+    if (gl > 0.03) { cx.globalAlpha = Math.min(1, al * gl); cx.drawImage(sp.glint, 0, 0, W, sh, dx, y - dh, W, dh); }
+    cx.globalAlpha = 1;
+  }
+
+  // per-thinker state (layout cached by id); life = seconds since the wall rose (< 0: Ice Floe still forming)
+  function iwState(R, e) {
+    if (e.ax == null) return null;
+    let st = iwLay.get(e.id);
+    if (!st) {
+      const reg = iwReg.get(e.x + '|' + e.y);
+      st = { lay: iceWallLayout(e.id, e.ax, e.ay, e.bx, e.by, e.r, R.P), dur: reg && reg.dur > 0 ? reg.dur : 3, delay: e.danger ? Math.max(0, e.danger.at - R.simT + e.age) : 0, life: 0, acc: 0, items: [] };
+      for (let k = 0; k < IW.NCH; k++) st.items.push({ st, k });
+      iwLay.set(e.id, st);
+    }
+    st.life = e.age + clamp(R.alpha, 0, 1) * (R.w.dt || 1 / 30) - st.delay;
+    return st;
+  }
+  const iwVis = (st) => st.life < 0 ? 0 : clamp(st.life / 0.3, 0, 1) * (1 - clamp((st.life - (st.dur - IW.MELT)) / IW.MELT, 0, 1) * 0.8);
+
+  // ground: frost patch + melt puddle + cast shadow under every shard (below the units); Ice Floe forming -> footprint outline
+  function iceWallGround(R, e) {
+    const st = iwState(R, e); if (!st) return;
+    if (st.life < 0) { iceWallTelegraph(R, e, st); return; }
+    const cx = R.cx, P = R.P, sh = st.lay.shards, VW = R.VW, VH = R.VH, life = st.life, dur = st.dur;
+    if (life > dur + 0.1) return;
+    for (let pass = 0; pass < 3; pass++) {
+      cx.fillStyle = pass === 0 ? '#cdeeff' : pass === 1 ? '#6cc4f4' : '#000';
+      for (let i = 0; i < sh.length; i++) {
+        const s = sh[i], x = Math.round(s.wx / P - R.camX), y = Math.round(s.wy / P - R.camY);
+        if (x < -20 || x > VW + 20 || y < -20 || y > VH + 30) continue;
+        const ph = iceWallPhase(life, dur, s), er = 1 - (1 - ph[0]) * (1 - ph[0]) * (1 - ph[0]), m = ph[1];
+        if (er <= 0 || m >= 1) { if (!(pass === 1 && m > 0)) continue; }
+        if (pass === 0) { cx.globalAlpha = 0.22 * er * (1 - m); cx.fillRect(x - (s.w >> 1) - 2, y - 1, s.w + 4, 3); }
+        else if (pass === 1) { if (m <= 0) continue; cx.globalAlpha = 0.32 * Math.sin(Math.PI * Math.min(1, m * 0.9 + 0.05)); cx.fillRect(x - (s.w >> 1) - 3, y, s.w + 6, 2); }
+        else { cx.globalAlpha = 0.3 * er * (1 - m); cx.fillRect(x - 1, y, s.w + 1 + Math.round(s.h * 0.22 * er), 2); }
+      }
+    }
+    cx.globalAlpha = 1;
+  }
+  function iceWallTelegraph(R, e, st) {
+    const cx = R.cx, P = R.P, t = R.time, f = clamp(1 + st.life / Math.max(0.1, st.delay), 0, 1);
+    const ax = pxs(R, e.ax), ay = pys(R, e.ay), bx = pxs(R, e.bx), by = pys(R, e.by), r = e.r / P, L = Math.hypot(bx - ax, by - ay) || 1;
+    const ux = (bx - ax) / L, uy = (by - ay) / L, px = -uy, py = ux, fa = 0.45 + 0.4 * f;
+    for (let pass = 0; pass < 2; pass++) {
+      const k = pass ? 0.15 + 0.85 * (1 - f) : 1, rr = r * k;
+      cx.globalAlpha = pass ? 0.55 : fa;
+      PX.dotted(cx, ax + px * rr, ay + py * rr, bx + px * rr, by + py * rr, pass ? '#6cd0ff' : '#bff4ff', 4, -t * 10);
+      PX.dotted(cx, ax - px * rr, ay - py * rr, bx - px * rr, by - py * rr, pass ? '#6cd0ff' : '#bff4ff', 4, -t * 10);
+    }
+    cx.globalAlpha = fa; cx.fillStyle = '#bff4ff';
+    for (let end = 0; end < 2; end++) {        // round caps (the sim footprint is a capsule)
+      const ex = end ? bx : ax, ey = end ? by : ay, dir = end ? 1 : -1, n = Math.max(6, Math.round(Math.PI * r / 3));
+      for (let i = 0; i <= n; i++) { const a = -Math.PI / 2 + Math.PI * i / n, c = Math.cos(a) * dir * r, d = Math.sin(a) * r; cx.fillRect(Math.round(ex + ux * c + px * d), Math.round(ey + uy * c + py * d), 1, 1); }
+    }
+    cx.globalAlpha = 1;
+  }
+
+  // sorted pass: one item per chunk of the wall (so units walking through it interleave correctly)
+  function pushIceWall(R, e, push) {
+    const st = iwState(R, e); if (!st || st.life < 0 || st.life > st.dur + 0.1) return;
+    const lay = st.lay, P = R.P, ch = lay.chunks;
+    for (let k = 0; k < ch.length; k++) if (ch[k].length) push(lay.chunkY[k] / P - R.camY, drawWallChunk, st.items[k]);
+  }
+  function drawWallChunk(a, R) {
+    const st = a.st, sh = st.lay.chunks[a.k], cx = R.cx, P = R.P, t = R.time, life = st.life, dur = st.dur, L = st.lay.L || 1, VW = R.VW, VH = R.VH;
+    for (let i = 0; i < sh.length; i++) {
+      const s = sh[i], x = Math.round(s.wx / P - R.camX), y = Math.round(s.wy / P - R.camY);
+      if (x < -12 || x > VW + 12 || y < -2 || y > VH + 30) continue;
+      const ph = iceWallPhase(life, dur, s), rise = ph[0], m = ph[1];
+      if (rise <= 0 || m >= 1) continue;
+      const er = 1 - (1 - rise) * (1 - rise) * (1 - rise), sp = iceWallSprite(s.h, s.w, s.v);
+      let gl = m * 0.5;
+      const band = (((s.s + s.o * 0.9) / L * 1.2 + t * 0.13) % 1 + 1) % 1;       // drifting sheen band, slanted across the rows
+      if (band < 0.09 && er >= 1) gl = Math.max(gl, 0.42 * Math.sin(Math.PI * band / 0.09));
+      iwBlit(cx, sp, x, y, er, m > 0 ? 1 - 0.85 * m : 1, 1 - 0.6 * m, gl);
+      if (er >= 1 && m <= 0 && s.h >= 14 && PX.hash2(s.i, (t * 5) | 0, 77) > 0.985) {          // rare sparkle on the tall tips
+        const tx = x - sp.ax + sp.tip, ty = y - sp.h + 1;
+        cx.fillStyle = '#fff'; cx.fillRect(tx, ty - 1, 1, 3); cx.fillRect(tx - 1, ty, 3, 1);
+      }
+    }
+  }
+
+  // frost mist rolling off the bases (low count), meltwater + mist in the last IW.MELT s; Floe forming: frost gathers along the footprint
+  function iceWallParticles(R, e, dt) {
+    if (e.team === 1 && !lit(R, e.x, e.y)) return;
+    const st = iwState(R, e); if (!st) return;
+    const sh = st.lay.shards, life = st.life, melting = life > st.dur - IW.MELT;
+    if (!sh.length) return;
+    const rate = life < 0 ? 7 : melting ? 20 : life < 0.5 ? 4 : 6;
+    st.acc += dt * rate;
+    const n = st.acc | 0; st.acc -= n;
+    for (let i = 0; i < n; i++) {
+      const s = life < 0 ? null : sh[(Math.random() * sh.length) | 0];
+      let x, y;
+      if (s) { x = s.wx; y = s.wy; }
+      else { const f = Math.random(), side = Math.random() < 0.5 ? -1 : 1; x = e.ax + (e.bx - e.ax) * f + (-(e.by - e.ay) / st.lay.L) * e.r * side; y = e.ay + (e.by - e.ay) * f + ((e.bx - e.ax) / st.lay.L) * e.r * side; }
+      if (melting && Math.random() < 0.5) IT.Particles.emit({ x, y, z: 4, zr: 8, n: 1, ramp: 'meltwater', speed: 8, up: 10, spread: 14, life: 0.5, rest: 1.4 });
+      else IT.Particles.emit({ x, y, z: 0, zr: 3, n: 1, ramp: 'frost', speed: 14, up: 16, spread: 14, life: 0.7, rest: 1.6 });
+    }
+  }
+  function iceWallEnd(x, y) {
+    const reg = iwReg.get(x + '|' + y);
+    iwReg.delete(x + '|' + y);
+    const n = 14;
+    for (let i = 0; i < n; i++) {
+      const f = Math.random(), px = reg && reg.ax != null ? reg.ax + (reg.bx - reg.ax) * f : x, py = reg && reg.ax != null ? reg.ay + (reg.by - reg.ay) * f : y;
+      IT.Particles.emit({ x: px, y: py, z: 2, zr: 10, n: 1, ramp: i & 1 ? 'meltwater' : 'frost', speed: 20, up: 30, spread: 10, life: 0.7, rest: 1.6 });
+    }
+  }
+
+  // night: five soft self-lights along the wall (scaled by rise/melt) so it stays readable; sheen is a normal sprite overlay
+  function iceWallLights(R, e) {
+    const st = iwState(R, e); if (!st) return;
+    const v = st.life < 0 ? 0.12 : iwVis(st), lay = st.lay, P = R.P;
+    if (v <= 0.02) return;
+    const ux = e.ax != null ? (e.bx - e.ax) / (lay.L || 1) : 1, uy = e.ax != null ? (e.by - e.ay) / (lay.L || 1) : 0, N = 5;
+    for (let i = 0; i < N; i++) {
+      const s = (-0.5 + (i + 0.5) / N) * lay.L, sx = (lay.mx + ux * s) / P - R.camX, sy = (lay.my + uy * s) / P - R.camY - 7;
+      R.light(sx, sy, 34, [150, 215, 255], 0.42 * v);
+      R.glow(sx, sy, 14, '#9fe0ff', 0.16 * v);
+    }
+  }
+
+  // ---- Ice Floe root: ice-spike ring around the rooted unit + pulsing ground ring + glow ----
+  function rootLive(R, r) {
+    const u = R.w.byId.get(r.unit), age = R.time - r.t0;
+    if (!u || u.dead || age > r.dur + 0.1 || age < 0) return null;
+    if (u.team === 1 && !lit(R, u.x, u.y)) return null;
+    return u;
+  }
+  function iceFloeRootsGround(R) {
+    for (let i = iwRoots.length - 1; i >= 0; i--) {
+      const r = iwRoots[i], u = R.w.byId.get(r.unit);
+      if (!u || u.dead || R.time - r.t0 > r.dur + 0.1) { iwRoots.splice(i, 1); continue; }
+      if (!rootLive(R, r)) continue;
+      R.interp(u);
+      const x = pxs(R, R.ix), y = pys(R, R.iy), age = R.time - r.t0, fade = clamp((r.t0 + r.dur - R.time) / 0.35, 0, 1), grow = clamp(age / 0.25, 0, 1);
+      const pul = 0.5 + 0.5 * Math.sin(R.time * 6);
+      dring(R, x, y, 13 * grow, '#8fe6ff', (0.55 + 0.3 * pul) * fade);
+      dring(R, x, y, 10 * grow, '#e4faff', 0.35 * fade);
+      R.cx.fillStyle = '#6cc4f4'; R.cx.globalAlpha = 0.16 * fade;
+      R.cx.fillRect(Math.round(x) - 12, Math.round(y) - 2, 25, 5); R.cx.globalAlpha = 1;
+    }
+  }
+  function iceFloeRootLights(R) {
+    for (const r of iwRoots) {
+      const u = rootLive(R, r); if (!u) continue;
+      R.interp(u);
+      const sx = pxs(R, R.ix), sy = pys(R, R.iy), fade = clamp((r.t0 + r.dur - R.time) / 0.35, 0, 1) * clamp((R.time - r.t0) / 0.2, 0, 1), pul = 0.5 + 0.5 * Math.sin(R.time * 6);
+      R.light(sx, sy - 6, 36, [120, 220, 255], (0.6 + 0.2 * pul) * fade);
+      R.glow(sx, sy - 6, 20, '#8fe6ff', 0.4 * fade);
+    }
+  }
+  function pushIceFloeRoots(R, push) {
+    for (const r of iwRoots) {
+      const u = rootLive(R, r); if (!u) continue;
+      R.interp(u);
+      r.sx = pxs(R, R.ix); r.sy = pys(R, R.iy);
+      r.fade = clamp((r.t0 + r.dur - R.time) / 0.35, 0, 1);
+      r.front = false; push(r.sy - 0.5, drawRootSpikes, r);
+      r.front = true; push(r.sy + 0.5, drawRootSpikes, r);
+    }
+  }
+  function drawRootSpikes(r, R) {
+    const age = R.time - r.t0, t = R.time, n = 8, cx = R.cx;
+    for (let i = 0; i < n; i++) {
+      const a = i * TAU / n + 0.3, sn = Math.sin(a);
+      if ((sn > 0) !== r.front) continue;
+      const k = clamp(age / 0.25 - i * 0.04, 0, 1), er = 1 - (1 - k) * (1 - k);
+      if (er <= 0) continue;
+      const h = 7 + ((PX.hash2(i, 5, 31) * 4) | 0), sp = iceWallSprite(h, 3 + (i & 1), i % 3);
+      const x = Math.round(r.sx + Math.cos(a) * 12), y = Math.round(r.sy + sn * 5);
+      const gl = 0.25 + 0.25 * Math.sin(t * 6 + i);
+      iwBlit(cx, sp, x, y, er, r.fade < 1 ? Math.max(0.15, r.fade) : 1, 0.55 + 0.45 * r.fade, gl);
     }
   }
 
@@ -939,5 +1201,5 @@
     }
   }
 
-  IT.FX = { init, clear, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal };
+  IT.FX = { init, clear, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal, iceWallLayout, iceWallPhase, iceWallSprite, IW };
 })(typeof window !== 'undefined' ? window : globalThis);

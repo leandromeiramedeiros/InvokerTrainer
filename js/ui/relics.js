@@ -55,6 +55,32 @@
     return over;
   }
 
+  // glow sand on the toast (IT.Sand.createGlow: additive hot grains + bloom): a gold burst from the icon falls onto the card's lower edge, piles up,
+  // and is blown away to the right just before the toast leaves. Purely decorative; absent engine / canvas / rAF / reduced motion = no-op.
+  function glowSand(el, tier) {
+    try {
+      if (!doc || !IT.Sand || !IT.Sand.createGlow || !G.requestAnimationFrame) return;
+      if (G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const r = el.getBoundingClientRect(), S = 2.5, w = Math.min(140, Math.max(40, Math.ceil((r.width || 240) / S))), hh = Math.min(40, Math.max(12, Math.ceil((r.height || 48) / S)));   // ~2.5 screen px per grain
+      const cv = IT.UI.h('canvas', { class: 'rl-sand', width: w, height: hh });
+      cv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated;z-index:2';
+      el.appendChild(cv);
+      const sand = IT.Sand.createGlow(cv, { floor: hh - 1, gravity: 80, pile: 3, max: 120, drain: 0.5, wind: 18 });
+      const cols = ['#fff4a8', '#f2c444', '#f2c444', '#ffb020', '#c27a10'];
+      sand.burst(Math.min(w * 0.18, 14), hh * 0.5, 26 + 10 * (tier || 1), cols, { speed: 34, lift: 18, spread: 4 });
+      sand.setEmitters([{ x0: w * 0.1, x1: w * 0.9, y: 1, pal: { h: cols[0], m: cols[1] }, rate: 7 + 2 * (tier || 1), vx: 8 }]);
+      let last = G.performance ? G.performance.now() : 0, t0 = last, gone = false;
+      const step = now => {
+        if (!cv.isConnected) return;
+        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+        if (!gone && now - t0 > 2600) { gone = true; sand.setEmitters([]); sand.disperse(1.2); }
+        sand.step(dt); sand.draw();
+        if (sand.live()) G.requestAnimationFrame(step);
+      };
+      G.requestAnimationFrame(step);
+    } catch (err) { /* decorative */ }
+  }
+
   // in-play toast: small card top-right, gold bloom, fanfare; never takes input
   function toast(e) {
     if (!doc || !IT.RELICS || !IT.RELICS.get(e.id)) return null;
@@ -66,6 +92,7 @@
       h('div', {}, h('small', { text: t('relics.toast', { t: IT.RELICS.ROMAN[e.tier] }) }), h('b', { text: name(e.id) })));
     box.appendChild(el);
     while (box.children.length > 3) box.removeChild(box.firstChild);
+    glowSand(el, e.tier);
     setTimeout(() => el.classList.add('out'), 3200);
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 3700);
     try { if (IT.Sfx && IT.Sfx.relic) IT.Sfx.relic(e.tier); } catch (err) { /* audio optional */ }
