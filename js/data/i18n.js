@@ -122,7 +122,7 @@
   D('lo.orbs', 'Orbs', 'Orbes');
   D('lo.auto', 'Auto build', 'Build automática');
   D('lo.talents', 'Talents', 'Talentos');
-  D('lo.talentPts', 'talent points {n}/{max}', 'pontos de talento {n}/{max}');
+  D('lo.talentPts', 'talents {n}/{max} (1 point each, same pool as orbs)', 'talentos {n}/{max} (1 ponto cada, mesmo total das orbes)');
   D('lo.aghs', "Aghanim's", 'Aghanim');
   D('lo.scepterOrb', 'Scepter orb (+1 level)', 'Orbe do Scepter (+1 nível)');
   D('lo.items', 'Items', 'Itens');

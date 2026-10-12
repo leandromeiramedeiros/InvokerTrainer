@@ -128,9 +128,9 @@
     }
   });
 
-  // Level-up rules view (plan G2-G4): IT.Hero.levelInfo(lvl, {quas,wex,exort}, scepter) -> { points, spent, bank, maxPerOrb, orbCap,
+  // Level-up rules view (plan G2-G4, batch P single pool): IT.Hero.levelInfo(lvl, {quas,wex,exort}, scepter, talents?) -> { points, spent, bank, maxPerOrb, orbCap,
   // invokeCd, canRaise:{}, locked:{}, talentsAllowed:{}, ... } (see IT.RULES.levelInfo)
-  const levelInfo = (lvl, orbs, scepter) => IT.RULES.levelInfo(lvl, orbs, scepter);
+  const levelInfo = (lvl, orbs, scepter, talents) => IT.RULES.levelInfo(lvl, orbs, scepter, talents);
 
   IT.Hero = { create, refresh, levelInfo, applyPreinvoked, attackTime, attackPoint, attrs, maxHp: ctx => build(ctx).maxHp, maxMana: ctx => build(ctx).maxMana };
 })(typeof window !== 'undefined' ? window : globalThis);

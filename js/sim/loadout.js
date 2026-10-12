@@ -21,18 +21,20 @@
   }
 
   // Auto-fixes anything illegal (plan G2-G4): orbs clamped to the gate (orb level N needs hero level >= 2N-1 until lvl 13) and
-  // to the points available (unspent points just bank), max 7 per orb; talents limited to what the level allows (all 8 at 30).
+  // to the single point pool (unspent points just bank), max 7 per orb; talents limited to what the level allows AND to the pool
+  // points the orbs left over (1 point each). A loadout without a talents list gets all 8 at level 30.
   function normalize(l) {
     l = l || {};
     const lvl = Math.max(1, Math.min(IT.RULES.maxHeroLevel, Math.round(Number(l.heroLevel != null ? l.heroLevel : l.lvl != null ? l.lvl : IT.RULES.maxHeroLevel)) || 1));
     const o = IT.RULES.fixOrbs(lvl, l.orbs || { quas: 7, wex: 7, exort: 7 });   // no orbs given -> best legal build for the level
+    const room = IT.RULES.pointsAvailable(lvl) - IT.RULES.orbsSpent({ orbs: o });
     let scepterOrb = l.scepterOrb || null;
     let scepter = !!l.scepter;
     if (typeof l.scepter === 'string') { scepter = true; scepterOrb = scepterOrb || l.scepter; }
     return {
       heroLevel: lvl,
       orbs: { quas: o.quas, wex: o.wex, exort: o.exort },
-      talents: IT.RULES.fixTalents(lvl, l.talents),
+      talents: IT.RULES.fixTalents(lvl, l.talents, room),
       scepter, scepterOrb: scepter ? scepterOrb : null,
       shard: !!l.shard || SHARD_SPELLS.includes(l.shard),
       shardSpell: (l.shard || l.shardSpell) ? (SHARD_SPELLS.includes(l.shardSpell) ? l.shardSpell : SHARD_SPELLS.includes(l.shard) ? l.shard : null) : null,

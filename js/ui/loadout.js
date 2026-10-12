@@ -50,19 +50,20 @@
       while (v > 0 && R.orbGate(v) > L) { v--; changed = true; }
       lo.orbs[k] = v;
     }
-    while (R.pointsLeft(lo) < 0) {
-      const k = ORBS.slice().sort((a, b) => lo.orbs[b] - lo.orbs[a])[0];
-      lo.orbs[k]--; changed = true;
-    }
-    const keep = [], per = [0, 0, 0, 0];
+    const keep = [], per = [0, 0, 0, 0], slots = R.talentPointsAt(L);
     for (const n of lo.talents) {
       const t = talentIdx(n);
-      if (t < 0 || L < R.talentTiers[t].level) { changed = true; continue; }
+      if (t < 0 || L < R.talentTiers[t].level || keep.length >= slots) { changed = true; continue; }
       per[t]++;
       if (per[t] === 2 && L < R.talentSecondLevels[t]) { changed = true; continue; }
       keep.push(n);
     }
     lo.talents = keep;
+    while (R.pointsLeft(lo) < 0) {   // one pool: orbs and talents are paid from the same points; shave orbs first
+      const k = ORBS.slice().sort((a, b) => lo.orbs[b] - lo.orbs[a])[0];
+      if (lo.orbs[k] > 0) lo.orbs[k]--; else lo.talents.pop();
+      changed = true;
+    }
     return changed;
   }
 
@@ -197,7 +198,7 @@
           if (picked) tip = t('lo.talentUnpick');
           else if (lo.heroLevel < T.level) { cls += ' lock'; tip = t('tip.talentLvl', { lvl: T.level }); }
           else if (per >= 1 && lo.heroLevel < R.talentSecondLevels[i]) { tip = t('lo.talentSwap') + '. ' + t('tip.talentSecond', { lvl: R.talentSecondLevels[i] }); }
-          else if (per >= 2 || used >= tot) { cls += ' lock'; tip = t('tip.noPoints'); }
+          else if (per >= 2 || used >= tot || R.pointsLeft(lo) <= 0) { cls += ' lock'; tip = t('tip.noPoints'); }
           else tip = t('lo.talentPick');
           return h('button', {
             type: 'button', class: cls, 'data-tip': tip, text: t('talent.' + name),
@@ -206,7 +207,7 @@
               if (lo.heroLevel < T.level) { flash(t('tip.talentLvl', { lvl: T.level })); return; }
               const mine = lo.talents.filter(n => talentIdx(n) === i);
               if (mine.length >= 1 && lo.heroLevel < R.talentSecondLevels[i]) { lo.talents = lo.talents.filter(n => talentIdx(n) !== i); lo.talents.push(name); changed(); return; }
-              if (mine.length >= 2 || lo.talents.length >= R.talentPointsAt(lo.heroLevel)) { flash(t('tip.noPoints')); return; }
+              if (mine.length >= 2 || lo.talents.length >= R.talentPointsAt(lo.heroLevel) || R.pointsLeft(lo) <= 0) { flash(t('tip.noPoints')); return; }
               lo.talents.push(name); changed();
             },
           });

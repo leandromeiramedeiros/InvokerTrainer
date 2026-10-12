@@ -33,8 +33,8 @@ test('G2 points schedule + bank + gate (levelInfo)', () => {
   const a = IT.Hero.levelInfo(1, { quas: 0, wex: 0, exort: 0 }, false);
   assert.equal(a.points, 1); assert.equal(a.spent, 0); assert.equal(a.bank, 1); assert.equal(a.maxPerOrb, 7);
   assert.equal(IT.Hero.levelInfo(6, {}, false).points, 7);        // 6 + bonus
-  assert.equal(IT.Hero.levelInfo(12, {}, false).points, 14);
-  assert.equal(IT.Hero.levelInfo(18, {}, false).points, 21);
+  assert.equal(IT.Hero.levelInfo(12, {}, false).points, 15);       // batch P single pool: 12 + 2 bonus + 1 talent point
+  assert.equal(IT.Hero.levelInfo(18, {}, false).points, 23);       // 18 + 3 bonus + 2 talent points
   assert.equal(IT.Hero.levelInfo(5, { quas: 3, wex: 0, exort: 0 }, false).bank, 2);
   assert.equal(IT.Hero.levelInfo(5, {}, false).orbCap, 3);         // 2N-1 <= 5
   assert.equal(IT.Hero.levelInfo(13, {}, false).orbCap, 7);
@@ -60,7 +60,9 @@ test('G3 normalize auto-fixes illegal orb sets and talents', () => {
   l = IT.Loadout.normalize({ heroLevel: 5, orbs: { quas: 1 }, talents: [R.talentTiers[0].left] });
   assert.deepEqual(l.talents, []);                                  // tier 10 not reached
   l = IT.Loadout.normalize({ heroLevel: 30, orbs: {}, talents: [] });
-  assert.equal(l.talents.length, 8);                                // all granted at 30
+  assert.equal(l.talents.length, 0);                                // batch P: an explicit list is respected (talents cost points)
+  l = IT.Loadout.normalize({ heroLevel: 30, orbs: {} });
+  assert.equal(l.talents.length, 8);                                // no list at 30 = legacy default, all 8
   assert.equal(IT.Loadout.normalize({ lvl: 9, orbs: { quas: 5 } }).heroLevel, 9);
 });
 test('G3 locked orb does nothing', () => {

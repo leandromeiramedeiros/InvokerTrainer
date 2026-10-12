@@ -12,9 +12,10 @@ test('points schedule', () => {
   assert.strictEqual(R.pointsAtLevel[0], 1);
   assert.strictEqual(R.pointsAtLevel[4], 5);
   assert.strictEqual(R.pointsAtLevel[5], 7);
-  assert.strictEqual(R.pointsAtLevel[11], 14);
-  assert.strictEqual(R.pointsAtLevel[17], 21);
-  assert.strictEqual(R.pointsAtLevel[29], 33);
+  // batch P: one pool = min(L,18) + Invoke bonus (6/12/18) + talent points (10/15/20/25/27-30)
+  assert.strictEqual(R.pointsAtLevel[11], 15);   // was 14 (L + bonus); level-10 talent point now joins the pool
+  assert.strictEqual(R.pointsAtLevel[17], 23);   // was 21
+  assert.strictEqual(R.pointsAtLevel[29], 29);   // was 33 (12 left over); now exactly 3x7 orbs + 8 talents
 });
 
 test('gate and tiers', () => {
@@ -37,7 +38,8 @@ test('validate orbs', () => {
   assert.ok(!R.validate(base({ heroLevel: 14, orbs: orbs(8, 0, 0) })).ok);
   assert.ok(R.validate(base({ heroLevel: 14, orbs: orbs(7, 0, 0) })).ok);
   assert.ok(R.validate(base({ heroLevel: 18, orbs: orbs(7, 7, 7) })).ok);
-  assert.ok(!R.validate(base({ heroLevel: 17, orbs: orbs(7, 7, 7) })).ok);
+  assert.ok(R.validate(base({ heroLevel: 17, orbs: orbs(7, 7, 7) })).ok);    // batch P: pool(17)=21 (17 base + 2 bonus + 2 talent points, shared pool)
+  assert.ok(!R.validate(base({ heroLevel: 16, orbs: orbs(7, 7, 7) })).ok);   // pool(16)=20
   assert.ok(!R.validate(base({ heroLevel: 30, orbs: orbs(8, 0, 0) })).ok);
   assert.ok(!R.validate(base({ heroLevel: 0 })).ok);
 });
@@ -45,7 +47,8 @@ test('validate orbs', () => {
 test('scepter is a free level on one orb', () => {
   const lo = base({ heroLevel: 18, orbs: orbs(7, 7, 7), scepter: true, scepterOrb: 'quas' });
   assert.ok(R.validate(lo).ok);
-  assert.strictEqual(R.pointsLeft(lo), 0);
+  assert.strictEqual(R.pointsLeft(lo), 2);   // batch P: pool(18)=23 (2 talent points unspent); the scepter level itself costs nothing
+  assert.strictEqual(R.pointsLeft(Object.assign({}, lo, { talents: R.talentTiers.slice(0, 2).map(t => t.left) })), 0);
   assert.ok(!R.validate(base({ scepter: true })).ok);
 });
 
