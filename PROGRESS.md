@@ -85,6 +85,9 @@ W1 launched (Sonnet, background), ids in session transcript:
 - BUG open: F1 orb/invoke chips (.tk canvas.ico.mini in top HUD cards/timeline) show as black squares although the canvas has pixels — investigate (CSS/compositing?).
 - Remaining: scenario content B3/C1/H (use new maps + towers, win/lose/steps fields), end splash/stats/PNG + infinite run C5/C6, F3 Aghs picker.
 
+- USER FEEDBACK maps (2026-10-12): 21 maps are poor — SCALE wrong: a small ref area is stretched over the whole map (trees/features giant vs units; in-game max zoom covers ~a lane-width chunk of ref). Mid lane inconsistent with ref. Screens: reference/user/midlane_ref_crop.webp (red = in-game max-zoom area, blue = what agent made) vs midlane_ingame.webp. FIX PLAN: calibrate ref px <-> Dota units (known tower coords), 48 u/tile -> ~N ref px/tile, auto-classify ref pixels (tree/river/cliff/path/grass) into tiles instead of hand shape programs.
+- USER BUG towers: sprite offset from entity (hp bar + grey block drawn left of sprite), see reference/user/tower_bug.png.
+
 ## NEXT SESSION (start here)
 Stash work is also on branch `wip/v4-stash` (origin) — use `git checkout origin/wip/v4-stash -- <files>` instead of stash@{0} if the stash is missing.
 Rules: BE TERSE; no Claude co-author in commits; Opus orchestrates, max 1 Sonnet/Haiku agent at a time; tests green + browser smoke
