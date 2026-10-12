@@ -97,10 +97,7 @@
       if (IT.Input.sfx) IT.Input.sfx('fail');
     });
     w.on('modeEnd', p => { if (!g.quiet) finish(p); });
-    w.on('scnResult', p => {
-      if (p.ok) UI.toast(IT.t(g.mode === 'ranked' || g.mode === 'infinite' ? 'scn.solvedRk' : 'scn.solved', { n: p.points }), 'good');
-      else { const dk = 'scn.fail.' + p.reason + (p.detail ? '.' + p.detail : ''); UI.toast(IT.t(IT.hasT(dk) ? dk : 'scn.fail.' + p.reason), 'bad'); }
-    });
+    // scnResult: the between-round result card (js/ui/combobar.js) shows it; no extra toast here (playtest 2)
     const ctx = { w, hero, cam: g.cam, R: g.R, cv, mode: opts.mode, grant: opts.grant, free: !run };
     if (run) {
       run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout

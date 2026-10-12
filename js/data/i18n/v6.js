@@ -34,6 +34,10 @@
       'lo.tod': 'Time of day', 'lo.tod.day': 'Day', 'lo.tod.night': 'Night', 'lo.tod.cycle': 'Cycle (5 min)',
       'lo.tod.d': 'Night: vision 800 for heroes and enemies (1800 by day). Cycle alternates every 5 minutes, as in Dota.',
       'status.revealed': 'Revealed (Dust)',
+      'hs.dmg': 'Damage', 'hs.armor': 'Armor', 'hs.ms': 'Move speed', 'hs.as': 'Attack speed', 'hs.amp': 'Spell amplification', 'hs.mr': 'Magic resistance',
+      'hs.range': 'Cast range bonus', 'hs.cdr': 'Cooldown reduction', 'hs.hpr': 'Health regen', 'hs.mpr': 'Mana regen',
+      'hs.base': 'Base', 'hs.orbs': 'Orbs', 'hs.items': 'Items', 'hs.slow': 'Slows', 'hs.none': 'No source in this build', 'hs.left': '{n}s left', 'hs.at': 'Attack time',
+      'status.towerProt': 'Tower protection',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -68,5 +72,9 @@
       'lo.tod': 'Hora do dia', 'lo.tod.day': 'Dia', 'lo.tod.night': 'Noite', 'lo.tod.cycle': 'Ciclo (5 min)',
       'lo.tod.d': 'Noite: visão 800 para heróis e inimigos (1800 de dia). Ciclo alterna a cada 5 minutos, como no Dota.',
       'status.revealed': 'Revelado (Dust)',
+      'hs.dmg': 'Dano', 'hs.armor': 'Armadura', 'hs.ms': 'Velocidade de movimento', 'hs.as': 'Velocidade de ataque', 'hs.amp': 'Amplificação de magia', 'hs.mr': 'Resistência mágica',
+      'hs.range': 'Alcance de lançamento (bônus)', 'hs.cdr': 'Redução de recarga', 'hs.hpr': 'Regeneração de vida', 'hs.mpr': 'Regeneração de mana',
+      'hs.base': 'Base', 'hs.orbs': 'Orbes', 'hs.items': 'Itens', 'hs.slow': 'Lentidões', 'hs.none': 'Sem fonte nesta versão', 'hs.left': '{n}s restantes', 'hs.at': 'Tempo de ataque',
+      'status.towerProt': 'Proteção da torre',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

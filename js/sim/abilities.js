@@ -29,7 +29,7 @@
     const d = defs[id];
     if (!d) return 'unknown';
     if (d.kind === 'spell') {
-      if (!caster.inv || !caster.inv.slots.includes(id)) return 'notInvoked';
+      if (!caster.inv || !caster.inv.slots.includes(id)) return 'notInvoked';   // playtest 2: silent in the UI (input.js: fail SFX only; no toast string)
       if (!IT.Status.canCast(caster)) return IT.Status.has(caster, 'silence') ? 'silenced' : 'disabled';
     } else {
       const it = caster.items && caster.items.find(s => s && s.id === id);

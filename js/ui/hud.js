@@ -59,6 +59,110 @@
   }
 
   const ul = (en, pt) => (IT.lang === 'pt' ? pt : en);
+
+  // ---------------------------------------------------------------- v6 stat boxes (core 2x2 under the portrait, secondary strip under the spells)
+  // Pure: H.statSheet(unit) -> { rows: { dmg, armor, ms, as, amp, mr, range, cdr, hpr, mpr: { txt, bonus, cls, tip } } }.
+  // Reads unit.attack.{min,max,as,bat}, armor, ms, magicRes, hpRegen, manaRegen, base.*, statuses[].data.stats (itemStats = items), hero orbs.
+  // spellAmp / castRangeBonus / cdr do not exist in the sim yet: read as optional fields, 0 when absent (tooltip says so).
+  const f1 = v => String(Math.round(v * 10) / 10);
+  const sgn = (v, pct) => (v > 0 ? '+' : v < 0 ? '-' : '') + f1(Math.abs(v)) + (pct ? '%' : '');
+  const CORE = ['dmg', 'armor', 'ms', 'as'], SEC = ['amp', 'mr', 'range', 'cdr', 'hpr', 'mpr'];
+  H.statSheet = function (e) {
+    const t = IT.t, V = IT.Values, a = e.attack || null, b = e.base || {}, P = { dmg: [], armor: [], ms: [], as: [], mr: [], hpr: [], mpr: [] };
+    const add = (k, src, v, pct) => { if (v) P[k].push({ src, v, pct: !!pct }); };
+    if (e.kind === 'hero' && e.inv && e.ctx && V) {
+      const n = { Q: 0, W: 0, E: 0 };
+      for (const o of e.inv.orbs) n[o]++;
+      add('hpr', 'orbs', n.Q * V.get('invoker_quas', 'hp_regen_per_instance', e.ctx));
+      add('ms', 'orbs', n.W * V.get('invoker_wex', 'move_speed_per_instance', e.ctx), true);
+      add('as', 'orbs', n.W * V.get('invoker_wex', 'attack_speed_per_instance', e.ctx));
+      add('dmg', 'orbs', n.E * V.get('invoker_exort', 'bonus_damage_per_instance', e.ctx));
+    }
+    for (const s of e.statuses || []) {
+      const st = s.data && s.data.stats; if (!st) continue;
+      const src = s.type === 'itemStats' ? 'items' : s.type;
+      add('as', src, st.as); add('dmg', src, st.dmg); add('ms', src, st.ms); add('ms', src, st.msPct, true);
+      add('armor', src, st.armor); add('mr', src, (st.magicRes || 0) * 100, true); add('hpr', src, st.hpRegen); add('mpr', src, st.manaRegen);
+    }
+    const S = IT.Status, slow = S && S.slowPct && !(S.has && S.has(e, 'hex')) ? S.slowPct(e) : 0;
+    if (slow) add('ms', 'slow', -slow * 100, true);
+    const nm = src => src === 'items' ? t('hs.items') : src === 'orbs' ? t('hs.orbs') : src === 'slow' ? t('hs.slow') : IT.hasT('status.' + src) ? t('status.' + src) : src;
+    const sum = k => P[k].reduce((x, p) => x + (p.pct ? 0 : p.v), 0);
+    const tip = (k, head, baseTxt, extra) => [head].concat(baseTxt != null ? ['  ' + t('hs.base') + ' ' + baseTxt] : [], P[k].map(p => '  ' + nm(p.src) + ' ' + sgn(p.v, p.pct)), extra || []).join('\n');
+    const cls = (v, v0) => (v > v0 + 0.05 ? 'up' : v < v0 - 0.05 ? 'dn' : '');
+    const bv = (k, cur) => (b[k] != null ? b[k] : cur);
+    const rows = {};
+    // damage: base range + green bonus (orbs / Alacrity / items)
+    const bonus = sum('dmg'), hasA = !!(a && a.max > 0);
+    const dmn = hasA ? Math.round(a.min - bonus) : 0, dmx = hasA ? Math.round(a.max - bonus) : 0;
+    const dtx = hasA ? (dmn === dmx ? String(dmn) : dmn + '-' + dmx) : '-';
+    rows.dmg = { txt: dtx, bonus: hasA && bonus ? sgn(bonus) : '', cls: '', tip: tip('dmg', t('hs.dmg') + ': ' + (hasA ? Math.round(a.min) + '-' + Math.round(a.max) : '-'), hasA ? dtx : null) };
+    const ar = e.armor || 0, ms = e.ms || 0, asv = a ? a.as || 0 : 0, mrv = e.magicRes || 0, hp = e.hpRegen || 0, mp = e.manaRegen || 0;
+    rows.armor = { txt: f1(ar), bonus: '', cls: cls(ar, bv('armor', ar)), tip: tip('armor', t('hs.armor') + ': ' + f1(ar), f1(bv('armor', ar))) };
+    rows.ms = { txt: String(Math.round(ms)), bonus: '', cls: cls(ms, bv('ms', ms)), tip: tip('ms', t('hs.ms') + ': ' + Math.round(ms), String(Math.round(bv('ms', ms)))) };
+    const at = a && a.bat && asv ? a.bat / (asv / 100) : 0;
+    rows.as = { txt: String(Math.round(asv)), bonus: '', cls: cls(asv, bv('as', asv)), tip: tip('as', t('hs.as') + ': ' + Math.round(asv), String(Math.round(bv('as', asv))), at ? ['  ' + t('hs.at') + ' ' + at.toFixed(2) + 's'] : []) };
+    rows.mr = { txt: Math.round(mrv * 100) + '%', bonus: '', cls: cls(mrv, bv('magicRes', mrv)), tip: tip('mr', t('hs.mr') + ': ' + Math.round(mrv * 100) + '%', Math.round(bv('magicRes', mrv) * 100) + '%') };
+    rows.hpr = { txt: f1(hp), bonus: '', cls: cls(hp, bv('hpRegen', hp)), tip: tip('hpr', t('hs.hpr') + ': ' + f1(hp) + '/s', f1(bv('hpRegen', hp))) };
+    rows.mpr = { txt: f1(mp), bonus: '', cls: cls(mp, bv('manaRegen', mp)), tip: tip('mpr', t('hs.mpr') + ': ' + f1(mp) + '/s', f1(bv('manaRegen', mp))) };
+    // no sim source yet (optional fields; 0 when absent)
+    const opt = (k, v, u) => { const x = Number(v) || 0; rows[k] = { txt: f1(x) + u, bonus: '', cls: x > 0 ? 'up' : '', tip: t('hs.' + k) + ': ' + f1(x) + u + (v == null ? '\n  ' + t('hs.none') : '') }; };
+    opt('amp', e.spellAmp, '%'); opt('range', e.castRangeBonus, ''); opt('cdr', e.cdr, '%');
+    return { rows };
+  };
+  // 11x11 hand-drawn stat icon (fresh canvas: the art cache canvas is shared)
+  function hsIcon(sheet, key) {
+    const src = IT.Art && IT.Art.canvas(sheet, key), c = document.createElement('canvas');
+    c.className = 'hsi'; c.width = c.height = 11;
+    if (src) c.getContext('2d').drawImage(src, 0, 0);
+    return c;
+  }
+  function statCell(k, store) {
+    const { h } = IT.UI, v = h('span', { class: 'hv' }), b = h('b', { class: 'hb' });
+    const el = h('div', { class: 'hc ' + k }, hsIcon('hstat', 'hs_' + k), v, b);
+    store[k] = { el, v, b };
+    return el;
+  }
+  const coreBox = store => IT.UI.h('div', { class: 'hcore' }, CORE.map(k => statCell(k, store)));
+  // secondary strip: the stat cells for `keys` + status chips (right aligned)
+  function stripBox(store, keys) {
+    const { h } = IT.UI;
+    store.chips = h('div', { class: 'hchips' });
+    return h('div', { class: 'hstrip' }, keys.map(k => statCell(k, store)), store.chips);
+  }
+  function paintCells(store, keys, e, ca, pfx) {
+    const sh = H.statSheet(e);
+    for (const k of keys) {
+      const c = store[k], r = sh.rows[k], sig = r.txt + '|' + r.bonus + '|' + r.cls + '|' + r.tip;
+      if (ca[pfx + k] === sig) continue;
+      ca[pfx + k] = sig;
+      c.v.textContent = r.txt; c.b.textContent = r.bonus;
+      c.el.className = 'hc ' + k + (r.cls ? ' ' + r.cls : '');
+      c.el.setAttribute('data-tip', r.tip);
+    }
+  }
+  // status chips (11px icons from IT.UnitDraw.statusIcons: priority sorted, cap 4) + a 1-px remaining-time pip; tip = name + seconds left
+  function paintChips(store, e, w, ca, pfx) {
+    const UD = IT.UnitDraw, list = UD && UD.statusIcons ? UD.statusIcons(e, w.t) : [], t = IT.t;
+    const sig = e.id + ':' + list.map(l => l.key).join(',');
+    if (ca[pfx + 'sig'] !== sig) {
+      ca[pfx + 'sig'] = sig; store.chips.textContent = ''; store.chipList = []; store.tot = {};
+      for (const it of list) {
+        const pip = IT.UI.h('i'), el = IT.UI.h('span', { class: 'sti' }, hsIcon('status', 'st_' + it.key), pip);
+        store.chips.appendChild(el); store.chipList.push({ el, pip, pw: -1 });
+      }
+    }
+    for (let i = 0; i < list.length && i < store.chipList.length; i++) {
+      const ch = store.chipList[i], it = list[i], fin = isFinite(it.left);
+      const nm = IT.hasT('status.' + it.type) ? t('status.' + it.type) : it.type;
+      const tx = nm + (fin ? ' - ' + t('hs.left', { n: Math.ceil(Math.max(0, it.left)) }) : '');
+      if (ca[pfx + 'ct' + i] !== tx) { ca[pfx + 'ct' + i] = tx; ch.el.setAttribute('data-tip', tx); }
+      let f = 1;
+      if (fin) { if (!(store.tot[it.key] >= it.left)) store.tot[it.key] = it.left; f = store.tot[it.key] > 0.5 ? Math.max(0, Math.min(1, it.left / store.tot[it.key])) : 1; }
+      const pw = fin ? Math.round(f * 100) : 0;
+      if (ch.pw !== pw) { ch.pw = pw; ch.pip.style.width = pw + '%'; }
+    }
+  }
   const UCMD_ICON = { attack: 'ui_atk', stop: 'ui_stop', hold: 'ui_hold' };
   // bottom bar for a selected non-hero unit (Dota-style): portrait, name, bars, armor/MR/speed, 6 items
   function unitBar(R) {
@@ -67,17 +171,16 @@
     R.uname = h('div', { class: 'uname' });
     R.uhp = h('div', { class: 'bar hp' }, R.uhpf = h('i'), R.uhpt = h('span'));
     R.ump = h('div', { class: 'bar mp' }, R.umpf = h('i'), R.umpt = h('span'));
-    R.ua = h('b'); R.um = h('b'); R.us = h('b'); R.ud = h('b');
-    R.udw = h('span', {}, ul('DAMAGE', 'DANO') + ' ', R.ud);
-    R.umw = h('span', {}, t('hud.mres') + ' ', R.um); R.usw = h('span', {}, t('hud.ms') + ' ', R.us);
-    R.ustats = h('div', { class: 'ustats' }, R.udw, h('span', {}, t('hud.armor') + ' ', R.ua), R.umw, R.usw);
+    R.uc = {}; R.us = {};
+    R.ucore = coreBox(R.uc);   // v6: core stats under the portrait (damage / armor / move / attack speed)
+    R.ustrip = stripBox(R.us, ['mr', 'hpr', 'mpr']);   // magic res + regen + status chips
     R.unote = h('div', { class: 'ustats', style: { display: 'none', color: '#ffd27a' } });   // buildings: team + invulnerable note
     R.uitems = [0, 1, 2, 3, 4, 5].map(() => { const ic = h('span', { class: 'ic' }); return { el: h('div', { class: 'hbtn item' }, ic), ic }; });
     // v6: own Forge Spirit card -> its own Attack / Stop / Hold commands (with the bound keys) instead of item slots
     R.ucmd = ['attack', 'stop', 'hold'].map(a => { const b = btnEl('item cmd', () => IT.Input.doAction(a, { hud: true })); b.act = a; b.el.style.display = 'none'; return b; });
     return h('div', { class: 'hudp hbar hunit', style: { display: 'none' } },
-      R.upor,
-      h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustats, R.unote),
+      h('div', { class: 'hpcol' }, R.upor, R.ucore),
+      h('div', { class: 'hmid' }, R.uname, h('div', { class: 'bars' }, R.uhp, R.ump), R.ustrip, R.unote),
       h('div', { class: 'hitems' }, R.uitems.map(b => b.el), R.ucmd.map(b => b.el)));
   }
   // ---------------------------------------------------------------- Aghanim's hood emblem (Dota layout)
@@ -444,19 +547,21 @@
     // recipe hints, always on: 3 mini orbs under each invoked-spell slot + a compact 10-spell recipe strip above the bar
     R.rec1 = h('div', { class: 'abrec' }); R.rec2 = h('div', { class: 'abrec' });
     R.recs = recipeStrip();
+    R.hc = {}; R.hs = {};
+    R.core = coreBox(R.hc);   // v6: core stats 2x2 under the portrait; secondary strip + status chips under the spell row
+    R.strip = stripBox(R.hs, SEC);
     R.bar = h('div', { class: 'hudp hbar' },
-      R.por,
+      h('div', { class: 'hpcol' }, R.por, R.core),
       h('div', { class: 'hmid' },
         h('div', { class: 'bars' }, R.hp, R.mp),
-        h('div', { class: 'abrow' }, R.q.el, R.w.el, R.e.el, R.r.el, h('i', { class: 'sep' }),
+        h('div', { class: 'abrow' }, h('div', { class: 'abq' }, h('div', { class: 'abl' }, R.q.el, R.w.el, R.e.el, R.r.el), R.strip), h('i', { class: 'sep' }),
           h('div', { class: 'abcol' }, R.s1.el, R.rec1), h('div', { class: 'abcol' }, R.s2.el, R.rec2))),
       R.hood,
       h('div', { class: 'hitems' }, R.items.map(b => b.el)),
       R.recs.el);
     R.ubar = unitBar(R);
-    R.buffs = h('div', { class: 'hbuffs' });
     R.orbcol = h('div', { class: 'horbcol' }, R.orbs);
-    R.stat = h('div', { class: 'hstat' }, R.orbcol, R.buffs);   // orbs + status icons float above the hero bar
+    R.stat = h('div', { class: 'hstat' }, R.orbcol);   // orbs float above the hero bar (status chips live in the strip under the spells)
     R.aim = h('div', { class: 'aimhint', text: t('hud.aimHint') });
     R.rk = rankedPanel(R);
     R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
@@ -779,7 +884,7 @@
       R.upor.textContent = ''; R.upor.appendChild(bp || (sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' })));
       R.upor.classList.toggle('foe', U.team === 1); R.uhp.classList.toggle('foe', U.team === 1);
       R.uname.textContent = U.name || t('hud.unit');
-      R.umw.style.display = R.usw.style.display = bld ? 'none' : '';
+      R.ucore.style.display = bld ? 'none' : '';
       const note = bld ? [U.team === 0 ? 'Radiant' : U.team === 1 ? 'Dire' : ul('Neutral', 'Neutro'), U.invulnerable ? ul('Invulnerable', 'Invulnerável') : U.destroyed ? ul('Destroyed', 'Destruída') : ''].filter(Boolean).join('  |  ') : '';
       R.unote.textContent = note; R.unote.style.display = note ? '' : 'none';
       R.uitems.forEach(b => { b.el.style.display = own || bld ? 'none' : ''; });
@@ -788,7 +893,7 @@
         if (own && !b.ic.firstChild && hasIcon(UCMD_ICON[b.act])) b.ic.appendChild(icon(UCMD_ICON[b.act]));
         b.el.title = { attack: ul('Attack', 'Atacar'), stop: ul('Stop', 'Parar'), hold: ul('Hold', 'Segurar') }[b.act];
       });
-      for (const k of ['uhp', 'ump', 'ua', 'um', 'us', 'ud', 'uk']) delete ca[k];
+      for (const k of Object.keys(ca)) if (k === 'uhp' || k === 'ump' || k === 'uk' || k.indexOf('uc') === 0 || k.indexOf('us') === 0) delete ca[k];
     }
     if (U.kind === 'spirit' && U.team === 0) {   // key labels follow live rebinds
       const kk = R.ucmd.map(b => keyLab(b.act)).join('|');
@@ -799,12 +904,11 @@
     const mmp = Math.round(U.maxMana || 0), mk = Math.max(0, Math.round(U.mana || 0)) + '/' + mmp;
     R.ump.style.display = mmp > 0 && !U.building ? '' : 'none';
     R.uhp.style.display = U.maxHp > 0 ? '' : 'none';   // fountain / shops: no hp
-    const at = U.attack, dk = at && at.max > 0 ? (Math.round(at.min) === Math.round(at.max) ? String(Math.round(at.min)) : Math.round(at.min) + '-' + Math.round(at.max)) : '';
-    R.udw.style.display = dk ? '' : 'none'; setText(R.ud, dk, ca, 'ud');
     if (ca.ump !== mk) { ca.ump = mk; R.umpt.textContent = mk; R.umpf.style.width = (U.maxMana ? Math.max(0, U.mana / U.maxMana) * 100 : 0) + '%'; }
-    setText(R.ua, String(Math.round((U.armor || 0) * 10) / 10), ca, 'ua');
-    setText(R.um, Math.round((U.magicRes || 0) * 100) + '%', ca, 'um');
-    setText(R.us, String(Math.round(U.ms || 0)), ca, 'us');
+    R.ustrip.style.display = U.building ? 'none' : '';
+    if (!U.building) {
+      paintCells(R.uc, CORE, U, ca, 'uc'); paintCells(R.us, ['mr', 'hpr', 'mpr'], U, ca, 'us'); paintChips(R.us, U, w, ca, 'usc');
+    }
     R.uitems.forEach((b, i) => {
       const it = U.items && U.items[i], id = it ? (typeof it === 'string' ? it : it.id) : null;
       if (ca['ui' + i] === id) return;
@@ -974,25 +1078,11 @@
     // orbs (a status) sit centred over the ability row; other statuses take slots to their right
     const lk = innerWidth + 'x' + innerHeight + ':' + (U ? 1 : 0);
     if (ca.statPos !== lk && R.bar.offsetParent) {
-      const ab = R.q.el.parentNode.getBoundingClientRect(), rt = R.stat.parentNode.getBoundingClientRect(), ow = R.orbs.getBoundingClientRect().width;
+      const ab = R.q.el.closest('.abrow').getBoundingClientRect(), rt = R.stat.parentNode.getBoundingClientRect(), ow = R.orbs.getBoundingClientRect().width;
       if (ab.width && ow) { ca.statPos = lk; R.stat.style.left = Math.round(ab.left + ab.width / 2 - ow / 2 - rt.left) + 'px'; }
     }
-    // buffs (hero's, or the selected unit's)
-    const bu = U || hero;
-    const sts = (bu.statuses || []).filter(s => s.type !== 'channel' && s.type !== 'itemStats' && isFinite(s.until));
-    const sig = bu.id + ':' + sts.map(s => s.type).join(',');
-    if (ca.buffs !== sig) {
-      ca.buffs = sig; R.buffs.textContent = ''; R.bchips = [];
-      for (const s of sts) {
-        const src = s.src != null ? w.get(s.src) : null, foe = src && src.team !== bu.team;
-        const nm = IT.hasT('status.' + s.type) ? t('status.' + s.type) : s.type;
-        const chip = IT.UI.h('div', { class: 'buff ' + (foe ? 'bad' : 'good'), 'data-tip': nm },
-          s.ability && hasIcon(s.ability) ? IT.UI.icon(s.ability) : (s.type && hasIcon(s.type) ? IT.UI.icon(s.type) : IT.UI.h('b', { class: 'ab', text: nm.slice(0, 3).toUpperCase() })),
-          IT.UI.h('span', { class: 'bt' }));
-        R.buffs.appendChild(chip); R.bchips.push({ chip, s, tx: chip.lastChild });
-      }
-    }
-    if (R.bchips) for (const b of R.bchips) { const rem = Math.max(0, b.s.until - w.t); const v = rem >= 10 ? String(Math.ceil(rem)) : rem.toFixed(1); if (b.v !== v) { b.v = v; b.tx.textContent = v; } }
+    // core box + secondary strip (stats + status chips) of the hero; the selected unit's own are painted in H.updUnit
+    if (!U) { paintCells(R.hc, CORE, hero, ca, 'hc'); paintCells(R.hs, SEC, hero, ca, 'hs'); paintChips(R.hs, hero, w, ca, 'hsc'); }
     // sandbox panel
     if (R.dpsN) H.updSide(dt, w, hero, ca);
     if (H.statsOn) { H.accT += dt; if (H.accT > 0.4) { H.accT = 0; H.buildLive(); } }

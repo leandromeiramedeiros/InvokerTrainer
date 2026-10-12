@@ -6,7 +6,9 @@
   'use strict';
   const IT = G.IT = G.IT || {};
   const KEY = 'it2.rank', IKEY = 'it2.inf';
-  const TURNS = 8, COUNTDOWN = 10, SOLO_COUNTDOWN = 3, RESULT_HOLD = 1.6, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
+  // playtest 2: the result card holds >= RESULT_MIN s, then any key / click continues (run.cont), else it auto-continues RESULT_AUTO s later
+  const RESULT_MIN = 1.0, RESULT_AUTO = 3.0;
+  const TURNS = 8, COUNTDOWN = 10, SOLO_COUNTDOWN = 3, RESULT_HOLD = RESULT_MIN + RESULT_AUTO, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
   // v6: tags of the "fun" scenarios (fog, invisibility, river, prediction, vision); a ranked run gives at least FUN_TURNS of its turns to them
   const FUN_TAGS = ['fog', 'invisible', 'river', 'prediction', 'vision'], FUN_TURNS = 4;
   const isFun = sc => (sc.tags || []).some(t => FUN_TAGS.indexOf(t) >= 0);
@@ -118,9 +120,10 @@
   //   Tornado = base + quas + wex damage; Cold Snap = freeze_damage x SNAP_PROCS; EMP = min(mana_burned, foe mana) x damage_per_mana_pct;
   //   Ice Wall = 0 (a zone the foe may never touch); Forge Spirits = count x spirit dps x ATTACK_WINDOW; an 'attack' step = hero dps (+ Alacrity when the
   //   steps cast it) x ATTACK_WINDOW; Gleipnir / Meteor Hammer = their KV unit damage. Steps at d0/lead credit foe 0, d1 foe 1, mid (and
-  //   Cataclysm) every foe. foe hp = HP_SHARE x credited damage x tier hpMul: the whole combo is needed, with ~15% slack for a sloppy hit.
+  //   Cataclysm) every foe. foe hp = min(HP_CAP, HP_SHARE x tier hpMul) x credited damage: the whole combo is needed, with ~10% slack for a
+  //   sloppy hit (playtest 2: 0.85 -> 0.9; bot sweep: any fraction > 0.9 of the credited damage breaks scripted clears, see DECISIONS.md).
   const KILL_TYPES = { kill: 1, kill_with: 1, killN: 1 }, TOWER_HULL = 72;   // towers.js RADIUS
-  const HP_SHARE = 0.85, ATTACK_WINDOW = 4, SNAP_PROCS = 3, IN_FLIGHT = 2;
+  const HP_SHARE = 0.9, HP_CAP = 0.9, ATTACK_WINDOW = 4, SNAP_PROCS = 3, IN_FLIGHT = 2;
   const NO_NEED = { move: 1, attack: 1 };
   // step abilities that cannot hit a foe: they count once the hero casts them (Ice Wall is a zone in front of the hero: a slow / block, not a hit)
   const SELF_OK = { ghostwalk: 1, alacrity: 1, blink: 1, refresher: 1, forcestaff: 1, bkb: 1, boots: 1, travels: 1, icewall: 1 };
@@ -175,7 +178,8 @@
     const c = comboDamage(sc, df, lo), pos = c.foes.filter(v => v > 0);
     if (!pos.length) return null;
     const lo0 = Math.min.apply(null, pos), mul = df.hpMul != null ? df.hpMul : 1;
-    return c.foes.map(v => Math.round(Math.max(100, HP_SHARE * (v > 0 ? v : lo0) * mul)));
+    const f = Math.min(HP_CAP, HP_SHARE * mul);
+    return c.foes.map(v => Math.round(Math.max(100, (v > 0 ? v : lo0) * f)));
   }
 
   // ---------------------------------------------------------------- v6: destroyTower timer math (pure; see DECISIONS.md "v6 WP1")
@@ -364,7 +368,7 @@
       placed[i] = p;
       const items = d.items || (df.useBkb || d.useBkb ? ['bkb'] : undefined);
       const skin = SK[(s0 + i) % SK.length], lap = Math.floor(i / SK.length);   // every foe wears a different NPC hero skin + name
-      // real enemy NPC, dies at 0 hp. Kill scenarios: hp = 0.85 x the damage of the scenario's own steps x tier hpMul (foeHp); the others keep
+      // real enemy NPC, dies at 0 hp. Kill scenarios: hp = min(HP_CAP, HP_SHARE x tier hpMul) x the damage of the scenario's own steps (foeHp); the others keep
       // the old line (d.hp = start fraction on the old 25% kill line x ENEMY.hp x hpMul)
       const need = d.hp != null && d.hp < 1 ? Math.max(0.05, d.hp - 0.25) : 0.75;
       const base = pr.hp && pr.hp[i] != null ? pr.hp[i] : need * E.hp * (df.hpMul != null ? df.hpMul : 1);
@@ -381,6 +385,7 @@
       });
       e.hpRegen = 0; e.base.hpRegen = 0;
       if (mot === 'flee' || mot === 'chase' || mot === 'march') { const ms = mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase; e.ms = ms; e.base.ms = ms; }
+      if (d.msMul && mot) { e.ms = Math.round(e.ms * d.msMul); e.base.ms = e.ms; }   // playtest 2: a booted scripted chaser
       if (tw === 'swift') { e.ms = Math.round(e.ms * 1.15); e.base.ms = e.ms; }
       e.scn = { mot: mot || null, next: 0, lastSeen: null, search: null, idx: i, n: (sc.units || sc.dummies || []).length };
       out.push(e);
@@ -562,7 +567,7 @@
         w.emit('comboFail', { id: pr.sc.id, reason, detail: detail || null, spells: spells || null, s: reason === 'method' ? methodText(detail, spells) : '' });
       }
       run.result = { ok, reason: reason || null, detail: detail || null, spells: spells || null, points: pts, time };
-      run.phase = 'result'; run.hold = RESULT_HOLD; w.paused = true;
+      run.phase = 'result'; run.hold = RESULT_HOLD; run.held = 0; w.paused = true;
       w.emit('scnResult', { id: pr.sc.id, ok, reason: reason || null, detail: detail || null, points: pts, time });
     }
 
@@ -605,6 +610,8 @@
       // v6: a kill only counts once every step spell / item hit a foe (or, self ones, was cast); the toast names the missing ones.
       // A spell still in flight at the kill (cast within IN_FLIGHT s: Sun Strike delay, Blast wave, Meteor fall) counts too, so a Meteor
       // burn that finishes the foe a moment before the last nuke lands is not a fail
+      // playtest 2: area defence (every 'hold' and every gate / 'cross' scenario): wiping out every foe IS the defence -> an immediate win
+      if ((o.type === 'hold' || (fail.indexOf('cross') >= 0 && w.gate)) && run.dummies.length && !alive.length) return conclude(true);
       const won = () => { const miss = (pr.need || []).filter(a => !st.used.has(a) && !(st.castAt[a] != null && w.t - st.castAt[a] <= IN_FLIGHT)); return miss.length ? conclude(false, 'method', 'missing', miss) : conclude(true); };
       if (o.type === 'kill' || o.type === 'kill_with') { if (!alive.length) return won(); }
       else if (o.type === 'killN') {
@@ -619,8 +626,10 @@
       else if (o.type === 'escape') {
         // v6: caught = a foe hurt the hero, or the hero is VISIBLE to the enemy team (Ghost Walk hides it unless a Dire tower's true sight /
         // a reveal shows it) with a foe within CAUGHT
+        // playtest 2: obj.caught = a per-scenario visible-contact distance; obj.bump = a foe that walks into the INVISIBLE hero finds it too
         if (st.hurt) return conclude(false, 'caught');
-        if (heroSeen(w)) for (const d of alive) if (Math.hypot(d.x - h.x, d.y - h.y) < CAUGHT) return conclude(false, 'caught');
+        const vis = heroSeen(w), reach = vis ? o.caught || CAUGHT : o.bump || 0;
+        if (reach > 0) for (const d of alive) if (Math.hypot(d.x - h.x, d.y - h.y) < reach) return conclude(false, 'caught', vis ? null : 'bump');
         if (el >= o.time) return conclude(true);
         return;
       }
@@ -707,12 +716,15 @@
     function go() { const w = run.w; run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', {}); }
     // skip the pre-scenario countdown (any action key / Start button); false if not counting down
     run.skip = () => { if (run.ended || !run.w || run.phase !== 'countdown') return false; go(); return true; };
+    // playtest 2: leave the result card (any key / click). false while not in 'result' or before RESULT_MIN s have shown it
+    run.cont = () => { if (run.ended || !run.w || run.phase !== 'result' || (run.held || 0) < RESULT_MIN) return false; nextScenario(); return true; };
 
     // advance by dt seconds. Frozen phases come from main.js (real dt), play comes from the sim system (w.dt)
     run.tick = dt => {
       if (run.ended || !run.w) return;
       const w = run.w;
-      if (run.runLeft != null && run.phase !== 'idle') {
+      // the result card is a pause: it never eats the run clock (nor the scenario timer: w.t is frozen)
+      if (run.runLeft != null && run.phase !== 'idle' && run.phase !== 'result') {
         run.runLeft -= dt;
         if (run.runLeft <= 0) { run.runLeft = 0; finish('time'); return; }
       }
@@ -721,7 +733,7 @@
         if (inv && inv.invokeCd > 0) { inv.invokeCd -= dt; if (inv.invokeCd < 1e-9) inv.invokeCd = 0; }
         run.cd -= dt; if (run.cd <= 0) go();
       }
-      else if (run.phase === 'result') { run.hold -= dt; if (run.hold <= 0) nextScenario(); }
+      else if (run.phase === 'result') { run.held = (run.held || 0) + dt; run.hold -= dt; if (run.hold <= 0) nextScenario(); }
       else if (run.phase === 'play') { script(w); check(w); }
     };
     return run;
@@ -745,16 +757,19 @@
       // extras
       mode: r.mode, id: pr.sc.id, n: r.n, solved: r.solved, failed: r.failed, streak: r.streak, bestStreak: r.bestStreak,
       diff: pr.df.id, diffDesc: loc(pr.df.desc), hints: !!pr.df.hints, tip: loc(pr.sc.tip), spells: sol.filter(s => IT.GAME.SPELL_ORBS[s.a]).map(s => s.a),
-      result: r.result, level: pr.sc.level || null, mapName: w.map && w.map.name ? loc(w.map.name) : null,
+      result: r.result,
+      // result card: canGo once RESULT_MIN s have shown it; auto = whole seconds to the auto-continue
+      hold: r.phase === 'result' ? { canGo: (r.held || 0) >= RESULT_MIN, auto: Math.max(0, Math.ceil(r.hold - 1e-9)), held: r.held || 0 } : null,
+      level: pr.sc.level || null, mapName: w.map && w.map.name ? loc(w.map.name) : null,
       twist: pr.twist ? pr.twist : null, twistName: pr.twist && TWISTS[pr.twist] ? loc(TWISTS[pr.twist].name) : null,
     };
   }
 
   IT.Ranked = {
-    TURNS, COUNTDOWN, RESULT_HOLD,
+    TURNS, COUNTDOWN, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     profile, record, reset, load, prepare, apply, create, hud, spot, arenas, TWISTS,
-    comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, ATTACK_WINDOW,
+    comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

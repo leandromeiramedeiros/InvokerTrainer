@@ -6,18 +6,44 @@
   const IT = G.IT = G.IT || {};
   const TAU = 0.16, TAU_FAR = 0.1;   // s: time constant; jumps over a full screen glide a bit quicker
 
+  // Overscroll: the view may pan past the map by the on-screen HUD coverage (bottom HUD, left minimap, top strip, small right margin),
+  // so a unit on the map edge can be brought into the VISIBLE play area. centerOn / glide / lock / minimap all share this clamp.
+  // HUD coverage in base screen units (480x270): minimap right edge, top strip bottom, bottom HUD height. IT.HUD.insets() {l,r,t,b} overrides when present.
+  const INSETS = { l: 139, r: 0, t: 18, b: 66 };
+  // extra breathing room past the HUD so a unit's body clears it (base units): margin = inset + PAD
+  const PAD = { l: 10, r: 8, t: 4, b: 8 };
+
+  function insets() {
+    let h = null;
+    try { h = IT.HUD && IT.HUD.insets && IT.HUD.insets(); } catch (e) { h = null; }
+    const o = {};
+    for (const k in INSETS) o[k] = h && isFinite(h[k]) && h[k] >= 0 ? +h[k] : INSETS[k];
+    return o;
+  }
+
+  // overscroll margins + the visible-area centre, world units, from the live zoom (view px per base unit = VIEW_W / VIEW_W_BASE)
+  function margins() {
+    const GM = IT.GAME, P = GM.UNIT_PX, i = insets(), k = GM.VIEW_W / (GM.VIEW_W_BASE || 480) * P, bh = GM.VIEW_H_BASE || 270;
+    return {
+      l: (i.l + PAD.l) * k, r: (i.r + PAD.r) * k, t: (i.t + PAD.t) * k, b: (i.b + PAD.b) * k,
+      fx: GM.VIEW_W * P / 2,                              // horizontal: the minimap only covers a corner, so the true centre
+      fy: (i.t + bh - i.b) / 2 * GM.VIEW_H / bh * P,      // vertical: centre of the band between the top strip and the bottom HUD
+    };
+  }
+
   function create(map) {
     const GM = IT.GAME, P = GM.UNIT_PX;   // view size is live (scroll-wheel zoom changes GM.VIEW_W/VIEW_H)
-    const cx = v => IT.U.clamp(v, 0, Math.max(0, map.W - GM.VIEW_W * P));
-    const cy = v => IT.U.clamp(v, 0, Math.max(0, map.H - GM.VIEW_H * P));
+    const cx = v => { const m = margins(), lo = -m.l; return IT.U.clamp(v, lo, Math.max(lo, map.W - GM.VIEW_W * P + m.r)); };
+    const cy = v => { const m = margins(), lo = -m.t; return IT.U.clamp(v, lo, Math.max(lo, map.H - GM.VIEW_H * P + m.b)); };
     const cam = {
       setMap(m) { map = m; cam.glide = null; cam.hold = false; cam.clamp(); },   // map swap: new bounds
       x: 0, y: 0, lock: false, follow: false, speed: 2200, edge: 3, glide: null, hold: false, tau: TAU,
       clamp() { cam.x = cx(cam.x); cam.y = cy(cam.y); },
-      centerOn(x, y) { cam.glide = null; cam.x = x - GM.VIEW_W * P / 2; cam.y = y - GM.VIEW_H * P / 2; cam.clamp(); },   // instant (minimap, start)
+      margins,
+      centerOn(x, y) { const m = margins(); cam.glide = null; cam.x = x - m.fx; cam.y = y - m.fy; cam.clamp(); },   // instant (minimap, start): onto the visible-area centre
       // round start / scenario swap: hard snap onto the hero; the next update() keeps it there (no lerp, no edge / arrow pan on that frame), lock / follow untouched
       snap(x, y) { cam.centerOn(x, y); cam.hold = true; },
-      glideTo(x, y) { cam.glide = { x: cx(x - GM.VIEW_W * P / 2), y: cy(y - GM.VIEW_H * P / 2) }; },                       // eased
+      glideTo(x, y) { const m = margins(); cam.glide = { x: cx(x - m.fx), y: cy(y - m.fy) }; },                       // eased
       // integer pixel offset of the view in map-pixel space
       get px() { return Math.round(cam.x / P); },
       get py() { return Math.round(cam.y / P); },
@@ -30,7 +56,7 @@
           return false;
         }
         let goal = null;
-        if (hero && (cam.follow || cam.lock)) goal = { x: cx(hero.x - GM.VIEW_W * P / 2), y: cy(hero.y - GM.VIEW_H * P / 2) };
+        if (hero && (cam.follow || cam.lock)) { const m = margins(); goal = { x: cx(hero.x - m.fx), y: cy(hero.y - m.fy) }; }
         else if (cam.glide) goal = cam.glide;
         if (goal) {
           const dx = goal.x - cam.x, dy = goal.y - cam.y, d = Math.hypot(dx, dy);
@@ -56,5 +82,5 @@
     return cam;
   }
 
-  IT.Camera = { create };
+  IT.Camera = { create, margins, insets, INSETS, PAD };
 })(typeof window !== 'undefined' ? window : globalThis);

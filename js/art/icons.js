@@ -1322,4 +1322,146 @@ IT.Art.sheet('icons', { pal:{
   ]
   }});
 })();
+// ---- hand-drawn stat icons (hero / unit HUD stat boxes: js/ui/hud.js). Own sheet 'hstat' (same palette as 'status'), 11x11, 1-px outline 'A', 2-tone.
+(function () {
+  IT.Art.sheet('hstat', { pal:{
+    'A':'#08080e', '^':'#ffffff',
+    'y':'#ffe45a', 'Y':'#d49a1c', 'o':'#ffa83a', 'O':'#d8601a',
+    'c':'#c4f2ff', 'C':'#4fb0e8', 'b':'#6aa8ff', 'B':'#2f5fc8',
+    'r':'#ff6a5a', 'R':'#b82828', 'g':'#84e060', 'G':'#3a9a30',
+    'p':'#d29aff', 'P':'#8040c0', 'w':'#e4e8f0', 'W':'#8793a8',
+    'k':'#a8703a', 'K':'#5a3a1a'
+  }, frames:{
+    hs_dmg:[
+      '....AAA....',
+      '...AAwAA...',
+      '...AwwWA...',
+      '...AwwWA...',
+      '...AwwWA...',
+      '.AAAwwWAAA.',
+      '.AYyyyyyYA.',
+      '.AAAAkAAAA.',
+      '...AAKAA...',
+      '...AyYyA...',
+      '...AAAAA...'
+    ],
+    hs_armor:[
+      'AAAAAAAAAAA',
+      'AbbbbbBBBBA',
+      'Ab^bbbBBBBA',
+      'AbbbbbBBBBA',
+      'AbbbbbBBBBA',
+      'AAbbbbBBBAA',
+      '.AbbbbBBBA.',
+      '.AAbbbBBAA.',
+      '..AAbbBAA..',
+      '...AABAA...',
+      '....AAA....'
+    ],
+    hs_ms:[
+      '...........',
+      '.AAAAAA....',
+      '.AkkkKA....',
+      '.AkkkKA....',
+      '.AkkkKAAA..',
+      '.AkkkKKKAAA',
+      '.AkkkkkkKKA',
+      'AAkkkkkkKKA',
+      'AwwwwwwwwWA',
+      'AAAAAAAAAAA',
+      '...........'
+    ],
+    hs_as:[
+      '...........',
+      'AAAAAAA....',
+      'AyyAyyAA...',
+      'AAyyAyyAA..',
+      '.AAyyAyyAA.',
+      '..AAyyAyyA.',
+      '.AAYYAYYAA.',
+      'AAYYAYYAA..',
+      'AYYAYYAA...',
+      'AAAAAAA....',
+      '...........'
+    ],
+    hs_amp:[
+      '....AAA....',
+      '...AApAA...',
+      '...AppPA...',
+      '.AAAppPAAA.',
+      'AApppp^PPAA',
+      'Apppp^PPPPA',
+      'AApppPPPPAA',
+      '.AAAPPPAAA.',
+      '...APPPA...',
+      '...AAPAA...',
+      '....AAA....'
+    ],
+    hs_mr:[
+      '..AAAAAAA..',
+      '.AAbbbbbAA.',
+      'AAb^bbbbBAA',
+      'Ab^bbbbbBBA',
+      'AbbbbbbbBBA',
+      'AbbbbbbBBBA',
+      'AbbbbbBBBBA',
+      'AbbbbBBBBBA',
+      'AABBBBBBBAA',
+      '.AABBBBBAA.',
+      '..AAAAAAA..'
+    ],
+    hs_range:[
+      '....AAA....',
+      '..AAAgAAA..',
+      '.AAgggggAA.',
+      '.AgAAgAAgA.',
+      'AAgAAgAAgAA',
+      'AggAArAAggA',
+      'AAGAAGAAGAA',
+      '.AGAAGAAGA.',
+      '.AAGGGGGAA.',
+      '..AAAGAAA..',
+      '....AAA....'
+    ],
+    hs_cdr:[
+      '..AAAAAAA..',
+      '.AAcccccAA.',
+      'AAcwwwwwCAA',
+      'AcwwwBwwwCA',
+      'AcwwwBwwwCA',
+      'AcwwwBBBwCA',
+      'AcwwwwwwwCA',
+      'AcwwwwwwwCA',
+      'AACwwwwwCAA',
+      '.AACCCCCAA.',
+      '..AAAAAAA..'
+    ],
+    hs_hpr:[
+      '.AAAAAAAAA.',
+      'AArrrArrrAA',
+      'Arr^rrrrrRA',
+      'Ar^rrrrrrRA',
+      'ArrrrrrrRRA',
+      'ArrrrrrrRRA',
+      'AArrrrrRRAA',
+      '.AArrrRRAA.',
+      '..AArRRAA..',
+      '...AARAA...',
+      '....AAA....'
+    ],
+    hs_mpr:[
+      '....AAA....',
+      '...AAcAA...',
+      '...AcbbA...',
+      '..AAcbBAA..',
+      '..AcbbbBA..',
+      '.AAcbbbBAA.',
+      '.AcbbbbbBA.',
+      '.AbbbbbbBA.',
+      '.ABbbbbBBA.',
+      '.AABBBBBAA.',
+      '..AAAAAAA..'
+    ]
+  }});
+})();
 })(typeof window!=='undefined'?window:globalThis);

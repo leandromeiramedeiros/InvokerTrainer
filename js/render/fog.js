@@ -26,8 +26,11 @@
         let x0 = Math.floor(fx), y0 = Math.floor(fy);
         const tx = fx - x0, ty = fy - y0;
         const W = map.w, H = map.h, cur = f.cur;
-        const x1 = x0 + 1 > W - 1 ? W - 1 : x0 + 1, y1 = y0 + 1 > H - 1 ? H - 1 : y0 + 1;
-        if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
+        let x1 = x0 + 1, y1 = y0 + 1;   // outside the map (camera overscroll) samples the nearest edge tile
+        if (x0 < 0) x0 = 0; else if (x0 > W - 1) x0 = W - 1;
+        if (y0 < 0) y0 = 0; else if (y0 > H - 1) y0 = H - 1;
+        if (x1 < 0) x1 = 0; else if (x1 > W - 1) x1 = W - 1;
+        if (y1 < 0) y1 = 0; else if (y1 > H - 1) y1 = H - 1;
         const a = cur[y0 * W + x0], b = cur[y0 * W + x1], c = cur[y1 * W + x0], d = cur[y1 * W + x1];
         return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
       },

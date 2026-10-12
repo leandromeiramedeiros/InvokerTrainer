@@ -142,6 +142,7 @@ function ranked(seed, rating, fixedIdx, sloppy) {
       for (const a of open) prep(w, h, a);
       run.tick(1 / 30);
     } else if (run.phase === 'play') playScenario(run, w, h, ctl, rnd, sloppy);
+    else if (run.phase === 'result' && run.cont && run.cont()) continue;   // playtest 2: a player presses a key once the card allows it
     else run.tick(1 / 30);
   }
   // projected 8/8 run: every turn cleared at this run's mean clear speed, relics = the solved scenarios' mean x 8

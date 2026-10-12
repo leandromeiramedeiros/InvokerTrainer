@@ -15,7 +15,8 @@ const NONE = new Set();
 
 // the camera target (view centre) equals the hero, up to the map-bounds clamp
 function centred(cam, hero, map) {
-  const ex = Math.max(0, Math.min(map.W - GM.VIEW_W * P, hero.x - HW)), ey = Math.max(0, Math.min(map.H - GM.VIEW_H * P, hero.y - HH));
+  const m = IT.Camera.margins();   // overscroll clamp + visible-area centre (fx, fy)
+  const ex = Math.max(-m.l, Math.min(map.W - GM.VIEW_W * P + m.r, hero.x - m.fx)), ey = Math.max(-m.t, Math.min(map.H - GM.VIEW_H * P + m.b, hero.y - m.fy));
   return Math.abs(cam.x - ex) < 1e-6 && Math.abs(cam.y - ey) < 1e-6;
 }
 
@@ -76,4 +77,81 @@ test('redo snaps too; later frames follow normally (lock lerps, edge pan works)'
   const x0 = m.cam.x;
   m.cam.update(1 / 60, new Set(['ArrowRight']), { x: 100, y: 100, in: false, edge: null }, m.hero);   // second frame: manual scroll live again
   assert.notEqual(m.cam.x, x0);
+});
+
+// ---- overscroll: the camera pans past the map by the HUD coverage so edge units clear the bottom HUD / minimap
+const K = GM.VIEW_W / GM.VIEW_W_BASE * P;   // world units per base screen unit
+const visible = (cam, x, y) => { const sx = (x - cam.x) / P, sy = (y - cam.y) / P, i = IT.Camera.insets(), k = GM.VIEW_W / GM.VIEW_W_BASE; return { sx, sy, ok: sx >= i.l * k && sx <= GM.VIEW_W && sy >= i.t * k && sy <= GM.VIEW_H - i.b * k }; };
+
+test('overscroll clamp: x may go negative up to the left margin, y up to the top margin, and past the far edges by the right / bottom margins', () => {
+  const map = IT.Maps.get('grounds'), cam = IT.Camera.create(map), m = IT.Camera.margins();
+  assert.ok(m.l > 0 && m.b > 0 && m.t > 0 && m.r > 0);
+  cam.x = -1e9; cam.y = -1e9; cam.clamp();
+  assert.ok(Math.abs(cam.x + m.l) < 1e-6 && Math.abs(cam.y + m.t) < 1e-6);
+  cam.x = 1e9; cam.y = 1e9; cam.clamp();
+  assert.ok(Math.abs(cam.x - (map.W - GM.VIEW_W * P + m.r)) < 1e-6 && Math.abs(cam.y - (map.H - GM.VIEW_H * P + m.b)) < 1e-6);
+  // margins in world units = insets * zoom factor
+  const i = IT.Camera.insets();
+  assert.ok(Math.abs(m.l - (i.l + IT.Camera.PAD.l) * K) < 1e-6 && Math.abs(m.b - (i.b + IT.Camera.PAD.b) * K) < 1e-6);
+});
+
+test('insets hook (IT.HUD.insets) overrides the fallback table; bad values fall back', () => {
+  const base = IT.Camera.margins().l;
+  IT.HUD = { insets: () => ({ l: 200, r: 0, t: 18, b: 66 }) };
+  assert.ok(IT.Camera.margins().l > base);
+  IT.HUD = { insets: () => ({ l: NaN }) };
+  assert.equal(IT.Camera.margins().l, base);
+  delete IT.HUD;
+});
+
+test('centerOn a hero at (0,0) / bottom-left puts it inside the VISIBLE area (not under the HUD or minimap)', () => {
+  for (const id of ['grounds', 'dota']) {
+    const map = IT.Maps.get(id), cam = IT.Camera.create(map);
+    for (const [x, y] of [[0, 0], [0, map.H], [map.W, map.H], [map.W, 0], [map.W / 2, map.H]]) {
+      cam.centerOn(x, y);
+      const v = visible(cam, x, y);
+      assert.ok(v.ok, id + ' (' + x + ',' + y + ') at screen ' + v.sx.toFixed(1) + ',' + v.sy.toFixed(1));
+    }
+    cam.centerOn(0, map.H);   // bottom-left corner: the map corner sits right of the minimap and above the HUD
+    assert.ok(cam.x < 0 && cam.y > map.H - GM.VIEW_H * P, 'overscrolled left and below the map');
+  }
+});
+
+test('centerOn: a hero mid-map is centred horizontally, and vertically on the visible band', () => {
+  const map = IT.Maps.get('dota'), cam = IT.Camera.create(map), m = IT.Camera.margins();
+  cam.centerOn(map.W / 2, map.H / 2);
+  assert.ok(Math.abs((map.W / 2 - cam.x) - m.fx) < 1e-6 && Math.abs((map.H / 2 - cam.y) - m.fy) < 1e-6);
+  assert.ok(m.fy < GM.VIEW_H * P / 2, 'visible band centre is above the raw centre');
+});
+
+test('minimap click near the map edge is reachable (every minimap pixel maps to a centred camera inside the clamp)', () => {
+  const map = IT.Maps.get('dota'), cam = IT.Camera.create(map), m = IT.Camera.margins();
+  for (const fx of [0, 0.01, 0.5, 0.99, 1]) for (const fy of [0, 0.01, 0.5, 0.99, 1]) {
+    const x = fx * map.W, y = fy * map.H;
+    cam.centerOn(x, y);
+    const v = visible(cam, x, y);
+    assert.ok(v.ok, 'click ' + fx + ',' + fy + ' -> hero at ' + v.sx.toFixed(1) + ',' + v.sy.toFixed(1));
+    assert.ok(cam.x >= -m.l - 1e-6 && cam.y >= -m.t - 1e-6 && cam.x <= map.W - GM.VIEW_W * P + m.r + 1e-6 && cam.y <= map.H - GM.VIEW_H * P + m.b + 1e-6);
+  }
+});
+
+test('lock-follow and glide use the same clamp: a hero in the corner ends inside the visible area', () => {
+  const map = IT.Maps.get('dota'), cam = IT.Camera.create(map), hero = { x: 20, y: map.H - 20 };
+  cam.lock = true;
+  for (let i = 0; i < 120; i++) cam.update(1 / 60, NONE, { x: 100, y: 100, in: false, edge: null }, hero);
+  assert.ok(visible(cam, hero.x, hero.y).ok, 'lock');
+  const c2 = IT.Camera.create(map); c2.glideTo(hero.x, hero.y);
+  for (let i = 0; i < 120; i++) c2.update(1 / 60, NONE, { x: 100, y: 100, in: false, edge: null }, null);
+  assert.ok(visible(c2, hero.x, hero.y).ok, 'glide');
+  // edge pan / arrow keys stop at the overscroll limit
+  const c3 = IT.Camera.create(map);
+  for (let i = 0; i < 600; i++) c3.update(1 / 60, new Set(['ArrowLeft', 'ArrowUp']), { x: 100, y: 100, in: false, edge: null }, null);
+  const m = IT.Camera.margins();
+  assert.ok(Math.abs(c3.x + m.l) < 1e-6 && Math.abs(c3.y + m.t) < 1e-6);
+});
+
+test('fog sampling outside the map (overscroll) is finite: nearest edge tile', () => {
+  const IT2 = load(['js/data/game.js', 'js/render/fog.js']), map = { w: 10, h: 8 }, f = IT2.Fog.create(map);
+  f.cur.fill(1.5);
+  for (const [x, y] of [[-500, -500], [-3, 20], [9999, 40], [40, 9999], [-1, -1], [79, 63]]) assert.equal(f.sample(x, y), 1.5, x + ',' + y);
 });

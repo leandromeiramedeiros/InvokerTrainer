@@ -104,3 +104,15 @@
 .cfb{font-size:max(.9em,10px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .combobar .cr{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:.1em;font-size:max(.9em,9px)}
 .combobar .cr .sc{font-size:1.7em}
+
+/* playtest 2: between-round result card (js/ui/combobar.js resultCard): one big line, the reason below, "press any key / auto in N" */
+.rescard{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);z-index:30;min-width:34em;max-width:70%;padding:1.2em 2.4em 1em;text-align:center;pointer-events:auto;cursor:pointer;background:linear-gradient(#1d1236ee,#120a24ee);border:.3em solid var(--line);box-shadow:0 0 0 .15em #000,0 .5em 0 .15em #000}
+.rescard.ok{border-color:var(--good)}
+.rescard.bad{border-color:var(--bad)}
+.rescard .rcbig{font-size:3.6em;line-height:1.05;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;text-shadow:.08em .08em 0 #000}
+.rescard.ok .rcbig{color:var(--good)}
+.rescard.bad .rcbig{color:var(--bad)}
+.rescard .rcsmall{margin-top:.5em;color:var(--ink);font-size:max(1.2em,11px);font-weight:normal}
+.rescard .rcsmall:empty{display:none}
+.rescard .rccont{margin-top:.9em;color:var(--dim);font-size:max(.95em,9px);text-transform:uppercase;opacity:.55}
+.rescard.go .rccont{color:var(--gold);opacity:1}

@@ -66,6 +66,9 @@
   // v6: orbs + Invoke run during the scenario countdown WITHOUT starting the round (build your spells); move / cast / item / attack / stop / hold start it
   const isWarmup = a => /^orb[QWE]$/.test(a) || a === 'invoke';
   const countingDown = () => { const r = In.ctx && In.ctx.w && In.ctx.w.ranked; return !!(r && r.phase === 'countdown'); };
+  // playtest 2: between rounds the result card waits for any key / click (Ranked run.cont; ignored before its 1 s minimum). Consumed: never an action
+  const inResult = () => { const r = In.ctx && In.ctx.w && In.ctx.w.ranked; return !!(r && r.phase === 'result' && r.cont && In.inspecting()); };
+  const MOD_KEY = { Shift: 1, Control: 1, Alt: 1, Meta: 1, AltGraph: 1, CapsLock: 1, OS: 1 };
 
   // Is a different cast still on its way (turning / walking / cast point)? Then a new cast must queue behind it, not drop it.
   function pendingCast(id) {
@@ -91,6 +94,8 @@
     if (id === '__none') { fail('noItem'); return; }
     const d = IT.Abilities.get(id);
     if (!d) return;
+    // playtest 2: a spell that is not invoked does nothing -- fail SFX only, no "Not invoked" toast (the reason string is gone from i18n)
+    if (d.kind === 'spell' && IT.Abilities.check(w, hero, id, null) === 'notInvoked') { sfx('fail'); return; }
     if (d.target === 'none') { In.cancel(true); issueCast({ type: 'cast', ability: id, queued: !!queued }); return; }
     const normal = S().castMode === 'normal';
     if (how !== 'click' && (normal || how === 'hud')) {
@@ -438,6 +443,7 @@
       else if (In.hooks.pause) In.hooks.pause();
       return;
     }
+    if (inResult() && !MOD_KEY[ev.key]) { ev.preventDefault(); if (!ev.repeat) w.ranked.cont(); return; }
     if (ev.key === 'Tab') { ev.preventDefault(); if (!ev.repeat && !w.paused) In.cycleSel(); return; }
     if (/^F\d+$/.test(ev.key) && (ev.key === 'F1' || IT.Settings.actionFor(ev.key))) ev.preventDefault();   // F1 never opens the browser help; any bound function key stays in the game (also while paused / frozen)
     { const sk = IT.Settings.keyName(ev); if (sk && !ev.repeat && IT.Settings.actionFor(sk) === 'stats') { ev.preventDefault(); press(sk, {}); return; } }   // live stats also work while paused
@@ -550,6 +556,7 @@
       if (!In.enabled) return;
       if (ctx.w.paused) {   // frozen inspect (ranked countdown): minimap + foe select; RMB (move / attack) starts the run and is executed
         if (!In.inspecting()) return;
+        if (inResult()) { ctx.w.ranked.cont(); return; }   // result card: any click continues
         if (ev.button === 2) { setMouse(ev); if (!(In.hooks.skip && In.hooks.skip())) return; }
         else {
           if (ev.button !== 0) return;

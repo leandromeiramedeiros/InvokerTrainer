@@ -64,7 +64,7 @@
 
   // ---- fail reasons (sim 'fail' events)
   const fails = {
-    notInvoked: ['Not invoked', 'Não invocada'], cooldown: ['On cooldown', 'Em recarga'], mana: ['Not enough mana', 'Mana insuficiente'],
+    cooldown: ['On cooldown', 'Em recarga'], mana: ['Not enough mana', 'Mana insuficiente'],
     silenced: ['Silenced', 'Silenciado'], disabled: ['Disabled', 'Incapacitado'], noTarget: ['No target', 'Sem alvo'],
     targetHidden: ['Target not visible', 'Alvo não visível'], targetInvalid: ['Invalid target', 'Alvo inválido'],
     orbNotLearned: ['Orb not learned', 'Orbe não aprendido'], invokeCooldown: ['Invoke on cooldown', 'Invocar em recarga'],

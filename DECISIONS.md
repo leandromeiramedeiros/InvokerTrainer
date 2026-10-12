@@ -213,3 +213,54 @@ Heuristic QE/QW mid orb orders in `js/data/rules.js` (not from a verified guide)
 - HUD: a pixel sun / moon clock left of the top strip with a phase progress arc. Tooltip: "Day: vision 1800 / Night: vision 800" plus the time to the next flip.
 - Supersedes the audit note above ("trainer is always day"): towers now use their KV night vision.
 - Tests: tests/daynight_v6.test.js.
+
+## v6 playtest 2 - area wipe wins, foe hp share, ghost escape, result card (2026-10-12)
+- **Area defence**: every 'hold' scenario and every gate ('cross') scenario ends as a WIN the moment every foe is dead (checked after the fail rules, before the kill need-check: the wipe is the defence).
+- **Foe hp** (kill scenarios): hp = min(HP_CAP, HP_SHARE x tier hpMul) x credited step damage, HP_SHARE = 0.9, HP_CAP = 0.9 (was 0.85 x hpMul uncapped). Effective share: ian 0.72, easy 0.81, common/hard/bambam 0.90 (was 0.68 / 0.77 / 0.85 / 0.89 / 0.94).
+  - The asked 1.0-1.2 range is infeasible: the credited damage IS the scripted steps' damage, so a share >= 1 means the steps cannot kill (bot runs out of time or finishes by auto-attack = method fail). Sweep (v5 bot, 34 kill scenarios x 5 tiers x seeds 1-8) vs 0.85: uniform shares above ~0.86 regress, increasingly (0.925+ breaks many single-step scenarios), mostly at hard/bambam where hpMul > 1 pushes the effective share past ~0.9. Capping the tier factor fixes that: min(0.9, 0.9 x hpMul) = 0 regressions on seeds 1-8, new clears (bkb_bait hard, tornado_chain ian, cataclysm_finish bambam s3).
+  - No foe dies before its last mandatory damaging step is cast on any clear at common, seeds 1-8 (old 0.85 had one: refresher_double ian).
+  - Common, seed 5 (last step = cast time of the last credited step, s; kill = last foe death, s; clears ian/easy/common/hard/bambam):
+
+| scenario | hp 0.85 | hp new | last step | kill | clears old | clears new |
+|---|---|---|---|---|---|---|
+| sleepy_target | 404 | 428 | 0.0 | 1.7 | YYYYY | YYYYY |
+| cold_start | 807 | 854 | 0.3 | 5.6 | YYYYY | YYYYY |
+| spirit_pack | 1142 | 1209 | 0.0 | 3.3 | YYYYY | YYYYY |
+| river_rune | 300 | 317 | 0.0 | 3.3 | YYYYY | YYYYY |
+| sun_snipe | 404 | 428 | 1.2 | 2.9 | YYYYY | YYYYY |
+| tornado_sun | 636 | 674 | 1.4 | 3.1 | YYYYY | YYYYY |
+| two_birds | 202/202 | 214/214 | 0.0 | 1.7 | YYYYY | YYYYY |
+| river_guard | 404/198 | 428/209 | 2.5 | 3.2 | YYYYY | YYYYY |
+| burst_cold_forge | 1287 | 1363 | 0.5 | 4.1 | YYYYY | YYYYY |
+| orchid_burst | 1287 | 1363 | 0.9 | 4.2 | YYYYY | YYYYY |
+| uphill_snipe | 404 | 428 | 0.0 | 1.7 | YYYYY | YYYYY |
+| sun_flee | 404 | 428 | 1.1 | 2.8 | YYYYY | YYYYY |
+| icewall_emp_pull | 977 | 1035 | 1.1 | 4.3 | YYYY- | YYYY- |
+| tower_dive | 497 | 527 | 1.0 | 1.9 | YYYYY | YYYYY |
+| pit_trap | 643 | 680 | 1.0 | 2.4 | YYYYY | YYYYY |
+| atos_vyse_lock | 703 | 745 | 1.1 | 2.4 | YYYYY | YYYYY |
+| gleipnir_burst | 901 | 954 | 2.6 | 3.0 | YYY-Y | YYY-Y |
+| force_chase | 636 | 674 | 1.5 | 3.1 | YYYYY | YYYYY |
+| ghost_finish | 296 | 314 | 0.0 | 3.7 | YYYYY | YYYYY |
+| blink_fog | 497 | 527 | 1.9 | 2.5 | YYY-Y | YYY-Y |
+| cataclysm_finish | 669/669 | 709/709 | 0.0 | 8.2 | YY-YY | YY-YY |
+| fog_ambush | 636 | 674 | 1.9 | 3.6 | YYYYY | YYYYY |
+| bkb_bait | 762 | 807 | 12.9 | 14.2 | YYY-Y | YYYYY |
+| dust_hunt | 549 | 581 | 4.9 | 6.6 | -YY-- | -YY-- |
+| tornado_chain | 940 | 996 | 3.0 | 3.6 | -YYY- | YYYY- |
+| river_guard_2 | 1134/233/100 | 1200/246/100 | 5.7 | 6.8 | YYYY- | YYYY- |
+| cliff_blink | 636 | 674 | 1.0 | 2.7 | YYYYY | YYYYY |
+| highground_hold | 1134/497/497 | 1200/527/527 | 4.2 | 7.6 | YYYY- | YYYY- |
+| refresher_double | 995 | 1053 | 4.2 | 4.8 | YYY-- | YYY-- |
+| triple_kill | 669/669/669 | 709/709/709 | 0.0 | 1.7 | YYY-- | YYY-- |
+| tower_tornado | 636 | 674 | 1.7 | 3.3 | YYYYY | YYYYY |
+| gauntlet | 1046 | 1108 | 21.5 | - | YY--- | YY--- |
+| blink_denial | 901 | 954 | 1.6 | 2.6 | YYY-- | YYY-- |
+| shadow_strike | 730/730 | 773/773 | 3.3 | 6.3 | YYYY- | YYYY- |
+
+- **ghost_escape** (legacy id): Radiant Triangle jungle, hero on a 'choke' cell (tree lines break sight), ONE chaser 450-550 u away in sight (rand pick 3 / jit 80), aware 1, msMul 1.2, 12 s, night. obj.caught 180 = visible contact; obj.bump 80 = a chaser walking into the INVISIBLE hero finds it (fail 'caught', detail 'bump'). No Dust: the lesson is "Ghost Walk, then keep moving".
+- **ghost_slip**: chasers 600-750 u (was 800-1050), both aware 1, msMul 1.15, caught 180, bump 80, 12 s; nightAt 5 unchanged.
+- Bot check (seeds 1-8, every tier): Ghost Walk + walk away wins 8/8 on both; Ghost Walk then stand still loses 8/8 (bump at 1.1-5.7 s); idle loses 8/8.
+- **Result card**: RESULT_MIN 1.0 s + RESULT_AUTO 3.0 s. run.cont() leaves the card once it has shown >= 1 s; otherwise auto-continue at 4 s with a visible countdown. runLeft and w.t do not run in 'result'. input.js: in 'result' any non-modifier key / canvas click calls run.cont and is consumed. combobar.js draws the card (CLEARED +N / FAILED: reason, "press any key - auto in N"); its comboDone / comboFail toasts are skipped in scenario modes (SFX kept).
+- **"Not invoked"**: i18n string removed; casting a non-invoked spell from input plays the fail SFX only. Abilities.check still returns 'notInvoked' (AI / tests).
+- Tests: tests/playtest2_v6.test.js (new); tests/ceo_v6_core.test.js updated.

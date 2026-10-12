@@ -10,8 +10,10 @@
 //            map arena tags: open highground lowground river tower choke fog pit; relative: high low level hidden seen dtower rtower
 //            (heroes never start in a Dire tower's range, foes never stand in a Radiant tower's, unless towers:true)
 //   units  = [spot + { hp (start fraction on the old 25% kill line: the foe has (hp - 0.25) x 2200 x tier hpMul), mot 'still'|'flee'|'chase'|'march',
-//            behavior (enemy AI: stationary wander escape disable_escape defend), items, useBkb, aware (0..1 base awareness) }]  (enemy NPC heroes)
-//   obj    = kill | kill_with {how} | killN {n, one, span} | push {n} (one Deafening Blast) | destroyTower | rootAll | escape {time} | hold {time}
+//            behavior (enemy AI: stationary wander escape disable_escape defend), items, useBkb, aware (0..1 base awareness),
+//            msMul (x scripted move speed: a booted chaser) }]  (enemy NPC heroes)
+//   obj    = kill | kill_with {how} | killN {n, one, span} | push {n} (one Deafening Blast) | destroyTower | rootAll | escape {time, caught, bump} | hold {time}
+//            escape: caught = visible contact distance (default Ranked.CAUGHT), bump = an invisible hero a foe walks within is found too
 //            how = { ability:[ids], by:'hero'|'spirit', low, high, inv } checked on every kill (a wrong kill = the 'method' fail)
 //   fail   = subset of: time died cross (a foe reaches the gate) seen (an enemy notices you before your first hit) method escaped caught tower
 //   steps  = [{ a: spell|item|'attack'|'move', at: 'd0'|'d1'|'mid'|'self'|'lead'|'tower', w: wait s }]  the STEP-BY-STEP HUD + the test bot script
@@ -165,8 +167,8 @@
       [U(W(['pit'], { d: [600, 900] }), { hp: 0.5, behavior: 'wander', aware: 0.5 })], KILL, ['time'],
       [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 0.4 }]),
     V('ghost_slip', 5, 'rad_ancients', ['escape', 'invisible', 'basics'], 12, {},
-      [U(SEEN([800, 1050]), { mot: 'chase', hp: 1 }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1 })],
-      { type: 'escape', time: 12 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 120 } }),
+      [U(SEEN([600, 750]), { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 })],
+      { type: 'escape', time: 12, caught: 180, bump: 80 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 120 } }),
     // ---------------------------------------------------------------- level 6
     V('force_chase', 6, 'dire_safe_t1', ['movement', 'escape', 'items'], 14, { items: ['forcestaff'] },
       [U(SEEN([900, 1100], { not: ['dtower'] }), { hp: 0.42, behavior: 'escape', aware: 1 })], KILL, ['escaped', 'time'],
@@ -251,7 +253,7 @@
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as
   //      the fallback on a map without arenas), steps = the solver script. Ids, hp and solver scripts are unchanged.
   const LEG = {
-    ghost_escape: [2, 'lotus_rad', ['escape', 'invisible']], gleipnir_cluster: [2, 'lotus_dire', ['items', 'multi']],
+    ghost_escape: [2, 'rad_triangle', ['escape', 'invisible']], gleipnir_cluster: [2, 'lotus_dire', ['items', 'multi']],
     tornado_sun: [3, 'rad_safe_t1', ['combo']], sun_snipe: [3, 'river_bot', ['prediction']],
     burst_cold_forge: [4, 'rad_off_t1', ['burst']], orchid_burst: [4, 'dire_off_t1', ['items', 'burst']],
     icewall_emp_pull: [5, 'outpost_rad', ['combo']], atos_vyse_lock: [6, 'dire_triangle', ['items']], gleipnir_burst: [6, 'rad_triangle', ['items']],
@@ -267,6 +269,19 @@
     s.dummies = s.units;
     s.fail = s.obj.type === 'escape' ? ['caught'] : d0.mot === 'flee' ? ['escaped', 'time'] : ['time'];
     s.steps = s.sol; s.flair = s.tip; s.desc = s.goal;
+  }
+  // playtest 2: ghost_escape reworked -- a jungle choke start (tree lines to break line of sight), ONE booted chaser (+20% speed) 450-550 u
+  // away that already sees you, 12 s to survive, visible contact at 180 u (obj.caught), and a chaser that walks into the invisible hero
+  // finds it (obj.bump 80 u): Ghost Walk alone is not enough, walk away / around the trees. No Dust (the slip is the lesson). Night stays.
+  {
+    const g = LEGACY.find(s => s.id === 'ghost_escape'), u0 = g.units[0];
+    g.map = 'rad_triangle';
+    g.hero = Object.assign({}, g.hero, { at: W(['choke'], { d: [0, 1400] }) });
+    g.units = g.dummies = [Object.assign({}, u0, { where: ['level', 'seen'], d: [450, 550], aware: 1, msMul: 1.2 })];
+    g.obj = { type: 'escape', time: 12, caught: 180, bump: 80 }; g.rand = { pick: 3, jit: 80 };
+    g.tip = g.flair = L('A booted chaser already sees you. Ghost Walk at once, then keep walking through the trees: if it walks into you, you are found.',
+      'Um perseguidor de botas já te vê. Ghost Walk na hora e continue andando pelas árvores: se ele esbarrar em você, te acha.');
+    g.goal = g.desc = L('Survive 12 s without being caught', 'Sobreviva 12 s sem ser pego');
   }
 
   // ---- v5 set: texts from the i18n pack (lazy, so load order does not matter; null until the pack is loaded), HUD aliases tip/goal

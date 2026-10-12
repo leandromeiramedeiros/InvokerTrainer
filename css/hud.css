@@ -134,3 +134,22 @@
 .bar::before{left:calc(-6*var(--fs))}.bar::after{right:calc(-6*var(--fs));transform:scaleX(-1)}
 .bar.mp::before,.bar.mp::after{background-image:var(--orn-cap-mp)}
 .bar.foe::before,.bar.foe::after{background-image:var(--orn-cap-foe)}
+
+/* v6 stat boxes: core 2x2 under the portrait, secondary strip (stats + status chips) under the Q-R spells */
+.hpcol{display:flex;flex-direction:column;justify-content:space-between;flex:none;width:12.4em}
+.hcore{display:grid;grid-template-columns:1.45fr 1fr;grid-auto-rows:1.7em;gap:.2em .3em;padding:0 .35em;box-sizing:border-box;background:#0b0618;border:.15em solid var(--line);align-content:center}
+.hc{display:flex;align-items:center;gap:.25em;min-width:0;white-space:nowrap;overflow:hidden;font-size:1em;color:var(--ink);cursor:default}
+.hsi{display:block;flex:none;width:1.24em;height:1.24em;image-rendering:pixelated}
+.hc .hv{overflow:hidden;text-overflow:clip}
+.hc .hb{font-weight:normal;color:var(--good)}
+.hc.up .hv{color:var(--good)}
+.hc.dn .hv{color:var(--bad)}
+.abq{display:flex;flex-direction:column;gap:.3em;flex:none}
+.abl{display:flex;gap:.6em}
+.hstrip{display:flex;align-items:center;gap:.3em;box-sizing:border-box;width:100%;height:max(2em,14px);padding:0 .25em;overflow:hidden;white-space:nowrap;background:#0b0618;border:.12em solid var(--line)}
+.hstrip .hc{flex:none;gap:.2em}
+.hchips{display:flex;align-items:center;gap:.25em;margin-left:auto;flex:none}
+.sti{position:relative;display:block;width:1.24em;height:1.24em;cursor:default}
+.sti i{position:absolute;left:0;bottom:-.14em;height:.12em;max-width:100%;background:#e8e8f0}
+.hunit .hmid{min-height:16.65em}
+.hunit .hstrip{width:auto;align-self:flex-start;margin-top:.5em}

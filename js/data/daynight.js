@@ -18,9 +18,9 @@
   // sunset begins s seconds into play (fully dark RAMP s later). Rule: full night only when every foe starts within night vision (800)
   // of the hero, so the opening picture is the same; foes placed farther out get a sunset during the scenario instead.
   const SCENARIO = {
-    ghost_escape: 'night',          // chaser 330-570 away: night vision 800 still sees it, Ghost Walk breaks its 800 sight sooner
+    ghost_escape: 'night',          // booted chaser 450-550 away (playtest 2): night vision 800 still sees it, Ghost Walk breaks its 800 sight sooner
     ghost_finish: 'night',          // still foe 600-800 away: sneak in invisible, spirits finish
-    ghost_slip: { nightAt: 5 },     // chasers 800-1050 away: seen by day, the dark closes in mid-escape
+    ghost_slip: { nightAt: 5 },     // booted chasers 600-750 away (playtest 2): seen by day, the dark closes in mid-escape
     dust_escape: { nightAt: 5 },    // Dust carrier 750-950 away
     plateau_escape: { nightAt: 6 }, // chasers 800-1200 below the plateau
     shadow_strike: { nightAt: 3 },  // two wanderers 1000-1250 away: spot them, then walk in under the dark

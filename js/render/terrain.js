@@ -340,14 +340,48 @@
   }
 
   const SHIM = ['#3f7bb4', '#6aa2d6', '#a4d4f0'];
+  // Out-of-bounds void (camera overscroll past the map edge): very dark plum, static dithered noise, tiled in map-pixel space so it scrolls with the world.
+  const VOID_T = 64;
+  let voidTile = null;
+  function makeVoid() {
+    const c = document.createElement('canvas'); c.width = c.height = VOID_T;
+    const x = c.getContext('2d'), id = x.createImageData(VOID_T, VOID_T), d = id.data;
+    let s = 0x2f6b9d1;
+    const rnd = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return (s >>> 0) / 4294967296; };
+    for (let i = 0; i < VOID_T * VOID_T; i++) {
+      const r = rnd(), k = r < 0.06 ? 7 : r < 0.22 ? 3 : r > 0.97 ? -4 : 0, o = i * 4;   // sparse lighter specks, a few darker pits
+      d[o] = 15 + k; d[o + 1] = 9 + (k * 0.6 | 0); d[o + 2] = 21 + (k * 1.2 | 0); d[o + 3] = 255;
+    }
+    x.putImageData(id, 0, 0);
+    return c;
+  }
+  // fill the screen rect (x, y, w, h) with void aligned to the camera
+  function voidRect(cx, x, y, w, h, camX, camY) {
+    if (w <= 0 || h <= 0) return;
+    if (!voidTile) voidTile = makeVoid();
+    cx.save(); cx.beginPath(); cx.rect(x, y, w, h); cx.clip();
+    const T = VOID_T, ox = -(((camX % T) + T) % T), oy = -(((camY % T) + T) % T);
+    for (let ty = oy; ty < y + h; ty += T) { if (ty + T <= y) continue; for (let tx = ox; tx < x + w; tx += T) if (tx + T > x) cx.drawImage(voidTile, tx, ty); }
+    cx.restore();
+  }
+
   // blit visible region of the pre-rendered map + animated water pixels
   function draw(R, ter) {
-    const cx = R.cx, VW = R.VW, VH = R.VH;
-    if (ter.ensure) ter.ensure(R.camX, R.camY, VW, VH);
-    cx.drawImage(ter.base, R.camX, R.camY, VW, VH, 0, 0, VW, VH);
+    const cx = R.cx, VW = R.VW, VH = R.VH, camX = R.camX, camY = R.camY;
+    if (ter.ensure) ter.ensure(camX, camY, VW, VH);
+    // map rectangle in screen space, clipped to the view; whatever it does not cover is void
+    const mx0 = Math.max(0, -camX), my0 = Math.max(0, -camY), mx1 = Math.min(VW, ter.W - camX), my1 = Math.min(VH, ter.H - camY);
+    if (mx1 <= mx0 || my1 <= my0) voidRect(cx, 0, 0, VW, VH, camX, camY);
+    else {
+      voidRect(cx, 0, 0, VW, my0, camX, camY);                       // top
+      voidRect(cx, 0, my1, VW, VH - my1, camX, camY);                // bottom
+      voidRect(cx, 0, my0, mx0, my1 - my0, camX, camY);              // left
+      voidRect(cx, mx1, my0, VW - mx1, my1 - my0, camX, camY);       // right
+      cx.drawImage(ter.base, mx0 + camX, my0 + camY, mx1 - mx0, my1 - my0, mx0, my0, mx1 - mx0, my1 - my0);
+    }
     const T = ter.T, map = R.w.map;
-    const tx0 = Math.max(0, Math.floor(R.camX / T)), ty0 = Math.max(0, Math.floor(R.camY / T));
-    const tx1 = Math.min(map.w - 1, Math.floor((R.camX + VW) / T)), ty1 = Math.min(map.h - 1, Math.floor((R.camY + VH) / T));
+    const tx0 = Math.max(0, Math.floor(camX / T)), ty0 = Math.max(0, Math.floor(camY / T));
+    const tx1 = Math.min(map.w - 1, Math.floor((camX + VW) / T)), ty1 = Math.min(map.h - 1, Math.floor((camY + VH) / T));
     const sh = ter.shimmer, tm = R.time * 1.5;
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
       const wi = ter.waterIdx[ty * map.w + tx];

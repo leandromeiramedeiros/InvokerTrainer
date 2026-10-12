@@ -1,4 +1,5 @@
 // Top combo bar: name, step chips, tip, score/streak/timer + combo toasts. IT.ComboBar.bind(ctx, root) / update(dt) / unbind().
+// Playtest 2: scenario modes show a big between-round result card instead of the combo toasts (CB.resultCard / CB.resultText).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -38,6 +39,41 @@
   }
   const winText = w => '+' + fmtS(w.wait) + 's (' + fmtS(Math.max(0, w.lo)) + ' - ' + fmtS(w.hi) + ')';
 
+  // ---- between-round result card (scenario modes). One big line ("CLEARED +120" / "FAILED: Caught"), the reason on a smaller second line,
+  //      then "press any key / auto in N" (Ranked holds the card >= RESULT_MIN s, any key / click continues, else it auto-continues)
+  const tk = (k, p, fb) => (IT.hasT && IT.hasT(k) ? IT.t(k, p) : fb);
+  CB.resultText = function (res, hold, scored) {
+    if (!res) return null;
+    const t = IT.t, r = res.reason || 'other';
+    if (res.ok) {
+      return { ok: true, big: scored ? t('rc.cleared', { n: Math.round(res.points || 0) }) : t('rc.clearedNp'),
+        small: t('rc.okd', { s: (Math.round((res.time || 0) * 10) / 10).toFixed(1) }), cont: hold ? t('rc.cont', { n: hold.auto }) : '' };
+    }
+    const why = tk('rc.r.' + r, null, r);
+    let small = tk('rc.d.' + r + (res.detail ? '.' + res.detail : ''), null, '') || tk('cfail.' + r, null, '');
+    if (r === 'method') small = tk('cfail.method.' + (res.detail || 'other'), { spells: (res.spells || []).map(a => abName(a)).join(', ') }, small);
+    return { ok: false, big: t('rc.failed', { why }), small, cont: hold ? t('rc.cont', { n: hold.auto }) : '' };
+  };
+  function resultCard(root) {
+    const { h } = IT.UI, R = CB.refs;
+    R.rbig = h('div', { class: 'rcbig' }); R.rsmall = h('div', { class: 'rcsmall' }); R.rcont = h('div', { class: 'rccont' });
+    R.res = h('div', { class: 'hudp rescard', style: { display: 'none' } }, R.rbig, R.rsmall, R.rcont);
+    R.res.addEventListener('mousedown', ev => { ev.stopPropagation(); const r = CB.c && CB.c.w.ranked; if (r && r.cont) r.cont(); });
+    (root.parentNode || root).appendChild(R.res);
+  }
+  function updResult(c) {
+    const R = CB.refs; if (!R.res) return;
+    const r = c.w.ranked, hd = r && r.pr && r.phase === 'result' && IT.Ranked && IT.Ranked.hud ? IT.Ranked.hud(c.w) : null;
+    const tx = hd ? CB.resultText(hd.result, hd.hold, hd.score != null) : null;
+    if (!tx) { if (R.res.style.display !== 'none') R.res.style.display = 'none'; return; }
+    if (R.res.style.display) R.res.style.display = '';
+    const cls = 'hudp rescard ' + (tx.ok ? 'ok' : 'bad') + (hd.hold && hd.hold.canGo ? ' go' : '');
+    if (R.res.className !== cls) R.res.className = cls;
+    if (R.rbig.textContent !== tx.big) R.rbig.textContent = tx.big;
+    if (R.rsmall.textContent !== tx.small) R.rsmall.textContent = tx.small;
+    if (R.rcont.textContent !== tx.cont) R.rcont.textContent = tx.cont;
+  }
+
   CB.bind = function (ctx, root) {
     CB.unbind();
     const { h } = IT.UI;
@@ -52,21 +88,25 @@
       h('div', { class: 'cl' }, h('div', { class: 'cbh' }, R.name, R.tier, R.retry), R.steps, R.win, R.tip, R.fb, R.empty),
       h('div', { class: 'cr' }, h('div', { class: 'scr1' }, h('span', { text: IT.t('hud.score') }), R.score), R.streak));
     root.appendChild(CB.el);
+    resultCard(root);
     const w = ctx.w, t = IT.t, on = (n, f) => CB.off.push(w.on(n, f));
-    on('comboDone', p => { IT.UI.toast(t(p.perfect ? 'toast.perfect' : 'toast.combo', { score: p.score }), 'good'); if (IT.Input) IT.Input.sfx('success'); });
-    on('comboFail', p => { const why = t('cfail.' + p.reason, { s: p.s }); IT.UI.toast(t('toast.comboFail', { why }), 'bad'); feedback(why, 'bad'); if (IT.Input) IT.Input.sfx('fail'); });
+    const scnMode = () => !!(w.ranked && w.ranked.pr);   // scenario modes: the result card says it, no toast
+    on('comboDone', p => { if (!scnMode()) IT.UI.toast(t(p.perfect ? 'toast.perfect' : 'toast.combo', { score: p.score }), 'good'); if (IT.Input) IT.Input.sfx('success'); });
+    on('comboFail', p => { const why = t('cfail.' + p.reason, { s: p.s }); if (!scnMode()) { IT.UI.toast(t('toast.comboFail', { why }), 'bad'); feedback(why, 'bad'); } if (IT.Input) IT.Input.sfx('fail'); });
     on('comboHint', p => feedback(t('chint.' + p.kind, { got: abName(p.got), exp: abName(p.expected) }), 'warn'));
     on('comboLocked', () => IT.UI.toast(t('toast.locked'), 'warn'));
     CB.update(0);
   };
   CB.unbind = function () {
     for (const f of CB.off) { try { f(); } catch (e) { /* ignore */ } }
+    if (CB.refs.res && CB.refs.res.parentNode) CB.refs.res.parentNode.removeChild(CB.refs.res);
     CB.off = []; CB.c = null; CB.el = null; CB.refs = {};
   };
 
   CB.update = function () {
     const c = CB.c; if (!c) return;
     const st = c.w.combo, R = CB.refs, t = IT.t, { h, icon } = IT.UI;
+    updResult(c);
     const scn = !!(c.w.ranked && c.w.ranked.pr);   // scenario modes (ranked/infinite/scenario sandbox): never the idle prompt
     if (!st) { R.empty.style.display = scn ? 'none' : ''; CB.el.style.display = scn ? 'none' : ''; return; }
     const def = st.def;

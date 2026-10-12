@@ -183,7 +183,10 @@
         cx.fillStyle = e.destroyed ? '#7a7a82' : e.team === 0 ? '#5dff7a' : '#ff5a4a'; cx.fillRect(px - 1, py - 1, 3, 3);
       }
       cx.strokeStyle = '#fff'; cx.lineWidth = 1;
-      cx.strokeRect(MMX + Math.round(cam.x * sx) + 0.5, MMY + Math.round(cam.y * sy) + 0.5, Math.round(VW * P * sx) - 1, Math.round(VH * P * sy) - 1);
+      // viewport rect, clipped to the map (the camera may overscroll past it)
+      const vx = Math.round(cam.x * sx), vy = Math.round(cam.y * sy);
+      const rx0 = Math.max(0, vx), ry0 = Math.max(0, vy), rx1 = Math.min(MM_W, vx + Math.round(VW * P * sx)), ry1 = Math.min(MM_H, vy + Math.round(VH * P * sy));
+      if (rx1 > rx0 && ry1 > ry0) cx.strokeRect(MMX + rx0 + 0.5, MMY + ry0 + 0.5, rx1 - rx0 - 1, ry1 - ry0 - 1);
     }
 
     R.render = function (alpha, dtReal) {
@@ -197,7 +200,7 @@
         const k = (R.shakeEnd - R.time) / (R.shakeDur || 0.25), a = R.shakeAmp * k;
         sx = Math.round((Math.random() - 0.5) * 2 * a); sy = Math.round((Math.random() - 0.5) * 2 * a);
       }
-      R.camX = Math.max(0, Math.min(ter.W - VW, cam.px + sx)); R.camY = Math.max(0, Math.min(ter.H - VH, cam.py + sy));
+      R.camX = cam.px + sx; R.camY = cam.py + sy;   // may run past the map (overscroll): terrain.draw paints the void
       const shade = !(IT.Settings && IT.Settings.get) || IT.Settings.get().fogShade !== false;   // setting: dark outside vision
       fog.shade = shade;
       const fogOn = w.fog !== false && shade, S = R.stats;

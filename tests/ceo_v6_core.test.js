@@ -44,19 +44,19 @@ test('1: every scenario fail reason + method detail has an EN and PT toast strin
 });
 
 // ---------------------------------------------------------------- 2. foe hp from KV + every step must hit
-test('2: foe hp = HP_SHARE x KV step damage x hpMul (sun_snipe: one Sun Strike)', () => {
+test('2: foe hp = min(HP_CAP, HP_SHARE x hpMul) x KV step damage (sun_snipe: one Sun Strike)', () => {
   const sc = SC.get('sun_snipe');
   assert.deepEqual(sc.steps.filter(s => s.a !== 'move' && s.a !== 'attack').map(s => s.a), ['sunstrike']);
   for (const id of DIFFS) {
     const df = DF.get(id), lo = R.prepare(sc, df).lo;
     const ss = IT.Values.get('invoker_sun_strike', 'damage', IT.Loadout.ctx(lo));
     assert.ok(ss > 0, 'KV damage');
-    const want = Math.round(Math.max(100, R.HP_SHARE * ss * (df.hpMul != null ? df.hpMul : 1)));
+    const want = Math.round(Math.max(100, ss * Math.min(R.HP_CAP, R.HP_SHARE * (df.hpMul != null ? df.hpMul : 1))));
     assert.equal(R.foeHp(sc, df, lo)[0], want, id);
     const m = build('sun_snipe', id); thaw(m.run);
     assert.equal(m.run.dummies[0].maxHp, want, id + ' spawned');
   }
-  assert.equal(R.HP_SHARE, 0.85);
+  assert.equal(R.HP_SHARE, 0.9); assert.equal(R.HP_CAP, 0.9);   // playtest 2 (DECISIONS.md: bot sweep)
 });
 
 test('2: every kill scenario derives hp from its steps; the combo out-damages the foe', () => {
@@ -124,7 +124,9 @@ test('3: visible contact within CAUGHT = caught', () => {
 
 test('3: a stun bolt cast is cancelled when the hero turns invisible', () => {
   const m = build('ghost_escape', 'easy'); thaw(m.run);
-  const src = IT.Units.spawnDummy(m.w, { x: m.h.x + 500, y: m.h.y, preset: 'training', skin: 'pedro', scenario: { stunBolt: true } });
+  // playtest 2: the (fast, close) chaser is parked far away; the bolt caster takes its in-sight spot (the jungle choke has trees around)
+  const c = m.run.dummies[0], at = { x: c.x, y: c.y }; c.scn.mot = null; c.x = m.h.x - 4000; c.orders.length = 0;
+  const src = IT.Units.spawnDummy(m.w, { x: at.x, y: at.y, preset: 'training', skin: 'pedro', scenario: { stunBolt: true } });
   let reason = null;
   m.w.on('bolt', p => { if (p.unit === src.id && p.phase === 'cancel') reason = p.reason; });
   for (let i = 0; i < 150 && !src.ai.bolt.active; i++) m.w.step();
