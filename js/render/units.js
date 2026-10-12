@@ -572,6 +572,52 @@
     cx.fillStyle = on ? '#ff5a4a' : '#ffd24a'; cx.fillRect(x0 + 7, y0 + 14, Math.max(0, Math.round(12 * (1 - f))), 1);
   }
 
+  // ---- status icons: a row (max 4, disables first) of 11x11 pixel icons above the bars of every visible unit. Art: IT.Art sheet 'status' (icons.js tail).
+  // STATUS_ICON: sim status type -> [icon key, priority (higher = shown first)]. STATUS_NONE: sim statuses that are internal (no icon).
+  const STATUS_ICON = {
+    stun: ['stun', 100], hex: ['hex', 95], lift: ['lift', 90], frozen: ['frozen', 85],
+    root: ['root', 80], atosRoot: ['root', 80], leash: ['root', 80],
+    silence: ['silence', 70], disarm: ['disarm', 60], revealed: ['revealed', 55], magicImmune: ['bkb', 50],
+    slow: ['slow', 40], burn: ['burn', 35], coldsnap: ['chill', 30], knockback: ['knockback', 28], melt: ['melt', 25], alacrity: ['alacrity', 20],
+    ghost: ['ghost', 15], invisible: ['ghost', 15], invisFade: ['ghost', 15],   // own hero only (an enemy one is not drawn at all)
+  };
+  const STATUS_NONE = { channel: 1, itemStats: 1, shivaAura: 1, towerProt: 1 };
+  const MAX_STATUS_ICONS = 4, ICON_W = 11;
+  // -> [{ key, type, pri, left }] best first, one entry per icon key (longest remaining wins), capped at MAX_STATUS_ICONS. `now` = world time.
+  function statusIcons(e, now) {
+    const out = [], ss = e.statuses;
+    if (!ss) return out;
+    for (let i = 0; i < ss.length; i++) {
+      const s = ss[i], m = STATUS_ICON[s.type];
+      if (!m || s.hidden) continue;
+      if (m[0] === 'ghost' && e.team !== 0) continue;
+      const left = isFinite(s.until) ? s.until - now : Infinity;
+      let o = null;
+      for (let j = 0; j < out.length; j++) if (out[j].key === m[0]) { o = out[j]; break; }
+      if (o) { if (left > o.left) o.left = left; } else out.push({ key: m[0], type: s.type, pri: m[1], left });
+    }
+    out.sort((a, b) => b.pri - a.pri);
+    if (out.length > MAX_STATUS_ICONS) out.length = MAX_STATUS_ICONS;
+    return out;
+  }
+  // Row centred on x, icon bottoms at yb; a 1-px pip under each icon shows the remaining duration (relative to the longest seen); last 0.6 s blink.
+  function statusRow(R, e, S, x, yb) {
+    const list = statusIcons(e, R.w.t); if (!list.length) return;
+    const cx = R.cx, n = list.length, x0 = Math.round(x - (n * ICON_W + (n - 1)) / 2), tot = S.stTot || (S.stTot = {});
+    for (let i = 0; i < n; i++) {
+      const it = list[i], cv = IT.Art.canvas('status', 'st_' + it.key); if (!cv) continue;
+      const ix = x0 + i * (ICON_W + 1), finite = isFinite(it.left);
+      if (finite) { if (!(tot[it.key] >= it.left)) tot[it.key] = it.left; if (it.left < 0.6 && ((R.time * 8) | 0) & 1) continue; }
+      cx.drawImage(cv, ix, yb - ICON_W - 1);
+      if (finite && tot[it.key] > 0.5) {
+        const f = clamp(it.left / tot[it.key], 0, 1);
+        cx.fillStyle = '#08080e'; cx.fillRect(ix + 1, yb - 1, ICON_W - 2, 1);
+        cx.fillStyle = '#e8e8f0'; cx.fillRect(ix + 1, yb - 1, Math.max(1, Math.round((ICON_W - 2) * f)), 1);
+      }
+    }
+    for (const k in tot) if (!list.some(l => l.key === k)) delete tot[k];
+  }
+
   // HUD pass (after lighting): bars, labels, stun stars
   function hud(R, e) {
     bind(R);
@@ -586,6 +632,10 @@
       }
     }
     if (e.kind === 'enemy' && e.tele) telegraph(R, e, x, top - (e.maxHp ? 30 : 20));
+    if (e.statuses.length) {   // same gate as the bars (visible() + va >= 0.5 above); above name tag / bars / telegraph
+      const named = isFoe(e) && e.name && !e.noHpBar && e.maxHp && !has(e, 'hex');
+      statusRow(R, e, S, x, top - (e.kind === 'dummy' && e.scarecrow ? 4 : named ? 16 : e.kind === 'spirit' ? 7 : 8) - (e.kind === 'enemy' && e.tele ? 20 : 0));
+    }
     if (has(e, 'hex') || !e.maxHp) return;
     let y;
     if (e.kind === 'dummy' && e.scarecrow) {
@@ -653,5 +703,5 @@
     const S = st(R, e); S.castStart = R.time; S.castUntil = R.time + 0.22; S.name = '';
   }
 
-  IT.UnitDraw = { draw, hud, lights, isUnit, isFoe, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
+  IT.UnitDraw = { statusIcons, STATUS_ICON, STATUS_NONE, draw, hud, lights, isUnit, isFoe, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
 })(typeof window !== 'undefined' ? window : globalThis);

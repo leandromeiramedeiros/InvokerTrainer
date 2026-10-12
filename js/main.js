@@ -49,6 +49,9 @@
     return IT.Units.spawnDummy(g.w, { x: sp.x, y: sp.y, preset: lo.preset, skin: lo.skin });
   }
 
+  // round start (first round, every swap / redo): hard-snap the camera onto the hero's NEW spot; cam.lock is left as is
+  function snapCam() { g.cam.setMap(g.w.map); g.cam.snap(g.hero.x, g.hero.y); }
+
   function start(opts) {
     teardown();
     UI.clear(); UI.clearToasts();
@@ -103,11 +106,12 @@
       run.attach(w, () => {   // next scenario swapped in: re-sync everything that caches the hero / loadout
         g.lo = run.pr.lo; g.nDummies = run.dummies.length;
         IT.Input.cancel(true); aimG.clearRect(0, 0, aimCv.width, aimCv.height);
-        g.cam.setMap(g.w.map); g.cam.centerOn(hero.x, hero.y); acc = 0;
+        snapCam(); acc = 0;
         if (IT.HUD.resetMeter) IT.HUD.resetMeter();
         IT.HUD.bind(ctx);
       });
       g.nDummies = run.dummies.length;
+      snapCam();   // attach() already moved the hero to the scenario spawn (and maybe swapped the map) without calling onSwap
     }
     if (IT.Combo) IT.Combo.mode(w, 'sandbox', { loadout: lo, grantMissing: !scn && !!opts.grant });
 

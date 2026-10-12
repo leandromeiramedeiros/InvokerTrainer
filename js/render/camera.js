@@ -11,10 +11,12 @@
     const cx = v => IT.U.clamp(v, 0, Math.max(0, map.W - GM.VIEW_W * P));
     const cy = v => IT.U.clamp(v, 0, Math.max(0, map.H - GM.VIEW_H * P));
     const cam = {
-      setMap(m) { map = m; cam.glide = null; cam.clamp(); },   // map swap: new bounds
-      x: 0, y: 0, lock: false, follow: false, speed: 2200, edge: 3, glide: null, tau: TAU,
+      setMap(m) { map = m; cam.glide = null; cam.hold = false; cam.clamp(); },   // map swap: new bounds
+      x: 0, y: 0, lock: false, follow: false, speed: 2200, edge: 3, glide: null, hold: false, tau: TAU,
       clamp() { cam.x = cx(cam.x); cam.y = cy(cam.y); },
       centerOn(x, y) { cam.glide = null; cam.x = x - GM.VIEW_W * P / 2; cam.y = y - GM.VIEW_H * P / 2; cam.clamp(); },   // instant (minimap, start)
+      // round start / scenario swap: hard snap onto the hero; the next update() keeps it there (no lerp, no edge / arrow pan on that frame), lock / follow untouched
+      snap(x, y) { cam.centerOn(x, y); cam.hold = true; },
       glideTo(x, y) { cam.glide = { x: cx(x - GM.VIEW_W * P / 2), y: cy(y - GM.VIEW_H * P / 2) }; },                       // eased
       // integer pixel offset of the view in map-pixel space
       get px() { return Math.round(cam.x / P); },
@@ -22,6 +24,11 @@
       toWorld(mx, my) { return { x: cam.px * P + mx * P, y: cam.py * P + my * P }; },
       toScreen(wx, wy) { return { x: wx / P - cam.px, y: wy / P - cam.py }; },
       update(dt, keys, mouse, hero) {
+        if (cam.hold) {   // first frame after snap(): stay exactly centred on the hero
+          cam.hold = false;
+          if (hero) cam.centerOn(hero.x, hero.y);
+          return false;
+        }
         let goal = null;
         if (hero && (cam.follow || cam.lock)) goal = { x: cx(hero.x - GM.VIEW_W * P / 2), y: cy(hero.y - GM.VIEW_H * P / 2) };
         else if (cam.glide) goal = cam.glide;
