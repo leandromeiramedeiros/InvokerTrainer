@@ -148,7 +148,7 @@
     const on = (n, f) => D.off.push(w.on(n, f)), hid = () => g.hero && g.hero.id;
     on('fail', p => {
       if (p.unit !== hid() || FAIL_SKIP[p.reason]) return;
-      if (p.reason === 'orbNotLearned' || p.reason === 'noItem') return;
+      if (p.reason === 'orbNotLearned' || p.reason === 'locked' || p.reason === 'noItem') return;
       say(FAIL_CAT[p.reason] || 'fail');
     });
     const wrong = spell => { const n = needed(w); if (n && !n.has(spell) && (!run() || run().phase === 'play')) say('wrong'); };

@@ -65,7 +65,7 @@
     for (const k of IT.RULES.orbs) orbs[k] = base.orbs[k] > 0 ? Math.max(1, base.orbs[k] - cut) : 0;
     const lo = IT.Loadout.normalize({
       heroLevel: base.heroLevel, orbs, talents: base.talents, scepter: !!H.scepter, scepterOrb: H.scepter || null,
-      shard: !!H.shard, shardSpell: H.shard || null, items: (H.items || []).slice(), skin: skin || IT.GAME.SKINS[0], preset: df.preset, mode: 'free',
+      shard: !!H.shard, shardSpell: H.shard || null, items: (H.items || []).slice(), skin: skin || IT.GAME.SKINS[0], preset: df.preset, mode: 'free', preinvoked: H.preinvoked,
     });
     const esc = sc.obj.type === 'escape';
     return { sc, df, lo, fog: sc.fog != null ? !!sc.fog : !!df.fog, par: sc.par, limit: esc ? sc.obj.time : Math.ceil(sc.par * df.timer + SLACK), skin: lo.skin };
@@ -92,6 +92,7 @@
     hero.anim = { name: 'idle', t: 0 };
     hero.x = sp.x; hero.y = sp.y; hero.z = 0; hero.facing = Math.PI / 2;
     IT.Hero.refresh(w, hero, pr.lo);
+    if (pr.lo.preinvoked && pr.lo.preinvoked.length) IT.Hero.applyPreinvoked(hero, pr.lo);
     hero.hp = hero.maxHp; hero.mana = hero.maxMana;
     hero.items = []; for (let i = 0; i < 6; i++) hero.items.push(pr.lo.items[i] ? { id: pr.lo.items[i], cd: 0, charges: 0 } : null);
     hero.lastSeen = { x: hero.x, y: hero.y, t: w.t };
