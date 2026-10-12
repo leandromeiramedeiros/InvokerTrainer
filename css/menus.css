@@ -36,25 +36,6 @@
 /* ---- pause */
 .pause .menu{min-width:17em;gap:.5em}
 
-/* ---- practice difficulty picker (S3 markup: .scr.diff > buttons; .btn[data-diff=<id>] with .dd description) */
-.scr.diff{display:flex;flex-direction:column;align-items:center;gap:.6em;max-width:36em;margin:0 auto}
-.scr.diff .btn{width:100%;display:flex;flex-direction:column;align-items:center;gap:.25em;padding:.6em 1em;
-  font-size:1.25em;letter-spacing:.14em;color:var(--t,#fff);text-shadow:0 2px 0 rgba(0,0,0,.6)}
-.scr.diff .btn:not([data-diff]){background:linear-gradient(#5f6b75,#3c464e);border:1px solid #aab6bf;color:#fff;
-  text-shadow:0 1px 0 #000;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 3px 0 #000}
-.scr.diff .btn:not([data-diff]):hover{background:linear-gradient(#7a8892,#4f5b64);border-color:#e3eaef;color:#fff}
-.scr.diff .btn[data-diff]{background:linear-gradient(var(--c1),var(--c2));border:2px solid var(--c3);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 3px 0 #000}
-.scr.diff .btn[data-diff]:hover{filter:brightness(1.15);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 0 #000,0 0 1em var(--c1)}
-.scr.diff .btn[data-diff]:active{transform:translateY(2px);box-shadow:0 1px 0 #000}
-.scr.diff .dd{font-size:.6em;font-weight:normal;letter-spacing:.02em;text-transform:none;color:var(--t,#fff);opacity:.9}
-/* colour ramp: green -> yellow -> orange -> red -> purple/black */
-.scr.diff [data-diff=ianzinho]{--c1:#5fc766;--c2:#22702f;--c3:#c4f7c8;--t:#fff}
-.scr.diff [data-diff=easy]{--c1:#f4e04a;--c2:#a58b10;--c3:#fff6a6;--t:#1a1400;text-shadow:none}
-.scr.diff [data-diff=normal]{--c1:#f3923a;--c2:#a24a0d;--c3:#ffd0a0;--t:#fff}
-.scr.diff [data-diff=hard]{--c1:#e5413f;--c2:#7a1116;--c3:#ffb3b0;--t:#fff}
-.scr.diff [data-diff=bambam]{--c1:#7d33c2;--c2:#100818;--c3:#c894ff;--t:#f4e9ff}
-
 @media (max-width:600px){
   .title .menu{width:min(22em,90vw)}
   .fsbtn{top:.3em;right:.3em}

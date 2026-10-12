@@ -692,8 +692,6 @@
     rumble(b, 320, 100, 0.22, 0.9);
     T(b, { type: 'triangle', f: 98, f2: 78, d: 0.3, g: 0.09, lp: 320, at: 0.03 });
   });
-  D('timerTick', b => { bell(b, 1400, 0.1, 0.1, 0, 0.3); });
-  D('timerTickLast', b => { bell(b, 1900, 0.15, 0.16, 0, 0.4); boom(b, 220, 150, 0.06, 0.15); });
   D('cdTick', b => { bell(b, 880, 0.2, 0.28, 0, 0.7); boom(b, 140, 100, 0.08, 0.16); });
   D('cdGo', b => { // GO: bright rising burst
     arp(b, [659.25, 987.77, 1318.5], 0.045, (f, i, t) => bell(b, f, 0.18, 0.5, t, 1.1));

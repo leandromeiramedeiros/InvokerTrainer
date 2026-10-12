@@ -1,4 +1,4 @@
-// Combo engine: prompts, step matching from sim events, scoring, practice/timed modes. Pure. See DECISIONS.md "Combos / stats".
+// Combo engine: prompts, step matching from sim events, scoring, sandbox mode. Pure. See DECISIONS.md "Combos / stats".
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -111,9 +111,8 @@
   function fresh(mode, opts) {
     return {
       mode: mode || 'sandbox', opts: opts || {}, phase: 'idle', current: null, def: null, dummy: null,
-      stepIndex: 0, steps: [], pending: [], startT: 0, elapsed: 0, lastT: 0, lastId: null, hint: null,
+      stepIndex: 0, steps: [], pending: [], startT: 0, elapsed: 0, lastT: 0, hint: null,
       score: 0, streak: 0, bestStreak: 0, count: 0, extra: 0, misses: 0, attempt: 0, retries: 0,
-      timeLeft: mode === 'timed' ? ((opts && opts.seconds) || IT.GAME.TIMED_SECONDS) : null,
       history: [], mastery: {}, resumeAt: 0, ended: false, granted: null, lastResult: null,
     };
   }
@@ -425,28 +424,6 @@
   }
 
   // ------------------------------------------------------------ per tick
-  function nextPrompt(w, st) {
-    const lo = st.opts.loadout || w.loadout;
-    let pool = available(lo, { grantMissing: st.opts.grantMissing });
-    if (st.opts.tiers && st.opts.tiers.length) pool = pool.filter(c => st.opts.tiers.includes(c.tier));
-    if (st.opts.ids && st.opts.ids.length) pool = pool.filter(c => st.opts.ids.includes(c.id));
-    if (pool.length > 1) pool = pool.filter(c => c.id !== st.lastId);
-    if (!pool.length) return null;
-    const wt = c => { const m = mastery(st, c.id); return (m.done < 1 ? 4 : m.done < 3 ? 2 : 1) + Math.min(3, 0.5 * m.fails); };
-    let sum = 0;
-    for (const c of pool) sum += wt(c);
-    let r = w.rng() * sum;
-    for (const c of pool) { r -= wt(c); if (r < 0) return c; }
-    return pool[pool.length - 1];
-  }
-
-  function launchNext(w, st) {
-    const c = nextPrompt(w, st);
-    if (!c) { endMode(w, st, 'noCombos'); return; }
-    st.lastId = c.id;
-    if (!begin(w, st, c, false)) endMode(w, st, 'locked');
-  }
-
   function summaryOf(st, reason) {
     return {
       mode: st.mode, score: st.score, combos: st.count, bestStreak: st.bestStreak, fails: st.retries,
@@ -456,7 +433,6 @@
   function endMode(w, st, reason) {
     if (st.ended) return;
     st.ended = true; st.phase = 'ended'; st.current = null; st.def = null; st.pending = []; st.hint = null;
-    if (st.timeLeft != null) st.timeLeft = Math.max(0, st.timeLeft);
     revoke(w, st);
     emit(w, 'modeEnd', summaryOf(st, reason));
   }
@@ -466,10 +442,6 @@
     if (!st) return;
     if (!w._comboHook) hook(w);
     if (st.ended) return;
-    if (st.mode === 'timed') {
-      st.timeLeft -= dt;
-      if (st.timeLeft <= EPS) { st.timeLeft = 0; endMode(w, st, 'time'); return; }
-    }
     if (st.phase === 'active' && st.current) {
       st.elapsed = w.t - st.startT;
       for (const q of st.pending) if (q.state === 'open' && w.t - q.t > RESOLVE_TIMEOUT + EPS) { q.state = 'timeout'; fail(w, st, 'timeout', q.idx); break; }
@@ -494,7 +466,6 @@
     } else if ((st.phase === 'done' || st.phase === 'fail') && st.resumeAt && w.t >= st.resumeAt - EPS) {
       st.resumeAt = 0;
       if (st.phase === 'fail') { if (!begin(w, st, st.def, true)) cancel(w); }
-      else if (st.mode === 'practice' || st.mode === 'timed') launchNext(w, st);
       else cancel(w);
     }
   }
@@ -505,19 +476,10 @@
     const st = w.combo = fresh(name, opts);
     if (!w._comboHook) hook(w);
     emit(w, 'modeStart', { mode: name });
-    if (name === 'practice' || name === 'timed') launchNext(w, st);
     return st;
   }
-  // practice/timed/any: end now and emit modeEnd
+  // end now and emit modeEnd
   function stop(w) { const st = state(w); endMode(w, st, 'stopped'); return summaryOf(st, 'stopped'); }
-  // practice: drop the current prompt and pick another (streak breaks)
-  function skip(w) {
-    const st = state(w);
-    if (st.ended || !st.current) return false;
-    st.streak = 0; st.pending = [];
-    if (st.mode === 'practice' || st.mode === 'timed') launchNext(w, st); else cancel(w);
-    return true;
-  }
 
   function hook(w) {
     w._comboHook = true;
@@ -531,7 +493,7 @@
 
   IT.World.system('combo', 90, (w, dt) => update(w, dt));
 
-  IT.Combo = { get, available, missing, orbNeeds, itemNeeds, start, mode, stop, skip, cancel, score, speedBonus, streakMult, blinkBlocked, refreshAll, positionOk,
+  IT.Combo = { get, available, missing, orbNeeds, itemNeeds, start, mode, stop, cancel, score, speedBonus, streakMult, blinkBlocked, refreshAll, positionOk,
     timing, tipText, windowOf, waitOf, TOL,
     TIMEOUT: RESOLVE_TIMEOUT, FAIL_DELAY, DONE_DELAY, PULL_MIN };
 })(typeof window !== 'undefined' ? window : globalThis);

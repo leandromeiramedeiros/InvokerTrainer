@@ -9,9 +9,9 @@
   const UI = IT.UI, S = IT.Settings;
 
   let g = null, lastOpts = null, settingsOver = false, state = 'title';
-  const THEME = { ranked: 'ranked', infinite: 'ranked', practice: 'practice', sandbox: 'sandbox' };
+  const THEME = { ranked: 'ranked', infinite: 'ranked', sandbox: 'sandbox' };
   const music = n => { try { IT.Music && IT.Music.play(n); } catch (e) { /* audio is optional */ } };
-  const isScn = o => o.mode === 'ranked' || o.mode === 'infinite' || o.mode === 'practice' || (o.mode === 'sandbox' && !!o.scenario);
+  const isScn = o => o.mode === 'ranked' || o.mode === 'infinite' || (o.mode === 'sandbox' && !!o.scenario);
 
   // ---------------------------------------------------------------- sizing
   function fit() {
@@ -56,7 +56,7 @@
     lastOpts = opts;
     const set = S.get(), scn = isScn(opts);
     let run = null, pr = null;
-    if (scn) {   // ranked / practice / scenario sandbox: a run feeds scenarios; the first one builds the world
+    if (scn) {   // ranked / infinite / scenario sandbox: a run feeds scenarios; the first one builds the world
       const LS = IT.UI.LoadoutScreen, skin = opts.skin || (opts.loadout && opts.loadout.skin) || (LS && LS.state.lo && LS.state.lo.skin) || undefined;
       run = IT.Ranked.create({ mode: opts.mode, diff: opts.diff, scenario: opts.scenario, skin });
       pr = run.next();
@@ -108,7 +108,7 @@
       });
       g.nDummies = run.dummies.length;
     }
-    if (IT.Combo) IT.Combo.mode(w, scn ? 'sandbox' : opts.mode, { loadout: lo, grantMissing: !scn && !!opts.grant, seconds: GM.TIMED_SECONDS });
+    if (IT.Combo) IT.Combo.mode(w, 'sandbox', { loadout: lo, grantMissing: !scn && !!opts.grant });
 
     stage.classList.add('on'); state = 'play'; settingsOver = false;
     music(THEME[opts.mode] || 'sandbox');
@@ -173,7 +173,6 @@
       music('menu');
       if (name === 'title') UI.set(UI.title);
       else if (name === 'loadout') UI.set(IT.UI.LoadoutScreen.build);
-      else if (name === 'practice') UI.set(IT.UI.Modes.picker);
       else if (name === 'stats') UI.set(IT.UI.statsScreen);
       else if (name === 'settings') { IT.UI.settingsOpen(); UI.set(IT.UI.settingsPanel); }
     },
@@ -194,7 +193,7 @@
     },
     pauseSettings() { settingsOver = true; IT.UI.settingsOpen(); UI.push(IT.UI.settingsPanel, true); },
     settingsBack() { if (settingsOver) { settingsOver = false; UI.pop(); } else App.go('title'); },
-    // ESC: one level up. play -> pause -> resume; pause-settings -> pause; settings / loadout / picker / stats / end -> title
+    // ESC: one level up. play -> pause -> resume; pause-settings -> pause; settings / loadout / stats / end -> title
     back() {
       if (state === 'title') return;
       try { IT.UISound && IT.UISound.play('back'); } catch (e) { /* ignore */ }

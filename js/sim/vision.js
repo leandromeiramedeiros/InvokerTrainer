@@ -62,10 +62,6 @@
     return true;
   }
 
-  function isGhost(e) {
-    if (IT.Status && IT.Status.has) return IT.Status.has(e, 'ghost');
-    return !!(e.statuses && e.statuses.some(s => s.type === 'ghost'));
-  }
   const INVIS = ['ghost', 'invisible', 'invis', 'shadowblade'];
   // hidden from enemies unless revealed: Ghost Walk, Shadow Blade (any status named like the above) or an `invisible` flag
   function isHidden(e) {

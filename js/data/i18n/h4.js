@@ -5,7 +5,6 @@
   IT.i18nAdd({
     en: {
       'title.ranked': 'Ranked',
-      'title.practice': 'Combo Practice',
       'title.sandbox': 'Sandbox',
       'title.rating': 'Rating {n}',
       'title.fullscreen': 'Fullscreen',
@@ -17,7 +16,6 @@
     },
     pt: {
       'title.ranked': 'Ranqueada',
-      'title.practice': 'Treino de Combos',
       'title.sandbox': 'Sandbox',
       'title.rating': 'Rating {n}',
       'title.fullscreen': 'Tela cheia',

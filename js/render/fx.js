@@ -67,13 +67,6 @@
   function burst(x, y, ramp, n, o) {
     IT.Particles.emit(Object.assign({ x, y, n, ramp, speed: 55, up: 75, spread: 30, life: 0.8, rest: 4 }, o || {}));
   }
-  function nameRamp(name) {
-    if (/ice|cold|frost|snap|wall|quas/i.test(name)) return 'ice';
-    if (/sun|fire|meteor|exort|blast|forge|spirit/i.test(name)) return 'fire';
-    if (/emp|tornado|wex|bolt|blink|purple/i.test(name)) return 'purple';
-    if (/heal|green|root/i.test(name)) return 'green';
-    return 'white';
-  }
 
   function onFx(p) {
     const name = p.name, x = p.x, y = p.y;

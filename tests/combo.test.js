@@ -207,36 +207,14 @@ test('hidden-step combo respawns the dummy outside vision (fog on)', () => {
   assert.ok(w.combo.hint);
 });
 
-test('determinism: same seed, same practice prompt sequence', () => {
-  const seq = seed => {
-    const { w, h } = mk({}, { seed });
-    IT.Combo.mode(w, 'practice', { tiers: ['basic'] });
-    const out = [w.combo.current];
-    for (let i = 0; i < 3; i++) { play(w, h, w.combo.current); for (let k = 0; k < 90; k++) w.step(); out.push(w.combo.current); }
-    return out.join(',');
-  };
-  assert.equal(seq(11), seq(11));
-});
-
-test('practice: completes and chains a different prompt', () => {
-  const { w, h } = mk();
-  IT.Combo.mode(w, 'practice', { tiers: ['basic'] });
-  const first = w.combo.current;
-  assert.ok(first);
-  play(w, h, first);
-  assert.equal(w.combo.streak, 1);
-  for (let k = 0; k < 60; k++) w.step();
-  assert.equal(w.combo.phase, 'active');
-  assert.notEqual(w.combo.current, first);
-});
-
-test('timed: ends after the limit with modeEnd summary', () => {
-  const { w, runT } = mk();
-  IT.Combo.mode(w, 'timed', { tiers: ['basic'], seconds: 5 });
-  runT(5.5);
+test('stop: ends the sandbox mode once with a modeEnd summary', () => {
+  const { w } = mk();
+  const s = IT.Combo.stop(w);
   const e = logOf(w, 'modeEnd');
-  assert.equal(e.length, 1); assert.equal(e[0].mode, 'timed');
-  assert.equal(w.combo.ended, true); assert.equal(w.combo.timeLeft, 0);
+  assert.equal(e.length, 1); assert.equal(e[0].mode, 'sandbox'); assert.equal(s.reason, 'stopped');
+  assert.equal(w.combo.ended, true);
+  IT.Combo.stop(w);
+  assert.equal(logOf(w, 'modeEnd').length, 1);
 });
 
 test('position step: completes only when the hero-dummy gap is in range', () => {

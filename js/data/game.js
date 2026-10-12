@@ -65,6 +65,5 @@
       blink: { range: 1000, minRange: 500, tell: 0.35 },
     },
     HERO: { radius: 24 },
-    TIMED_SECONDS: 120,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

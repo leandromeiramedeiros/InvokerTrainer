@@ -1,12 +1,4 @@
 /* loadout styles. Owner: H2. Loaded after v2.css. */
-/* Aghanim's toggles: lit when on, grey when off */
-.agh-row{gap:.6em;align-items:center}
-.agh{width:2.8em;height:2.8em;padding:0;display:flex;align-items:center;justify-content:center;background:var(--panel2);border:2px solid var(--line)}
-.agh .ico{width:1.7em;height:1.7em;filter:grayscale(.8) brightness(.85);opacity:.8}
-.agh:hover:not(.on){border-color:var(--mag)}
-.agh:hover:not(.on) .ico{opacity:.85}
-.agh.on{border-color:var(--gold);background:#3a2810}
-.agh.on .ico{filter:none;opacity:1}
 /* shard spell picker */
 .shsp{align-items:center;margin-top:.5em}
 .spsel{width:2.4em;height:2.4em;padding:0;display:flex;align-items:center;justify-content:center;background:var(--panel2);border:2px solid var(--line)}
@@ -45,7 +37,6 @@
 .tb.ian{--c:#5fc766}.tb.easy{--c:#a6d83e}.tb.common{--c:#e8c34a}.tb.hard{--c:#f08a3a}.tb.bambam{--c:#ff4a4a}
 .chipb .tb{margin-left:0}
 .chipb.tierb{padding:.25em .5em}.chipb.tierb .tb{margin:0}
-.scr.diff .dn{display:flex;align-items:center;gap:.5em}.scr.diff .dn .tb{margin:0;font-size:.6em;letter-spacing:.12em}
 
 /* Free Play enemy card: one row per enemy */
 .erow{display:flex;flex-wrap:wrap;align-items:center;gap:.4em .5em;margin:.45em 0;padding:.4em .5em;background:var(--panel2);border:1px solid var(--line)}

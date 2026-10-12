@@ -16,7 +16,7 @@ Baked Dota KV data + spells/items faithful; progression G1-G4 exact; enemy AI (d
 | E | Loadout: F3 Aghanim hood picker, Free Play enemy card (place/config), difficulty badge in picker | BAD 10,12; MISSING 5,8 | Sonnet | done |
 | S | Sounds: redo all SFX to resemble Dota 2 (spells, invoke, orbs, items, hits, UI) | user | Sonnet | done (tuned by measurement; audition via IT.SFX.board()) |
 | P | Points: research real 7.4x Invoker point spending; single pool, talents cost 1 point, 0 left at lvl 30; loadout UI + tests | user | Sonnet | done (single pool 29 at lvl 30; see section P) |
-| G | Dead code: practice mode, timed combo, legacy dummy AI, looksEnemy hack | BAD 15 | Sonnet | todo |
+| G | Dead code: practice mode, timed combo, legacy dummy AI, looksEnemy hack | BAD 15 | Sonnet | done (dummy AI + looksEnemy kept: still reachable) |
 
 Order: A, C, E, D, F, S, P, G, then final Fable audit.
 

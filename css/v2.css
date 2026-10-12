@@ -95,7 +95,7 @@ body.gl #glow{display:none}
 .combobar .cr .sc{color:var(--gold);font-size:1.6em}
 .scr1{display:flex;gap:.6em;align-items:baseline;color:var(--dim)}
 .stk{color:var(--mag)}
-.tm{font-size:1.5em}.tm.low{color:var(--bad)}
+.tm{font-size:1.5em}
 
 /* sandbox side panel */
 .hside{position:absolute;right:1%;top:12em;width:22%;max-height:58%;display:flex;flex-direction:column;gap:.6em;padding:.8em;background:#150d27e6;border:.25em solid var(--line);font-size:calc(var(--u)*3.3333)}
@@ -232,17 +232,6 @@ h3{margin:0 0 .5em;color:var(--mag);font-size:.9em;text-transform:uppercase;lett
 .gobox .go{flex:1}.gobox{margin-top:.2em}
 .note{min-height:1.4em;color:var(--e);font-size:.85em}
 
-/* settings */
-.set-body{display:grid;grid-template-columns:1fr 1.6fr;gap:2em}
-.fld{margin-bottom:1em}
-.kgroup{margin-bottom:1em}.kgroup.inactive{opacity:.5}
-.kgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:.3em 1.2em}
-.keyrow{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.85em}
-.keybtn{min-width:5em;padding:.25em .6em;background:#0b0618;border:2px solid var(--line);color:var(--gold)}
-.keybtn:hover{border-color:var(--mag)}.keybtn.cap{border-color:var(--gold);color:#fff;animation:blink .6s steps(2) infinite}
-.keybtn.bad{border-color:var(--bad);color:var(--bad);background:#2a0a12}
-@keyframes blink{50%{background:#3a2810}}
-
 /* end / stats */
 .kcards{display:flex;flex-wrap:wrap;gap:.6em;margin-bottom:1em}
 .kcard{display:flex;flex-direction:column;min-width:7em;padding:.5em .9em;background:#0b0618;border:2px solid var(--line)}
@@ -254,7 +243,7 @@ h3{margin:0 0 .5em;color:var(--mag);font-size:.9em;text-transform:uppercase;lett
 .tbl td{text-align:right;padding:.25em .6em;border-bottom:1px dotted var(--line)}
 .tbl td.nm,.tbl th:first-child{text-align:left}.tbl td.acc{color:var(--gold)}
 .bestgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:.2em 2em}
-@media (max-width:1000px){.lo-grid{grid-template-columns:1fr}.set-body{grid-template-columns:1fr}}
+@media (max-width:1000px){.lo-grid{grid-template-columns:1fr}}
 .cfb{flex-basis:100%;min-height:0;font-size:max(.9em,10px);padding:0}
 .cfb:empty{display:none}
 .cfb.bad{color:var(--bad)}

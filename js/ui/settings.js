@@ -338,9 +338,7 @@
   G.addEventListener('mouseup', ev => { if (auxSwallow && ev.button > 2) swallow(ev); }, true);
   G.addEventListener('auxclick', ev => { if (auxSwallow && ev.button > 2) swallow(ev); }, true);
 
-  // language change from the panel's own toggle applies immediately and must keep the draft
   IT.UI.settingsPanel = panel;
   IT.UI.settingsCancel = cancel;
   IT.UI.settingsOpen = () => { draft = clone(S.data); capture = null; note = ''; sec = 'abil'; };
-  IT.UI.settingsDraftLang = l => { if (draft) draft.lang = l; };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,4 +1,4 @@
-// Procedural music (WebAudio, original): themes menu | sandbox | practice | ranked + stingers. Owner: S5.
+// Procedural music (WebAudio, original): themes menu | sandbox | ranked + stingers. Owner: S5.
 // One lookahead scheduler (setInterval + AudioContext time) drives the active theme; themes crossfade. Routed to the 'music' bus.
 (function (G) {
   'use strict';
@@ -139,25 +139,6 @@
           const f = rnd(2800, 4200);
           for (let k = 0; k < 3; k++) note(th, t + k * 0.11, f * (1 + k * 0.05), 0.08, { type: 'sine', f2: f * 1.35, g: 0.012, a: 0.01 });
         }
-      },
-    },
-    // mid-tempo war drums + plucked bass/arp + choir swells, A minor. Am Am F G
-    practice: {
-      sd: () => 60 / 98 / 4,
-      init(th) { drone(th, 55, 0.05, 240); },
-      step(th, i, t, sd) {
-        const s = i % 16, bar = Math.floor(i / 16) % 4, ch = [[57, 60, 64], [57, 60, 64], [53, 57, 60], [55, 59, 62]][bar], root = [33, 33, 29, 31][bar];
-        if (s === 0 && bar % 2 === 0) pad(th, t, bar === 2 ? [53, 57, 60, 65] : [57, 60, 64, 69], sd * 33, 0.05);
-        if (s % 2 === 0) { // plucked bass, eighths
-          const oct = s === 6 || s === 14 ? 12 : 0, acc = s % 8 === 0;
-          note(th, t, mf(root + oct), sd * 2.2, { type: 'sawtooth', g: acc ? 0.15 : 0.1, a: 0.004, lp: 600, lp2: 150 });
-        }
-        if (s === 0 || s === 8 || (s === 10 && bar % 2) || (s === 14 && bar === 3)) kick(th, t, s === 0 ? 0.34 : 0.26);
-        if (s === 4 || s === 12) clap(th, t, 0.13);
-        if (s % 2 === 0) hat(th, t + (s % 4 === 2 ? 0 : 0), s % 4 === 2 ? 0.035 : 0.02);
-        if (bar === 3 && s >= 12) tom(th, t, 0.18, [150, 120, 100, 80][s - 12]); // fill
-        if (s === 0 && bar === 0) taiko(th, t, 0.2);
-        if (s % 4 === 2) pluck(th, t, mf(ch[(s >> 2) % 3] + 12), 0.05, 0.45); // soft arp
       },
     },
     // tense ostinato; x (0..1) raises tempo and adds layers: hats, clap+taiko, strings, riser, double kick

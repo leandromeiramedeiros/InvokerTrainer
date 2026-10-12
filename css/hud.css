@@ -34,7 +34,6 @@
 /* top-centre stack: ranked panel above the combo bar. Big type scales with --g */
 .htop{position:absolute;left:17.5%;top:.8em;width:62%;display:flex;flex-direction:column;gap:.5em;pointer-events:none}
 .htop .combobar{position:relative;left:auto;top:auto;width:auto}
-.htop.rk .combobar .tm{display:none}
 .rkp{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.35);padding:calc(var(--g)*.5) calc(var(--g)*1) calc(var(--g)*.6);background:#150d27e6;border:.25em solid var(--mag);box-shadow:0 0 0 .15em #000;text-align:center}
 .rknum{color:var(--gold);font-size:calc(var(--g)*6);line-height:1;text-shadow:0 .06em 0 #000,0 0 .5em #ffd23f88}
 .rkscen{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.15)}

@@ -85,7 +85,6 @@
   D('toast.comboFail', 'FAILED: {why}', 'FALHOU: {why}');
   D('toast.locked', 'Combo locked: loadout lacks requirements', 'Combo bloqueado: a build não cumpre os requisitos');
   D('toast.refreshed', 'Cooldowns refreshed', 'Recargas reiniciadas');
-  D('toast.noCombos', 'No combos available for this loadout', 'Nenhum combo disponível para esta build');
   D('toast.spawned', 'Dummy spawned', 'Alvo criado');
   D('toast.dummiesReset', 'Dummies reset', 'Alvos reiniciados');
   D('toast.cancelled', 'Cast cancelled', 'Lançamento cancelado');
@@ -99,11 +98,6 @@
 
   // ---- modes / presets
   D('mode.sandbox', 'Sandbox', 'Treino livre');
-  D('mode.practice', 'Practice', 'Prática');
-  D('mode.timed', 'Timed', 'Contra o tempo');
-  D('mode.sandbox.d', 'Free play with dummies, DPS meter and cooldown refresh. Start combos from the list.', 'Jogo livre com alvos, medidor de DPS e reinício de recargas. Inicie combos pela lista.');
-  D('mode.practice.d', 'Random combos from your loadout. Retry on failure. Learn at your pace.', 'Combos aleatórios da sua build. Repete ao falhar. Aprenda no seu ritmo.');
-  D('mode.timed.d', 'Score as much as you can before the clock runs out ({secs} s).', 'Faça o máximo de pontos antes do tempo acabar ({secs} s).');
   D('preset.training', 'Training', 'Treino'); D('preset.standard', 'Standard', 'Padrão'); D('preset.expert', 'Expert', 'Expert');
   D('preset.training.d', 'Stands still', 'Fica parado'); D('preset.standard.d', 'Wanders around', 'Anda por aí'); D('preset.expert.d', 'Dodges spells', 'Desvia das magias');
   D('beh.stationary', 'stationary', 'parado'); D('beh.wander', 'wanders', 'anda'); D('beh.evasive', 'evasive', 'esquivo');
@@ -196,7 +190,6 @@
   D('hud.spawn', 'Spawn dummy', 'Criar alvo');
   D('hud.resetDummies', 'Reset dummies', 'Reiniciar alvos');
   D('hud.combos', 'Combos', 'Combos');
-  D('hud.skip', 'Skip', 'Pular');
   D('hud.noneYet', 'No combo running. Pick one from the list.', 'Nenhum combo em andamento. Escolha um da lista.');
   D('hud.locked', 'locked', 'bloqueado');
   D('hud.needs', 'needs: {x}', 'exige: {x}');

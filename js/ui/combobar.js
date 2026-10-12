@@ -32,13 +32,12 @@
     const R = CB.refs = {};
     R.name = h('b', { class: 'cname' }); R.tier = h('span', { class: 'ctr' }); R.retry = h('span', { class: 'cretry' });
     R.steps = h('div', { class: 'csteps' }); R.tip = h('div', { class: 'ctip' });
-    R.score = h('b', { class: 'sc' }); R.streak = h('span', { class: 'stk' }); R.time = h('b', { class: 'tm' });
-    R.skip = h('button', { type: 'button', class: 'mini skip', text: IT.t('hud.skip'), onclick: () => { IT.Combo.skip(ctx.w); } });
+    R.score = h('b', { class: 'sc' }); R.streak = h('span', { class: 'stk' });
     R.fb = h('div', { class: 'cfb' });
     R.empty = h('div', { class: 'cempty', text: IT.t('hud.noneYet') });
     CB.el = h('div', { class: 'hudp combobar' },
       h('div', { class: 'cl' }, R.name, R.tier, R.retry, R.steps, R.tip, R.fb, R.empty),
-      h('div', { class: 'cr' }, h('div', { class: 'scr1' }, h('span', { text: IT.t('hud.score') }), R.score), R.streak, R.time, R.skip));
+      h('div', { class: 'cr' }, h('div', { class: 'scr1' }, h('span', { text: IT.t('hud.score') }), R.score), R.streak));
     root.appendChild(CB.el);
     const w = ctx.w, t = IT.t, on = (n, f) => CB.off.push(w.on(n, f));
     on('comboDone', p => { IT.UI.toast(t(p.perfect ? 'toast.perfect' : 'toast.combo', { score: p.score }), 'good'); if (IT.Input) IT.Input.sfx('success'); });
@@ -55,7 +54,7 @@
   CB.update = function () {
     const c = CB.c; if (!c) return;
     const st = c.w.combo, R = CB.refs, t = IT.t, { h, icon } = IT.UI;
-    const scn = !!(c.w.ranked && c.w.ranked.pr);   // scenario modes (ranked/practice/scenario sandbox): never the idle prompt
+    const scn = !!(c.w.ranked && c.w.ranked.pr);   // scenario modes (ranked/infinite/scenario sandbox): never the idle prompt
     if (!st) { R.empty.style.display = scn ? 'none' : ''; CB.el.style.display = scn ? 'none' : ''; return; }
     const def = st.def;
     R.empty.style.display = def ? 'none' : '';
@@ -94,11 +93,6 @@
     if (R.fb && R.fb.textContent && Date.now() > (CB.fbUntil || 0)) { R.fb.textContent = ''; R.fb.className = 'cfb'; }
     const sc = String(Math.round(st.score || 0)); if (R.score.textContent !== sc) R.score.textContent = sc;
     const sk = st.streak > 1 ? t('hud.streak', { n: st.streak }) : ''; if (R.streak.textContent !== sk) R.streak.textContent = sk;
-    let tm = '';
-    if (st.mode === 'timed' && st.timeLeft != null) { const s = Math.max(0, st.timeLeft); tm = Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); R.time.className = 'tm' + (s < 10 ? ' low' : ''); }
-    else if (def && st.elapsed != null && st.mode !== 'sandbox') tm = '';
-    if (R.time.textContent !== tm) R.time.textContent = tm;
-    R.skip.style.display = st.mode === 'practice' || st.mode === 'timed' ? '' : 'none';
     CB.el.classList.toggle('done', st.phase === 'done'); CB.el.classList.toggle('failed', st.phase === 'fail');
   };
 

@@ -67,7 +67,7 @@
     const { h, btn } = IT.UI, t = IT.t, A = IT.App;
     const S = info.stats, m = info.mode || {};
     if ((m.mode === 'ranked' || m.mode === 'infinite') && IT.UI.endSplash) return IT.UI.endSplash(info);   // v5: colourful splash for scored runs
-    const scn = m.mode === 'ranked' || m.mode === 'practice';
+    const scn = m.mode === 'ranked';
     const head = [
       h('div', { class: 'kcard big' }, h('span', { text: t(m.mode === 'ranked' ? 'end.score' : 'end.solved') }), h('b', { text: String(m.mode === 'ranked' ? Math.round(m.score || 0) : scn ? (m.solved || 0) : Math.round(m.score != null ? m.score : (S.combos ? S.combos.score : 0))) })),
       h('div', { class: 'kcard' }, h('span', { text: t('end.combos') }), h('b', { text: String(m.combos != null ? m.combos : (S.combos ? S.combos.done : 0)) })),

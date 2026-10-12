@@ -31,7 +31,7 @@
     cdTick: { prio: 1 }, cdGo: { prio: 1 }, levelUp: { verb: 0.25 },
   };
   // throttle: max per 100 ms per id, plus per-group caps so per-tick sounds never pile up into a harsh buzz
-  const MAXN = { dmgTick: 2, hit: 3, csProc: 2, csTarget: 2, failSoft: 1, orbQ: 3, orbW: 3, orbE: 3, comboStep: 2, blocked: 2, timerTick: 1, spiritLaunch: 3, spiritImpact: 3,
+  const MAXN = { dmgTick: 2, hit: 3, csProc: 2, csTarget: 2, failSoft: 1, orbQ: 3, orbW: 3, orbE: 3, comboStep: 2, blocked: 2, spiritLaunch: 3, spiritImpact: 3,
     tornadoLift: 2, tornadoLand: 2, atkPre: 2, atkLaunch: 2, atkImpact: 2, iceCrunch: 3, meteorBurn: 2, empDrain: 2, iceHit: 2, footstep: 1, sunBeam: 3, empCrackle: 2, meteorWhistle: 2, sunImpact: 3, meteorLand: 2, towerShot: 2, towerDown: 1, kill: 2, heroDeath: 1, cdTick: 1, cdGo: 1 };
   const GMAX = { tick: 4, hit: 4, step: 1 };
   const hist = Object.create(null);
@@ -361,8 +361,6 @@
       on('modeEnd', () => { S.stopLoops(); hammer = null; idle = null; });
       on('modeStart', () => { if (!idle || !idle.alive()) startIdle(); });
 
-      // timed mode: tick each second in the last 10
-      let lastSec = Infinity;
       let lastCd = 0;
       timer = setInterval(() => {
         if (S.w !== w) return;
@@ -372,11 +370,6 @@
           if (cd && cd !== lastCd) P('cdTick');
           lastCd = cd || 0;
         } catch (e) {}
-        const c = w.combo;
-        if (!c || c.mode !== 'timed' || c.ended || w.paused || c.timeLeft == null) { lastSec = Infinity; return; }
-        const s = Math.ceil(c.timeLeft);
-        if (s <= 10 && s >= 1 && s < lastSec) P(s <= 3 ? 'timerTickLast' : 'timerTick');
-        lastSec = Math.min(lastSec, s);
       }, 100);
     },
   };

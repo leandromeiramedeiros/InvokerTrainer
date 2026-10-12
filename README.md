@@ -46,8 +46,6 @@ Settings: normal-cast mode (aim with range/AoE preview), the legacy one-key-per-
 
 ## Modes
 - **Sandbox**: no prompts, 1–5 dummies, DPS meter, cooldown refresh.
-- **Practice**: endless combo prompts your loadout can perform (or grant the missing items).
-- **Timed**: 120 s of combos for score.
 
 Dummies: Pedro, Renan and Vitinho, with Training (stationary), Standard (wander) and Expert (hides behind trees, dodges delayed spells) presets. Some combos have the dummy cast a stun bolt (counter it with BKB, a disable, or by leaving range) or blink away when hit (root it first, or Sun Strike the landing spot). Trees block vision, so fog of war is on.
 

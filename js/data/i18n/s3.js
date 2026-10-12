@@ -5,8 +5,6 @@
   IT.i18nAdd({
     en: {
       'mode.ranked': 'Ranked',
-      'modes.pickTitle': 'Combo Practice',
-      'modes.pickSub': 'Pick a difficulty. Endless random scenarios, no rating.',
       'diff.ianzinho': 'Ianzinho',
       'diff.easy': 'Easy',
       'diff.normal': 'Normal',
@@ -30,8 +28,6 @@
     },
     pt: {
       'mode.ranked': 'Ranqueada',
-      'modes.pickTitle': 'Treino de Combos',
-      'modes.pickSub': 'Escolha a dificuldade. Cenários aleatórios sem fim, sem rating.',
       'diff.ianzinho': 'Ianzinho',
       'diff.easy': 'Fácil',
       'diff.normal': 'Normal',
