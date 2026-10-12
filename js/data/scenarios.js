@@ -175,13 +175,19 @@
       [U(SEEN([600, 800]), { hp: 0.4, mot: 'still', aware: 0.3 })],
       { type: 'kill', how: { by: 'spirit', inv: true } }, ['method', 'time'],
       [{ a: 'forgespirit', at: 'self' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0' }]),
-    // tower_siege timer (v6, Ranked.towerMath; tests/ceo_v6_core.test.js recomputes it): tower 650 hp (gate x0.5 hero / x0.6 spirit, armor 12),
-    // walk 0.75 s; auto-attacks only: tAttack = 16.05 s (16.25 at bambam); Forge + Alacrity (+ the 2 s hammer channel): tCombo = 7.51 s (8.09).
-    // limit 14 s: tCombo x 1.25 = 9.4 (10.1) <= 14 < tAttack, at every tier -- the combo is required, plain hitting runs out of time.
+    // v6 Dust: exactly one of the two hunters (unit 0, its HUD card shows the item) carries Dust of Appearance (one charge). It dusts the
+    // spot where it lost you, after its reaction time and a "Dust!" telegraph (IT.Units.useDust); lift it first, then vanish and keep walking.
+    V('dust_escape', 6, 'lotus_dire', ['escape', 'invisible', 'items'], 12, {},
+      [U(SEEN([750, 950]), { mot: 'chase', hp: 1, items: ['dust'] }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1 })],
+      { type: 'escape', time: 12 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 100 } }),
+    // tower_siege timer (v6, Ranked.towerMath; tests/ceo_v6_core.test.js recomputes it): tower 1000 hp (gate x0.5 hero / x0.6 spirit, armor 12),
+    // walk 0.75 s; auto-attacks only: tAttack = 24.29 s (24.59 at bambam); Meteor Hammer (KV 90 + 50 x 6 s = 390 vs buildings) + plain
+    // attacks: tHammer = 17.11 s (17.30); Forge + Alacrity + Hammer (2 s channel): tCombo = 7.94 s (8.35).
+    // limit 14 s: tCombo x 1.25 = 9.9 (10.4) <= 14 < tHammer < tAttack, at every tier -- the full combo is required.
     V('tower_siege', 6, 'dire_off_t1', ['towers', 'items'], 10,
       { items: ['meteorhammer'], at: { tower: { team: 1 }, ahead: -950 } },
       [], { type: 'destroyTower' }, ['died', 'time'],
-      [{ a: 'forgespirit', at: 'self' }, { a: 'alacrity', at: 'self' }, { a: 'meteorhammer', at: 'tower' }, { a: 'attack', at: 'tower' }], { towerHp: 650, limit: 14 }),
+      [{ a: 'forgespirit', at: 'self' }, { a: 'alacrity', at: 'self' }, { a: 'meteorhammer', at: 'tower' }, { a: 'attack', at: 'tower' }], { towerHp: 1000, limit: 14 }),
     // ---------------------------------------------------------------- level 7
     V('fog_ambush', 7, 'outpost_rad', ['vision', 'awareness', 'fog'], 10, {},
       [U(SEEN([1000, 1300]), { hp: 0.45, mot: 'still', aware: 0.15 })], KILL, ['seen', 'time'],
@@ -226,7 +232,7 @@
       [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1.2 }]),
     V('plateau_escape', 9, 'dire_highground', ['highground', 'escape', 'invisible'], 14,
       { lvl: 30, at: W(['highground'], { d: [0, 3500], not: ['dtower'], has: { where: ['low'], d: [800, 1200] } }) },
-      [U(W(['low'], { d: [800, 1200] }), { mot: 'chase', hp: 1 }), U({ of: 0, side: 250 }, { mot: 'chase', hp: 1 }), U({ of: 0, side: -250 }, { mot: 'chase', hp: 1 })],
+      [U(W(['low'], { d: [800, 1200] }), { mot: 'chase', hp: 1, items: ['dust'] }), U({ of: 0, side: 250 }, { mot: 'chase', hp: 1 }), U({ of: 0, side: -250 }, { mot: 'chase', hp: 1 })],
       { type: 'escape', time: 14 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3 } }),
     // ---------------------------------------------------------------- level 10
     V('gauntlet', 10, 'dire_mid_t1', ['towers', 'escape', 'invisible', 'items'], 16,

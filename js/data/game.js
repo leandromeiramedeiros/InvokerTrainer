@@ -33,7 +33,7 @@
     },
     ITEMS_MAIN: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir'],
     ITEMS_EXTRA: ['blink', 'boots', 'travels', 'forcestaff', 'dust'],
-    ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff'],   // items an enemy NPC may carry (v4)
+    ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust'],   // items an enemy NPC may carry (v4; v6 dust: one charge, used by a chaser at the last-seen spot)
     SKINS: ['pedro', 'renan', 'vitinho'],
     SKIN_NAMES: { pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho' },
     // Dummy stat presets. Behavior: stationary | wander | evasive.
@@ -55,6 +55,7 @@
       flee: { range: 1100, step: 500, think: 0.4 },   // 'escape' behaviour: keeps this far from the hero
       shadowRange: 900,      // 'escape': pops Shadow Blade when an aware hero is closer than this
       leash: 150,            // 'defend' / fights-back: chases the hero this far beyond its attack range, then goes home
+      dustAt: 80,            // v6 Dust: a chaser dusts only standing within this of the hero's last-seen spot
     },
     // Hero auto-attack of an enemy NPC (Dota hero baseline: ~50 dmg, 1.7 BAT; no per-hero KV is baked, only the forged spirit). Scaled by the tier's dmgMul.
     ENEMY_ATTACK: {

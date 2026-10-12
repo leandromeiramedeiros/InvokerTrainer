@@ -15,5 +15,25 @@
     const stars = Math.min(5, 1 + Math.floor((r - lo) / per));
     return { tier, stars, name: NAMES[tier], id: TIERS[tier], next: Math.round(lo + per * stars) };
   }
-  IT.Ranks = { TIERS, NAMES, START, fromRating, MAX_DELTA: 150 };
+  // v6 WP6: the end-splash medal is PER RUN (no cumulative rating). One 8-turn ranked run -> tier from its score, capped by how many
+  // scenarios it cleared (CAP[cleared]); Immortal needs 8/8 AND the top score band. Stars 1..5 = position inside the score band.
+  // A clean run at the lowest ramp (difficulties 0,0,0,1,1,1,2,2, all at/under par, streak x1..x1.7) scores ~1300; slow but perfect ~860.
+  const RUN_START = [0, 120, 250, 400, 560, 720, 900, 1200];   // score lower bound per tier
+  const RUN_CAP = [0, 1, 1, 2, 3, 4, 5, 6, 7];                  // max tier by scenarios cleared (index = cleared, 8+ = 7)
+  function fromRun(m) {
+    m = m || {};
+    const score = Math.max(0, Number(m.score) || 0), turns = m.turns || 8;
+    const solved = Math.max(0, (m.solved != null ? m.solved : m.cleared != null ? m.cleared : m.combos) | 0);
+    let st = 0;
+    for (let i = 0; i < RUN_START.length; i++) if (score >= RUN_START[i]) st = i;
+    const full = solved >= turns, cap = full ? 7 : Math.min(6, RUN_CAP[Math.min(8, solved)]);
+    const tier = Math.min(st, cap);
+    if (tier === 7) return { tier, stars: 0, name: NAMES[tier], id: TIERS[tier], next: null };
+    let stars;
+    if (st > tier) stars = 5;   // score earned more than the clears allow: the top of the capped tier
+    else { const lo = RUN_START[tier], hi = RUN_START[tier + 1]; stars = Math.min(5, 1 + Math.floor((score - lo) / ((hi - lo) / 5))); }
+    return { tier, stars, name: NAMES[tier], id: TIERS[tier], next: st > tier ? null : RUN_START[tier + 1] };
+  }
+  const medalKey = r => (r ? (r.tier | 0) * 6 + (r.stars | 0) : -1);
+  IT.Ranks = { TIERS, NAMES, START, fromRating, fromRun, medalKey, RUN_START, RUN_CAP, MAX_DELTA: 150 };
 })(typeof window !== 'undefined' ? window : globalThis);

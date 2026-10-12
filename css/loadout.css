@@ -12,25 +12,41 @@
 /* scenario chips */
 .scns{gap:.4em;margin-bottom:.5em}
 
-/* Aghanim's hood picker: [Scepter card][hood][Shard card]; the hood's eyes light up with the picks (js/art/hood.js) */
-.hoodpick{position:relative;display:flex;align-items:stretch;justify-content:center;gap:.5em;margin:.3em 0 .5em}
-.hcard{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3em;padding:.7em .3em;background:var(--panel2);border:2px solid var(--line);box-shadow:0 3px 0 #000;color:var(--dim);text-align:center}
-.hcard .ico.huge{width:4.4em;height:4.4em;filter:grayscale(.9) brightness(.7);opacity:.75;transition:filter .15s,opacity .15s,transform .15s}
-.hcard .hn{font-size:.8em;color:var(--ink);line-height:1.15}
-.hcard .hs{font-size:.7em;letter-spacing:.06em;text-transform:uppercase}
-.hcard:hover{border-color:var(--mag)}
-.hcard:hover .ico.huge{opacity:.95;transform:scale(1.06)}
-.hcard:active{transform:translateY(2px);box-shadow:0 1px 0 #000}
-.hcard.on{background:#3a2810;border-color:var(--gold);color:var(--gold);box-shadow:0 3px 0 #000,0 0 .9em rgba(242,196,68,.35)}
-.hcard.on .ico.huge{filter:none;opacity:1}
-.hcard.shard.on{background:#0e2a36;border-color:#5ae6ff;color:#5ae6ff;box-shadow:0 3px 0 #000,0 0 .9em rgba(90,230,255,.35)}
-.hood-stage{flex:none;display:flex;align-items:center;justify-content:center;width:6.6em}
-.hood-cv{width:6.2em;height:6.2em;image-rendering:pixelated;transition:filter .2s}
-.hood-stage.s .hood-cv{filter:drop-shadow(0 0 .35em rgba(255,214,80,.55))}
-.hood-stage.h .hood-cv{filter:drop-shadow(0 0 .35em rgba(90,230,255,.55))}
-.hood-stage.s.h .hood-cv{filter:drop-shadow(0 0 .35em rgba(255,214,80,.5)) drop-shadow(0 0 .35em rgba(90,230,255,.5))}
-.hood-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated}
-.agh-sub .row{margin:.35em 0}
+/* ---- Aghanim's picker: the in-game hood drawn big (js/art/hood.js); the three orbs are the buttons, the gems light in the orb colour, sand pools under it */
+.aghs{display:flex;flex-direction:column;align-items:center;gap:.5em}
+.hoodrig{--hs:8px;position:relative;flex:none;width:calc(34*var(--hs));height:calc(46*var(--hs))}
+.hoodrig .hh{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none}
+.hoodrig .hh.scepter,.hoodrig .hh.shard{filter:drop-shadow(0 0 .35em var(--hc,#fff)) drop-shadow(0 0 .8em var(--hc,#fff))}
+.horb,.hgem{position:absolute;padding:0;background:transparent;cursor:pointer}
+.horb{border:2px solid transparent;border-radius:50%;transition:box-shadow .15s,border-color .15s}
+.horb:hover,.horb:focus-visible{border-color:rgba(255,255,255,.7);box-shadow:0 0 1em rgba(255,255,255,.35)}
+.horb:active{transform:scale(.95)}
+.horb .mk{position:absolute;bottom:-.55em;width:.75em;height:.75em;border:1px solid #000;transform:rotate(45deg);display:none;pointer-events:none}
+.horb.s .mk.s{display:block;left:calc(50% - .95em);background:var(--gold);box-shadow:0 0 .5em var(--gold)}
+.horb.h .mk.h{display:block;left:calc(50% + .2em);background:#5ae6ff;box-shadow:0 0 .5em #5ae6ff}
+.hgem{border:0;border-radius:40%;opacity:0}
+.hgem:hover,.hgem:focus-visible{opacity:1;box-shadow:inset 0 0 0 2px rgba(255,255,255,.5)}
+@media (max-height:680px){.hoodrig{--hs:6px}}
+.upgs{display:grid;grid-template-columns:1fr 1fr;gap:.5em;width:100%}
+.upg{display:flex;align-items:flex-start;gap:.6em;padding:.5em .6em;background:var(--panel2);border:2px solid var(--line);min-width:0}
+.upg .ico.huge{flex:none;width:3.2em;height:3.2em;filter:grayscale(.9) brightness(.65);opacity:.7}
+.upg.on .ico.huge{filter:none;opacity:1}
+.upg.sc.on{border-color:var(--gold);background:#2a1c0a}
+.upg.sh.on{border-color:#5ae6ff;background:#0a2230}
+.upg .ub{min-width:0}
+.upg .ut{display:flex;align-items:baseline;flex-wrap:wrap;gap:.2em .6em;font-size:.82em}
+.upg.sc .ut b{color:var(--gold)}.upg.sh .ut b{color:#5ae6ff}
+.upg .uo{font-size:.85em;padding:0 .4em;border:1px solid currentColor;text-transform:uppercase;letter-spacing:.05em}
+.upg .uo.quas{color:var(--q)}.upg .uo.wex{color:var(--w)}.upg .uo.exort{color:var(--e)}
+.upg .ud{margin:.25em 0 0;font-size:.74em;line-height:1.3;color:var(--ink)}
+.upg:not(.on) .ud{color:var(--dim)}
+.upg .warn{margin:.2em 0 0;font-size:.74em}
+.fx-sand{position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:60;image-rendering:pixelated}
+/* orbs: 7 steps + the Scepter +1 as an extra bead (diamond) */
+.bead{flex:none;width:.8em;height:.8em;margin:0 .45em 0 .35em;border:2px dashed var(--line);transform:rotate(45deg)}
+.bead.quas{--bc:var(--q)}.bead.wex{--bc:var(--w)}.bead.exort{--bc:var(--e)}
+.orbrow .bead.on{width:.8em;border:2px solid var(--gold);background:var(--bc);box-shadow:0 0 .6em var(--bc),0 0 0 1px #000;animation:beadpop .55s ease-out}
+@keyframes beadpop{0%{transform:rotate(45deg) scale(2.2);opacity:0}60%{transform:rotate(45deg) scale(.85);opacity:1}100%{transform:rotate(45deg) scale(1)}}
 
 /* tier badges (ian / easy / common / hard / bambam) */
 .tb{display:inline-block;flex:none;padding:0 .45em;margin-right:.4em;border:1px solid var(--c,#aaa);color:var(--c,#aaa);font-size:.72em;font-weight:normal;letter-spacing:.05em;line-height:1.55;text-transform:uppercase;white-space:nowrap;vertical-align:middle}
@@ -67,7 +83,6 @@
 .fp[data-tab=items] .pane.items,.fp[data-tab=agh] .pane.agh,.fp[data-tab=stats] .pane.stats{display:block}
 .pcol{display:flex;flex-direction:column;gap:.6em;min-width:0}
 .lo-panes .sec{border-width:2px;box-shadow:none}
-.fp .ipool{grid-template-columns:repeat(3,1fr)}
 .fp .orbrow{margin:.3em 0}.fp .tier{margin:.25em 0}
 .fp-foot{display:flex;align-items:center;justify-content:flex-end;gap:1em;margin-top:.6em;min-height:3em}
 .fp-foot .note{flex:1;margin:0}
@@ -109,5 +124,19 @@
 .scard .scn{font-size:.8em;line-height:1.15;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .scard .sctags{display:flex;flex-wrap:wrap;gap:.25em}
 .scard .sctags i{font-style:normal;font-weight:normal;font-size:.62em;padding:0 .4em;border:1px solid var(--line);color:var(--dim);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-.fp .islots{grid-template-columns:repeat(6,3.4em);justify-content:start;margin-bottom:.6em}
-.fp .hoodpick{max-width:40em}
+/* items: slots in 2 rows of 3 (Dota layout) beside a compact catalogue; drag and drop between them */
+.sec>.items{display:flex;gap:.8em;align-items:flex-start}
+.islotbox{flex:none}
+.fp .islots{display:grid;grid-template-columns:repeat(3,4.4em);gap:.4em;margin:0}
+.fp .islot{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1;padding:.2em;background:#0b0618;border:2px solid var(--line)}
+.fp .islot.full{cursor:grab}.fp .islot.full:active{cursor:grabbing}
+.fp .islot:hover{border-color:var(--mag)}.fp .islot.full:hover{border-color:var(--gold)}
+.islot .skey{position:absolute;left:2px;top:1px;padding:0 .3em;font-size:.62em;line-height:1.4;color:var(--gold);background:rgba(0,0,0,.65);pointer-events:none}
+.fp .islot.over{border-color:#fff;box-shadow:0 0 .8em rgba(255,255,255,.5)}
+.dragsrc{opacity:.4}
+.icat{flex:1;min-width:0;padding:.2em;border:2px dashed transparent}
+.items.dragging .icat{border-color:var(--bad)}
+.fp .ipool{grid-template-columns:repeat(auto-fill,minmax(7.4em,1fr));gap:.3em}
+.fp .iopt{padding:.2em .35em;gap:.35em;font-size:.7em;line-height:1.1}
+.fp .iopt .ico{flex:none;width:1.9em;height:1.9em}
+.fp .iopt[draggable=true]{cursor:grab}

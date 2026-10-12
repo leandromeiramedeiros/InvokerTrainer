@@ -1,5 +1,6 @@
-// End splash (ranked + infinite run): medal / count reveal over a pixel-ember canvas, procedural sting, a few curated stats,
-// PLAY AGAIN / INFINITE RUN (RANKED) / SAVE IMAGE / GO BACK. Pure formatting helpers are exported for the share card (js/ui/share.js).
+// End splash (ranked + infinite run): per-run medal / count reveal over a pixel-ember canvas, procedural sting, curated stats,
+// total damage + PHYSICAL / MAGICAL / PURE bar + damage by spell, RELICS PROGRESS panel (js/ui/relics.js),
+// PLAY AGAIN / INFINITE RUN (8/8 only) / RELICS PROGRESS / SAVE IMAGE / GO BACK. Pure formatting helpers are exported for the share card (js/ui/share.js).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -24,27 +25,34 @@
     }
     return { label: t('end.sp.' + tl.id), text };
   }
-  const tierOf = (m, cur) => {
-    if (m.mode === 'infinite') return cur.ornament;
-    const ar = m.rank && m.rank.after && m.rank.after.rank;
-    if (ar) return ar.tier;
-    try { return IT.Ranks.fromRating(IT.Ranked.profile().rating).tier; } catch (e) { return 0; }
-  };
-  const rankOf = (m) => {
-    const ar = m.rank && m.rank.after && m.rank.after.rank;
-    if (ar) return ar;
-    try { return IT.Ranks.fromRating(IT.Ranked.profile().rating); } catch (e) { return { tier: 0, stars: 0, name: '' }; }
-  };
+  const ZERO = { tier: 0, stars: 0, name: 'Herald', id: 'herald' };
+  // v6 WP6: the medal is this run's (IT.Ranks.fromRun via curated().medal), never the cumulative rating
+  const medalOf = (m, cur) => (cur && cur.medal) || (IT.Ranks && IT.Ranks.fromRun ? IT.Ranks.fromRun(m) : ZERO);
+  const tierOf = (m, cur) => (m.mode === 'infinite' ? cur.ornament : medalOf(m, cur).tier);
+  const medalName = r => (r ? r.name + (r.stars ? ' ' + r.stars : '') : '');
   const nameOf = o => (o && typeof o === 'object' ? o[IT.lang] || o.en : o || '');
+  const fmtN = n => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // damage source id -> label in the current language (spells, items, plain attacks)
+  function srcName(id) {
+    const t = IT.t;
+    if (IT.hasT && IT.hasT('spell.' + id)) return t('spell.' + id);
+    if (IT.hasT && IT.hasT('item.' + id)) return t('item.' + id);
+    if (id === 'attack') return t('attack');
+    return id;
+  }
+  const srcIcon = id => (id === 'attack' ? 'ui_atk' : id);
+  const DMG_COL = { physical: '#e8643a', magical: '#7a6cf0', pure: '#f2c444' };
+  const dmgLabel = k => IT.t(k === 'physical' ? 'end.sp.dmg.physical' : k === 'magical' ? 'end.sp.dmg.magical' : 'end.sp.dmg.pure');
 
   // everything the share card needs, resolved in the current language
   function shareData(m, cur) {
-    const inf = m.mode === 'infinite', r = rankOf(m), rk = m.rank;
+    const inf = m.mode === 'infinite', r = medalOf(m, cur), dm = cur.damage || { total: 0, bySpell: [] };
     return {
       mode: m.mode, ornament: cur.ornament, tier: inf ? cur.ornament : r.tier, stars: inf ? 0 : r.stars,
-      rankName: inf ? '' : r.name + (r.stars ? ' ' + r.stars : ''), rating: rk ? Math.round(rk.after.rating) : null, delta: rk ? rk.delta : null,
+      rankName: inf ? '' : medalName(r), rating: null, delta: null,
       cleared: cur.cleared, best: m.best != null ? m.best : null, newBest: !!m.newBest, score: Math.round(m.score || 0),
       tiles: cur.tiles.map(fmtTile), diff: m.diff, level: m.level, seed: Math.round(m.score || 0) + cur.cleared * 977,
+      dmgTotal: dm.total || 0, topSpells: (dm.bySpell || []).slice(0, 3).map(x => ({ id: x.id, icon: srcIcon(x.id), label: srcName(x.id), v: x.v })),
     };
   }
 
@@ -112,15 +120,34 @@
     return cv;
   }
 
+  // TOTAL DAMAGE + PHYSICAL / MAGICAL / PURE stacked bar + DAMAGE BY SPELL (only sources that hit, desc, with icons)
+  function damageBlock(dm) {
+    const { h } = IT.UI, t = IT.t;
+    if (!dm || !(dm.total > 0)) return h('div', { class: 'sp-dmg none' }, h('span', { class: 'sp-dlab', text: t('end.sp.dmgTotal') }), h('b', { class: 'sp-dtot', text: '0' }), h('p', { class: 'sp-dnone', text: t('end.sp.noDmg') }));
+    const tot = Math.max(1, dm.byType.physical + dm.byType.magical + dm.byType.pure);
+    const types = ['physical', 'magical', 'pure'];
+    const bar = h('div', { class: 'sp-dbar' }, types.filter(k => dm.byType[k] > 0).map(k => h('i', { class: 'dt-' + k, style: { width: (dm.byType[k] / tot * 100).toFixed(2) + '%', background: DMG_COL[k] }, 'data-tip': dmgLabel(k) + ': ' + fmtN(dm.byType[k]) })));
+    const legend = h('div', { class: 'sp-dleg' }, types.map(k => h('span', { class: 'dt-' + k + (dm.byType[k] > 0 ? '' : ' off') }, h('i', { style: { background: DMG_COL[k] } }), dmgLabel(k) + ' ' + Math.round(dm.byType[k] / tot * 100) + '%')));
+    const top = dm.bySpell.length ? dm.bySpell[0].v : 1;
+    const rows = dm.bySpell.map(x => h('div', { class: 'sp-drow', 'data-src': x.id },
+      IT.UI.icon(srcIcon(x.id), 'sp-dico'), h('span', { class: 'sp-dname', text: srcName(x.id) }),
+      h('span', { class: 'sp-dline' }, h('i', { style: { width: Math.max(2, x.v / top * 100).toFixed(1) + '%' } })), h('b', { text: fmtN(x.v) })));
+    return h('div', { class: 'sp-dmg' },
+      h('div', { class: 'sp-dhead' }, h('span', { class: 'sp-dlab', text: t('end.sp.dmgTotal') }), h('b', { class: 'sp-dtot', text: fmtN(dm.total) })),
+      bar, legend,
+      h('div', { class: 'sp-dlab sub', text: t('end.sp.dmgBySpell') }),
+      h('div', { class: 'sp-dlist' }, rows));
+  }
+
   function splash(info) {
     const { h, btn } = IT.UI, t = IT.t, A = IT.App;
     const m = info.mode || {}, inf = m.mode === 'infinite', cur = IT.StatsCollector.curated(info.stats, m);
-    const tier = tierOf(m, cur), rk = m.rank, col = PAL[tier];
+    const tier = tierOf(m, cur), col = PAL[tier];
     const root = h('div', { class: 'scr endscr splash', style: { '--sp1': col[0], '--sp2': BG[tier] } });
     const fx = h('canvas', { class: 'sp-fx', width: 320, height: 180 });
     const stage = h('div', { class: 'sp-stage' }, h('div', { class: 'sp-glow' }), h('div', { class: 'sp-ring' }), h('div', { class: 'sp-ring r2' }));
     const side = h('div', { class: 'sp-side' });
-    let count = null, rating = null;
+    let count = null, newMedal = false;
 
     if (inf) {
       count = h('b', { class: 'sp-count', text: '0' });
@@ -132,17 +159,16 @@
       if (why) side.appendChild(h('div', { class: 'sp-why', text: t('end.sp.failedBy', { why }) }));
       if (m.failName) side.appendChild(h('div', { class: 'sp-on', text: t('end.sp.failedOn', { name: nameOf(m.failName) }) }));
     } else {
-      const r = rankOf(m);
+      const r = medalOf(m, cur), K = IT.StatsCollector.medalKey;
+      // best medal before this run (main.js passes it; a synthetic call falls back to the stored best)
+      const prev = info.prevBest !== undefined ? info.prevBest : (() => { try { const L = IT.UI.Life && IT.UI.Life.load(); return L && L.bestMedal; } catch (e) { return null; } })();
+      newMedal = K(r) > K(prev);
       stage.appendChild(h('div', { class: 'sp-medal' }, medalCanvas(r.tier, r.stars, 176)));
-      side.appendChild(h('div', { class: 'sp-rname', text: r.name + (r.stars ? ' ' + r.stars : '') }));
-      if (rk) {
-        const dc = rk.delta > 0 ? '#7bd88f' : rk.delta < 0 ? '#ff7a7a' : '#cfd6dc';
-        rating = h('b', { text: String(Math.round(rk.before.rating)) });
-        side.appendChild(h('div', { class: 'sp-rating' }, h('span', { text: t('end.rating') + ' ' }), rating));
-        side.appendChild(h('div', { class: 'sp-delta', text: (rk.delta > 0 ? '+' : '') + rk.delta, style: { color: dc } }));
-        const nm = r.name + (r.stars ? ' ' + r.stars : '');
-        side.appendChild(h('div', { class: 'sp-msg' + (rk.up ? ' up' : ''), text: rk.up ? t('end.rankUp', { rank: nm }) : rk.down ? t('end.rankDown', { rank: nm }) : t('end.rankSame', { rank: nm }) }));
-      } else side.appendChild(h('div', { class: 'sp-msg', text: t('end.noRating') }));
+      side.appendChild(h('div', { class: 'sp-kick', text: t('end.sp.medal') }));
+      side.appendChild(h('div', { class: 'sp-rname', text: medalName(r) }));
+      side.appendChild(h('div', { class: 'sp-score' }, h('span', { text: t('end.sp.score') + ' ' }), h('b', { text: fmtN(m.score) })));
+      if (newMedal) side.appendChild(h('div', { class: 'sp-best new', text: t('end.sp.newMedal') }));
+      else if (prev) side.appendChild(h('div', { class: 'sp-best', text: t('end.sp.bestMedal', { name: medalName(prev) }) }));
     }
 
     const tiles = h('div', { class: 'sp-tiles' }, cur.tiles.map((tl, i) => {
@@ -158,12 +184,17 @@
       });
     };
     shareBtn = h('button', { class: 'btn', type: 'button', 'data-share': '1', onclick: share, text: t('end.btn.share') });
+    const relicsBtn = IT.UI.Relics ? h('button', {
+      class: 'btn blu relicbtn', type: 'button', 'data-relics': '1', text: t('end.btn.relics'),
+      onclick: () => { if (!root.querySelector('.rl-over')) root.appendChild(IT.UI.Relics.panel(cur.relics, null)); },
+    }) : null;
     // v6: Infinite Run is only offered after a perfect ranked run (all turns solved); an infinite run offers RANKED back
     const perfect = !inf && (m.solved | 0) >= (m.turns || 8);
     const infBtn = perfect ? h('button', { class: 'btn red infbtn', type: 'button', 'data-snd': 'start', 'data-tip': t('end.btn.infinite.d'), onclick: () => A.go('infinite'), text: t('end.btn.infinite') }) : null;
     const btns = h('div', { class: 'sp-btns' },
       btn('end.btn.again', () => A.go('again'), 'gold'),
       inf ? btn('end.btn.ranked', () => A.go('ranked'), 'grn') : infBtn,
+      relicsBtn,
       shareBtn,
       btn('end.btn.back', () => A.go('title'), 'dim'));
 
@@ -171,12 +202,13 @@
       h('div', { class: 'sp-body' },
         h('div', { class: 'sp-head', text: t(inf ? 'end.sp.infinite' : 'end.sp.ranked') }),
         h('div', { class: 'sp-hero' }, stage, side),
-        tiles, btns));
+        h('div', { class: 'sp-grid' }, tiles, damageBlock(cur.damage)),
+        btns));
 
     // sting once per run (a language switch rebuilds the screen), then the animations that need the element in the document
     if (!info.sting) {
       info.sting = true;
-      const kind = inf ? (cur.cleared > 0 ? 'reveal' : 'fail') : rk && rk.up ? 'up' : rk && rk.down ? 'down' : 'reveal';
+      const kind = inf ? (cur.cleared > 0 ? 'reveal' : 'fail') : newMedal ? 'up' : 'reveal';
       try { if (IT.Music) IT.Music.stinger(kind); } catch (e) { /* audio optional */ }
     }
     setTimeout(() => {
@@ -185,11 +217,10 @@
         return a.width > 0 && a.height > 0 ? { x: (b.left + b.width / 2 - a.left) / a.width, y: (b.top + b.height / 2 - a.top) / a.height } : null;
       });
       if (count) tween(root, POP * 1000 + 150, 1100 + Math.min(1500, cur.cleared * 80), k => { count.textContent = String(Math.round(cur.cleared * k)); });
-      if (rating && rk) tween(root, POP * 1000 + 350, 1400, k => { rating.textContent = String(Math.round(rk.before.rating + (rk.after.rating - rk.before.rating) * k)); });
     }, 0);
     return root;
   }
 
-  IT.UI.Splash = { fmtTile, shareData, PAL, BG, medalCanvas };
+  IT.UI.Splash = { fmtTile, shareData, PAL, BG, medalCanvas, srcName, srcIcon, DMG_COL, fmtN };
   IT.UI.endSplash = splash;
 })(typeof window !== 'undefined' ? window : globalThis);

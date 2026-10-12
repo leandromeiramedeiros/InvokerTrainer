@@ -147,11 +147,12 @@
       ptsBox.appendChild(h('span', { class: 'chip ' + (left === 0 ? 'ok' : 'gold'), text: t('lo.left') + ' ' + left }));
     }
 
-    // ---- orbs
+    // ---- orbs: 7 spent steps per orb (R.orbMax). The Scepter's +1 is an EXTRA bead beyond the 7 (diamond, gold ring); it pops with a sand burst.
     const orbBox = reg('orbs', 'orbs');
+    let prevScOrb = (lo.scepter && lo.scepterOrb) || null;
     function whyNotPlus(k) {
       const v = lo.orbs[k];
-      if (v >= 8) return t('tip.maxOrb');
+      if (v >= R.orbMax) return t('tip.maxOrb');
       if (R.pointsLeft(lo) <= 0) return t('tip.noPoints');
       const g = R.orbGate(v + 1);
       if (g > lo.heroLevel) return t('tip.gate', { n: v + 1, lvl: g });
@@ -159,21 +160,20 @@
     }
     function renderOrbs() {
       orbBox.textContent = '';
+      const scNow = (lo.scepter && lo.scepterOrb) || null;
+      let beadNew = null;
       for (const k of ORBS) {
-        const v = lo.orbs[k], why = whyNotPlus(k);
+        const v = lo.orbs[k], why = whyNotPlus(k), hasSc = scNow === k;
         const pips = h('div', { class: 'pips' });
-        for (let n = 1; n <= 9; n++) {
-          const sc = n === 9;
-          const on = sc ? (lo.scepter && lo.scepterOrb === k) : n <= v;
+        for (let n = 1; n <= R.orbMax; n++) {
           const g = R.orbGate(n);
-          pips.appendChild(h('i', {
-            class: 'pip ' + k + (on ? ' on' : '') + (sc ? ' sc' : '') + (!sc && g > lo.heroLevel ? ' lock' : ''),
-            'data-tip': sc ? t('item.scepter') : t('tip.gate', { n, lvl: g }),
-          }));
+          pips.appendChild(h('i', { class: 'pip ' + k + (n <= v ? ' on' : '') + (g > lo.heroLevel ? ' lock' : ''), 'data-tip': t('tip.gate', { n, lvl: g }) }));
         }
+        const bead = h('i', { class: 'bead ' + k + (hasSc ? ' on' : ''), 'data-tip': t('lo.bead') });
+        if (hasSc && prevScOrb !== k) beadNew = bead;
         orbBox.appendChild(h('div', { class: 'orbrow ' + k },
-          icon(k), h('span', { class: 'on', text: t('orb.' + k) }), h('span', { class: 'ov', text: v + (lo.scepter && lo.scepterOrb === k ? '+1' : '') }),
-          pips,
+          icon(k), h('span', { class: 'on', text: t('orb.' + k) }), h('span', { class: 'ov', text: v + (hasSc ? '+1' : '') }),
+          pips, bead,
           h('button', { type: 'button', class: 'pm', text: '-', 'data-tip': v ? '' : t('tip.minOrb'), disabled: v <= 0 ? true : null, onclick: () => { if (lo.orbs[k] > 0) { lo.orbs[k]--; changed(); } } }),
           h('button', {
             type: 'button', class: 'pm' + (why ? ' dis' : ''), text: '+', 'data-tip': why || '',
@@ -184,6 +184,8 @@
         h('span', { class: 'lbl', text: t('lo.auto') }),
         h('button', { type: 'button', class: 'btn sm', text: 'Q / E', 'data-tip': t('tip.autoQE'), onclick: () => autoBuild('qe') }),
         h('button', { type: 'button', class: 'btn sm', text: 'Q / W', 'data-tip': t('tip.autoQW'), onclick: () => autoBuild('qw') })));
+      prevScOrb = scNow;
+      if (beadNew) fxBurst(beadNew, grainCols(scNow), 30);
     }
     function autoBuild(style) {
       const a = R.autoLoadout(lo.heroLevel, style);
@@ -225,124 +227,188 @@
       }
     }
 
-    // ---- aghs: Invoker-hood picker. Two big cards (Scepter | hood | Shard); the hood's eyes light up with the picks.
-    // The card row is built once (the re-render only touches the sub rows) so the hood canvas and the grain burst survive a pick.
-    const A = IT.Agh;
-    const aghBox = reg('aghs', 'aghs');
-    const hoodCv = h('canvas', { class: 'hood-cv', width: 48, height: 48 });
-    const fxCv = h('canvas', { class: 'hood-fx' });
-    const aghSub = h('div', { class: 'agh-sub' });
-    const mkCard = kind => h('button', { type: 'button', class: 'hcard ' + kind, onclick: () => pickAgh(kind) },
-      icon(kind, 'huge'), h('span', { class: 'hn' }), h('span', { class: 'hs' }));
-    const cardS = mkCard('scepter'), cardH = mkCard('shard');
-    const stage = h('div', { class: 'hood-stage' }, hoodCv);
-    const hoodRow = h('div', { class: 'hoodpick' }, cardS, stage, cardH, fxCv);
-    aghBox.appendChild(hoodRow); aghBox.appendChild(aghSub);
-    let burstId = 0;
-    function burst(kind, card) {   // a few sand grains pop out of the card and fall (visual only, ~1 s)
-      let reduced = false;
-      try { reduced = !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { reduced = false; }
-      if (reduced || !hoodRow.isConnected) return;
-      const S = 3, box = hoodRow.getBoundingClientRect(), cr = card.getBoundingClientRect();
-      const W = Math.max(8, Math.round(box.width / S)), H = Math.max(8, Math.round(box.height / S));
-      fxCv.width = W; fxCv.height = H;
-      const cx = (cr.left + cr.width / 2 - box.left) / S, cy = (cr.top + cr.height * 0.35 - box.top) / S;
-      const cols = kind === 'scepter' ? ['#fff4a8', '#f2c444', '#c28a1a', '#7c5110'] : ['#e8ffff', '#5ae6ff', '#1a8a9e', '#0e5058'];
-      const ps = [];
-      for (let i = 0; i < 46; i++) {
-        const a = Math.random() * Math.PI * 2, v = 14 + Math.random() * 38;
-        ps.push({ x: cx + (Math.random() - 0.5) * 8, y: cy + (Math.random() - 0.5) * 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 22, life: 0.7 + Math.random() * 0.7, c: cols[(Math.random() * cols.length) | 0] });
-      }
-      const g2 = fxCv.getContext('2d'), id = ++burstId;
+    // ---- sand fx: ONE fixed full-viewport canvas (3 px grains, js/art/hood.js Sand); a burst falls from an anchor, rests just under it and fades
+    const reducedMotion = () => { try { return !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } };
+    const grainCols = k => { const p = IT.Hood.PAL[k]; return [p.h, p.m, p.m, p.e]; };
+    let fxCv = null, fxSand = null, fxRaf = 0;
+    function fxBurst(anchor, cols, n) {
+      if (reducedMotion() || !anchor.isConnected || !G.requestAnimationFrame) return;
+      const r = anchor.getBoundingClientRect(), root = anchor.closest('.scr');
+      if (!r.width || !root) return;
+      const S = 3, W = Math.ceil(G.innerWidth / S), Hh = Math.ceil(G.innerHeight / S);
+      if (!fxCv) fxCv = h('canvas', { class: 'fx-sand' });
+      if (!fxCv.isConnected) root.appendChild(fxCv);
+      if (!fxSand || fxCv.width !== W || fxCv.height !== Hh) { fxCv.width = W; fxCv.height = Hh; fxSand = IT.Hood.Sand(fxCv, { gravity: 120 }); }
+      fxSand.burst((r.left + r.width / 2) / S, (r.top + r.height / 2) / S, n || 30, cols, { speed: 30, lift: 16, spread: 3, floor: (r.bottom + 12) / S });
+      if (fxRaf) return;
       let last = performance.now();
       const step = now => {
-        if (id !== burstId || !fxCv.isConnected) return;
-        const dt = Math.min(0.05, (now - last) / 1000); last = now;
-        g2.clearRect(0, 0, W, H);
-        let live = false;
-        for (const p of ps) {
-          if (p.life <= 0) continue;
-          p.vy += 130 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - 1.5 * dt;
-          if (p.y > H - 1) { p.y = H - 1; p.vy = 0; p.vx *= 0.4; }   // grains settle on the floor of the picker
-          p.life -= dt; live = true;
-          g2.globalAlpha = Math.max(0, Math.min(1, p.life * 2));
-          g2.fillStyle = p.c; g2.fillRect(p.x | 0, p.y | 0, 1, 1);
-        }
-        g2.globalAlpha = 1;
-        if (live) G.requestAnimationFrame(step); else g2.clearRect(0, 0, W, H);
+        if (!fxCv.isConnected) { fxRaf = 0; return; }
+        fxSand.step((now - last) / 1000); last = now; fxSand.draw();
+        if (fxSand.live()) fxRaf = G.requestAnimationFrame(step); else fxRaf = 0;
       };
-      G.requestAnimationFrame(step);
-    }
-    function pickAgh(kind) {
-      const wasOn = kind === 'scepter' ? lo.scepter : lo.shard;
-      if (kind === 'scepter') A.setScepter(lo, !lo.scepter); else A.setShard(lo, !lo.shard);
-      if (!wasOn) burst(kind, kind === 'scepter' ? cardS : cardH);
-      changed();
-    }
-    function renderAghs() {
-      const g2 = hoodCv.getContext('2d');
-      g2.clearRect(0, 0, 48, 48);
-      if (IT.Hood) g2.drawImage(IT.Hood.canvas(lo.scepter, lo.shard), 0, 0);
-      stage.className = 'hood-stage' + (lo.scepter ? ' s' : '') + (lo.shard ? ' h' : '');
-      const fill = (card, on, tip, name, sub) => {
-        card.classList.toggle('on', !!on);
-        card.setAttribute('data-tip', tip);
-        card.querySelector('.hn').textContent = name;
-        card.querySelector('.hs').textContent = sub;
-      };
-      fill(cardS, lo.scepter, A.scepterTip(lo), t('agh.name.scepter'), lo.scepter ? (lo.scepterOrb ? t('orb.' + lo.scepterOrb) : t('agh.pickOrb')) : t('agh.off'));
-      fill(cardH, lo.shard, A.shardTip(lo), t('agh.name.shard'), lo.shard ? (lo.shardSpell ? t('spell.' + lo.shardSpell) : t('agh.pickSpell')) : t('agh.off'));
-      aghSub.textContent = '';
-      if (lo.scepter) {
-        const need = !lo.scepterOrb;
-        aghSub.appendChild(h('div', { class: 'row scorb' + (need ? ' need' : '') },
-          h('span', { class: 'lbl', text: t('lo.scepterOrb') }),
-          ORBS.map(k => h('button', { type: 'button', class: 'orbsel ' + k + (lo.scepterOrb === k ? ' on' : ''), onclick: () => { A.setScepterOrb(lo, k); changed(); }, 'data-tip': t('orb.' + k) }, icon(k)))));
-        if (need) aghSub.appendChild(h('div', { class: 'warn', text: t('err.scepter') }));
-      }
-      if (lo.shard) {
-        const need = !lo.shardSpell;
-        aghSub.appendChild(h('div', { class: 'row shsp' + (need ? ' need' : '') },
-          h('span', { class: 'lbl', text: t('lo.shardSpell') }),
-          IT.Loadout.SHARD_SPELLS.map(s => h('button', {
-            type: 'button', class: 'spsel' + (lo.shardSpell === s ? ' on' : ''), 'data-tip': t('spell.' + s) + ': ' + A.shardSpellTip(lo, s),
-            onclick: () => { A.setShardSpell(lo, s); changed(); },
-          }, icon(s)))));
-        if (need) aghSub.appendChild(h('div', { class: 'warn', text: t('err.shard') }));
-      }
+      fxRaf = G.requestAnimationFrame(step);
     }
 
-    // ---- items
+    // ---- aghs: the Invoker HUD hood drawn big (js/art/hood.js = the in-game hood). The three orbs ARE the buttons:
+    // click 1 = Scepter on that orb (its gem lights in the orb's colour), click 2 = Shard on that orb's spell, click 3 = remove both (IT.Agh.orbClick).
+    // Below: the upgraded spell + a one-line explainer per upgrade. Built once; the re-render only touches the layers / rows (sand keeps falling).
+    const A = IT.Agh, HD = IT.Hood, HFH = 46;   // canvas grid 34 x 46: the hood (38 rows) + 8 rows of floor where the sand pools
+    const aghBox = reg('aghs', 'aghs');
+    const mkCv = cls => h('canvas', { class: 'hh ' + cls, width: HD.W, height: HFH });
+    const cvBase = mkCv('base'), cvSc = mkCv('scepter'), cvSh = mkCv('shard'), cvSand = mkCv('sand');
+    cvBase.getContext('2d').drawImage(HD.layer('base'), 0, 0);
+    const sand = HD.Sand(cvSand, { floor: HFH, gravity: 90 });
+    const pc = (v, tot) => (v / tot * 100) + '%';
+    const orbBtns = {};
+    for (const k of ORBS) {
+      const [ox, oy] = HD.ORB[k], r = HD.OR + 1;
+      orbBtns[k] = h('button', {
+        type: 'button', class: 'horb ' + k, style: { left: pc(ox - r, HD.W), top: pc(oy - r, HFH), width: pc(2 * r, HD.W), height: pc(2 * r, HFH) },
+        onclick: () => pickOrb(k),
+      }, h('span', { class: 'mk s' }), h('span', { class: 'mk h' }));
+    }
+    const gemBtn = (kind, x0, y0, x1, y1) => h('button', {
+      type: 'button', class: 'hgem ' + kind, style: { left: pc(x0, HD.W), top: pc(y0, HFH), width: pc(x1 - x0, HD.W), height: pc(y1 - y0, HFH) },
+      onclick: () => { if (kind === 'sc') A.setScepter(lo, false); else A.setShard(lo, false); changed(); },
+    });
+    const gemS = gemBtn('sc', 12.5, 13, 21.5, 24), gemH = gemBtn('sh', 8, 28, 26, 38);
+    const rig = h('div', { class: 'hoodrig' }, cvBase, cvSc, cvSh, cvSand, gemS, gemH, ORBS.map(k => orbBtns[k]));
+    const upS = h('div', { class: 'upg sc' }), upH = h('div', { class: 'upg sh' });
+    aghBox.appendChild(rig); aghBox.appendChild(h('div', { class: 'upgs' }, upS, upH));
+
+    let rigRaf = 0, rigIdle = 0;
+    function rigRun() {   // the loop idles out once the sand is gone; a few unattached frames are tolerated (the screen is built before it is shown)
+      if (rigRaf || !G.requestAnimationFrame || reducedMotion()) return;
+      let last = performance.now();
+      const step = now => {
+        rigIdle = rig.isConnected ? 0 : rigIdle + 1;
+        if (rigIdle > 90) { rigRaf = 0; return; }
+        sand.step((now - last) / 1000); last = now; sand.draw();
+        rigRaf = sand.live() ? G.requestAnimationFrame(step) : 0;
+      };
+      rigRaf = G.requestAnimationFrame(step);
+    }
+    function pickOrb(k) {
+      const res = A.orbClick(lo, k);
+      changed();
+      if (res.add && !reducedMotion()) {   // sand pops out of the gem that just lit
+        const pal = HD.PAL[res.add === 'scepter' ? k : HD.SHARD_ORB[HD.ORB_SHARD[k]]], cols = [pal.h, pal.m, pal.m, pal.e];
+        if (res.add === 'scepter') sand.burst(17, 18, 44, cols, { speed: 20, lift: 10, spread: 4 });
+        else sand.burst(17, 33, 44, cols, { speed: 20, lift: 10, spread: 8 });
+        rigRun();
+      }
+    }
+    const upRow = (kind, row) => {
+      const u = A.upgradeLine(lo, kind), sc = kind === 'scepter';
+      row.textContent = ''; row.classList.toggle('on', !!u);
+      row.appendChild(icon(u ? u.spell : kind, 'huge'));
+      const body = h('div', { class: 'ub' });
+      body.appendChild(h('div', { class: 'ut' }, h('b', { text: t(sc ? 'agh.name.scepter' : 'agh.name.shard') }),
+        u ? h('span', { class: 'uo ' + u.orb, text: sc ? t('agh.up.plus', { orb: t('orb.' + u.orb) }) : t('spell.' + u.spell) }) : null));
+      body.appendChild(h('p', { class: 'ud', text: u ? t(u.k, u.v) : t(sc ? 'agh.up.none.sc' : 'agh.up.none.sh') }));
+      if (sc && lo.scepter && !lo.scepterOrb) body.appendChild(h('p', { class: 'warn', text: t('err.scepter') }));
+      if (!sc && lo.shard && !lo.shardSpell) body.appendChild(h('p', { class: 'warn', text: t('err.shard') }));
+      row.appendChild(body);
+    };
+    let hoodKey = '';
+    function renderAghs() {
+      const so = lo.scepter && HD.PAL[lo.scepterOrb] ? lo.scepterOrb : null, sh = lo.shard && HD.SHARD_ORB[lo.shardSpell] ? HD.SHARD_ORB[lo.shardSpell] : null;
+      const key = (so || '-') + '|' + (sh || '-');
+      if (key !== hoodKey) {
+        hoodKey = key;
+        for (const [cv, kind, o] of [[cvSc, 'scepter', so], [cvSh, 'shard', sh]]) {
+          const cx = cv.getContext('2d'); cx.clearRect(0, 0, HD.W, HFH);
+          if (o) { cx.drawImage(HD.layer(kind, o), 0, 0); cv.style.setProperty('--hc', HD.PAL[o].glow); }
+          cv.style.display = o ? '' : 'none';
+        }
+        const em = [];
+        if (so) em.push({ x0: 14, x1: 20, y: 24, pal: HD.PAL[so], rate: 5, vx: 9 });
+        if (sh) em.push({ x0: 9, x1: 25, y: 35, pal: HD.PAL[sh], rate: 7, vx: 5 });
+        sand.setEmitters(em);
+        rigRun();
+      }
+      gemS.style.display = so ? '' : 'none'; gemH.style.display = sh ? '' : 'none';
+      gemS.setAttribute('data-tip', t('agh.hood.gemS')); gemH.setAttribute('data-tip', t('agh.hood.gemH'));
+      for (const k of ORBS) {
+        const b = orbBtns[k], r = A.orbClick(Object.assign({}, lo), k);   // what a click on this orb would do (on a copy)
+        b.classList.toggle('s', A.scepterAt(lo, k)); b.classList.toggle('h', A.shardAt(lo, k));
+        b.setAttribute('data-tip', t('orb.' + k) + '. ' + (r.add === 'scepter' ? t('agh.hood.o1', { orb: t('orb.' + k) }) : r.add === 'shard' ? t('agh.hood.o2', { spell: t('spell.' + A.SHARD_OF[k]) }) : r.rm.length > 1 ? t('agh.hood.o3') : t('agh.hood.o4')));
+        b.setAttribute('aria-label', t('orb.' + k));
+      }
+      upRow('scepter', upS); upRow('shard', upH);
+    }
+
+    // ---- items: equipped slots in 2 rows of 3 (Dota layout: 1 2 3 / 4 5 6) with their keys; drag a slot onto another to reorder (the key follows the slot),
+    // drag it out onto the catalogue / pane to remove it; the catalogue is a compact icon + name grid: click to add, or drag an item onto a slot.
     const itemBox = reg('items', 'items');
+    const slotKey = i => { try { const S = IT.Settings; return S && S.label ? S.label(S.keyOf('item' + (i + 1))) : String(i + 1); } catch (e) { return String(i + 1); } };
+    const isBoots = id => IT.Loadout.BOOTS.includes(id);
+    function moveSlot(from, to) {   // swap with a full slot; an empty target sends the item to the end of the row (the list has no holes)
+      const a = lo.items; if (from === to || from >= a.length) return;
+      if (to >= a.length) a.push(a.splice(from, 1)[0]); else { const x = a[from]; a[from] = a[to]; a[to] = x; }
+    }
+    function addItem(id, at) {   // at: slot index to drop onto (replaces a full slot) or undefined = first free
+      if (lo.items.includes(id)) { flash(t('item.' + id)); return false; }
+      const rest = lo.items.filter(x => !(isBoots(id) && isBoots(x)));
+      if (at != null && at < rest.length) rest[at] = id; else rest.push(id);
+      if (rest.length > 6) { flash(t('tip.itemsFull')); return false; }
+      lo.items = rest; return true;
+    }
+    let dragging = null;   // { from: slot index } | { id: catalogue item }
+    const endDrag = () => { dragging = null; itemBox.classList.remove('dragging'); for (const e of itemBox.querySelectorAll('.over,.dragsrc')) e.classList.remove('over', 'dragsrc'); };
+    const dragStart = (ev, info, srcEl) => {
+      dragging = info; itemBox.classList.add('dragging'); srcEl.classList.add('dragsrc');
+      try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', info.id || ('slot' + info.from)); } catch (e) { /* ignore */ }
+    };
+    function dropRemove(ev) {   // a slot item dropped on anything that is not a slot removes it
+      const d = dragging; if (!d || d.from == null) return;
+      ev.preventDefault(); endDrag();
+      if (d.from < lo.items.length) { lo.items.splice(d.from, 1); changed(); }
+    }
     function renderItems() {
       itemBox.textContent = '';
       const slots = h('div', { class: 'islots' });
       for (let i = 0; i < 6; i++) {
-        const id = lo.items[i];
-        slots.appendChild(h('button', {
-          type: 'button', class: 'islot' + (id ? ' full' : ''), 'data-tip': id ? t('item.' + id) : t('lo.itemSlotN', { n: i + 1 }),
+        const id = lo.items[i], key = slotKey(i);
+        slots.appendChild(h('div', {
+          class: 'islot' + (id ? ' full' : ''), role: 'button', tabindex: '0', draggable: id ? 'true' : null,
+          'data-tip': id ? t('item.' + id) + ' (' + key + '). ' + t('lo.itemDrag') : t('lo.itemSlotKey', { n: i + 1, key }),
           onclick: () => { if (id) { lo.items.splice(i, 1); changed(); } },
-        }, id ? icon(id) : null));
+          onkeydown: ev => { if (id && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Delete')) { ev.preventDefault(); lo.items.splice(i, 1); changed(); } },
+          ondragstart: ev => { if (id) dragStart(ev, { from: i }, ev.currentTarget); },
+          ondragend: endDrag,
+          ondragover: ev => { if (dragging) { ev.preventDefault(); ev.currentTarget.classList.add('over'); } },
+          ondragleave: ev => ev.currentTarget.classList.remove('over'),
+          ondrop: ev => {
+            ev.preventDefault(); ev.stopPropagation();
+            const d = dragging; endDrag(); if (!d) return;
+            if (d.from != null) moveSlot(d.from, i); else if (!addItem(d.id, i)) return;
+            changed();
+          },
+        }, id ? icon(id) : null, h('span', { class: 'skey', text: key })));
       }
-      itemBox.appendChild(slots);
       const pool = h('div', { class: 'ipool' });
       for (const id of GM.ITEMS_MAIN.concat(GM.ITEMS_EXTRA)) {
         const on = lo.items.includes(id), full = !on && lo.items.length >= 6;
         pool.appendChild(h('button', {
-          type: 'button', class: 'iopt' + (on ? ' on' : '') + (full ? ' dis' : ''), 'data-tip': full ? t('tip.itemsFull') : t('item.' + id),
+          type: 'button', class: 'iopt' + (on ? ' on' : '') + (full ? ' dis' : ''), 'data-tip': full ? t('tip.itemsFull') : t('item.' + id), draggable: on ? null : 'true',
+          ondragstart: ev => dragStart(ev, { id }, ev.currentTarget), ondragend: endDrag,
           onclick: () => {
             if (on) lo.items = lo.items.filter(x => x !== id);
-            else {
-              if (lo.items.length >= 6) { flash(t('tip.itemsFull')); return; }
-              if (IT.Loadout.BOOTS.includes(id)) lo.items = lo.items.filter(x => !IT.Loadout.BOOTS.includes(x));
-              if (lo.items.length >= 6) { flash(t('tip.itemsFull')); return; }
-              lo.items.push(id);
-            }
+            else if (!addItem(id)) return;
             changed();
           },
         }, icon(id), h('span', { text: t('item.' + id) })));
       }
-      itemBox.appendChild(pool);
+      itemBox.appendChild(h('div', { class: 'islotbox' }, slots));
+      itemBox.appendChild(h('div', { class: 'icat', ondragover: ev => { if (dragging && dragging.from != null) ev.preventDefault(); }, ondrop: dropRemove }, pool));
+      const pane = itemBox.closest('.pane');
+      if (pane && !pane._dnd) {
+        pane._dnd = true;
+        pane.addEventListener('dragover', ev => { if (dragging && dragging.from != null) ev.preventDefault(); });
+        pane.addEventListener('drop', dropRemove);
+      }
     }
 
     // ---- enemies (Free Play): one row per enemy = skin picker + difficulty + remove; max EnemyCard.MAX. They are on the map at the start.

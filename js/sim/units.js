@@ -531,6 +531,23 @@
     const it = e.items.find(x => x && x.id === id); if (it) it.cd = e.cd[id];
     w.emit('itemUse', { unit: e.id, ability: id });
     def.cast(w, e, id === 'forcestaff' ? { target: e.id } : o);
+    if (id === 'dust' && it) e.items[e.items.indexOf(it)] = null;   // one charge: consumed (the HUD card drops it)
+    return true;
+  }
+
+  // v6 enemy Dust of Appearance (fair + telegraphed). A chaser that LOST the invisible hero (Ghost Walk / Shadow Blade, not plain fog)
+  // walks to the last-seen spot L {x, y, t: when the team last saw it}; standing there (ENEMY.dustAt) it waits out its reaction time
+  // counted from L.t, then telegraphs ('telegraph' event: the "Dust!" shout, e.telegraph s lead) and casts the item at its own feet:
+  // IT.Items 'dust' puts 'revealed' + slow on every enemy within KV radius, so IT.Vision.teamSees sees a hero that stayed close. One charge
+  // per scenario. -> true while the carrier holds the spot for it (waiting / telegraphing / just cast), false = carry on searching.
+  function useDust(w, e, L) {
+    const a = e.ai, h = w.hero;
+    if (e.tele) return e.tele.item === 'dust';
+    if (a.dustUsed || !L || !h || h.dead || !e.items || !e.items.some(s => s && s.id === 'dust') || !IT.Status.hidden(h)) return false;
+    if (U.dist(e, L) > GM().ENEMY.dustAt || disabled(e)) return false;
+    if (w.t < (L.t || 0) + (e.reaction || 0) - 1e-9) return true;
+    if (!useItem(w, e, 'dust', {})) return false;
+    a.dustUsed = true;
     return true;
   }
   function tickTele(w, e) {
@@ -663,6 +680,6 @@
   });
 
   IT.Units = {
-    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

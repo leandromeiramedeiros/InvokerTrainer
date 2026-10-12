@@ -63,7 +63,7 @@
     }
     const lo = IT.Loadout.normalize(scn ? pr.lo : opts.loadout);
     const map = IT.Maps.get((scn ? pr.sc.map : opts.map) || 'grounds');
-    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: scn ? pr.fog : opts.fog !== false, autoAttack: set.autoAttack });
+    const w = IT.World.create({ seed: (Math.random() * 1e9) | 0, map, loadout: lo, fog: IT.Ranked.worldFog(opts, scn ? pr : null), autoAttack: set.autoAttack });
     const sp = map.spawns.hero;
     const hero = IT.Hero.create(w, lo, sp.x, sp.y);
     g = { w, hero, opts, lo, mode: opts.mode, grant: opts.grant, cam: IT.Camera.create(map), ended: false, committed: false, R: null, cv, run, menu: false, quiet: false, failAt: {} };
@@ -137,23 +137,28 @@
     g = null;
   }
 
-  function commitStats() {
+  // v6 WP6: a finished ranked run also records its per-run medal (lifetime runs / best medal); relic deltas ride in st.relics
+  function commitStats(modeInfo) {
     if (!g || g.committed) return null;
     g.committed = true;
     const st = g.w._stats ? g.w._stats.summary() : null;
-    if (st && st.time > 1) IT.UI.Life.add(st);
+    if (st && modeInfo && modeInfo.mode === 'ranked' && IT.Ranks && IT.Ranks.fromRun) {
+      st.run = { mode: 'ranked', score: Math.round(modeInfo.score || 0), solved: modeInfo.solved | 0, turns: modeInfo.turns || 8, medal: IT.Ranks.fromRun(modeInfo) };
+    }
+    try { const L = IT.UI.Life.load(); g.prevBest = (L && L.bestMedal) || null; } catch (e) { g.prevBest = null; }
+    if (st && (st.time > 1 || st.run)) IT.UI.Life.add(st);
     return st;
   }
 
   function finish(modeInfo) {
     if (!g || g.ended) return;
     g.ended = true;
-    const st = commitStats() || (IT.StatsCollector ? IT.StatsCollector.blank() : null);
+    const st = commitStats(modeInfo) || (IT.StatsCollector ? IT.StatsCollector.blank() : null);
     g.w.paused = true; IT.Input.enabled = false; g.menu = false;
     aimG.clearRect(0, 0, aimCv.width, aimCv.height);
     if (IT.Music) { IT.Music.intensity(0); music('menu'); }
     state = 'end';
-    const info = { stats: st, mode: modeInfo };
+    const info = { stats: st, mode: modeInfo, prevBest: g.prevBest || null };
     UI.clear();
     UI.push(() => IT.UI.endScreen(info), true);
   }

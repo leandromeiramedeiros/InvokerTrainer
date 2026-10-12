@@ -235,6 +235,8 @@
       ['Fast hands. Annoying.', 'Mãos rápidas. Irritante.'],
       ['Remind me to stay away from you.', 'Me lembra de ficar longe de você.'],
     ],
+    // v6: an enemy shouts this as it telegraphs Dust of Appearance (not a taunt category: DummyChat.CATS leaves it out)
+    dust: [['Dust!', 'Pó!']],
   };
   const dcEn = {}, dcPt = {};
   for (const cat in DC) DC[cat].forEach((l, i) => { dcEn['dc.' + cat + '.' + i] = l[0]; dcPt['dc.' + cat + '.' + i] = l[1]; });

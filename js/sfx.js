@@ -12,6 +12,21 @@
   const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   // Voices live in js/sfxvoices.js (loaded first); this file only maps sim events to them.
+  // v6 WP6: one relic-tier fanfare (short, soft: a brass-ish triad + bell sparkle, under the action; higher tier = one more note)
+  if (SFX && SFX.define && SFX.T && SFX.N) {
+    const T = SFX.T, N = SFX.N;
+    SFX.define('relicTier', b => {
+      const tier = Math.max(1, Math.min(5, (b.opt && b.opt.tier) || 1)), notes = [523.25, 659.25, 783.99, 1046.5, 1318.5].slice(0, 2 + Math.min(3, tier));
+      notes.forEach((f, i) => {
+        const at = i * 0.075;
+        T(b, { type: 'sawtooth', f, d: 0.32, g: 0.035, a: 0.012, at, lp: 2200 });
+        T(b, { type: 'sine', f, d: 0.6, g: 0.06, a: 0.002, at, mr: 3.5, mi: 1, mdec: 0.03 });
+      });
+      const end = notes.length * 0.075;
+      T(b, { type: 'triangle', f: notes[notes.length - 1] * 2, d: 0.7, g: 0.035, a: 0.004, at: end });
+      N(b, { nk: 'pink', ft: 'highpass', f: 6000, d: 0.5, g: 0.03, at: end, q: 0.7 });
+    });
+  }
 
   // ---------------------------------------------------------------- engine
 
@@ -110,6 +125,13 @@
       return h;
     },
     stopLoops() { for (const h of loops) h.stop(); loops = []; trk = []; },
+    // relic tier completed (js/ui/relics.js toast): unpositioned, quiet, at most one per 400 ms
+    relic(tier) {
+      if (!SFX || !SFX.playEx || !SFX.has('relicTier') || !soundOn() || !once('relicTier', 400)) return false;
+      this.calls++;
+      SFX.playEx('relicTier', { vol: 0.7, pan: 0, tier, verb: 0.3, prio: 1 });
+      return true;
+    },
     detach() {
       for (const f of off) { try { f(); } catch (e) {} }
       off = []; clearInterval(timer); clearInterval(trkTimer); timer = trkTimer = 0; this.stopLoops(); this.w = null;

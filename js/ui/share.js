@@ -1,4 +1,5 @@
-// Share image for the end splash: a 1200x630 canvas card (medal, rank, key stats, difficulty, ornaments that grow with the rank / clears)
+// Share image for the end splash: a 1200x630 canvas card (this run's medal, score / cleared, total damage + top 3 spells with icons,
+// difficulty, ornaments that grow with the medal / clears)
 // saved through a blob link as invoker-trainer-<date>.png. No network.
 (function (G) {
   'use strict';
@@ -10,6 +11,7 @@
   function prng(seed) { let s = (seed | 0) || 1; return () => { s = (Math.imul(s, 1664525) + 1013904223) | 0; return ((s >>> 0) % 100000) / 100000; }; }
 
   const pad2 = n => String(n).padStart(2, '0');
+  const fmtN = n => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const stamp = d => { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
   const filename = d => 'invoker-trainer-' + stamp(d) + '.png';
 
@@ -86,24 +88,39 @@
         c.imageSmoothingEnabled = false; c.save(); c.shadowColor = p.hi; c.shadowBlur = 36;
         c.drawImage(m, cx - 160, cy - 180, 320, 320); c.restore();
       } catch (e) { /* medal art optional */ }
-      txt(c, d.rankName, cx, cy + 190, 40, p.hi, 'center', true, 440);
-      if (d.rating != null) {
-        const dl = d.delta || 0;
-        txt(c, t('end.rating') + ' ' + d.rating + (dl ? '  ' + (dl > 0 ? '+' : '') + dl : ''), cx, cy + 228, 24, dl > 0 ? '#7bd88f' : dl < 0 ? '#ff7a7a' : '#cfd6dc', 'center', true, 440);
-      }
+      txt(c, t('share.medal'), cx, cy + 172, 20, '#9aa6b4', 'center', true, 440);
+      txt(c, d.rankName, cx, cy + 214, 40, p.hi, 'center', true, 440);
     }
-    // title + stat grid on the right
-    const x0 = 640;
-    txt(c, t('share.brand'), x0, 92, 22, p.lo, 'left', true);
-    txt(c, t(inf ? 'end.sp.infinite' : 'end.sp.ranked'), x0, 138, 34, '#f1f4f8', 'left', true, 520);
-    const tiles = d.tiles.slice(0, 6), cw = 260, ch = 112;
-    tiles.forEach((tl, i) => {
-      const x = x0 + (i % 2) * (cw + 16), y = 175 + Math.floor(i / 2) * (ch + 14);
-      c.fillStyle = 'rgba(8,10,14,0.62)'; c.fillRect(x, y, cw, ch);
-      c.strokeStyle = p.lo; c.globalAlpha = 0.6; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1); c.globalAlpha = 1;
-      txt(c, tl.label, x + 16, y + 32, 18, '#9aa6b4', 'left', false, cw - 32);
-      txt(c, tl.text, x + 16, y + 88, i === 0 ? 54 : 46, i === 0 ? p.hi : '#f1f4f8', 'left', true, cw - 32);
+    // title + stat tiles + damage on the right
+    const x0 = 640, cw = 260, ch = 92;
+    txt(c, t('share.brand'), x0, 80, 22, p.lo, 'left', true);
+    txt(c, t(inf ? 'end.sp.infinite' : 'end.sp.ranked'), x0, 122, 32, '#f1f4f8', 'left', true, 520);
+    const box = (x, y, w, hh) => {
+      c.fillStyle = 'rgba(8,10,14,0.62)'; c.fillRect(x, y, w, hh);
+      c.strokeStyle = p.lo; c.globalAlpha = 0.6; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, w - 1, hh - 1); c.globalAlpha = 1;
+    };
+    d.tiles.slice(0, 2).forEach((tl, i) => {
+      const x = x0 + i * (cw + 16), y = 148;
+      box(x, y, cw, ch);
+      txt(c, tl.label, x + 16, y + 28, 17, '#9aa6b4', 'left', false, cw - 32);
+      txt(c, tl.text, x + 16, y + 76, i === 0 ? 46 : 40, i === 0 ? p.hi : '#f1f4f8', 'left', true, cw - 32);
     });
+    // total damage + top 3 spells (icon, name, bar, value)
+    const y1 = 256, wd = cw * 2 + 16, top = (d.topSpells || []).slice(0, 3);
+    box(x0, y1, wd, 84 + Math.max(1, top.length) * 52);
+    txt(c, t('share.dmg'), x0 + 16, y1 + 30, 17, '#9aa6b4', 'left', false, 240);
+    txt(c, fmtN(d.dmgTotal || 0), x0 + wd - 16, y1 + 34, 34, p.hi, 'right', true, 260);
+    txt(c, t('share.topSpells'), x0 + 16, y1 + 66, 15, '#9aa6b4', 'left', false, 240);
+    const max = top.length ? top[0].v || 1 : 1;
+    top.forEach((sp, i) => {
+      const y = y1 + 80 + i * 52;
+      try { const ic = IT.Art && IT.Art.canvas('icons', sp.icon); if (ic) { c.imageSmoothingEnabled = false; c.drawImage(ic, x0 + 16, y, 40, 40); } } catch (e) { /* icon optional */ }
+      txt(c, sp.label, x0 + 68, y + 18, 19, '#f1f4f8', 'left', true, 250);
+      c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(x0 + 68, y + 28, wd - 200, 8);
+      c.fillStyle = p.hi; c.fillRect(x0 + 68, y + 28, Math.max(4, (wd - 200) * sp.v / max), 8);
+      txt(c, fmtN(sp.v), x0 + wd - 16, y + 34, 22, '#f1f4f8', 'right', true, 120);
+    });
+    if (!top.length) txt(c, t('end.sp.noDmg'), x0 + 16, y1 + 110, 18, '#9aa6b4', 'left', false, wd - 32);
     // footer: difficulty / level / date
     const dn = d.diff && IT.hasT('dtier.' + d.diff) ? t('dtier.' + d.diff) : d.diff || '';
     const foot = [dn ? t('share.diff') + ': ' + dn : '', d.level ? t('share.level') + ' ' + d.level : '', stamp()].filter(Boolean).join('   |   ');

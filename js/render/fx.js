@@ -199,6 +199,15 @@
         burst(x, y, 'gold', 40, { spread: 20, up: 90 });
         break;
       case 'atosDodged': case 'hexBlocked': case 'atosBlocked': burst(x, y, 'white', 8, { spread: 10, speed: 30, up: 40 }); break;
+      case 'dustBlast': {   // Dust of Appearance (player or enemy): a sparkling cloud bursts out to the reveal radius and hangs there a moment
+        const r = p.r || 1050;
+        addFx({ k: 'wave', x, y, r0: r * 0.08, r1: r, dur: 0.7, color: '#f0e2b0' });
+        addFx({ k: 'cloud', x, y, r, dur: 1.8, color: '#e8d49a' });
+        addFx({ k: 'flash', x, y, r: 160, dur: 0.4, color: '#fff2c0' });
+        burst(x, y, 'gold', 60, { spread: Math.min(r * 0.3, 240), speed: 45, up: 90, life: 1.1, rest: 3 });
+        burst(x, y, 'dirt', 26, { spread: 70, speed: 40, up: 70, rest: 2 });
+        break;
+      }
       case 'cataclysm': addFx({ k: 'wave', x, y, r0: 20, r1: 300, dur: 0.6, color: '#ffd070' }); break;
       case 'blinkStart': case 'blinkEnd': break;
       case 'iceWallEnd': burst(x, y, 'ice', 40, { spread: 80, speed: 40, up: 60 }); break;
@@ -461,6 +470,9 @@
       if (f.k === 'wave') {
         const r = (f.r0 + (f.r1 - f.r0) * Math.sqrt(age)) / R.P;
         dring(R, x, y, r, f.color, 1 - age); dring(R, x, y, r - 1, f.color, (1 - age) * 0.5);
+      } else if (f.k === 'cloud') {   // dust cloud edge: the reveal radius, dithered, fading
+        const r = f.r / R.P;
+        dring(R, x, y, r, f.color, 0.85 * (1 - age)); dring(R, x, y, r * 0.66, f.color, 0.3 * (1 - age)); dring(R, x, y, r * 0.33, f.color, 0.2 * (1 - age));
       } else if (f.k === 'pillar' && age < 0.5) {
         ddisc(R, x, y, f.r / R.P * (0.5 + age), '#ff9a30', 0.5 * (1 - age * 2));
       } else if (f.k === 'ping') {

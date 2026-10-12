@@ -176,8 +176,19 @@
 
   // ---------------------------------------------------------------- v6: destroyTower timer math (pure; see DECISIONS.md "v6 WP1")
   // tAttack = walk into attack range + tower hp / (hero auto-attack dps x 0.5 reinforced, tower armor);
-  // tCombo  = walk + cast points (+ channels) + tower hp / (hero with Alacrity x 0.5 + Forge Spirits x 0.6) dps.
+  // tCombo  = walk + cast points (+ channels) + the fight: (hero with Alacrity x 0.5 + Forge Spirits x 0.6) dps, plus Meteor Hammer's building
+  //           damage when a step channels it (KV impact_damage_buildings on landing (land_time after the channel) + burn_dps_buildings for
+  //           burn_duration, magical: towers have 0 magic resistance); tHammer = the same with Meteor Hammer + plain hero attacks only.
   // A scenario's limit must satisfy tCombo x 1.25 <= limit < tAttack (tests/ceo_v6_core.test.js).
+  // s to bring `hp` down at `dps` (+ the hammer {impact, burn, dur, land}: impact at `land`, burn per second after it)
+  function fightTime(hp, dps, ham) {
+    if (!ham) return hp / dps;
+    const dealt = t => dps * t + (t >= ham.land ? ham.impact + ham.burn * Math.min(ham.dur, Math.floor(t - ham.land + 1e-9)) : 0);
+    let lo = 0, hi = hp / dps;
+    if (dealt(hi) < hp) return hi;
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (dealt(m) >= hp) hi = m; else lo = m; }
+    return hi;
+  }
   function towerMath(sc, df, lo) {
     lo = lo || prepare(sc, df).lo;
     const ctx = IT.Loadout.ctx(lo), V = IT.Values, T = IT.Towers.TIERS[1], hp = sc.towerHp || T.hp;
@@ -189,16 +200,19 @@
     const plain = attackDps(ctx, T.armor, false), combo = attackDps(ctx, T.armor, has('alacrity'));
     const tAttack = walk + hp / (plain.hero * 0.5);
     const spirits = has('forgespirit') ? combo.count * combo.spirit * 0.6 : 0;
+    const MH = IT.GAME.ITEM_DOTA.meteorhammer, gi = k => { try { return num(V.item(MH, k)); } catch (e) { return 0; } };
+    const ham = has('meteorhammer') ? { impact: gi('impact_damage_buildings'), burn: gi('burn_dps_buildings') * (gi('burn_interval') || 1), dur: gi('burn_duration') / (gi('burn_interval') || 1), land: gi('land_time') } : null;
+    const castOf = a => { const id = SPELL_DOTA[a] || IT.GAME.ITEM_DOTA[a]; return num(V.castPoint && V.castPoint(id, ctx)) + num(V.channelTime && V.channelTime(id, ctx)) + (a === 'meteorhammer' ? gi('max_duration') : 0); };   // item channel (KV max_duration)
     let setup = 0;
-    for (const s of steps) {
-      if (s.a === 'move' || s.a === 'attack') continue;
-      const id = SPELL_DOTA[s.a] || IT.GAME.ITEM_DOTA[s.a];
-      setup += num(V.castPoint && V.castPoint(id, ctx)) + num(V.channelTime && V.channelTime(id, ctx));
-      if (s.a === 'meteorhammer') { try { setup += num(V.item(id, 'max_duration')); } catch (e) { /* no KV */ } }   // item channel (KV max_duration)
-    }
-    const tCombo = walk + setup + hp / (combo.hero * 0.5 + spirits);
-    return { hp, walk, setup, tAttack, tCombo, limit: sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK) };
+    for (const s of steps) if (s.a !== 'move' && s.a !== 'attack') setup += castOf(s.a);
+    const tCombo = walk + setup + fightTime(hp, combo.hero * 0.5 + spirits, ham);
+    const tHammer = ham ? walk + castOf('meteorhammer') + fightTime(hp, plain.hero * 0.5, ham) : null;
+    return { hp, walk, setup, tAttack, tCombo, tHammer, hammer: ham ? ham.impact + ham.burn * ham.dur : 0, limit: sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK) };
   }
+
+  // world fog for main.js start(): a scenario run (ranked / infinite / sandbox scenario: `pr` = its first prepared scenario) always uses the
+  // scenario's fog (always on, v6); only Free Play (pr null) honours the loadout's "Fog of war" checkbox (opts.fog, default on)
+  const worldFog = (opts, pr) => (pr ? pr.fog !== false : !(opts && opts.fog === false));
 
   // tier dummy behaviour -> enemy NPC behaviour ('evasive' foes wander and dodge ground danger on foot)
   const ENEMY_BEHAVIOR = { stationary: 'stationary', wander: 'wander', evasive: 'wander' };
@@ -636,10 +650,12 @@
     function chase(w, d, h, seen) {
       const c = d.scn;
       if (seen) { c.lastSeen = { x: h.x, y: h.y, t: w.t }; c.search = null; IT.Orders.issue(w, d, { type: 'move', x: h.x, y: h.y }); return; }
-      if (!c.lastSeen) c.lastSeen = { x: d.x, y: d.y, t: w.t };   // never saw it: search around itself
+      if (!c.lastSeen) c.lastSeen = { x: d.x, y: d.y, t: w.t, own: true };   // never saw it: search around itself
       const L = c.lastSeen;
       if (!c.search) {
         if (Math.hypot(d.x - L.x, d.y - L.y) > 60) { IT.Orders.issue(w, d, { type: 'move', x: L.x, y: L.y }); return; }
+        // a Dust carrier holds the last-seen spot for its reaction time + telegraph, dusts it once (IT.Units.useDust), then searches
+        if (!L.own && IT.Units.useDust(w, d, L)) { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
         c.search = { t0: w.t, k: 0, to: null };
       }
       const S = c.search, o = d.orders[0];
@@ -732,6 +748,6 @@
     streakMult, scenarioScore, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     profile, record, reset, load, prepare, apply, create, hud, spot, arenas, TWISTS,
-    comboDamage, foeHp, towerMath, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, ATTACK_WINDOW,
+    comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, ATTACK_WINDOW,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

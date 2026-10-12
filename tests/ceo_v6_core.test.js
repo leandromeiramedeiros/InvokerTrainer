@@ -266,3 +266,131 @@ test('9: >= 4 fun-tagged scenarios in every 8-turn ranked run (50 seeds)', () =>
     assert.ok(fun >= R.FUN_TURNS, 'seed ' + seed + ' rating ' + rating + ': ' + fun);
   }
 });
+
+// ---------------------------------------------------------------- 10. v6 follow-ups: enemy Dust, Meteor Hammer in the tower math, Free Play fog
+// Dust escape harness: the run sees the hero, then it turns invisible (Ghost Walk) and is put `off` u from the last-seen spot, away from the
+// carrier. Returns the dust casts ({t, x, y}), the telegraph shouts, the last-seen spot, the carrier and the result.
+function dustRun(id, diff, off, secs, after) {
+  const sc = SC.get(id), t0 = sc.obj.time;
+  sc.obj.time = 60;
+  try {
+    const m = build(id, diff); thaw(m.run);
+    const { w, h, run } = m, d = run.dummies.find(u => u.items && u.items.some(s => s && s.id === 'dust'));
+    const casts = [], shouts = [];
+    w.on('itemUse', p => { if (p.ability === 'dust') { const u = w.get(p.unit); casts.push({ t: w.t, x: u.x, y: u.y, unit: p.unit }); } });
+    w.on('telegraph', p => { if (p.item === 'dust') shouts.push(w.t); });
+    for (let i = 0; i < 30 && !d.scn.lastSeen; i++) w.step();    // the chasers see the hero (the scripted chase records the spot)
+    assert.ok(R.heroSeen(w) && d.scn.lastSeen && !d.scn.lastSeen.own, id + ': seen at first');
+    IT.Status.add(w, h, 'ghost', 60, {});
+    const L = { x: h.x, y: h.y }, Lseen = Object.assign({}, d.scn.lastSeen);
+    if (off > 0) {
+      const dx = h.x - d.x, dy = h.y - d.y, l = Math.hypot(dx, dy) || 1;
+      let p = { x: L.x + dx / l * off, y: L.y + dy / l * off };
+      if (!w.map.walkable(p.x, p.y)) p = IT.Nav.nearestWalkable(w.map, p.x, p.y);
+      h.x = p.x; h.y = p.y;
+    }
+    h.orders.length = 0; h.path.length = 0;
+    let seenAfter = false;
+    for (let i = 0; i < secs * 30 && !run.result; i++) {
+      w.step();
+      if (casts.length && R.heroSeen(w)) seenAfter = true;
+      if (after) after(m, casts);
+    }
+    return { m, d, casts, shouts, L, Lseen, seenAfter, result: run.result };
+  } finally { sc.obj.time = t0; }
+}
+
+test('10: Dust only on the labelled escape scenarios (one carrier each), texts say so; ENEMY_ITEMS has dust', () => {
+  assert.ok(IT.GAME.ENEMY_ITEMS.includes('dust'));
+  const carriers = SC.filter(s => (s.units || []).some(u => (u.items || []).includes('dust'))).map(s => s.id).sort();
+  assert.deepEqual(carriers, ['dust_escape', 'plateau_escape']);
+  for (const id of carriers) {
+    const sc = SC.get(id);
+    assert.equal(sc.obj.type, 'escape', id);
+    assert.equal(sc.units.filter(u => (u.items || []).includes('dust')).length, 1, id + ': exactly one carrier');
+    assert.ok(sc.units.length >= 2, id);
+    assert.match(sc.desc.en, /Dust/, id); assert.match(sc.desc.pt, /Dust/, id); assert.match(sc.flair.en, /Dust/, id);
+  }
+  assert.ok(IT.I18N.en['dc.dust.0'] && IT.I18N.pt['dc.dust.0'] && IT.I18N.en['dc.dust.0'] !== IT.I18N.pt['dc.dust.0']);
+  const m = build('dust_escape', 'easy'); thaw(m.run);
+  assert.ok(m.run.dummies[0].items.some(s => s && s.id === 'dust'), 'the HUD-readable enemy slot holds Dust');
+});
+
+test('10: Dust at the last-seen spot after reaction + telegraph: a hero inside the KV radius is revealed and caught', () => {
+  const R0 = IT.Values.item(IT.GAME.ITEM_DOTA.dust, 'radius'), df = DF.get('common');
+  assert.ok(R0 > 500, 'KV radius ' + R0);
+  const r = dustRun('dust_escape', 'common', 500, 20);
+  assert.equal(r.casts.length, 1, 'dusted once');
+  const c = r.casts[0];
+  assert.ok(Math.hypot(c.x - r.L.x, c.y - r.L.y) <= IT.GAME.ENEMY.dustAt + 1, 'cast at the last-seen spot (' + Math.hypot(c.x - r.L.x, c.y - r.L.y).toFixed(0) + ')');
+  assert.ok(c.t >= r.Lseen.t + df.reaction + df.telegraph - 0.05, 'after reaction + telegraph: ' + c.t.toFixed(2) + ' vs lost ' + r.Lseen.t.toFixed(2));
+  assert.equal(r.shouts.length, 1, 'telegraphed ("Dust!")');
+  assert.ok(r.seenAfter, 'the dusted hero is seen');
+  assert.ok(r.result && r.result.reason === 'caught', 'caught: ' + JSON.stringify(r.result));
+  assert.ok(!r.d.items.some(s => s && s.id === 'dust'), 'the charge is consumed');
+});
+
+test('10: a hero that kept moving (500 u beyond the dust radius) is never revealed nor caught', () => {
+  const R0 = IT.Values.item(IT.GAME.ITEM_DOTA.dust, 'radius');
+  const r = dustRun('dust_escape', 'common', R0 + 500, 20, (m) => assert.ok(!IT.Status.revealed(m.h), 'revealed at ' + m.w.t.toFixed(1)));
+  assert.equal(r.casts.length, 1, 'the carrier still dusts the spot');
+  assert.ok(!r.seenAfter, 'never seen');
+  assert.ok(!(r.result && r.result.reason === 'caught'), 'never caught');
+});
+
+test('10: Dust is used at most once per scenario; never on a visible hero or away from the spot', () => {
+  // seen -> ghost -> dusted -> seen again -> ghost again: still one cast
+  let again = false;
+  const r = dustRun('dust_escape', 'common', 1600, 25, (m, casts) => {
+    if (casts.length && !again && m.w.t > casts[0].t + 2) {
+      again = true;
+      IT.Status.remove(m.w, m.h, 'ghost'); IT.Status.remove(m.w, m.h, 'revealed');
+      const d = m.run.dummies[0]; m.h.x = d.x + 300; m.h.y = d.y;    // in plain sight again, out of CAUGHT
+      for (let i = 0; i < 14; i++) m.w.step();
+      IT.Status.add(m.w, m.h, 'ghost', 60, {});
+    }
+  });
+  assert.ok(again, 'the second loss happened');
+  assert.equal(r.casts.length, 1);
+  const m = build('dust_escape', 'common'); thaw(m.run);
+  let n = 0; m.w.on('itemUse', p => { if (p.ability === 'dust') n++; });
+  step(m.w, 10);
+  const d = m.run.dummies[0];
+  assert.equal(IT.Units.useDust(m.w, d, { x: d.x, y: d.y, t: -9 }), false, 'visible hero: no dust');
+  IT.Status.add(m.w, m.h, 'ghost', 60, {});
+  assert.equal(IT.Units.useDust(m.w, d, { x: d.x + 500, y: d.y, t: -9 }), false, 'not standing at the spot');
+  assert.equal(n, 0);
+});
+
+// ---------------------------------------------------------------- 10. tower math with Meteor Hammer vs buildings
+test('10: towerMath counts Meteor Hammer building damage (KV impact + burn x duration); tower_siege needs the full combo', () => {
+  const sc = SC.get('tower_siege'), gi = k => IT.Values.item(IT.GAME.ITEM_DOTA.meteorhammer, k);
+  for (const id of DIFFS) {
+    const t = R.towerMath(sc, DF.get(id));
+    assert.equal(t.hammer, gi('impact_damage_buildings') + gi('burn_dps_buildings') * gi('burn_duration'), id);
+    const noHam = R.towerMath(Object.assign({}, sc, { steps: sc.steps.filter(s => s.a !== 'meteorhammer') }), DF.get(id));
+    assert.ok(t.tCombo - t.setup < noHam.tCombo - noHam.setup, id + ': the hammer shortens the fight');
+    assert.ok(t.tCombo * 1.25 <= t.limit && t.limit < t.tHammer && t.tHammer < t.tAttack,
+      id + ': ' + [t.tCombo * 1.25, t.limit, t.tHammer, t.tAttack].map(v => v.toFixed(2)).join(' / '));
+  }
+  assert.ok(Math.abs(R.fightTime(100, 10, null) - 10) < 1e-9);
+  assert.ok(Math.abs(R.fightTime(390, 100, { impact: 90, burn: 50, dur: 6, land: 0 }) - 2) < 1e-6, '90 impact + 2 burn ticks + 2 s of hits');
+});
+
+// ---------------------------------------------------------------- 10. Free Play fog toggle
+test('10: the Free Play "Fog of war" checkbox is honoured only in Free Play; scenario runs keep fog on', () => {
+  assert.equal(R.worldFog({ mode: 'sandbox', fog: false }, null), false);
+  assert.equal(R.worldFog({ mode: 'sandbox', fog: true }, null), true);
+  assert.equal(R.worldFog({ mode: 'sandbox' }, null), true, 'default on');
+  for (const mode of ['ranked', 'infinite', 'sandbox']) {
+    const sid = mode === 'sandbox' ? 'ghost_slip' : undefined;
+    const run = R.create({ mode, diff: 'easy', scenario: sid, seed: 4 }), pr = run.next();
+    assert.equal(R.worldFog({ mode, fog: false, scenario: sid || null }, pr), true, mode);
+  }
+  const fs = require('fs'), path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
+  assert.match(src, /fog: IT\.Ranked\.worldFog\(opts, scn \? pr : null\)/, 'main.js start() uses worldFog');
+  assert.match(src, /const isScn = o => o\.mode === 'ranked' \|\| o\.mode === 'infinite' \|\| \(o\.mode === 'sandbox' && !!o\.scenario\)/);
+  const lo = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'loadout.js'), 'utf8');
+  assert.match(lo, /mode: 'sandbox', count: 1, fog: st\.fog/, 'Free Play passes the checkbox as opts.fog');
+});

@@ -148,12 +148,13 @@ test('curated stats (pure): the few numbers worth showing, in order, omitting wh
   };
   const m = { mode: 'ranked', score: 4321.7, solved: 6, turns: 8, bestStreak: 5, rank: { after: { rank: { tier: 3, stars: 2 } } } };
   const c = IT.StatsCollector.curated(S, m);
-  assert.deepEqual(c.tiles.map(x => x.id), ['score', 'cleared', 'streak', 'apm', 'fastest', 'sun', 'meteor']);
+  // v6 WP6: no per-spell accuracy tiles (damage by spell replaces them)
+  assert.deepEqual(c.tiles.map(x => x.id), ['score', 'cleared', 'streak', 'apm', 'fastest']);
   const by = id => c.tiles.find(x => x.id === id);
   assert.equal(by('score').v, 4322); assert.equal(by('cleared').v, 6); assert.equal(by('cleared').of, 8); assert.equal(by('streak').v, 5);
   assert.equal(by('apm').v, 142.6); assert.equal(by('fastest').v, 2.46);
-  assert.equal(by('sun').v, 0.75); assert.equal(by('sun').n, 6); assert.equal(by('meteor').v, 0.25);
-  assert.equal(c.cleared, 6); assert.equal(c.ornament, 3);
+  // v6 WP6: the ornament is this run's medal tier (score tier 7 capped by 6/8 cleared -> Legend)
+  assert.equal(c.cleared, 6); assert.equal(c.ornament, 5); assert.equal(c.medal.tier, 5);
   // nothing recorded: only score + streak
   const e = IT.StatsCollector.curated(IT.StatsCollector.blank(), { mode: 'ranked', score: 0, solved: 0, turns: 8, bestStreak: 0 });
   assert.deepEqual(e.tiles.map(x => x.id), ['score', 'cleared', 'streak']);
@@ -209,7 +210,9 @@ test('i18n: the end pack has the same keys in en and pt, and covers every key th
   for (const k of en) { assert.ok(pack.en[k] && pack.pt[k], k); assert.equal((pack.en[k].match(/\{\w+\}/g) || []).join(), (pack.pt[k].match(/\{\w+\}/g) || []).join(), 'placeholders ' + k); }
   let v6 = null;   // end.btn.infinite.d lives in the v6 pack
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/data/i18n/v6.js'), 'utf8'), vm.createContext({ IT: { i18nAdd: p => { v6 = p; } } }));
-  const all = en.concat(Object.keys(v6.en));
+  let rl = null;   // v6 WP6: damage / medal / relics keys live in the relics pack
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/data/i18n/relics.js'), 'utf8'), vm.createContext({ IT: { i18nAdd: p => { rl = p; } } }));
+  const all = en.concat(Object.keys(v6.en), Object.keys(rl.en));
   for (const f of ['js/ui/endsplash.js', 'js/ui/share.js']) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
     for (const mt of src.matchAll(/\bt\('((?:end\.sp|end\.btn|share)\.[a-zA-Z.]+)'/g)) assert.ok(all.includes(mt[1]), f + ' uses ' + mt[1]);

@@ -1,0 +1,38 @@
+// WP5 i18n pack: Aghanim's hood picker (orbs inside the hood drawing, upgrade explainers), orb bead, items drag and drop.
+// Upgrade texts are adapted from Dota's in-game Scepter / Shard explainer. en/pt key parity + placeholders are tested (tests/loadout_wp5.test.js).
+(function (G) { 'use strict'; const IT = G.IT; IT.i18nAdd({
+    en: {
+      'agh.up.sc.quas': 'Ice Wall becomes Ice Floe, vector targeted. After a delay it rises as a 150 wide Ice Wall; enemy heroes who stay inside get rooted and take magic damage.',
+      'agh.up.sc.wex': 'Tornado spawns twisters along its path. They last as long as the Tornado and hit enemies around them for {dmg} damage per second ({dur}s).',
+      'agh.up.sc.exort': 'Double-tap Sun Strike for a Cataclysm: {n} extra Sun Strikes ({pct}% damage) around each enemy hero. {cd}s cooldown.',
+      'agh.up.sh.ghostwalk': 'Ghost Walk also applies the Ice Wall damage per second ({dps}) to enemy heroes in its area.',
+      'agh.up.sh.emp': 'E.M.P. deals more damage per point of mana drained and pulls enemy units into its center ({drag} units per second).',
+      'agh.up.sh.sunstrike': 'If Sun Strike damages an enemy hero, a Forge Spirit of your current level is created at the location.',
+      'agh.up.none.sc': 'Click an orb once to put the Scepter on it (+1 orb level and a spell upgrade).',
+      'agh.up.none.sh': 'Click the same orb again to put the Shard on its spell (Quas Ghost Walk, Wex E.M.P., Exort Sun Strike).',
+      'agh.up.plus': '{orb} +1 level',
+      'agh.hood.o1': 'Click: Scepter on {orb}', 'agh.hood.o2': 'Click: Shard on {spell} too', 'agh.hood.o3': 'Click: remove Scepter and Shard', 'agh.hood.o4': 'Click: remove the Shard',
+      'agh.hood.gemS': 'Click to remove the Scepter', 'agh.hood.gemH': 'Click to remove the Shard',
+      'tip.maxOrb': 'Orbs max out at 7 spent levels (the Scepter adds a free +1).',
+      'lo.bead': 'Aghanim\'s Scepter: +1 free level',
+      'lo.itemsHint': 'Click an item to add it. Drag slots to reorder; drag an item out of the slots to remove it.',
+      'lo.itemSlotKey': 'Slot {n} ({key})', 'lo.itemDrag': 'Drag to move or remove', 'lo.itemCat': 'Items',
+    },
+    pt: {
+      'agh.up.sc.quas': 'Ice Wall vira Ice Floe, com alvo vetorial. Depois de um tempo ela surge como uma Ice Wall de 150 de largura; heróis inimigos que ficam dentro ficam presos e sofrem dano mágico.',
+      'agh.up.sc.wex': 'Tornado cria twisters ao longo do caminho. Duram o mesmo que o Tornado e atingem inimigos ao redor com {dmg} de dano por segundo ({dur}s).',
+      'agh.up.sc.exort': 'Toque duas vezes em Sun Strike para um Cataclysm: {n} Sun Strikes extras ({pct}% de dano) ao redor de cada herói inimigo. {cd}s de recarga.',
+      'agh.up.sh.ghostwalk': 'Ghost Walk também aplica o dano por segundo da Ice Wall ({dps}) a heróis inimigos na área.',
+      'agh.up.sh.emp': 'E.M.P. causa mais dano por ponto de mana drenado e puxa unidades inimigas para o centro ({drag} unidades por segundo).',
+      'agh.up.sh.sunstrike': 'Se Sun Strike causar dano a um herói inimigo, um Forge Spirit do seu nível atual é criado no local.',
+      'agh.up.none.sc': 'Clique em um orbe uma vez para pôr o Cetro nele (+1 nível de orbe e uma melhoria de magia).',
+      'agh.up.none.sh': 'Clique no mesmo orbe de novo para pôr o Fragmento na magia dele (Quas Ghost Walk, Wex E.M.P., Exort Sun Strike).',
+      'agh.up.plus': '{orb} +1 nível',
+      'agh.hood.o1': 'Clique: Cetro em {orb}', 'agh.hood.o2': 'Clique: Fragmento em {spell} também', 'agh.hood.o3': 'Clique: tirar Cetro e Fragmento', 'agh.hood.o4': 'Clique: tirar o Fragmento',
+      'agh.hood.gemS': 'Clique para tirar o Cetro', 'agh.hood.gemH': 'Clique para tirar o Fragmento',
+      'tip.maxOrb': 'Orbes chegam no máximo a 7 níveis gastos (o Cetro dá +1 grátis).',
+      'lo.bead': 'Cetro de Aghanim: +1 nível grátis',
+      'lo.itemsHint': 'Clique em um item para adicionar. Arraste os espaços para reordenar; arraste um item para fora dos espaços para remover.',
+      'lo.itemSlotKey': 'Espaço {n} ({key})', 'lo.itemDrag': 'Arraste para mover ou remover', 'lo.itemCat': 'Itens',
+    },
+  }); })(typeof window !== 'undefined' ? window : globalThis);
