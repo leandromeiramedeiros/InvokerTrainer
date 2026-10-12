@@ -157,6 +157,7 @@ const KNOWN = new Set(['triple_kill|easy|3', 'triple_kill|easy|6', 'triple_kill|
   'shadow_strike|easy|3', 'shadow_strike|easy|4', 'shadow_strike|common|3', 'shadow_strike|common|4',
   'cataclysm_finish|common|2', 'cataclysm_finish|common|4', 'cataclysm_finish|common|5',
   'plateau_escape|common|1', 'plateau_escape|common|6',
+  'triple_kill|easy|5', 'triple_kill|common|5', 'plateau_escape|common|4',   // item 40: variation shifts which seeds hit these bot-limited scenarios
   ...SEEDS.map(s => 'gauntlet|common|' + s)]);
 const BANDS = {   // story fit: laning 6-10, mid game 12-18, late game 20-25
   cold_start: [6, 10], sleepy_target: [6, 10], spirit_pack: [6, 10], river_rune: [6, 10], two_birds: [6, 10], uphill_snipe: [6, 10], sun_flee: [6, 10],

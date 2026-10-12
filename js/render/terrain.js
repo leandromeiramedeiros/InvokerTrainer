@@ -16,8 +16,20 @@
   const WATER = ['#1a4e92', '#205ca8', '#286abc'].map(A), SHORE = A('#4a8cd0'), FOAM = A('#8cc8ec');
   const RIVER = ['#2480c8', '#2e94d8', '#3ca8e4'].map(A), RIVER_EDGE = A('#7cd2f2'), RIVER_SAND = A('#c4ae6e'), RIVER_FOAM = A('#c4f0fc');
   const STONE = ['#5c5c6a', '#6a6a78', '#787886'].map(A), STONE_LINE = A('#3e3e4a'), STONE_HI = A('#9a9aac');
-  const ROCK = ['#463f56', '#544c66', '#625a76'].map(A);
-  const R_HI = A('#c2b8d8'), R_HI2 = A('#9c92b4'), R_FACE = A('#302a40'), R_FACE2 = A('#3a344c'), R_EDGE = A('#1c1824'), R_LEFT = A('#80769c');
+  // v6 cliffs (CEO 25): lit top lip (near white: survives the night tint and the fog darkening), 4 px dark vertical face on the low side,
+  // 1 px upper-tier outline, a cast-shadow gradient on the low ground, ambient occlusion at the base, graded ramp steps with side walls
+  const ROCK = ['#544e6c', '#625c7a', '#706a8a'].map(A);
+  const R_HI = A('#f8f2ff'), R_HI2 = A('#c4bae0'), R_FACE_T = A('#463f60'), R_FACE = A('#2a2440'), R_FACE2 = A('#352f50'), R_EDGE = A('#0c0814'), R_LEFT = A('#aba1ca');
+  const SAND = A('#c2aa6c');
+  // height tiers (0 low / 1 ground / 2 high): brightness and saturation offsets, ~6 % per tier, higher = lighter and warmer
+  const TIER_K = [0.94, 1, 1.06], TIER_S = [0.9, 1, 1.1];
+  // edge flags (see edgeFlags): rock tiles
+  const LIP_N = 1, FOOT_N = 2, FACE_S = 4, LIP_S = 8, LIP_W = 16, FOOT_W = 32, FACE_E = 64, LIP_E = 128;
+  // ground tiles beside rock: cast shadow / ambient occlusion on the low side, outline on the upper tier
+  const SHADOW_S = 1 << 8, AO_N = 1 << 9, OUTL_S = 1 << 10, AO_S = 1 << 11, SHADOW_E = 1 << 12, AO_W = 1 << 13, OUTL_E = 1 << 14, AO_E = 1 << 15;
+  // ground-to-ground height steps (ramps): this tile is higher (HI) / lower (LO) than the N,S,W,E neighbour; RAMP = flagged ramp tile
+  const HI_N = 1 << 16, HI_S = 1 << 17, HI_W = 1 << 18, HI_E = 1 << 19, LO_N = 1 << 20, LO_S = 1 << 21, LO_W = 1 << 22, LO_E = 1 << 23, RAMP = 1 << 24, CAST_S = 1 << 25;   // CAST_S: weak cast shadow south of a same-level rock (boulder)
+  const HI_ANY = HI_N | HI_S | HI_W | HI_E, LO_ANY = LO_N | LO_S | LO_W | LO_E;
 
   const TREE_PAL = [
     { hi: '#5aa844', mid: '#408a36', sh: '#2e6a2c', dp: '#1c4a22', ol: '#0a1a10' },
@@ -148,6 +160,63 @@
     return treeCache[key] || (treeCache[key] = bakeTree(fam, v, kb));
   }
 
+  const SH = [0.5, 0.64, 0.78, 0.9], AO = [0.74, 0.9], WALL = [0.5, 0.68, 0.86], RAMP_K = [1.1, 1.03, 0.95, 0.87];
+  const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];   // N S W E
+  const isWet = t => t === 3 || t === 5;
+
+  // Elevation of the first non-rock tile from (tx,ty) stepping (dx,dy) through rock; -1 when none within 8 tiles.
+  function across(map, tx, ty, dx, dy) {
+    for (let i = 1; i <= 8; i++) { const x = tx + dx * i, y = ty + dy * i; if (map.at(x, y) !== 2) return map.elevTile(x, y); }
+    return -1;
+  }
+  // Pure: edge flag bitmask of a tile (see the flag constants above). Rock: lip on the high side, face (south) or foot on the low side.
+  // Ground: cast shadow / AO beside rock on the low side, outline on the upper tier, height steps between ground tiles, ramp flag.
+  function edgeFlags(map, tx, ty) {
+    const t = map.at(tx, ty), up = map.at(tx, ty - 1), dn = map.at(tx, ty + 1), lf = map.at(tx - 1, ty), rt = map.at(tx + 1, ty);
+    let m = 0;
+    if (t === 2) {
+      if (up !== 2) { const q = across(map, tx, ty, 0, 1); m |= q > map.elevTile(tx, ty - 1) ? FOOT_N : LIP_N; }
+      if (dn !== 2) { const q = across(map, tx, ty, 0, -1); m |= q >= 0 && map.elevTile(tx, ty + 1) > q ? LIP_S : FACE_S; }
+      if (lf !== 2) { const q = across(map, tx, ty, 1, 0); m |= q > map.elevTile(tx - 1, ty) ? FOOT_W : LIP_W; }
+      if (rt !== 2) { const q = across(map, tx, ty, -1, 0); m |= q >= 0 && map.elevTile(tx + 1, ty) > q ? LIP_E : FACE_E; }
+      return m;
+    }
+    const e = map.elevTile(tx, ty);
+    if (up === 2) { const q = across(map, tx, ty, 0, -1); m |= q > e ? SHADOW_S : q === e || q < 0 ? CAST_S : AO_N; }
+    if (dn === 2) m |= across(map, tx, ty, 0, 1) > e ? AO_S : OUTL_S;
+    if (lf === 2) m |= across(map, tx, ty, -1, 0) > e ? SHADOW_E : AO_W;
+    if (rt === 2) m |= across(map, tx, ty, 1, 0) > e ? AO_E : OUTL_E;
+    if (!isWet(t)) {
+      for (let i = 0; i < 4; i++) {
+        const nx = tx + DIRS[i][0], ny = ty + DIRS[i][1], nt = map.at(nx, ny);
+        if (nt === 2 || isWet(nt)) continue;
+        const q = map.elevTile(nx, ny);
+        if (q < e) m |= HI_N << i; else if (q > e) m |= LO_N << i;
+      }
+      if (map.ramp && map.ramp[ty * map.w + tx]) m |= RAMP;
+    }
+    return m;
+  }
+  // Downhill direction (signs) of a ramp tile from the elevation changes up to 5 tiles away along each axis.
+  function rampDir(map, tx, ty) {
+    const e = map.elevTile(tx, ty); let ux = 0, uy = 0;
+    for (let d = 0; d < 4; d++) for (let i = 1; i <= 5; i++) {
+      const x = tx + DIRS[d][0] * i, y = ty + DIRS[d][1] * i, t = map.at(x, y);
+      if (t === 2 || isWet(t)) break;
+      const q = map.elevTile(x, y);
+      if (q !== e) { const s = q < e ? 1 : -1; ux += DIRS[d][0] * s; uy += DIRS[d][1] * s; break; }
+    }
+    return [Math.sign(ux), Math.sign(uy)];
+  }
+  // Pure: the primary edge kind of a tile for tests / tools. Rock: faceS (visible low-side face) | lipN (lit top lip) | lipS (high ground
+  // to the south) | footN | side | rock (interior). Ground: ramp | castS / castE (cast shadow from a higher cliff) | rim (upper-tier
+  // outline) | stepHi / stepLo (ground height step) | ao | none.
+  function edgeKind(map, tx, ty) {
+    const m = edgeFlags(map, tx, ty);
+    if (map.at(tx, ty) === 2) return m & FACE_S ? 'faceS' : m & LIP_N ? 'lipN' : m & LIP_S ? 'lipS' : m & FOOT_N ? 'footN' : m & (LIP_W | FOOT_W | FACE_E | LIP_E) ? 'side' : 'rock';
+    return m & RAMP ? 'ramp' : m & (SHADOW_S | CAST_S) ? 'castS' : m & SHADOW_E ? 'castE' : m & (OUTL_S | OUTL_E) ? 'rim' : m & HI_ANY ? 'stepHi' : m & LO_ANY ? 'stepLo' : m & (AO_N | AO_S | AO_W | AO_E) ? 'ao' : 'none';
+  }
+
   function build(map) {
     const T = map.tile / IT.GAME.UNIT_PX, MW = map.w, MH = map.h, W = MW * T, H = MH * T;
     const base = document.createElement('canvas'); base.width = W; base.height = H;
@@ -174,8 +243,20 @@
       return v < 0.44 ? G[0] : v < 0.57 ? G[1] : G[2];
     };
     const mul = (c, f) => {
-      const r = (c & 255) * f | 0, g = ((c >> 8) & 255) * f | 0, b = ((c >> 16) & 255) * f | 0;
+      let r = (c & 255) * f | 0, g = ((c >> 8) & 255) * f | 0, b = ((c >> 16) & 255) * f | 0;
+      if (r > 255) r = 255; if (g > 255) g = 255; if (b > 255) b = 255;
       return (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+    };
+    // height tier tint: saturation s around the luma, then brightness k
+    const tint = (c, k, s) => {
+      const r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255, l = r * 0.3 + g * 0.59 + b * 0.11;
+      let r2 = (l + (r - l) * s) * k | 0, g2 = (l + (g - l) * s) * k | 0, b2 = (l + (b - l) * s) * k | 0;
+      if (r2 > 255) r2 = 255; else if (r2 < 0) r2 = 0; if (g2 > 255) g2 = 255; else if (g2 < 0) g2 = 0; if (b2 > 255) b2 = 255; else if (b2 < 0) b2 = 0;
+      return (0xff000000 | (b2 << 16) | (g2 << 8) | r2) >>> 0;
+    };
+    const mixc = (a, b, t) => {
+      const r = (a & 255) + ((b & 255) - (a & 255)) * t | 0, g = ((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * t | 0, bl = ((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * t | 0;
+      return (0xff000000 | (bl << 16) | (g << 8) | r) >>> 0;
     };
 
     const shimmer = [];                                    // per water tile: 2 px positions
@@ -187,6 +268,9 @@
     const paint = (ax0, ay0, ax1, ay1) => { for (let ty = ay0; ty < ay1; ty++) for (let tx = ax0; tx < ax1; tx++) {
       const t = at(tx, ty), x0 = tx * T, y0 = ty * T;
       const up = at(tx, ty - 1), dn = at(tx, ty + 1), lf = at(tx - 1, ty), rt = at(tx + 1, ty);
+      const m = edgeFlags(map, tx, ty), et = t === 2 ? 1 : el(tx, ty), tk = TIER_K[et], ts = TIER_S[et];
+      let rux = 0, ruy = 0;
+      if (m & RAMP) { const rd = rampDir(map, tx, ty); rux = rd[0]; ruy = rd[1]; }
       if (t === 3 || t === 5) {
         waterIdx[ty * MW + tx] = shimmer.length / 3;
         for (let k = 0; k < 2; k++) shimmer.push(x0 + (PX.hash2(tx, ty, 20 + k) * T | 0), y0 + (PX.hash2(tx, ty, 30 + k) * T | 0), PX.hash2(tx, ty, 40 + k));
@@ -238,18 +322,51 @@
         } else {   // rock / cliff
           const v = PX.noise2(x, y, 6, 7) + (PX.bayer(x, y) - 0.5) * 0.3;
           c = v < 0.42 ? ROCK[0] : v < 0.58 ? ROCK[1] : ROCK[2];
-          if (up !== 2 && ly < 2) c = ly === 0 ? R_HI : R_HI2;
-          else if (dn !== 2 && ly >= T - 3) c = ly === T - 1 ? R_EDGE : ((x % 3) === 0 ? R_FACE2 : R_FACE);
-          else if (lf !== 2 && lx === 0) c = R_LEFT;
-          else if (rt !== 2 && lx === T - 1) c = R_FACE;
+          const dB = T - 1 - ly, dR = T - 1 - lx;   // distance to the bottom / right edge
+          if (m & LIP_N && ly < 2) c = ly === 0 ? R_HI : R_HI2;                        // lit top lip (2 px) on the high side
+          else if (m & FOOT_N && ly === 0) c = R_EDGE;                                 // north side is the low ground: dark base line
+          else if (m & FACE_S && dB < 4) c = dB === 0 ? R_EDGE : dB === 3 ? R_FACE_T : ((x % 3) === 0 ? R_FACE2 : R_FACE);   // vertical face (4 px) on the low side
+          else if (m & LIP_S && dB < 2) c = dB === 0 ? R_HI : R_HI2;                   // south side is the high ground: its lip along our bottom edge
+          else if (m & (LIP_W | FOOT_W | FACE_E | LIP_E)) {
+            if (lx === 0) { if (m & LIP_W) c = R_LEFT; else if (m & FOOT_W) c = R_FACE; }
+            else if (dR === 0) { if (m & LIP_E) c = R_LEFT; else if (m & FACE_E) c = R_EDGE; }
+            else if (dR === 1 && m & FACE_E) c = R_FACE;
+          }
         }
-        // elevation tint: plateaus lighter, pits darker and cooler
         if (t !== 2) {
-          const e = el(tx, ty);
-          if (e === 2) c = mul(c, 1.16); else if (e === 0) c = mul(mul(c, 0.8), 1);
+          c = tint(c, tk, ts);   // height tier tint (cached with the map)
+          if (m) {
+            const dB = T - 1 - ly, dR = T - 1 - lx;
+            let k = 1;
+            if (m & RAMP) {   // sandy graded steps: 4 treads per tile along the downhill direction, lighter uphill
+              c = mixc(c, SAND, 0.22);
+              if (rux || ruy) {
+                const p = (rux * (lx + 0.5 - T / 2) + ruy * (ly + 0.5 - T / 2)) / (T * (Math.abs(rux) + Math.abs(ruy))) + 0.5;
+                k *= RAMP_K[Math.min(3, Math.max(0, (p * 4) | 0))];
+              }
+            }
+            const wall = m & RAMP ? WALL : AO;   // ramp side walls: a deeper 3 px gradient against the rock
+            if (m & SHADOW_S && ly < 4) k = Math.min(k, SH[ly]);
+            if (m & CAST_S && ly < 3) k = Math.min(k, SH[ly + 1]);
+            if (m & AO_N && ly < wall.length) k = Math.min(k, wall[ly]);
+            if (m & (OUTL_S | AO_S) && dB === 0) k = Math.min(k, m & OUTL_S ? 0.6 : 0.82);   // upper-tier outline / base AO
+            if (m & SHADOW_E && lx < 3) k = Math.min(k, SH[lx + 1]);
+            if (m & AO_W && lx < wall.length) k = Math.min(k, wall[lx]);
+            if (m & OUTL_E && dR === 0) k = Math.min(k, 0.6);
+            if (m & AO_E && dR < wall.length) k = Math.min(k, wall[dR]);
+            if (m & (HI_ANY | LO_ANY)) {   // ground steps: lit lip on the higher edge, riser shadow on the lower tile
+              if (m & HI_N && ly === 0) k *= 1.22;
+              if (m & HI_S && dB === 0) k *= 1.3;
+              if (m & HI_W && lx === 0) k *= 1.2;
+              if (m & HI_E && dR === 0) k *= 0.86;
+              if (m & LO_N && ly < 2) k *= ly === 0 ? 0.55 : 0.8;
+              if (m & LO_S && dB === 0) k *= 0.85;
+              if (m & LO_W && lx < 2) k *= lx === 0 ? 0.7 : 0.86;
+              if (m & LO_E && dR === 0) k *= 0.84;
+            }
+            if (k !== 1) c = mul(c, k < 1 ? k + (PX.bayer(x, y) - 0.5) * 0.06 : k);
+          }
         }
-        // cliff shadow on ground just below a rock tile
-        if (t !== 2 && up === 2) { if (ly === 0) c = mul(c, 0.6); else if (ly === 1) c = mul(c, 0.8); }
         u[y * W + x] = c;
       }
       if (t === 1 && !ent) {
@@ -395,5 +512,6 @@
     }
   }
 
-  IT.Terrain = { build, draw, chunkRange, TW, TH, TAX, TAY, MINI_W, MINI_H };
+  const EDGE = { LIP_N, FOOT_N, FACE_S, LIP_S, LIP_W, FOOT_W, FACE_E, LIP_E, SHADOW_S, AO_N, OUTL_S, AO_S, SHADOW_E, AO_W, OUTL_E, AO_E, CAST_S, HI_N, HI_S, HI_W, HI_E, LO_N, LO_S, LO_W, LO_E, RAMP };
+  IT.Terrain = { build, draw, chunkRange, edgeKind, edgeFlags, EDGE, TIER_K, TIER_S, TW, TH, TAX, TAY, MINI_W, MINI_H };
 })(typeof window !== 'undefined' ? window : globalThis);

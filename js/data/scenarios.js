@@ -18,7 +18,9 @@
 //   fail   = subset of: time died cross (a foe reaches the gate) seen (an enemy notices you before your first hit) method escaped caught tower
 //   steps  = [{ a: spell|item|'attack'|'move', at: 'd0'|'d1'|'mid'|'self'|'lead'|'tower', w: wait s }]  the STEP-BY-STEP HUD + the test bot script
 //   rand   = { pick: seeded choice among the best n arenas, jit: +-units of seeded jitter }
-//   focus  = [areas the intro camera tour shows: 'pit' | 'gate' | 'tower'];  reveal (set below) = start reveal at hard / bambam too
+//   vary   = per-play variation overrides (v6 item 40, Ranked.variation): { posJit: [lo, hi] | n (extra +-u start jitter, default 80-150), hp: frac | [lo, hi] (foe hp, default +-0.08),
+  //            reaction: frac (default 0.05), boots: false | 'boots' | 'travels' (default: chase / flee / march foes and 'escape' behaviours get boots, travels from hero lvl 16) }; a unit's own boots: false | id wins
+  //   focus  = [areas the intro camera tour shows: 'pit' | 'gate' | 'tower'];  reveal (set below) = start reveal at hard / bambam too
 // Legacy 13 (S(...) below, inline texts) keep their ids, hp and solver scripts; they get a level, a map and arena-relative spots.
 (function (G) {
   'use strict';
@@ -45,7 +47,7 @@
         'O alvo está quase morto e foge. O Sun Strike leva 1,7 s para cair, então mire onde ele vai estar.'),
       L('Finish the fleeing dummy', 'Acabe com o alvo em fuga'), 8,
       { lvl: 25 }, [D(500, -150, { hp: 0.38, mot: 'flee' })], { type: 'kill' },
-      [{ a: 'sunstrike', at: 'lead', w: 1.2 }]),
+      [{ a: 'sunstrike', at: 'lead', w: 1.2 }], { vary: { posJit: [40, 80] } }),
     S('blink_fog', 3, L('Blink from the fog', 'Blink saindo da névoa'),
       L('It stands far away in the fog. Blink in, then Chaos Meteor and Deafening Blast before it reacts.',
         'Ele está longe, na névoa. Dê Blink, depois Chaos Meteor e Deafening Blast antes de ele reagir.'),
@@ -76,7 +78,7 @@
         'Deixe-o lento com a parede e use EMP ao lado: a shard o puxa ao centro enquanto a mana queima.'),
       L('Ice Wall + EMP with the shard', 'Ice Wall + EMP com a shard'), 12,
       { lvl: 25, shard: 'emp' }, [D(450, 0, { hp: 0.6 })], { type: 'kill' },
-      [{ a: 'icewall', at: 'd0' }, { a: 'emp', at: 'd0', w: 0.3 }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }]),
+      [{ a: 'icewall', at: 'd0' }, { a: 'emp', at: 'd0', w: 0.3 }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }], { vary: { posJit: [40, 80] } }),
     S('ghost_escape', 1, L('Ghost Walk escape', 'Fuga com Ghost Walk'),
       L('A chaser is closing in. Ghost Walk makes you invisible and slows it: break contact and survive.',
         'Um perseguidor se aproxima. O Ghost Walk te deixa invisível e o deixa lento: quebre o contato e sobreviva.'),
@@ -140,7 +142,7 @@
     V('river_guard', 3, 'mid_river', ['river', 'multi', 'reaction'], 12, { lvl: 12 },
       [U(W([], { beyond: 'gate', d: [1500, 2200] }), { hp: 0.35, mot: 'march' }), U({ of: 0, side: 340 }, { hp: 0.35, mot: 'march' })],
       KILL, ['cross', 'time'], [{ a: 'sunstrike', at: 'lead', w: 0.3 }, { a: 'move', at: 'gate' }, { a: 'deafeningblast', at: 'd1', near: 1000 }],
-      { gate: W(['river'], { d: [500, 1000], r: 260 }), rand: { jit: 120 } }),
+      { gate: W(['river'], { d: [500, 1000], r: 260 }), rand: { jit: 120 }, vary: { posJit: 0 } }),
     // ---------------------------------------------------------------- level 4
     V('uphill_snipe', 4, 'river_top', ['highground', 'vision'], 10,
       { lvl: 10, at: W(['lowground'], { d: [0, 3000], has: { where: ['high', 'hidden'], d: [500, 800] } }) },
@@ -171,7 +173,7 @@
       { lvl: 16, at: W([], { d: [0, 3000], has: { where: ['inpit'], d: [1100, 1500] } }) },
       [U({ pit: 'bank', d: [450, 600] }, { hp: 0.5, behavior: 'stationary', aware: 0.5, items: ['blink', 'forcestaff'], juke: 'pit', near: 500 })],
       { type: 'kill', how: { inside: 'pit' } }, ['method', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'move', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 1.2 }, { a: 'deafeningblast', at: 'd0', w: 0.4 }], { focus: ['pit'], rand: { pick: 3 } }),
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'move', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 1.2 }, { a: 'deafeningblast', at: 'd0', w: 0.4 }], { focus: ['pit'], rand: { pick: 3 }, vary: { posJit: [40, 80] } }),
     V('ghost_slip', 5, 'rad_ancients', ['escape', 'invisible', 'basics'], 12, { lvl: 12 },
       [U(SEEN([600, 750]), { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 })],
       { type: 'escape', time: 12, caught: 180, bump: 80 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 120 } }),
@@ -205,7 +207,7 @@
       [{ a: 'coldsnap', at: 'd0' }, { a: 'tornado', at: 'd0', w: 6 }, { a: 'sunstrike', at: 'd0', w: 0.3 }, { a: 'chaosmeteor', at: 'd0', w: 0.3 }]),
     V('dust_hunt', 7, 'lotus_rad', ['invisible', 'escape', 'items'], 14, { lvl: 16, items: ['dust'] },
       [U(SEEN([700, 900]), { hp: 0.4, behavior: 'escape', items: ['shadowblade'], aware: 1 })], KILL, ['escaped', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'dust', at: 'self', w: 1.4 }, { a: 'sunstrike', at: 'd0', w: 1.2 }]),
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'dust', at: 'self', w: 1.4 }, { a: 'sunstrike', at: 'd0', w: 1.2 }], { vary: { hp: [-0.08, 0] } }),
     V('jungle_hold', 7, 'dire_triangle', ['multi', 'hold', 'positioning'], 16, { lvl: 20 },
       [U(W([], { beyond: 'gate', d: [2500, 3000] }), { hp: 0.3, mot: 'march' }), U({ of: 0, side: 240 }, { hp: 0.3, mot: 'march' }), U({ of: 0, side: -240 }, { hp: 0.3, mot: 'march' })],
       { type: 'hold', time: 20 }, ['cross', 'died'],
@@ -217,7 +219,7 @@
         U({ of: 0, side: 220 }, { hp: 0.33, mot: 'march', items: ['bkb'], useBkb: true })],
       KILL, ['cross', 'time'],
       [{ a: 'move', at: 'gate' }, { a: 'tornado', at: 'mid', near: 1800 }, { a: 'sunstrike', at: 'lead' }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0' }],
-      { gate: W(['river'], { d: [500, 1000], r: 260 }) }),
+      { gate: W(['river'], { d: [500, 1000], r: 260 }), vary: { posJit: [40, 80], boots: false } }),
     V('cliff_blink', 8, 'dire_ancients', ['highground', 'blink', 'escape'], 12,
       { lvl: 20, items: ['blink'], at: W(['lowground'], { d: [0, 3000], has: { where: ['high'], d: [600, 900] } }) },
       [U(W(['high'], { d: [600, 900] }), { hp: 0.42, behavior: 'escape', aware: 0.6 })], KILL, ['escaped', 'time'],
@@ -227,11 +229,11 @@
       [U(W(['low'], { d: [1100, 1700] }), { hp: 0.35, mot: 'march' }), U({ of: 0, side: 200 }, { hp: 0.35, mot: 'march' }), U({ of: 0, side: -200 }, { hp: 0.35, mot: 'march' })],
       KILL, ['cross', 'time'],
       [{ a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.4 }, { a: 'tornado', at: 'd0', w: 1.2 }, { a: 'sunstrike', at: 'd0' }],
-      { gate: { struct: { kind: 'barracks', team: 0 }, r: 300 } }),
+      { gate: { struct: { kind: 'barracks', team: 0 }, r: 300 }, vary: { boots: false } }),   // item 40: booted marchers beat the line
     // ---------------------------------------------------------------- level 9
     V('triple_kill', 9, 'outpost_dire', ['multi', 'burst'], 8, { lvl: 30, scepter: 'exort' },
       [U(SEEN([500, 700], { clear: 3, not: ['dtower'] }), { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, side: 180 }, { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, ahead: 200 }, { hp: 0.4, mot: 'still', aware: 0.3 })],
-      { type: 'killN', n: 3, one: true, span: 1.2 }, ['method', 'time'], [{ a: 'sunstrike', at: 'self' }], { rand: { pick: 3 } }),
+      { type: 'killN', n: 3, one: true, span: 1.2 }, ['method', 'time'], [{ a: 'sunstrike', at: 'self' }], { rand: { pick: 3 }, vary: { posJit: 0 } }),   // item 40: one Sun Strike must catch all three (still foes), no extra start jitter
     V('blast_push_3', 9, 'dire_off_t1', ['multi', 'positioning'], 10, { lvl: 30 },
       [U(SEEN([500, 650], { clear: 3, not: ['dtower'] }), { hp: 1, mot: 'still' }), U({ of: 0, ahead: 170, side: 40 }, { hp: 1, mot: 'still' }), U({ of: 0, ahead: 340, side: -30 }, { hp: 1, mot: 'still' })],
       { type: 'push', n: 3 }, ['time'], [{ a: 'deafeningblast', at: 'd0' }], { rand: { pick: 3 } }),
@@ -241,15 +243,15 @@
     V('plateau_escape', 9, 'dire_highground', ['highground', 'escape', 'invisible'], 14,
       { lvl: 30, at: W(['highground'], { d: [0, 3500], not: ['dtower'], has: { where: ['low'], d: [800, 1200] } }) },
       [U(W(['low'], { d: [800, 1200] }), { mot: 'chase', hp: 1, items: ['dust'] }), U({ of: 0, side: 250 }, { mot: 'chase', hp: 1 }), U({ of: 0, side: -250 }, { mot: 'chase', hp: 1 })],
-      { type: 'escape', time: 14 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3 } }),
+      { type: 'escape', time: 14 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3 }, vary: { boots: false } }),   // item 40: a booted chaser cannot be outrun
     // ---------------------------------------------------------------- level 10
     V('gauntlet', 10, 'dire_mid_t1', ['towers', 'escape', 'invisible', 'items'], 16,
       { lvl: 30, items: ['blink', 'dust'], at: { tower: { team: 1 }, ahead: -1700 } },
       [U({ tower: { team: 1 }, ahead: -950 }, { hp: 0.45, behavior: 'escape', items: ['shadowblade', 'blink'], aware: 1 })], KILL, ['escaped', 'died', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }]),
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }], { vary: { boots: false, posJit: 0 } }),
     V('blink_denial', 10, 'rad_triangle', ['reaction', 'escape', 'items'], 14, { lvl: 30, items: ['atos', 'blink'] },
       [U(SEEN([750, 950]), { hp: 0.5, behavior: 'disable_escape', items: ['blink', 'forcestaff'], aware: 1 })], KILL, ['escaped', 'time'],
-      [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }]),
+      [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { vary: { posJit: 0 } }),   // item 40: the bot's Atos timing is position sensitive
     V('shadow_strike', 10, 'dire_triangle', ['invisible', 'awareness', 'multi'], 16, { lvl: 30, items: ['blink'] },
       [U(SEEN([1000, 1250], { clear: 2, not: ['dtower'] }), { hp: 0.4, behavior: 'wander', aware: 0.3 }), U({ of: 0, side: 250 }, { hp: 0.4, behavior: 'wander', aware: 0.3 })],
       KILL, ['seen', 'time'],
@@ -284,7 +286,7 @@
     g.map = 'rad_triangle';
     g.hero = Object.assign({}, g.hero, { at: W(['choke'], { d: [0, 1400] }) });
     g.units = g.dummies = [Object.assign({}, u0, { where: ['level', 'seen'], d: [450, 550], aware: 1, msMul: 1.2 })];
-    g.obj = { type: 'escape', time: 12, caught: 180, bump: 80 }; g.rand = { pick: 3, jit: 80 };
+    g.obj = { type: 'escape', time: 12, caught: 180, bump: 80 }; g.rand = { pick: 3, jit: 80 }; g.vary = { posJit: 0 };   // item 40: the 450-550 u start is the spec
     g.tip = g.flair = L('A booted chaser already sees you. Ghost Walk at once, then keep walking through the trees: if it walks into you, you are found.',
       'Um perseguidor de botas já te vê. Ghost Walk na hora e continue andando pelas árvores: se ele esbarrar em você, te acha.');
     g.goal = g.desc = L('Survive 12 s without being caught', 'Sobreviva 12 s sem ser pego');

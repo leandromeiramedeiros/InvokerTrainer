@@ -79,3 +79,84 @@ test('icons tail: status section is after the hand-drawn marker so icons_from_re
   assert.ok(a > 0 && b > a);
   assert.ok(src.lastIndexOf('})(typeof window') > b);
 });
+
+// ---- item 32: LARGE sheet, buff/debuff classification, uncapped list, row placement ----
+test('status icons: every mapped key is in BOTH sheets (11 px + large <= 22 px, outlined, shared art source)', () => {
+  const keys = new Set(Object.values(UD.STATUS_ICON).map(v => v[0]));
+  for (const k of keys) {
+    const s = IT.Art.frame('status', 'st_' + k), L = IT.Art.frame('statusL', 'st_' + k);
+    assert.ok(s && L, 'missing st_' + k);
+    assert.ok(L.length <= 22 && L.length >= 16 && L.every(r => r.length === L[0].length && r.length <= 22 && r.length >= 16), k + ' large size ' + L.length + 'x' + L[0].length);
+    assert.ok(L.join('').includes('A'), k + ' large outline');
+    assert.strictEqual(L[0][0], '.', k + ' large corner transparent');
+    assert.ok(new Set(L.join('').replace(/\./g, '')).size >= 4, k + ' large art too flat');
+  }
+  const f = IT.Art.frame('status', 'st_stun');
+  assert.strictEqual(f.length + 'x' + f[0].length, '11x11');
+});
+
+test('status kind: every sim status is classified (or internal); dual = buff only on self-cast', () => {
+  for (const t of simStatuses()) assert.ok(UD.STATUS_KIND[t] || UD.STATUS_NONE[t], 'unclassified status ' + t);
+  for (const t in UD.STATUS_ICON) assert.ok(['buff', 'debuff', 'dual'].includes(UD.STATUS_KIND[t]), 'bad kind ' + t);
+  const e = { id: 7, team: 0 };
+  for (const t of ['stun', 'hex', 'frozen', 'root', 'atosRoot', 'silence', 'disarm', 'revealed', 'slow', 'burn', 'coldsnap', 'melt', 'leash'])
+    assert.strictEqual(UD.statusIsBuff(t, e, { src: 7 }), false, t + ' is a debuff even self-inflicted');
+  for (const t of ['alacrity', 'ghost', 'magicImmune', 'invisible', 'invisFade'])
+    assert.strictEqual(UD.statusIsBuff(t, e, { src: 99 }), true, t + ' is a buff');
+  for (const t of ['lift', 'knockback']) {
+    assert.strictEqual(UD.statusIsBuff(t, e, { src: 7 }), true, t + ' self');
+    assert.strictEqual(UD.statusIsBuff(t, e, { src: 3 }), false, t + ' foreign');
+    assert.strictEqual(UD.statusIsBuff(t, e, {}), false, t + ' no src');
+  }
+});
+
+test('status list: uncapped, priority sorted, one entry per icon key, buff flag + stack count', () => {
+  const st = (type, until, extra) => Object.assign({ type, until: until == null ? 5 : until, data: {} }, extra);
+  const e = { id: 1, team: 0, statuses: ['slow', 'burn', 'revealed', 'magicImmune', 'silence', 'root', 'frozen', 'lift', 'hex', 'stun', 'alacrity', 'ghost', 'disarm', 'coldsnap'].map(t => st(t)) };
+  const L = UD.statusList(e, 0);
+  assert.strictEqual(L.length, 14, 'uncapped');
+  assert.strictEqual(UD.statusIcons(e, 0).length, 4, 'world row stays capped');
+  for (let i = 1; i < L.length; i++) assert.ok(L[i - 1].pri >= L[i].pri, 'priority order');
+  assert.strictEqual(L[0].key, 'stun');
+  assert.strictEqual(L.find(x => x.type === 'alacrity').buff, true);
+  assert.strictEqual(L.find(x => x.type === 'slow').buff, false);
+  assert.strictEqual(L.find(x => x.type === 'lift').buff, false, 'foreign lift = debuff');
+  assert.strictEqual(UD.statusList({ id: 1, team: 0, statuses: [st('lift', 5, { src: 1 })] }, 0)[0].buff, true, 'self lift = buff');
+  const m = UD.statusList({ id: 2, team: 1, statuses: [st('melt', 4, { data: { stacks: 3 } })] }, 0)[0];
+  assert.strictEqual(m.count, 3); assert.strictEqual(m.key, 'melt');
+  const r = UD.statusList({ id: 2, team: 1, statuses: [st('root', 2), st('atosRoot', 4)] }, 0);
+  assert.strictEqual(r.length, 1); assert.strictEqual(r[0].left, 4); assert.strictEqual(r[0].count, 2);
+  assert.strictEqual(UD.statusList({ id: 2, team: 1, statuses: [st('stun', 5)] }, 3)[0].left, 2, 'relative to world time');
+  assert.strictEqual(UD.statusList({ id: 2, team: 1 }, 0).length, 0);
+});
+
+test('status HUD row: 22 px cells, debuffs before buffs, green/red frames, tooltip, capped at MAX_STATUS_HUD', () => {
+  const hud = fs.readFileSync(path.join(ROOT, 'js/ui/hud.js'), 'utf8'), css = fs.readFileSync(path.join(ROOT, 'css/hud.css'), 'utf8');
+  assert.ok(UD.MAX_STATUS_HUD >= 6);
+  assert.ok(/SBF_PX\s*=\s*22\b/.test(hud), 'cell canvas is 22 px');
+  assert.ok(hud.includes("'statusL'"), 'uses the large sheet');
+  assert.ok(hud.includes('data-tip'), 'tooltip');
+  assert.ok(/\.sbf\.debuff\s*\{[^}]*border-color:#d0/.test(css) && /\.sbf\s*\{[^}]*border:[^;]*#3fae38/.test(css), 'green buff / red debuff frames');
+  const i = hud.indexOf('function sbfOrder');
+  assert.ok(/!x\.buff\)\.concat\(list\.filter\(x => x\.buff\)\)/.test(hud.slice(i, i + 200)), 'debuffs first');
+});
+
+test('status i18n: every STATUS_ICON type has a status.<type> name in en and pt', () => {
+  const T = load(['js/data/i18n.js', 'js/data/i18n/v6.js']);
+  for (const t of Object.keys(UD.STATUS_ICON)) for (const l of ['en', 'pt']) assert.ok(T.I18N[l]['status.' + t], 'status.' + t + ' (' + l + ')');
+});
+
+test('status row placement: clears orbs (hexed hero), name tag, telegraph and the Alacrity sigil', () => {
+  const hero = (orbs, sts) => ({ id: 1, kind: 'hero', team: 0, maxHp: 100, inv: { orbs }, statuses: (sts || []).map(t => ({ type: t, until: 9, data: {} })) });
+  const full = hero(['q', 'w', 'e']), none = hero([]);
+  assert.ok(UD.statusRowD(full, { top: 10 }) >= 24 + 8, 'short (hexed) sprite: row above the orb orbit');
+  assert.ok(UD.statusRowD(full, { top: 40 }) >= 40 + 8, 'tall sprite: above the head');
+  assert.ok(UD.statusRowD(none, { top: 10 }) < UD.statusRowD(full, { top: 10 }), 'no orbs: tighter');
+  assert.ok(UD.statusRowD(hero(['q', 'w', 'e'], ['alacrity']), { top: 30 }) >= 30 + 14 + 7, 'above the alacrity sigil ring');
+  const foe = { id: 2, kind: 'enemy', team: 1, name: 'Pedro', maxHp: 50, statuses: [] };
+  assert.ok(UD.statusRowD(foe, { top: 30 }) >= 30 + 16, 'above the name tag');
+  assert.ok(UD.statusRowD(Object.assign({ tele: {} }, foe), { top: 30 }) >= 30 + 16 + 20, 'above the telegraph');
+  const sp = { id: 3, kind: 'spirit', team: 0, maxHp: 10, statuses: [] };
+  assert.ok(UD.statusRowD(sp, { top: 16 }) >= 16 + 7, 'forge spirit');
+  assert.ok(UD.statusRowD({ id: 4, kind: 'dummy', scarecrow: true, team: 1, maxHp: 10, statuses: [] }, { top: 30 }) >= 34, 'scarecrow');
+});

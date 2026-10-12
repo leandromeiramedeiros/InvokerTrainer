@@ -100,12 +100,14 @@
   // sc + difficulty -> { sc, df, lo, fog, par, limit, skin, hp (per-foe hp of kill scenarios, or null), need (step abilities that must hit) }
   // v6: no pre-invoked spells (the countdown is for invoking), fog of war always on, kill-scenario foe hp derived from the steps (foeHp).
   // v6 item 11: `lvl` = the hero level of this play (rollLevel: the scenario's base level +-1, feasibility-clamped); omitted = the base level
-  function prepare(sc, df, skin, lvl) {
+  function prepare(sc, df, skin, lvl, vrng) {
     const lo = loadoutAt(sc, df, lvl != null ? lvl : baseLevel(sc), skin);
     const esc = sc.obj.type === 'escape' || sc.obj.type === 'hold';
     const limit = esc ? sc.obj.time : sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK);
     const kill = !!KILL_TYPES[sc.obj.type];
-    return { sc, df, lo, fog: true, par: sc.par, limit, skin: lo.skin, twist: null, hp: kill ? foeHp(sc, df, lo) : null, need: kill ? needOf(sc) : [] };
+    const pr = { sc, df, lo, fog: true, par: sc.par, limit, skin: lo.skin, twist: null, hp: kill ? foeHp(sc, df, lo) : null, need: kill ? needOf(sc) : [], vary: null };
+    if (vrng) pr.vary = variation(sc, df, pr, lo.heroLevel, vrng);   // v6 item 40: per-play variation (seeded by the run)
+    return pr;
   }
   // the scenario loadout at hero level L: IT.RULES.autoLoadout(L, style) (real point / orb-gate rules), the tier's orb cut, scepter / shard / items
   function loadoutAt(sc, df, L, skin) {
@@ -229,6 +231,41 @@
     const lo0 = Math.min.apply(null, pos), mul = df.hpMul != null ? df.hpMul : 1;
     const f = Math.min(HP_CAP, HP_SHARE * mul);
     return c.foes.map(v => Math.round(Math.max(100, (v > 0 ? v : lo0) * f)));
+  }
+
+  // ---------------------------------------------------------------- v6 item 40: per-play variation (see DECISIONS.md "v6 item 40")
+  // Each play draws (run.varRng: seeded by the run seed -> reproducible in ranked, random in a seedless sandbox run) one posJit (extra +-u of
+  // start-position jitter on top of rand.jit, the spot rules still hold), one hpMul (foe hp +-8%, clamped so the whole combo still kills and no
+  // foe dies before its last damaging step), one reactionMul (+-5% enemy reaction) and, per foe, a boot item (chase / flee / march foes and
+  // 'escape' behaviours: boots, travels from hero level 16 for the scripted movers; 'still' foes never). sc.vary overrides:
+  // { posJit: [lo, hi] | n | 0, hp: frac | [lo, hi] (fractions, e.g. [-0.08, 0]), reaction: frac, boots: false | 'boots' | 'travels' }; a unit's own `boots` (false | id) wins.
+  const VARY = { posJit: [80, 150], hp: 0.08, reaction: 0.05, travelsLvl: 16, floor: 1.02 };
+  const MOVERS = { chase: 1, flee: 1, march: 1 }, RUNNERS = { escape: 1, disable_escape: 1 };
+  function bootFor(sc, d, lvl) {
+    const v = sc.vary || {};
+    if (d.boots !== undefined) return d.boots || null;
+    if (v.boots === false || d.mot === 'still') return null;
+    if (v.boots) return v.boots;
+    if (MOVERS[d.mot]) return lvl >= VARY.travelsLvl ? 'travels' : 'boots';
+    return !d.mot && RUNNERS[d.behavior] ? 'boots' : null;
+  }
+  function variation(sc, df, pr, lvl, rng) {
+    const v = sc.vary || {}, units = sc.units || sc.dummies || [];
+    const pj = v.posJit != null ? v.posJit : VARY.posJit, hpF = v.hp != null ? v.hp : VARY.hp, rF = v.reaction != null ? v.reaction : VARY.reaction;
+    const seed = Math.floor(rng() * 0x7fffffff), u1 = rng(), u2 = rng(), u3 = rng();
+    const posJit = Array.isArray(pj) ? Math.round(pj[0] + (pj[1] - pj[0]) * u1) : pj;
+    const hr = Array.isArray(hpF) ? hpF : [-hpF, hpF], hpMul = Math.round((1 + hr[0] + (hr[1] - hr[0]) * u2) * 1000) / 1000, reactionMul = Math.round((1 + (u3 * 2 - 1) * rF) * 1000) / 1000;
+    let hp = null;
+    if (pr.hp) {   // kill scenarios: hp x hpMul, never above HP_CAP x the credited damage (the steps must still kill), never below the credited damage minus the foe's last damaging part
+      const c = comboDamage(sc, df, pr.lo), pos = c.foes.filter(x => x > 0), lo0 = Math.min.apply(null, pos);
+      hp = pr.hp.map((b, i) => {
+        const cred = c.foes[i] > 0 ? c.foes[i] : lo0;
+        let last = 0; for (const q of c.parts) if (q.foes.indexOf(i) >= 0) last = q.dmg;
+        const cap = Math.max(b, Math.round(Math.max(100, cred * HP_CAP))), floor = Math.min(b, Math.max(100, Math.round((cred - last) * VARY.floor)));
+        return clamp(Math.round(b * hpMul), floor, cap);
+      });
+    }
+    return { seed, posJit, hpMul, hp, reactionMul, boots: units.map(d => bootFor(sc, d, lvl)) };
   }
 
   // ---------------------------------------------------------------- v6: destroyTower timer math (pure; see DECISIONS.md "v6 WP1")
@@ -416,7 +453,7 @@
   function jitter(w, p, base, o, s) {
     const map = w.map, V = IT.Vision, e0 = map.elevAt(p.x, p.y), los0 = V && V.los ? V.los(map, base.x, base.y, p.x, p.y) : true;
     for (let k = 0; k < 6; k++) {
-      const q = { x: p.x + (w.rng() * 2 - 1) * o.jit, y: p.y + (w.rng() * 2 - 1) * o.jit };
+      const rn = o.rng || w.rng, q = { x: p.x + (rn() * 2 - 1) * o.jit, y: p.y + (rn() * 2 - 1) * o.jit };
       if (!map.walkable(q.x, q.y) || map.elevAt(q.x, q.y) !== e0) continue;
       if (!s.towers && nearTower(map, q, o.role === 'hero' ? 1 : 0) && !nearTower(map, p, o.role === 'hero' ? 1 : 0)) continue;
       if (V && V.los && V.los(map, base.x, base.y, q.x, q.y) !== los0) continue;
@@ -476,17 +513,19 @@
     hero.items = []; for (let i = 0; i < 6; i++) hero.items.push(pr.lo.items[i] ? { id: pr.lo.items[i], cd: 0, charges: 0 } : null);
     hero.lastSeen = { x: hero.x, y: hero.y, t: w.t };
     w.fog = pr.fog; w.loadout = pr.lo;
-    const out = [], placed = [], E = IT.GAME.ENEMY, SK = IT.GAME.SKINS, s0 = Math.max(0, SK.indexOf(pr.skin)), tw = pr.twist;
+    const out = [], placed = [], E = IT.GAME.ENEMY, SK = IT.GAME.SKINS, s0 = Math.max(0, SK.indexOf(pr.skin)), tw = pr.twist, vy = pr.vary;
     w.gate = sc.gate ? Object.assign(spot(w, sc.gate, sp, placed, { pick: R.pick }), { r: sc.gate.r || 260 }) : null;   // 'cross' line (a circle on the map)
     (sc.units || sc.dummies || []).forEach((d, i) => {
-      const p = spot(w, d, sp, placed, { pick: R.pick, jit: d.of != null ? 0 : R.jit || 0, role: 'unit' }), mot = d.mot;
+      const mot = d.mot, boot = vy ? vy.boots[i] : null;
+      const p = spot(w, d, sp, placed, { pick: R.pick, jit: d.of != null ? 0 : (R.jit || 0) + (vy ? vy.posJit : 0), rng: vy ? IT.U.mulberry32((vy.seed + i * 7919) >>> 0) : null, role: 'unit' });
       placed[i] = p;
-      const items = d.items || (df.useBkb || d.useBkb ? ['bkb'] : undefined);
+      const items0 = d.items || (df.useBkb || d.useBkb ? ['bkb'] : undefined);
+      const items = boot ? (items0 || []).filter(x => x !== boot).concat(boot) : items0;
       const skin = SK[(s0 + i) % SK.length], lap = Math.floor(i / SK.length);   // every foe wears a different NPC hero skin + name
       // real enemy NPC, dies at 0 hp. Kill scenarios: hp = min(HP_CAP, HP_SHARE x tier hpMul) x the damage of the scenario's own steps (foeHp); the others keep
       // the old line (d.hp = start fraction on the old 25% kill line x ENEMY.hp x hpMul)
       const need = d.hp != null && d.hp < 1 ? Math.max(0.05, d.hp - 0.25) : 0.75;
-      const base = pr.hp && pr.hp[i] != null ? pr.hp[i] : need * E.hp * (df.hpMul != null ? df.hpMul : 1);
+      const base = vy && vy.hp && vy.hp[i] != null ? vy.hp[i] : pr.hp && pr.hp[i] != null ? pr.hp[i] : need * E.hp * (df.hpMul != null ? df.hpMul : 1) * (vy ? vy.hpMul : 1);
       const hp = Math.round(Math.max(100, base * (tw === 'tough' ? 1.15 : 1)));
       // per-unit awareness (a notice delay of df.notice x (1 - aw) s) is the scenario's base, nudged by the tier (+-0.2); 'alert' twist adds 0.3
       const aw = clamp((d.aware != null ? d.aware + (df.awareness - 0.6) * 0.5 : df.awareness) + (tw === 'alert' ? 0.3 : 0), 0, 1);
@@ -495,13 +534,14 @@
         behavior: d.behavior || (mot ? 'stationary' : ENEMY_BEHAVIOR[df.behavior] || 'stationary'),
         scenario: { stunBolt: df.stunBolt, dummyEscape: mot || d.juke ? 'none' : df.escape, blinkAfter: d.juke ? null : df.blinkAfter },   // a pit juker's only jump is the juke
         useBkb: !!(df.useBkb || d.useBkb), items,
-        telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction,
+        telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction * (vy ? vy.reactionMul : 1),
         dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
         juke: d.juke === 'pit' && pitRegion(w.map) ? { x: pitRegion(w.map).x, y: pitRegion(w.map).y, near: d.near || 500 } : null,   // v6 pit_trap
       });
       e.hpRegen = 0; e.base.hpRegen = 0;
-      if (mot === 'flee' || mot === 'chase' || mot === 'march') { const ms = mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase; e.ms = ms; e.base.ms = ms; }
-      if (d.msMul && mot) { e.ms = Math.round(e.ms * d.msMul); e.base.ms = e.ms; }   // playtest 2: a booted scripted chaser
+      // scripted movers: tier speed + the boot item's KV bonus_movement_speed (v6 item 40); a msMul unit already models its boots (playtest 2): msMul only
+      if (mot === 'flee' || mot === 'chase' || mot === 'march') { const ms = (mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase) + (d.msMul ? 0 : IT.Units.bootBonus(items)); e.ms = ms; e.base.ms = ms; }
+      if (d.msMul && mot) { e.ms = Math.round(e.ms * d.msMul); e.base.ms = e.ms; }
       if (tw === 'swift') { e.ms = Math.round(e.ms * 1.15); e.base.ms = e.ms; }
       e.scn = { mot: mot || null, next: 0, lastSeen: null, search: null, idx: i, n: (sc.units || sc.dummies || []).length };
       out.push(e);
@@ -569,9 +609,10 @@
     const mode = opts.mode || 'sandbox', ranked = mode === 'ranked', infinite = mode === 'infinite', fixed = opts.scenario ? IT.SCENARIOS.get(opts.scenario) : null;
     const rating = opts.rating != null ? opts.rating : ranked ? profile().rating : 0;
     const seed = opts.seed == null ? (Math.random() * 1e9) | 0 : opts.seed, rng = IT.U.mulberry32(seed);
+    const varRng = IT.U.mulberry32((seed ^ 0x9e3779b1) >>> 0);   // v6 item 40: per-play variation (own stream)
     const lvRng = IT.U.mulberry32((seed ^ 0x5bd1e995) >>> 0);   // v6 item 11: hero level rolls (own stream: picks / twists stay as they were)
     const run = {
-      mode, ranked, infinite, fixed, rating, rng, lvRng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
+      mode, ranked, infinite, fixed, rating, rng, lvRng, varRng, skin: opts.skin, phase: 'idle', cd: 0, hold: 0,
       runLeft: ranked && opts.runSeconds ? opts.runSeconds : null, turns: ranked ? (opts.turns || TURNS) : null, score: 0, streak: 0, bestStreak: 0, solved: 0, failed: 0, n: 0,
       pr: null, dummies: [], intro: null, result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
@@ -645,7 +686,7 @@
     run.next = () => {
       const sc = pick();
       const df = run.difficulty(), lv = rollLevel(sc, df, run.lvRng);
-      run.pr = prepare(sc, df, run.skin, lv.lvl);
+      run.pr = prepare(sc, df, run.skin, lv.lvl, run.varRng);
       run.pr.lvl = lv;
       run.pr.twist = twist(sc);
       run.recent.push(sc.id); if (run.recent.length > Math.max(6, run.turns || 0)) run.recent.shift();
@@ -967,7 +1008,7 @@
     TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, buildIntro, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
-    profile, record, reset, load, prepare, pitRegion, inPit, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS,
+    profile, record, reset, load, prepare, pitRegion, inPit, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS, variation, VARY,
     comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

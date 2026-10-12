@@ -87,6 +87,13 @@
   const isNight = w => !!(w && (w.night || (w.map && w.map.night)));
   const enemyVision = w => { const E = GM().ENEMY; return IT.DayNight ? IT.DayNight.lerp(w, E.vision, E.visionNight) : isNight(w) ? E.visionNight : E.vision; };
 
+  // movement speed an enemy gets from carried boots / travels (KV bonus_movement_speed; only one counts, travels first, like the hero)
+  function bootBonus(items) {
+    const id = Array.isArray(items) ? ['travels', 'boots'].find(b => items.indexOf(b) >= 0) : null;
+    if (!id) return 0;
+    try { const v = Number(IT.Values.item(GM().ITEM_DOTA[id], 'bonus_movement_speed')); return isFinite(v) ? v : 0; } catch (e) { return 0; }
+  }
+
   // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, mana, behavior, items, awareness, reaction, telegraph, preset,
   // scenario ({stunBolt, ...} hooks), useBkb, refill. Dies at 0 hp (combat.js emits 'kill') unless opts.refill (training dummy: refills
   // below 25% hp instead, always aware, no auto-attack, 800 vision, ignored by towers; Free Play Standard / Expert go through spawnDummy).
@@ -96,9 +103,10 @@
     const pick = (k) => o[k] != null ? o[k] : p && p[k] != null ? p[k] : E[k];
     const behavior = o.behavior || 'stationary';
     const items = Array.isArray(o.items) ? o.items.filter(id => G_.ENEMY_ITEMS.includes(id)) : undefined;
+    const bb = bootBonus(items);   // v6 item 40: boots / travels add the KV bonus_movement_speed
     const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
       hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
-      ms: pick('ms'), reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
+      ms: pick('ms') + bb, reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
     });
     e.ai = newAI(behavior, o.x, o.y, w.t);
     e.ai.useBkb = !!o.useBkb;
@@ -720,6 +728,6 @@
   });
 
   IT.Units = {
-    spawnDummy, spawnEnemy, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, bootBonus, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

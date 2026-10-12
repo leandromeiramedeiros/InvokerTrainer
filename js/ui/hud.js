@@ -126,11 +126,10 @@
     return el;
   }
   const coreBox = store => IT.UI.h('div', { class: 'hcore' }, CORE.map(k => statCell(k, store)));
-  // secondary strip: the stat cells for `keys` + status chips (right aligned)
+  // secondary strip: the stat cells for `keys` (the buff / debuff row lives in R.sbf, next to the orbs)
   function stripBox(store, keys) {
     const { h } = IT.UI;
-    store.chips = h('div', { class: 'hchips' });
-    return h('div', { class: 'hstrip' }, keys.map(k => statCell(k, store)), store.chips);
+    return h('div', { class: 'hstrip' }, keys.map(k => statCell(k, store)));
   }
   function paintCells(store, keys, e, ca, pfx) {
     const sh = H.statSheet(e);
@@ -143,27 +142,49 @@
       c.el.setAttribute('data-tip', r.tip);
     }
   }
-  // status chips (11px icons from IT.UnitDraw.statusIcons: priority sorted, cap 4) + a 1-px remaining-time pip; tip = name + seconds left
-  function paintChips(store, e, w, ca, pfx) {
-    const UD = IT.UnitDraw, list = UD && UD.statusIcons ? UD.statusIcons(e, w.t) : [], t = IT.t;
-    const sig = e.id + ':' + list.map(l => l.key).join(',');
-    if (ca[pfx + 'sig'] !== sig) {
-      ca[pfx + 'sig'] = sig; store.chips.textContent = ''; store.chipList = []; store.tot = {};
-      for (const it of list) {
-        const pip = IT.UI.h('i'), el = IT.UI.h('span', { class: 'sti' }, hsIcon('status', 'st_' + it.key), pip);
-        store.chips.appendChild(el); store.chipList.push({ el, pip, pw: -1 });
-      }
+  // ---- buff / debuff row (Dota style): one 22-px framed cell per status of the shown unit (own hero, or the selected enemy / spirit). Buff = green frame, debuff = red.
+  // A canvas per cell draws the 'statusL' art + a clockwise radial sweep of the elapsed duration (relative to the longest seen); stack count bottom-right; tooltip = name + seconds left.
+  const SBF_PX = 22;
+  function sbfCell() {
+    const { h } = IT.UI, cv = h('canvas', { width: SBF_PX, height: SBF_PX }), cnt = h('b', { class: 'sbn' });
+    return { el: h('div', { class: 'sbf' }, cv, cnt), cv, cnt, ctx: cv.getContext('2d'), key: '', buff: null, q: -1, tx: null, cn: 0 };
+  }
+  function sbfBox(store) { store.sbf = IT.UI.h('div', { class: 'hsbf', style: { display: 'none' } }); store.sbfCells = []; store.sbfTot = {}; return store.sbf; }
+  // debuffs first (a stun is what you must notice), then buffs; each group in sim priority order
+  function sbfOrder(list) { return list.filter(x => !x.buff).concat(list.filter(x => x.buff)).slice(0, IT.UnitDraw.MAX_STATUS_HUD); }
+  function sbfDraw(c, it, f, last) {
+    const g = c.ctx, ic = IT.Art.canvas('statusL', 'st_' + it.key);
+    g.clearRect(0, 0, SBF_PX, SBF_PX);
+    if (ic) g.drawImage(ic, 0, 0);
+    if (f > 0) {   // elapsed share, clockwise from 12 o'clock
+      g.fillStyle = 'rgba(8,8,14,.66)'; g.beginPath(); g.moveTo(SBF_PX / 2, SBF_PX / 2);
+      g.arc(SBF_PX / 2, SBF_PX / 2, SBF_PX, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(f, 0.999), false); g.closePath(); g.fill();
     }
-    for (let i = 0; i < list.length && i < store.chipList.length; i++) {
-      const ch = store.chipList[i], it = list[i], fin = isFinite(it.left);
+  }
+  function paintBuffs(store, e, w, ca, pfx) {
+    const UD = IT.UnitDraw, t = IT.t, box = store.sbf; if (!box) return;
+    const list = UD && UD.statusList ? sbfOrder(UD.statusList(e, w.t)) : [];
+    if (ca.sbfuid !== e.id) { ca.sbfuid = e.id; store.sbfTot = {}; }
+    const tot = store.sbfTot, cells = store.sbfCells;
+    while (cells.length < list.length) { const c = sbfCell(); cells.push(c); box.appendChild(c.el); }
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i], it = list[i];
+      if (!it) { if (c.key) { c.key = ''; c.el.style.display = 'none'; } continue; }
+      if (!c.key) c.el.style.display = '';
+      const fin = isFinite(it.left);
+      if (fin) { if (!(tot[it.key] >= it.left)) tot[it.key] = it.left; }
+      const f = fin && tot[it.key] > 0.5 ? Math.max(0, Math.min(1, 1 - it.left / tot[it.key])) : 0, q = Math.round(f * 48);
+      if (c.key !== it.key || c.buff !== it.buff) { c.key = it.key; c.buff = it.buff; c.q = -1; c.el.className = 'sbf ' + (it.buff ? 'buff' : 'debuff'); }
+      if (c.q !== q) { c.q = q; sbfDraw(c, it, q / 48); }
       const nm = IT.hasT('status.' + it.type) ? t('status.' + it.type) : it.type;
       const tx = nm + (fin ? ' - ' + t('hs.left', { n: Math.ceil(Math.max(0, it.left)) }) : '');
-      if (ca[pfx + 'ct' + i] !== tx) { ca[pfx + 'ct' + i] = tx; ch.el.setAttribute('data-tip', tx); }
-      let f = 1;
-      if (fin) { if (!(store.tot[it.key] >= it.left)) store.tot[it.key] = it.left; f = store.tot[it.key] > 0.5 ? Math.max(0, Math.min(1, it.left / store.tot[it.key])) : 1; }
-      const pw = fin ? Math.round(f * 100) : 0;
-      if (ch.pw !== pw) { ch.pw = pw; ch.pip.style.width = pw + '%'; }
+      if (c.tx !== tx) { c.tx = tx; c.el.setAttribute('data-tip', tx); }
+      if (c.cn !== it.count) { c.cn = it.count; c.cnt.textContent = it.count > 1 ? String(it.count) : ''; }
+      c.el.style.opacity = fin && it.left < 0.6 && (((w.t * 8) | 0) & 1) ? '.45' : '';   // last 0.6 s blinks
     }
+    for (const k in tot) if (!list.some(l => l.key === k)) delete tot[k];
+    const show = list.length ? '' : 'none';
+    if (box.style.display !== show) box.style.display = show;
   }
   const UCMD_ICON = { attack: 'ui_atk', stop: 'ui_stop', hold: 'ui_hold' };
   // bottom bar for a selected non-hero unit (Dota-style): portrait, name, bars, armor/MR/speed, 6 items
@@ -175,7 +196,7 @@
     R.ump = h('div', { class: 'bar mp' }, R.umpf = h('i'), R.umpt = h('span'));
     R.uc = {}; R.us = {};
     R.ucore = coreBox(R.uc);   // v6: core stats under the portrait (damage / armor / move / attack speed)
-    R.ustrip = stripBox(R.us, ['mr', 'hpr', 'mpr']);   // magic res + regen + status chips
+    R.ustrip = stripBox(R.us, ['mr', 'hpr', 'mpr']);   // magic res + regen
     R.unote = h('div', { class: 'ustats', style: { display: 'none', color: '#ffd27a' } });   // buildings: team + invulnerable note
     R.uitems = [0, 1, 2, 3, 4, 5].map(() => { const ic = h('span', { class: 'ic' }); return { el: h('div', { class: 'hbtn item' }, ic), ic }; });
     // v6: own Forge Spirit card -> its own Attack / Stop / Hold commands (with the bound keys) instead of item slots
@@ -550,7 +571,7 @@
     R.rec1 = h('div', { class: 'abrec' }); R.rec2 = h('div', { class: 'abrec' });
     R.recs = recipeStrip();
     R.hc = {}; R.hs = {};
-    R.core = coreBox(R.hc);   // v6: core stats 2x2 under the portrait; secondary strip + status chips under the spell row
+    R.core = coreBox(R.hc);   // v6: core stats 2x2 under the portrait; secondary strip under the spell row
     R.strip = stripBox(R.hs, SEC);
     R.bar = h('div', { class: 'hudp hbar' },
       h('div', { class: 'hpcol' }, R.por, R.core),
@@ -563,7 +584,7 @@
       R.recs.el);
     R.ubar = unitBar(R);
     R.orbcol = h('div', { class: 'horbcol' }, R.orbs);
-    R.stat = h('div', { class: 'hstat' }, R.orbcol);   // orbs float above the hero bar (status chips live in the strip under the spells)
+    R.stat = h('div', { class: 'hstat' }, R.orbcol, sbfBox(R));   // orbs float above the hero bar; the large buff / debuff row sits right of them
     R.aim = h('div', { class: 'aimhint', text: t('hud.aimHint') });
     R.rk = rankedPanel(R);
     R.top = h('div', { class: 'htop' }, R.rk);   // top-centre stack: ranked panel, then combo bar
@@ -912,7 +933,7 @@
     if (ca.ump !== mk) { ca.ump = mk; R.umpt.textContent = mk; R.umpf.style.width = (U.maxMana ? Math.max(0, U.mana / U.maxMana) * 100 : 0) + '%'; }
     R.ustrip.style.display = U.building ? 'none' : '';
     if (!U.building) {
-      paintCells(R.uc, CORE, U, ca, 'uc'); paintCells(R.us, ['mr', 'hpr', 'mpr'], U, ca, 'us'); paintChips(R.us, U, w, ca, 'usc');
+      paintCells(R.uc, CORE, U, ca, 'uc'); paintCells(R.us, ['mr', 'hpr', 'mpr'], U, ca, 'us'); paintBuffs(R, U, w, ca, 'usc');
     }
     R.uitems.forEach((b, i) => {
       const it = U.items && U.items[i], id = it ? (typeof it === 'string' ? it : it.id) : null;
@@ -1089,8 +1110,8 @@
       const ab = R.q.el.closest('.abrow').getBoundingClientRect(), rt = R.stat.parentNode.getBoundingClientRect(), ow = R.orbs.getBoundingClientRect().width;
       if (ab.width && ow) { ca.statPos = lk; R.stat.style.left = Math.round(ab.left + ab.width / 2 - ow / 2 - rt.left) + 'px'; }
     }
-    // core box + secondary strip (stats + status chips) of the hero; the selected unit's own are painted in H.updUnit
-    if (!U) { paintCells(R.hc, CORE, hero, ca, 'hc'); paintCells(R.hs, SEC, hero, ca, 'hs'); paintChips(R.hs, hero, w, ca, 'hsc'); }
+    // core box + secondary strip (stats) + buff row of the hero; the selected unit's own are painted in H.updUnit
+    if (!U) { paintCells(R.hc, CORE, hero, ca, 'hc'); paintCells(R.hs, SEC, hero, ca, 'hs'); paintBuffs(R, hero, w, ca, 'hsc'); }
     // sandbox panel
     if (R.dpsN) H.updSide(dt, w, hero, ca);
     if (H.statsOn) { H.accT += dt; if (H.accT > 0.4) { H.accT = 0; H.buildLive(); } }

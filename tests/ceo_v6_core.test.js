@@ -15,8 +15,9 @@ const IT = load(FILES);
 const R = IT.Ranked, SC = IT.SCENARIOS, DF = IT.DIFFICULTY;
 const DIFFS = ['ian', 'easy', 'common', 'hard', 'bambam'];
 
-function build(id, diff, seed, mode) {
+function build(id, diff, seed, mode, nominal) {
   const run = R.create({ mode: mode || 'sandbox', diff: diff || 'easy', scenario: id, seed: seed || 5 });
+  if (nominal) run.varRng = null;   // item 40: exact-value tests run un-varied (variation_v6.test.js covers the variation)
   const pr = run.next(), m0 = IT.Maps.get('grounds');
   const w = IT.World.create({ seed: seed || 5, map: m0, loadout: pr.lo, fog: pr.fog });
   const h = IT.Hero.create(w, pr.lo, m0.spawns.hero.x, m0.spawns.hero.y);
@@ -53,7 +54,7 @@ test('2: foe hp = min(HP_CAP, HP_SHARE x hpMul) x KV step damage (sun_snipe: one
     assert.ok(ss > 0, 'KV damage');
     const want = Math.round(Math.max(100, ss * Math.min(R.HP_CAP, R.HP_SHARE * (df.hpMul != null ? df.hpMul : 1))));
     assert.equal(R.foeHp(sc, df, lo)[0], want, id);
-    const m = build('sun_snipe', id); thaw(m.run);
+    const m = build('sun_snipe', id, 5, null, true); thaw(m.run);
     assert.equal(m.run.dummies[0].maxHp, want, id + ' spawned');
   }
   assert.equal(R.HP_SHARE, 0.9); assert.equal(R.HP_CAP, 0.9);   // playtest 2 (DECISIONS.md: bot sweep)
@@ -276,7 +277,7 @@ function dustRun(id, diff, off, secs, after) {
   const sc = SC.get(id), t0 = sc.obj.time;
   sc.obj.time = 60;
   try {
-    const m = build(id, diff); thaw(m.run);
+    const m = build(id, diff, 5, null, true); thaw(m.run);
     const { w, h, run } = m, d = run.dummies.find(u => u.items && u.items.some(s => s && s.id === 'dust'));
     const casts = [], shouts = [];
     w.on('itemUse', p => { if (p.ability === 'dust') { const u = w.get(p.unit); casts.push({ t: w.t, x: u.x, y: u.y, unit: p.unit }); } });

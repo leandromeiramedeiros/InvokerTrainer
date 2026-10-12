@@ -13,11 +13,11 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [x] #37 Boots don't stack: Travel replaces brown boots (loadout, scenario kits, sim stats). (loadout.js/sim loadout.js/items.js/scenarios kits)
 - [x] #38 Scenarios have NO side pane; side pane is Free Play only. (hud.js buildSide gate)
 - [x] #13 Intro tour + animated briefing (12 s, camera glides to enemies/gate/focus, cancel rules, F1 skips tour) + #39 Sun-Strike-shaped start reveal on unseen enemies (lingers ~1 s after start; mandatory at Ian/Easy/Normal, per scenario at Hard/Bambam; crowded tree pathing at harder tiers). (opus; ranked.js phase, camera.js, new ui/briefing.js, fx)
-- [ ] #40 Per-play variation: enemy start pos / HP / movement (seeded in ranked), enemy boots where sensible; keep feasibility. (ranked.js apply/prepare)
+- [x] #40 Per-play variation: enemy start pos / HP / movement (seeded in ranked), enemy boots where sensible; keep feasibility. (ranked.js apply/prepare)
 
 ### P1
-- [ ] #25 Terrain height readability (cliff lip/face/shadow/outline, ramps as steps, tier brightness, AO; night + fog). (terrain.js/light.js/fog.js)
-- [ ] #32 + 21.png: status icons redrawn after Liquipedia mechanics iconography; row above the orb orbit; LARGE framed HUD buff/debuff row next to the orb icons (sweep, stacks, green/red, tooltip; selected unit's statuses). (render/units.js, icons.js, hud.js)
+- [x] #25 Terrain height readability (cliff lip/face/shadow/outline, ramps as steps, tier brightness, AO; night + fog). (terrain.js/light.js/fog.js)
+- [x] #32 + 21.png: status icons redrawn after Liquipedia mechanics iconography; row above the orb orbit; LARGE framed HUD buff/debuff row next to the orb icons (sweep, stacks, green/red, tooltip; selected unit's statuses). (render/units.js, icons.js, hud.js)
 - [ ] #41 Ice Wall visual rework (irregular shards, refraction, frost mist, cracks, staggered spawn, melt-out; same footprint). (fx.js)
 - [ ] #42 Sand particles Noita-style: additive blending + bloom + height layer (recover v1 look from git history of js/render/sand.js); apply to end card, Aghanim picker, relic toasts. (sand.js, endsplash, loadout aghs, relics toast)
 - [ ] #6/#8/#9 End splash: concise/bigger result text already done; fill the 2 empty boxes (per-turn timeline strip + best combo/most-used spell), fanciness scaling with medal tier (sand, particles, god rays, glow/pulse). (endsplash.js, splash.css, medals.js)

@@ -20,6 +20,7 @@ IT.SCENARIOS.push({
 
 function mk(id, diff, skin) {
   const run = IT.Ranked.create({ mode: 'practice', diff, scenario: id, seed: 5, skin });
+  run.varRng = null;   // item 40: exact-value tests run un-varied (variation_v6.test.js covers the variation)
   const pr = run.next(), sp = map.spawns.hero;
   const w = IT.World.create({ seed: 5, map, loadout: pr.lo, fog: pr.fog, autoAttack: false });
   const h = IT.Hero.create(w, pr.lo, sp.x, sp.y);

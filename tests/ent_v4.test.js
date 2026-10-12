@@ -62,7 +62,7 @@ test('enemy items limited to the five; behavior default stationary', () => {
   const e = enemy(400, 0, { items: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'refresher', 'atos'] });
   assert.deepEqual(e.items.filter(Boolean).map(s => s.id), ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff']);
   assert.equal(e.behavior, 'stationary');
-  assert.deepEqual(IT.GAME.ENEMY_ITEMS, ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust']);   // v6: + dust (scenario chasers)
+  assert.deepEqual(IT.GAME.ENEMY_ITEMS, ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust', 'boots', 'travels']);   // v6: + dust (scenario chasers), + boots / travels (item 40: ms)
 });
 
 test('item Dota values baked', () => {

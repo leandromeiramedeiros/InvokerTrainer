@@ -33,7 +33,7 @@
     },
     ITEMS_MAIN: ['refresher', 'atos', 'vyse', 'shiva', 'meteorhammer', 'bkb', 'orchid', 'gleipnir'],
     ITEMS_EXTRA: ['blink', 'boots', 'travels', 'forcestaff', 'dust'],
-    ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust'],   // items an enemy NPC may carry (v4; v6 dust: one charge, used by a chaser at the last-seen spot)
+    ENEMY_ITEMS: ['bkb', 'blink', 'shadowblade', 'euls', 'forcestaff', 'dust', 'boots', 'travels'],   // v6 item 40: boots / travels add the KV ms bonus; items an enemy NPC may carry (v4; v6 dust: one charge, used by a chaser at the last-seen spot)
     SKINS: ['pedro', 'renan', 'vitinho'],
     SKIN_NAMES: { pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho' },
     // Dummy stat presets. Behavior: stationary | wander | evasive.

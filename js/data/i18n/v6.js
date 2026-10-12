@@ -39,6 +39,7 @@
       'hs.base': 'Base', 'hs.orbs': 'Orbs', 'hs.items': 'Items', 'hs.slow': 'Slows', 'hs.none': 'No source in this build', 'hs.left': '{n}s left', 'hs.at': 'Attack time',
       'status.towerProt': 'Tower protection',
       'panel.reset': 'Reset position', 'panel.close': 'Close',
+      'status.leash': 'Leashed', 'status.invisible': 'Invisible', 'status.invisFade': 'Fading out', 'status.melt': 'Melting Strike (armor reduced)',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -78,5 +79,6 @@
       'hs.base': 'Base', 'hs.orbs': 'Orbes', 'hs.items': 'Itens', 'hs.slow': 'Lentidões', 'hs.none': 'Sem fonte nesta versão', 'hs.left': '{n}s restantes', 'hs.at': 'Tempo de ataque',
       'status.towerProt': 'Proteção da torre',
       'panel.reset': 'Redefinir posição', 'panel.close': 'Fechar',
+      'status.leash': 'Preso à coleira', 'status.invisible': 'Invisível', 'status.invisFade': 'Desaparecendo', 'status.melt': 'Melting Strike (armadura reduzida)',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);
