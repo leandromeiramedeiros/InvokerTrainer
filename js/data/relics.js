@@ -1,29 +1,33 @@
 // v6 WP6: Invoker relics (Dota Plus "Relic progression"), only the ones the sim can measure. Pure data + tier math.
-// Source: SteamDatabase/GameTracking-Dota2 @ b2c7f7c (2026-10-11):
-//   game/dota/pak01_dir/scripts/tracked_stats_player.vdata (invoker_* kill-eater stats) + game/dota/pak01_dir/resource/localization/dota_english.txt
-//   (KillEaterEvent[Type]_* names). The files carry no per-relic level thresholds (relic_progress_per_level is served by the GC), so the tiers
-//   below are trainer-scaled (a ranked run is 8 short scenarios vs a 40-minute match); see DECISIONS.md.
-// dota: true = a real Dota relic (name = the game's English name); false = a trainer relic measuring the same kind of thing for our scenarios.
+// Source: local Dota 2 install, build 6957 (steam.inf ClientVersion/ServerVersion 6957, Oct 09 2026), pak01_dir.vpk:
+//   scripts/tracked_stats_player.vdata_c (invoker_* kill-eater stats), resource/localization/dota_english.txt (KillEaterEvent[Type]_* names),
+//   scripts/items/items_game.txt kill_eater_score_types.<event>.in_game_display_interval = the per-level step of a Dota relic.
+//   Dota relics level LINEARLY (panorama/scripts/post_game_progress/post_game_progress_hero_relics.vjs_c: level = floor(value / value_per_level);
+//   client.dll fills the About tooltip's assists_per_relic_level from kill_eater_score_types[1].in_game_display_interval). There are no tier tables.
+// dota: true = a real Dota relic: `step` = the game's per-level value, tiers I..V = Dota relic levels 1..5 (k x step).
+// dota: false = a trainer relic measuring the same kind of thing for our scenarios: tiers are trainer-scaled (no Dota source).
 // unit: 'n' count, 'dmg' damage / mana points, 's' seconds. Names live in js/data/i18n/relics.js ('relic.<id>', 'relic.<id>.d').
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
   const R = (id, dota, key, icon, unit, tiers, extra) => Object.assign({ id, dota, key, icon, unit, tiers }, extra || {});
+  // real Dota relic: kill-eater event id + items_game in_game_display_interval (per-level step) -> tiers = levels 1..5
+  const D = (id, key, icon, unit, ev, step, extra) => R(id, true, key, icon, unit, [1, 2, 3, 4, 5].map(k => k * step), Object.assign({ event: ev, step }, extra || {}));
   const LIST = [
     // ---- Invoker hero relics (rare relics in Dota Plus)
-    R('sunstrike_kills', true, 'KillEaterEventType_Invoker_SunstrikeKills', 'sunstrike', 'n', [3, 12, 40, 120, 300]),
-    R('tornado_kills', true, 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', [3, 12, 40, 120, 300]),
-    R('multi_icewall', true, 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', [2, 8, 25, 70, 180], { min: 2 }),
-    R('three_emp', true, 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', [1, 4, 12, 35, 90], { min: 3 }),
-    R('three_deafening', true, 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', [1, 4, 12, 35, 90], { min: 3 }),
-    R('multi_meteor', true, 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', [2, 8, 25, 70, 180], { min: 2 }),
-    R('alacrity_dmg', true, 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', [300, 1500, 6000, 20000, 60000]),
+    D('sunstrike_kills', 'KillEaterEventType_Invoker_SunstrikeKills', 'sunstrike', 'n', 23, 15),
+    D('tornado_kills', 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', 32, 3),
+    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2 }),
+    D('three_emp', 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', 579, 5, { min: 3 }),
+    D('three_deafening', 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', 580, 5, { min: 3 }),
+    D('multi_meteor', 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', 581, 20, { min: 2 }),
+    D('alacrity_dmg', 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', 582, 25000),
     // ---- generic relics every hero has (common relics)
-    R('kills', true, 'KillEaterEventType_Kills', 'invoke', 'n', [10, 40, 150, 400, 1000]),
-    R('stun_kills', true, 'KillEaterEvent_StunsLeadingToKills', 'coldsnap', 'n', [5, 20, 75, 200, 500]),
-    R('blink_kills', true, 'KillEaterEvent_KillsAfterBlink', 'blink', 'n', [3, 12, 40, 120, 300]),
-    R('bkb_kills', true, 'KillEaterEvent_KillsDuringBKB', 'bkb', 'n', [3, 12, 40, 120, 300]),
-    // ---- trainer relics (no Dota equivalent; same style, sim-measured)
+    D('kills', 'KillEaterEventType_Kills', 'invoke', 'n', 0, 75),
+    D('stun_kills', 'KillEaterEvent_StunsLeadingToKills', 'coldsnap', 'n', 5043, 50),
+    D('blink_kills', 'KillEaterEvent_KillsAfterBlink', 'blink', 'n', 5038, 100),
+    D('bkb_kills', 'KillEaterEvent_KillsDuringBKB', 'bkb', 'n', 5041, 15),
+    // ---- trainer relics (no Dota equivalent; same style, sim-measured; tiers trainer-scaled for 8-scenario runs)
     R('meteor_dmg', false, null, 'chaosmeteor', 'dmg', [1500, 8000, 30000, 100000, 250000]),
     R('emp_mana', false, null, 'emp', 'dmg', [800, 4000, 15000, 50000, 120000]),
     R('tornado_lifts', false, null, 'tornado', 'n', [10, 40, 150, 400, 1000]),

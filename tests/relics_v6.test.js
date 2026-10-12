@@ -38,11 +38,22 @@ test('relics data: the Invoker relics + generic kill relics, 5 ascending tiers, 
     for (let i = 1; i < r.tiers.length; i++) assert.ok(r.tiers[i] > r.tiers[i - 1], r.id);
     assert.ok(['n', 'dmg', 's'].includes(r.unit), r.id);
   }
-  assert.equal(RL.tierOf('kills', 0), 0); assert.equal(RL.tierOf('kills', 10), 1); assert.equal(RL.tierOf('kills', 39), 1); assert.equal(RL.tierOf('kills', 5000), 5);
-  assert.deepEqual(RL.progress('kills', 25), { tier: 1, next: 40, prev: 10, frac: 0.5 });
+  assert.equal(RL.tierOf('kills', 0), 0); assert.equal(RL.tierOf('kills', 75), 1); assert.equal(RL.tierOf('kills', 149), 1); assert.equal(RL.tierOf('kills', 5000), 5);
+  assert.deepEqual(RL.progress('kills', 112.5), { tier: 1, next: 150, prev: 75, frac: 0.5 });
   const mx = RL.progress('kills', 1e6); assert.equal(mx.tier, 5); assert.equal(mx.next, null); assert.equal(mx.frac, 1);
   assert.equal(RL.progress('nope', 3).tier, 0);
   assert.equal(RL.fmt('meteor_dmg', 12345.6), '12,346'); assert.equal(RL.fmt('disable_time', 12.34), '12.3s'); assert.equal(RL.fmt('disable_time', 456.7), '457s');
+});
+
+test('relics data: Dota relics level linearly by the items_game in_game_display_interval step (local build 6957), tiers = levels 1..5', () => {
+  // kill_eater_score_types.<event>.in_game_display_interval (scripts/items/items_game.txt, pak01_dir.vpk, build 6957)
+  const STEP = { sunstrike_kills: [23, 15], tornado_kills: [32, 3], multi_icewall: [578, 25], three_emp: [579, 5], three_deafening: [580, 5],
+    multi_meteor: [581, 20], alacrity_dmg: [582, 25000], kills: [0, 75], stun_kills: [5043, 50], blink_kills: [5038, 100], bkb_kills: [5041, 15] };
+  for (const [id, [ev, step]] of Object.entries(STEP)) {
+    const r = RL.BY[id]; assert.equal(r.event, ev, id); assert.equal(r.step, step, id);
+    assert.deepEqual(r.tiers, [1, 2, 3, 4, 5].map(k => k * step), id);
+  }
+  for (const r of RL.LIST) if (!r.dota) assert.equal(r.step, undefined, r.id);
 });
 
 test('per-run medal: score tier capped by cleared turns, Immortal only on a perfect run, stars inside the band', () => {
@@ -108,13 +119,13 @@ test('collector: kills, sunstrike / stun / blink kills, multi-hero windows, mete
 test('collector: hooks.tier fires once when the lifetime total crosses a tier', () => {
   const { w, h, foes, S } = mk(true);
   const fired = [], prev = SC.hooks;
-  SC.hooks = { base: () => ({ kills: 9 }), tier: e => fired.push(e) };
+  SC.hooks = { base: () => ({ kills: 74 }), tier: e => fired.push(e) };
   try {
     dmg(w, h, foes[0], 'attack', 1e5, 'physical');
     dmg(w, h, foes[1], 'attack', 1e5, 'physical');
   } finally { SC.hooks = prev; }
   const k = fired.filter(e => e.id === 'kills');
-  assert.equal(k.length, 1); assert.equal(k[0].tier, 1); assert.equal(k[0].value, 10);
+  assert.equal(k.length, 1); assert.equal(k[0].tier, 1); assert.equal(k[0].value, 75);
   assert.equal(S.summary().relics.kills, 2);
 });
 

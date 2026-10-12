@@ -10,7 +10,9 @@
     3: { hp: 2500, armor: 16, min: 170, max: 174, protArmor: 5, protRegen: 3 },
     4: { hp: 2600, armor: 21, min: 170, max: 174, protArmor: 5, protRegen: 3 },
   };
-  const RANGE = 700, BAT = 0.9, PROJ = 750, VISION = 1900, TRUE_SIGHT = 700, PROT_R = 900, AGGRO_R = 500, RADIUS = 72, LAUNCH_Z = 260;
+  const RANGE = 700, BAT = 0.9, PROJ = 750, VISION = 1900, TRUE_SIGHT = 860, PROT_R = 900, AGGRO_R = 500, RADIUS = 72, LAUNCH_Z = 260;
+  // TRUE_SIGHT: not in the KV; server.dll build 6957 CDOTA_Modifier_Tower_Truesight_Aura aura-radius getter (vtable slot 68, RVA 0x01644020) returns 860.0f
+  // (same slot returns 1200 for CDOTA_Modifier_Fountain_Truesight_Aura = the known fountain value). See DECISIONS.md "v6 local-install audit".
   const RECENT = 1.5;        // s an attack order counts as "attacking the tower / an ally"
   const REPICK_GAP = 2.5;
   const TARGET_KINDS = { hero: 1, spirit: 1, enemy: 1 };   // dummies are scarecrows: towers ignore them
@@ -218,5 +220,5 @@
     return best;
   }
 
-  IT.Towers = { TIERS, RANGE, PROT_R, spawn, spawnAll, gate, STRUCT_KV, structSub, structCard, buildingAt };
+  IT.Towers = { TIERS, RANGE, PROT_R, TRUE_SIGHT, spawn, spawnAll, gate, STRUCT_KV, structSub, structCard, buildingAt };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -16,7 +16,7 @@ Tests: `node --test tests/*.test.js` must stay green (244 now). Never commit (or
 | Armor | 12 | 16 | 16 | 21 |
 | Damage | 88-92 | 170-174 | 170-174 | 170-174 |
 - Attack interval 0.9 s (100 / 191 DPS), range 700 (+ target hull), projectile speed 750, vision 1900 (ground, blocked by
-  trees and higher ground; NO flying vision), True Sight aura 700 (reveals Ghost Walk), Tower Protection aura 900 to allied
+  trees and higher ground; NO flying vision), True Sight aura 860 (server.dll build 6957; reveals Ghost Walk), Tower Protection aura 900 to allied
   heroes: armor +3/+5/+5/+5, HP regen +1/+3/+3/+3 per s.
 - Reinforced: hero attacks deal 50% less to buildings, non-hero attacks 30% less, player-controlled summons a further 10% less.
   Buildings are immune to most abilities (spells deal 0 and apply no statuses; Meteor Hammer is the exception).
@@ -64,7 +64,7 @@ IT.Towers.TIERS          { 1:{hp,armor,min,max}, ... }
 IT.Towers.spawn(w, { x, y, team, tier }) -> ent
 IT.Towers.spawnAll(w, map) -> ents   (map.towers; callers: main.js world creation, ranked.apply after clearing ents)
 ent = { kind:'tower', building:true, team, tier, x, y, radius:72, hp, maxHp, armor, magicRes:0, ms:0, vision:1900,
-        trueSight:700, attack:{ min, max, bat:0.9, point:0, range:700, projSpeed:750, next, target }, statuses:[], ... }
+        trueSight:860, attack:{ min, max, bat:0.9, point:0, range:700, projSpeed:750, next, target }, statuses:[], ... }
 events: 'towerAttack' {unit, target}, 'towerDown' {unit, team, tier, by}
 ```
 - Damage gate in combat.js: buildings only take attack damage (and Meteor Hammer) with Reinforced reductions.

@@ -394,3 +394,14 @@ test('10: the Free Play "Fog of war" checkbox is honoured only in Free Play; sce
   const lo = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'loadout.js'), 'utf8');
   assert.match(lo, /mode: 'sandbox', count: 1, fog: st\.fog/, 'Free Play passes the checkbox as opts.fog');
 });
+
+test('local-install audit: Dire tower true sight 860 (server.dll build 6957) reveals a ghosted hero at 800 u, not at 900 u', () => {
+  assert.equal(IT.Towers.TRUE_SIGHT, 860);
+  const { w, h } = world();
+  const tw = IT.Towers.spawn(w, { team: 1, tier: 1, x: h.x + 800, y: h.y });
+  assert.equal(tw.trueSight, 860);
+  IT.Status.add(w, h, 'ghost', 30, {});
+  assert.equal(IT.Vision.trueSighted(w, 1, h), true, '800 u: inside the aura');
+  tw.x = h.x + 900;
+  assert.equal(IT.Vision.trueSighted(w, 1, h), false, '900 u: outside the aura');
+});
