@@ -386,8 +386,61 @@
     if (trail.size > 200) for (const id of trail.keys()) if (!w.byId.has(id)) trail.delete(id);
   }
 
+  // ---------- #76 L1 point lights (world space; no-op while IT.Lights.enabled is false) ----------
+  // Element hierarchy (#76b): EXORT strongest + flicker, WEX strobing violet/white, QUAS faint steady cyan; mixed spells blend by orb share.
+  const ELEM_RGB = { exort: [1, 0.6, 0.2], wex: [0.66, 0.36, 1], quas: [0.35, 0.68, 1] };
+  function elemOfRgb(c) {   // nearest element to a 0..255 colour, null when none is close
+    let best = null, bd = 0.45;
+    for (const k in ELEM_RGB) { const e = ELEM_RGB[k], d = Math.hypot(c[0] / 255 - e[0], c[1] / 255 - e[1], c[2] / 255 - e[2]); if (d < bd) { bd = d; best = k; } }
+    return best;
+  }
+  const ITEM_ELEM = { meteorhammer: 'quas', atos: 'wex', gleipnir: 'exort' };
+  function pointLights(R) {
+    const LT = IT.Lights; if (!LT || !LT.enabled) return;
+    LT.frame(R);
+    const w = R.w, P = R.P, ORB = IT.GAME.SPELL_ORBS;
+    for (const e of w.ents) {
+      if (e.dead || (e.kind !== 'proj' && e.kind !== 'thinker')) continue;
+      if (e.team === 1 && !lit(R, e.x, e.y)) continue;
+      R.interp(e);
+      const key = e.fx || e.ability, rad = e.r || e.radius || 60, sd = e.id | 0;
+      if (key === 'startReveal' || key === 'tower') continue;
+      if (key === 'attack') { const o = (orbPal(w.byId.get(e.src)).rgb); const el = elemOfRgb(o); if (el) LT.addElem(R, R.ix, R.iy, 30, 110, el, 0.7, sd, 'attack'); continue; }
+      if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; LT.addElem(R, R.ix, R.iy, 150, 420, 'exort', 0.45 + 0.55 * clamp(1 - rem, 0, 1), sd, 'sunstrike'); continue; }
+      if (key === 'chaosmeteor') { LT.addElem(R, R.ix, R.iy, e.landed ? 60 : 160 + R.iz, 520, 'exort', 1, sd, 'meteor'); continue; }
+      if (key === 'icewall') continue;   // iceWallLights
+      if (ITEM_ELEM[key]) { LT.addElem(R, R.ix, R.iy, 40, 160, ITEM_ELEM[key], 0.8, sd, key); continue; }
+      const orbs = ORB[key];
+      if (orbs) LT.addElem(R, R.ix, R.iy, 50, Math.max(150, rad * 1.3), LT.blend(orbs), 1, sd, key);
+    }
+    for (const f of fxs) {
+      const age = (R.time - f.t0) / f.dur, k = 1 - clamp(age, 0, 1), fr = f.k === 'pillar' ? [255, 190, 90] : PX.rgb(f.color || '#ffffff');
+      const el = f.k === 'pillar' ? 'exort' : elemOfRgb(fr), sd = (f.x | 0) + (f.y | 0);
+      if (f.k === 'flash' || f.k === 'pillar') {
+        if (el) LT.addElem(R, f.x, f.y, 40, Math.min(660, (f.r || 120) * 2), el, 1.6 * k, sd, f.k);
+        else LT.add({ x: f.x, y: f.y, z: 40, r: fr[0] / 255, g: fr[1] / 255, b: fr[2] / 255, radius: Math.min(500, (f.r || 120) * 1.8), intensity: 0.7 * k, kind: f.k });
+      } else if (f.k === 'shards') LT.addElem(R, f.x, f.y, 30, 240, 'quas', 1.5 * k, sd, 'shards');
+      else if (f.k === 'wave' || f.k === 'chainring') { if (el) LT.addElem(R, f.x, f.y, 40, 220, el, k, sd, f.k); }
+    }
+    for (const c of chans) {
+      const age = R.time - c.t0, fade = c.end != null ? 1 - clamp((R.time - c.end) / 0.3, 0, 1) : 1;
+      LT.addElem(R, c.x, c.y, 60, Math.min(700, c.r * 1.3), 'quas', fade * clamp(age / 0.25, 0, 1), c.x | 0, 'channel');
+    }
+    for (const e of w.ents) {   // TP column (Quas-cool, steady), Ghost Walk / Cold Snap on units (faint cyan)
+      if (e.dead) continue;
+      const ch = tpOf(e);
+      if (ch) { const Av = unitA(R, e); if (Av >= 0.05) { R.interp(e); const p = clamp((w.t - ch.t0) / (ch.dur > 0 ? ch.dur : 3), 0, 1); LT.add({ x: R.ix, y: R.iy, z: 90, r: 0.47, g: 0.78, b: 1, radius: 360 + 100 * p, intensity: (0.55 + 0.35 * p) * Av, kind: 'tp' }); } }
+      if (!e.statuses || !e.statuses.length) continue;
+      for (let i = 0; i < e.statuses.length; i++) {
+        const ty = e.statuses[i].type;
+        if (ty === 'ghost' || ty === 'coldsnap') { R.interp(e); LT.addElem(R, R.ix, R.iy, 40, 200, 'quas', 1, e.id | 0, ty); break; }
+      }
+    }
+  }
+
   // ---------- lights ----------
   function lights(R) {
+    pointLights(R);
     const w = R.w;
     for (const e of w.ents) {
       if (e.dead || (e.kind !== 'proj' && e.kind !== 'thinker')) continue;
@@ -1182,6 +1235,7 @@
       const s = (-0.5 + (i + 0.5) / N) * lay.L, sx = (lay.mx + ux * s) / P - R.camX, sy = (lay.my + uy * s) / P - R.camY - 7;
       R.light(sx, sy, 34, [150, 215, 255], 0.42 * v);
       R.glow(sx, sy, 14, '#9fe0ff', 0.16 * v);
+      if (IT.Lights && IT.Lights.enabled && (i & 1) === 0) { IT.Lights.frame(R); IT.Lights.addElem(R, lay.mx + ux * s, lay.my + uy * s, 40, 200, 'quas', v, i, 'icewall'); }
     }
   }
 

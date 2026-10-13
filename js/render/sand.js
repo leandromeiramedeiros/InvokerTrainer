@@ -555,10 +555,12 @@
     if (!emAny) return;
     const lb = R.lightmap.buf, fog = R.fog, fogOn = R.w.fog !== false;
     const gu = glowU; gu.fill(0xff000000);
+    const LT = IT.Lights && IT.Lights.enabled ? IT.Lights : null, lpts = [];
     let g = false;
     for (let y = 0; y < LHn; y++) for (let x = 0; x < LWn; x++) {
       const k = y * LWn + x, r = er[k], gg = eg[k], b = eb[k];
       if (r + gg + b < 0.04) continue;
+      if (LT && lpts.length < 600 && r + gg + b > 0.5) lpts.push({ x: (R.camX + x * 4 + 2) * R.P, y: (R.camY + y * 4 + 2) * R.P, z: 10, r: r / 255, g: gg / 255, b: b / 255, w: r + gg + b });
       // light, 3x3 spread
       for (let dy = -1; dy <= 1; dy++) {
         const yy = y + dy; if (yy < 0 || yy >= LHn) continue;
@@ -572,6 +574,13 @@
       if (fogOn) gf = clamp(fog.sample(camX + x * 4 + 2, camY + y * 4 + 2) - 1.3, 0, 0.7) / 0.7;
       if (gf <= 0) continue;
       gu[k] = A(ch(r * GK * 255 * gf), ch(gg * GK * 255 * gf), ch(b * GK * 255 * gf)); g = true;
+    }
+    if (LT && lpts.length) {   // #76 L1: glow sand -> <= 4 clustered point lights (colour = weighted mean, normalised; strength from total emission)
+      LT.frame(R);
+      for (const c of LT.cluster(lpts, 4)) {
+        const m = Math.max(c.r, c.g, c.b) || 1;
+        LT.add({ x: c.x, y: c.y, z: c.z, r: c.r / m, g: c.g / m, b: c.b / m, radius: 120 + Math.min(300, c.span * 0.6 + c.n * 2), intensity: Math.min(0.9, 0.12 + Math.sqrt(c.weight) * 0.012), kind: 'sand' });
+      }
     }
     er.fill(0); eg.fill(0); eb.fill(0); emAny = false;
     if (!g) return;

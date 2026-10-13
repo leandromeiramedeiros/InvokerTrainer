@@ -431,7 +431,13 @@
       ter.chunksDone = () => nDone;
       ter.chunkCount = cw * chn;
     }
+    ter.normals = () => normals(ter);
     return ter;
+  }
+
+  // v6 #76 L2: normal/height buffer of a built terrain (js/render/normals.js), cached on `ter` (same lifetime as ter.base); null while lighting is off.
+  function normals(ter) {
+    return IT.Normals && IT.Normals.active() && ter && ter.map ? IT.Normals.terrain(ter.map, ter) : null;
   }
 
   // Pure: the chunk index rectangle (inclusive, clamped to the cw x chn grid) covering the pixel box (x, y, w, h) grown by `margin` chunks.
@@ -513,5 +519,5 @@
   }
 
   const EDGE = { LIP_N, FOOT_N, FACE_S, LIP_S, LIP_W, FOOT_W, FACE_E, LIP_E, SHADOW_S, AO_N, OUTL_S, AO_S, SHADOW_E, AO_W, OUTL_E, AO_E, CAST_S, HI_N, HI_S, HI_W, HI_E, LO_N, LO_S, LO_W, LO_E, RAMP };
-  IT.Terrain = { build, draw, chunkRange, edgeKind, edgeFlags, EDGE, TIER_K, TIER_S, TW, TH, TAX, TAY, MINI_W, MINI_H };
+  IT.Terrain = { build, draw, chunkRange, edgeKind, edgeFlags, rampDir, normals, EDGE, TIER_K, TIER_S, TW, TH, TAX, TAY, MINI_W, MINI_H };
 })(typeof window !== 'undefined' ? window : globalThis);

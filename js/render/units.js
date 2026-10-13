@@ -714,6 +714,18 @@
     R.interp(e);
     const sx = R.ix / R.P - R.camX, sy = R.iy / R.P - R.camY - R.iz / R.P;
     const S0 = state.get(e.id);
+    const LT = IT.Lights;
+    if (LT && LT.enabled) {   // #76 L1: world-space point lights; orb element -> intensity hierarchy (Exort >> Wex > Quas)
+      LT.frame(R);
+      if (e.kind === 'hero') {
+        const orbs = e.inv.orbs, EL = { Q: 'quas', W: 'wex', E: 'exort' };
+        for (let i = 0; i < orbs.length; i++) {
+          const th = R.time * 2.6 + i * 2.0944;
+          LT.addElem(R, R.ix + Math.cos(th) * 72, R.iy + Math.sin(th) * 30, 80 + R.iz, 150, EL[orbs[i]], 0.8, (e.id | 0) * 3 + i, 'orb');
+        }
+        if (S0 && S0.alU > R.simT) LT.addElem(R, R.ix, R.iy, 60 + R.iz, 260, LT.blend('WWE'), 1, e.id | 0, 'alacrity');   // Alacrity: Wex strobes + fiery tint
+      } else if (e.kind === 'spirit') LT.addElem(R, R.ix, R.iy, 50 + R.iz, 240, 'exort', 0.9, e.id | 0, 'spirit');
+    }
     if (S0 && S0.wdP > 0) R.light(sx + Math.cos(e.facing) * 4, sy - 10, 14 + 26 * S0.wdP, [255, 150, 60], 0.15 + 0.55 * S0.wdP);
     if (e.kind === 'hero') {
       const orbs = e.inv.orbs, o = PX.mixOrbs(orbs.join(''));

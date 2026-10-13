@@ -44,7 +44,7 @@
     if (cv._itComp) cv._itComp.release();          // a new session reuses the canvas/context: free the previous resources first
     const C = { ok: false, canvas: cv, kind: (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) ? 'webgl2' : 'webgl', frames: 0, err: '' };
     let light8 = new Uint8ClampedArray(LW * LH * 4);
-    let progMain, progH, progV, vbo, texScene, texLight, texGlow, texA, texB, fboA, fboB, uM, uH, uV, curW = 0, curH = 0;
+    let progMain, progH, progV, vbo, texScene, texLight, texGlow, texA, texB, texN = [null, null], normSrc = [null, null], fboA, fboB, uM, uH, uV, curW = 0, curH = 0;
 
     function shader(type, src) {
       const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
@@ -83,6 +83,7 @@
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE); gl.disable(gl.DITHER);
       textures();
+      for (let k = 0; k < 2; k++) if (normSrc[k]) upNormals(k);   // context restored: re-upload the G-buffer inputs
       if (gl.getError() !== gl.NO_ERROR) throw new Error('gl error at init');
     }
     function textures() {   // view-sized targets (rebuilt on zoom)
@@ -95,6 +96,35 @@
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       curW = curH = 0;
     }
+    // v6 #76 L2: normal/height G-buffer inputs, units 4 (terrain) / 5 (sprite atlas). Raw RGBA (alpha is material: never premultiplied); L3 samples them.
+    function upNormals(k) {
+      const n = normSrc[k], big = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      if (!n || n.w > big || n.h > big) return false;
+      if (texN[k]) gl.deleteTexture(texN[k]);
+      gl.activeTexture(gl.TEXTURE0 + 4 + k);
+      const t = texN[k] = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      if (n.px) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, n.w, n.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, n.px);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, n.src);
+      gl.activeTexture(gl.TEXTURE0);
+      return true;
+    }
+    // src: IT.Normals result ({data,w,h} / forSheet / terrain), ImageData, a Uint8(Clamped)Array + w,h, a canvas (debug: premultiplied), or null to free.
+    // which: 'terrain' (default, unit 4) | 'sprites' (unit 5). Returns false when GL is off or the image is too large.
+    C.setNormals = function (src, w, h, which) {
+      if (!C.ok) return false;
+      const k = which === 'sprites' ? 1 : 0;
+      try {
+        if (!src) { if (texN[k]) gl.deleteTexture(texN[k]); texN[k] = null; normSrc[k] = null; return true; }
+        const raw = src.data && (src.w || src.width) ? src.data : (src.length != null && w ? src : null);
+        normSrc[k] = raw ? { px: raw instanceof Uint8Array ? raw : new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength), w: src.w || src.width || w, h: src.h || src.height || h } : { src, w: src.width, h: src.height };
+        return upNormals(k);
+      } catch (e) { normSrc[k] = null; return false; }
+    };
+    C.hasNormals = which => !!texN[which === 'sprites' ? 1 : 0];
+
     function fail(e) { C.ok = false; C.err = String((e && e.message) || e); try { console.warn('[GL] disabled:', C.err); } catch (x) { /* ignore */ } }
     try { build(); C.ok = true; } catch (e) { fail(e); return null; }
 
