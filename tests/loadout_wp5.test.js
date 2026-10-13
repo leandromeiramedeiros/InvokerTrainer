@@ -7,7 +7,7 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const PACKS = [...html.matchAll(/src="(js\/data\/i18n\/\w+\.js)"/g)].map(m => m[1]);
+const PACKS = [...html.matchAll(/src="(js\/data\/i18n\/\w+\.js)(?:\?v=\w+)?"/g)].map(m => m[1]);
 const FILES = ['js/data/i18n.js'].concat(PACKS, ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/sim/util.js', 'js/sim/values.js', 'js/sim/loadout.js', 'js/sim/agh.js']);
 const ctx = vm.createContext({ console, Math, JSON, Date, Map, Set, Array, Object, Number, String, Boolean, Error, Symbol, Promise, Infinity, NaN, isFinite, isNaN, parseInt, parseFloat });
 for (const f of FILES) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
@@ -66,7 +66,7 @@ test('agh i18n pack: en/pt parity and same {placeholders}', () => {
 
 test('7 orb steps; agh.js i18n + hood.js load before loadout.js', () => {
   assert.equal(IT.RULES.orbMax, 7);
-  const at = f => html.indexOf('src="' + f + '"');
+  const at = f => html.indexOf('src="' + f + '?');
   assert.ok(at('js/data/i18n/agh.js') > 0 && at('js/art/hood.js') > 0);
   assert.ok(at('js/data/i18n/agh.js') < at('js/ui/loadout.js') && at('js/art/hood.js') < at('js/ui/loadout.js'));
   assert.ok(at('js/data/i18n/agh.js') > at('js/data/i18n/v6.js'), 'agh pack overrides v6 (tip.maxOrb)');

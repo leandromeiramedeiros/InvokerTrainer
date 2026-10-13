@@ -53,5 +53,6 @@ Dummies: Pedro, Renan and Vitinho, with Training (stationary), Standard (wander)
 
 ## Run locally
 Open `index.html` directly, or serve the folder. No build step. Tests: `node --test tests/*.test.js`.
+After editing any js/css run `node tools/stamp.mjs` (cache-busting `?v=` stamps in index.html; a test enforces it).
 
 Unofficial fan project. Dota 2 and Invoker are trademarks of Valve.

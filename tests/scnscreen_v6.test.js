@@ -6,7 +6,7 @@ const ROOT = path.join(__dirname, '..');
 const rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 const html = rd('index.html');
-const PACKS = [...html.matchAll(/src="(js\/data\/i18n\/\w+\.js)"/g)].map(m => m[1]);
+const PACKS = [...html.matchAll(/src="(js\/data\/i18n\/\w+\.js)(?:\?v=\w+)?"/g)].map(m => m[1]);
 const FILES = ['js/data/i18n.js'].concat(PACKS, ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/dotaworld.js', 'js/data/maps.js', 'js/data/difficulty.js',
   'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js', 'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js',
   'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js', 'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/sim/stats.js', 'js/sim/towers.js', 'js/sim/ranked.js',

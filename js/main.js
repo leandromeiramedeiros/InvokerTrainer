@@ -306,8 +306,8 @@
       `hp ${Math.round(hero.hp)}/${Math.round(hero.maxHp)}  mana ${Math.round(hero.mana)}/${Math.round(hero.maxMana)}  t ${g.w.t.toFixed(1)}`;
   }
   // frame pacing: estimate the display refresh from rAF deltas (lower quartile of the last 16: robust to stalls),
-  // render every k-th rAF with k = max(1, round(refresh / fpsCap)); sim time keeps accumulating real dt
-  const PACE = { ring: new Float64Array(16), tmp: new Float64Array(16), n: 0, i: 0, ms: 16.67, skip: 0, pend: 0 };
+  // render when the time budget (IT.Pacer, js/pacer.js) covers 1000/fpsCap ms: exact on any refresh rate, no bursts after stalls; sim time keeps accumulating real dt
+  const PACE = { ring: new Float64Array(16), tmp: new Float64Array(16), n: 0, i: 0, ms: 16.67, pend: 0, cap: IT.Pacer.make() };
   function pace(raw) {
     if (!(raw > 2 && raw < 80)) return;
     PACE.ring[PACE.i] = raw; PACE.i = (PACE.i + 1) & 15; if (PACE.n < 16) PACE.n++;
@@ -324,11 +324,9 @@
       const idle = g.w.paused && (g.menu || g.ended || settingsOver);
       if (idle || document.hidden) { if (PACE.pend < 100) return; }                // menu / hidden: ~10 fps
       else {
-        const cap = S.get().fpsCap, k = cap > 0 ? Math.max(1, Math.round(1000 / PACE.ms / cap)) : 1;
-        if (++PACE.skip < k) return;
+        if (!PACE.cap.step(raw, S.get().fpsCap)) return;
       }
     }
-    PACE.skip = 0;
     const dt = Math.min(0.1, PACE.pend / 1000); PACE.pend = 0;
     if (g && !(IT.dev && IT.dev.paused)) {
       const w = g.w;

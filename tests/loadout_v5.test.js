@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
-const PACKS = [...fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').matchAll(/src="(js\/data\/i18n\/\w+\.js)"/g)].map(m => m[1]);   // index.html order: later packs override earlier ones
+const PACKS = [...fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').matchAll(/src="(js\/data\/i18n\/\w+\.js)(?:\?v=\w+)?"/g)].map(m => m[1]);   // index.html order: later packs override earlier ones
 const FILES = ['js/data/i18n.js'].concat(PACKS, ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/dotaworld.js', 'js/data/maps.js', 'js/data/difficulty.js',
   'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js',
   'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js',
@@ -222,7 +222,7 @@ test('i18n: every key the new UI and sim helpers use exists', () => {
 
 test('index.html loads the new scripts before the UI that uses them', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  const at = f => html.indexOf('src="' + f + '"');
+  const at = f => html.indexOf('src="' + f + '?');
   for (const f of ['js/sim/agh.js', 'js/sim/enemycard.js', 'js/art/hood.js', 'js/data/i18n/e1.js']) { assert.ok(at(f) > 0, f); assert.ok(fs.existsSync(path.join(ROOT, f)), f); }
   assert.ok(at('js/sim/agh.js') < at('js/ui/loadout.js') && at('js/sim/enemycard.js') < at('js/ui/loadout.js') && at('js/art/hood.js') < at('js/ui/loadout.js'));
   assert.ok(at('js/sim/enemycard.js') < at('js/main.js'));

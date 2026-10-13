@@ -169,7 +169,7 @@ test('reduced motion: nothing is applied, count-up jumps to the end', () => {
 
 test('index.html includes anim.css after the other css and anim.js after the ui scripts; no gameplay element is animated', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  const css = [...html.matchAll(/href="(css\/[^"]+)"/g)].map(m => m[1]), js = [...html.matchAll(/src="(js\/[^"?]+)"/g)].map(m => m[1]);
+  const css = [...html.matchAll(/href="(css\/[^"?]+)[^"]*"/g)].map(m => m[1]), js = [...html.matchAll(/src="(js\/[^"?]+)[^"]*"/g)].map(m => m[1]);
   assert.strictEqual(css[css.length - 1], 'css/anim.css');
   const i = js.indexOf('js/ui/anim.js');
   assert.ok(i > js.indexOf('js/ui/menus.js') && i > js.indexOf('js/ui/hud.js') && i > js.indexOf('js/ui/panels.js') && i > js.indexOf('js/ui/shop.js'));
