@@ -87,6 +87,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #72 SHOP button (title screen): position is good, but it must be WAY more noticeable so players don't miss it: bigger, gold/ornamented frame, idle shimmer + gentle pulse/glow (glow-sand sparkle), coin icon, badge showing current relic points, and a "NEW"/"!" badge when the player can afford something not yet owned. Respect reduced-motion.
 
+- [ ] #73 Intro (CEO: "much better") — each centre-stage text must stay long enough for a human to READ it before flying to the HUD: hold = max(1.2 s, 0.35 s + words / 3.5 words-per-s) (~210 wpm; PT same rate), title shorter floor ok; combo steps: ~0.45 s each (icons) + 1 s for the whole row; tune by reading aloud. Any key/click advances to the next piece (not skip all) on first press, skip-all via Esc / the existing cancel-on-action. Panning phase starts only after the last piece has landed.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
