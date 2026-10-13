@@ -3,7 +3,6 @@
 // Categories: player (Invoker look + spell icon / VFX palette), enemy (ranked + Free Play foes), dummy (the training scarecrow).
 // Free items cost 0 and are always owned. Ranked uses ONLY the owned enemy skins + 'default' (IT.Skins.pool('enemy'), js/data/game.js).
 // Free Play reads IT.Shop.owned(skinId) to gate its enemy picker.
-// TODO(CEO): 'ian' enemy skin slot reserved (no sprite, no flair): add it here + IT.GAME.SKINS once the art exists.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -21,8 +20,8 @@
     { kind: 'enemy', skin: 'renan', price: 100 },
     { kind: 'enemy', skin: 'pedro', price: 100 },
     { kind: 'enemy', skin: 'vitinho', price: 100 },
+    { kind: 'enemy', skin: 'ianzinho', price: 110 },   // v6 #61, next to Vitinho
     { kind: 'enemy', skin: 'nando', price: 120 },
-    // { kind: 'enemy', skin: 'ian', price: 150 },   // TODO(CEO): no sprite yet
     { kind: 'dummy', skin: 'scarecrow', price: 0 },
     { kind: 'dummy', skin: 'raven', price: 100 },
   ];

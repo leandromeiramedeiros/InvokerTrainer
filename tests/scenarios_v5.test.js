@@ -12,8 +12,8 @@ const FILES = ['js/data/i18n.js', 'js/data/i18n/s3.js', 'js/data/i18n/f1.js', 'j
   'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/sim/stats.js', 'js/sim/towers.js', 'js/sim/ranked.js', 'js/ui/hudsteps.js'];
 const IT = load(FILES);
 const R = IT.Ranked, SC = IT.SCENARIOS;
-const OBJ = ['kill', 'kill_with', 'killN', 'push', 'destroyTower', 'rootAll', 'escape', 'hold', 'reach'];
-const FAIL = ['time', 'died', 'cross', 'seen', 'method', 'escaped', 'caught', 'tower'];
+const OBJ = ['kill', 'kill_with', 'killN', 'push', 'destroyTower', 'rootAll', 'escape', 'hold', 'reach', 'pickup'];   // + v6 item 28 pickup
+const FAIL = ['time', 'died', 'cross', 'seen', 'method', 'escaped', 'caught', 'tower', 'allyDied', 'taken', 'towerLost'];   // + v6 item 28
 const DIFFS = ['ian', 'easy', 'common', 'hard', 'bambam'];
 // scenarios the scripted bot cannot play fairly (foes that read the hero and run / dodge with items: the bot has no chase logic)
 const NO_BOT = new Set(['qop_blink_snipe']);   // ids the scripted bot cannot play. qop_blink_snipe (v6 #52): the Sun Strike must be aimed at the innate blink's landing spot, read from the wind-up telegraph -> played by the levels_v6 bot (easy/common seeds 1-6)
@@ -122,7 +122,7 @@ test('every scenario builds on its map at every difficulty: towers spawned, hero
       assert.equal(d.kind, 'enemy', sc.id);
       assert.ok(map.walkable(d.x, d.y) && ok(d), sc.id + ' foe walkable + reachable');
       assert.ok(d.hp > 0 && d.hp === d.maxHp, sc.id + ' hp');
-      if (!sc.units[0].towers) assert.ok(!map.towers.some(t => t.team === 0 && Math.hypot(t.x - d.x, t.y - d.y) < 700), sc.id + ' foe not under a Radiant tower');
+      if (!sc.units[0].towers && !sc.allyTowerBusy) assert.ok(!map.towers.some(t => t.team === 0 && Math.hypot(t.x - d.x, t.y - d.y) < 700), sc.id + ' foe not under a Radiant tower');
     }
     if (!sc.hero.at || !sc.hero.at.tower) assert.ok(!map.towers.some(t => t.team === 1 && Math.hypot(t.x - h.x, t.y - h.y) < 720), sc.id + ' hero not under a Dire tower');
     if (sc.gate) assert.ok(m.w.gate && map.walkable(m.w.gate.x, m.w.gate.y) || m.w.gate.r >= 260, sc.id + ' gate');
@@ -371,7 +371,7 @@ function bot(id, diff, seed, trace) {
 test('bot clears every scriptable scenario at easy', () => {
   const bad = [];
   for (const sc of SC) {
-    if (NO_BOT.has(sc.id) || (sc.tags || []).indexOf('juke') >= 0) continue;   // juke: needs belief + day/night + the spot bot (tests/juke_v6.test.js)
+    if (NO_BOT.has(sc.id) || (sc.tags || []).indexOf('juke') >= 0 || sc.funBot) continue;   // juke: needs belief + day/night + the spot bot (tests/juke_v6.test.js); funBot: tests/fun_v6.test.js
     const r = bot(sc.id, 'easy', 5);
     if (!r || !r.ok) bad.push(sc.id + ':' + (r ? r.reason : 'none'));
   }

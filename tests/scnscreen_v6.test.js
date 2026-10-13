@@ -49,7 +49,7 @@ test('tabs: ALL shows everything, each other tab only its members, juke may be e
     assert.equal(got.length, LIST.filter(s => F.categories(s.tags).indexOf(c) >= 0).length, c);
     if (c !== 'juke') assert.ok(got.length > 0, 'empty tab ' + c);
   }
-  assert.deepEqual(F.apply(LIST, Object.assign(F.defaults(), { cat: 'terrain' }), { name: nm }).filter(s => (s.tags || []).indexOf('pit') >= 0).map(s => s.id), ['pit_trap', 'pit_in_out', 'pit_force_exit', 'pit_mouth_snipe', 'pit_ghost']);   // + v6 item 55 pit set
+  assert.deepEqual(F.apply(LIST, Object.assign(F.defaults(), { cat: 'terrain' }), { name: nm }).filter(s => (s.tags || []).indexOf('pit') >= 0).map(s => s.id), ['pit_trap', 'pit_in_out', 'pit_force_exit', 'pit_mouth_snipe', 'pit_ghost', 'pit_fight_blast', 'aegis_snatch']);   // + v6 item 55 pit, item 28 fun pit fights set
 });
 
 test('tag chips: OR = any selected tag, AND = all selected tags, empty = no restriction', () => {

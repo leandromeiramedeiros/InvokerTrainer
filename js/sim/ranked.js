@@ -10,7 +10,7 @@
   const RESULT_MIN = 1.0, RESULT_AUTO = 3.0;
   const TURNS = 8, COUNTDOWN = 12, SOLO_COUNTDOWN = 3, RESULT_HOLD = RESULT_MIN + RESULT_AUTO, SLACK = 6, CAUGHT = 110, ESCAPED = 1900, HIST = 40, ASSIST = 0.5;
   // v6: tags of the "fun" scenarios (fog, invisibility, river, prediction, vision); a ranked run gives at least FUN_TURNS of its turns to them
-  const FUN_TAGS = ['fog', 'invisible', 'river', 'prediction', 'vision', 'juke'], FUN_TURNS = 4;
+  const FUN_TAGS = ['fog', 'invisible', 'river', 'prediction', 'vision', 'juke', 'fun'], FUN_TURNS = 4;   // v6 item 28: 'fun' = the research-driven set
   const isFun = sc => (sc.tags || []).some(t => FUN_TAGS.indexOf(t) >= 0);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lang = () => IT.lang || 'en';
@@ -494,6 +494,7 @@
     else if (s.gate && w.gate) p = around(w.gate, base, s);
     else if (s.of != null && placed[s.of]) p = around(placed[s.of], base, s);
     else if (s.spot && w.spots && w.spots[s.spot]) p = around(w.spots[s.spot], base, s);
+    else if (s.pit === 'deep') { const r = pitRegion(map); if (r) p = { x: r.x + (s.dx || 0), y: r.y + (s.dy || 0) }; }   // v6 item 28: the crater's deepest tile + offset
     else if (s.pit) { const q = pitBank(w, s, o); if (q) return q; }
     if (o.jit) p = jitter(w, p, base, o, s);
     return nearWalk(w, p.x, p.y);
@@ -525,6 +526,47 @@
   const TIER_ORDER = ['ian', 'easy', 'common', 'hard', 'bambam'];
   const tierOn = (d, df) => !d.minDf || !df || TIER_ORDER.indexOf(df.id) < 0 || TIER_ORDER.indexOf(df.id) >= TIER_ORDER.indexOf(d.minDf);
 
+  // v6 item 28 (fun scenarios): extras resolved after the units + named spots. A spec is a spot name (w.spots) or a spot() spec.
+  //   sc.ally      [{ at, hp?, frac?, skin? }]            a stationary friendly hero (IT.Units.spawnAlly; fail 'allyDied')
+  //   sc.roshan    { at?, hp?, frac?, armor?, scriptHits?, ttl? }   Roshan (default: the crater's deepest tile); ttl = s of play -> dies anyway
+  //   sc.pickups   [{ kind: 'rune'|'aegis', at, t? }]      t = s of play before it spawns (0 / none: at once)
+  //   sc.allyTowerHp / sc.allyTowerBusy                   our towers' hp / busy with creeps (they never shoot the scenario foe)
+  //   unit fields: tpPlan { after, near?, dest?, remove? } (planned TP channel), grab { kinds, at? } (rune / Aegis contest),
+  //                bkbOn (BKB popped at the start; needs 'bkb' in items), intent.target ('ally' | 'roshan' | 'tower': intent attack_ally)
+  function funExtras(w, sc, sp, placed, R, extra) {
+    const at = s => (typeof s === 'string' ? spotOf(w, s) : s ? spot(w, s, sp, placed, { pick: R.pick, role: 'hero' }) : null);
+    w._pk = []; w._roshTtl = null;
+    if (sc.allyTowerHp || sc.allyTowerBusy) for (const t of w.ents) if (t.kind === 'tower' && t.team === 0 && !t.dead) {
+      if (sc.allyTowerHp) { t.hp = t.maxHp = sc.allyTowerHp; }
+      if (sc.allyTowerBusy && t.attack) { t.attack.range = 0; t.attack.target = null; t.busy = true; }
+    }
+    for (const a of sc.ally || []) { const p = at(a.at); if (p) IT.Units.spawnAlly(w, { x: p.x, y: p.y, hp: a.hp, frac: a.frac, skin: a.skin }); }
+    if (sc.roshan) {
+      const r = pitRegion(w.map), p = sc.roshan.at ? at(sc.roshan.at) : r ? { x: r.x, y: r.y } : null;
+      if (p) IT.Units.spawnRoshan(w, { x: p.x, y: p.y, hp: sc.roshan.hp, frac: sc.roshan.frac, armor: sc.roshan.armor, scriptHits: sc.roshan.scriptHits });
+      w._roshTtl = sc.roshan.ttl != null ? sc.roshan.ttl : null;
+    }
+    for (const q of sc.pickups || []) {
+      const p = at(q.at); if (!p) continue;
+      if (!(q.t > 0)) IT.Units.spawnPickup(w, { kind: q.kind, x: p.x, y: p.y });
+      else w._pk.push({ kind: q.kind, x: p.x, y: p.y, t: q.t, done: false });
+    }
+    for (const [e, d, I0] of extra) {
+      if (e.intent) e.intent.target = I0.target || null;
+      if (d.tpPlan) e.tpPlan = { after: d.tpPlan.after || 0, near: d.tpPlan.near != null ? d.tpPlan.near : null, dest: d.tpPlan.dest ? at(d.tpPlan.dest) : null, remove: !!d.tpPlan.remove, done: false, t0: null };
+      if (d.grab) e.grab = { kinds: d.grab.kinds || ['rune'], at: d.grab.at ? at(d.grab.at) : null, seen: null, goAt: 0 };
+      if (d.bkbOn && e.items && e.items.some(s => s && s.id === 'bkb')) {
+        const def = IT.Abilities && IT.Abilities.get('bkb');
+        if (def) { w.emit('itemUse', { unit: e.id, ability: 'bkb' }); def.cast(w, e, {}); }
+      }
+    }
+  }
+  // the play-time half of funExtras (ranked script): timed pickups, Roshan's ttl
+  function funTick(w, el) {
+    if (w._pk) for (const q of w._pk) if (!q.done && el >= q.t - 1e-9) { q.done = true; IT.Units.spawnPickup(w, { kind: q.kind, x: q.x, y: q.y }); }
+    if (w._roshTtl != null && el >= w._roshTtl - 1e-9) { w._roshTtl = null; const r = w.ents.find(e => e.kind === 'roshan' && !e.dead); if (r) IT.Units.killRoshan(w, r, null); }
+  }
+
   // swap the world over to a prepared scenario, in place (hero kept, everything else removed)
   function apply(w, pr) {
     const hero = w.hero, df = pr.df, sc = pr.sc;
@@ -553,7 +595,7 @@
     const out = [], placed = [], E = IT.GAME.ENEMY, SK = IT.Skins ? IT.Skins.pool('enemy') : IT.GAME.SKINS, s0 = Math.max(0, SK.indexOf(pr.skin)), tw = pr.twist, vy = pr.vary;
     w.gate = sc.gate ? Object.assign(spot(w, sc.gate, sp, placed, { pick: R.pick }), { r: sc.gate.r || 260 }) : null;   // 'cross' line (a circle on the map)
     w._placed = placed; w.spots = {};   // v6 item 27: spot filters relative to placed units (unseenBy / far); named spots resolve after the units
-    const ulist = sc.units || sc.dummies || [], jlist = ulist.filter(d => tierOn(d, df));
+    const ulist = sc.units || sc.dummies || [], jlist = ulist.filter(d => tierOn(d, df)), extra = [];
     ulist.forEach((d, i) => {
       // v6 #50: the unit's intent (scenario data, IT.Intent.of derives one from mot / behavior) -> its engine (script mot / AI behavior)
       const I0 = IT.Intent.of(d), eng = IT.Intent.engine(I0.kind, d), mot = eng.mot, boot = vy ? vy.boots[i] : null;
@@ -577,6 +619,7 @@
         useBkb: !!(df.useBkb || d.useBkb), items,
         telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction * (vy ? vy.reactionMul : 1),
         dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
+        attack: d.attack || undefined,   // v6 item 28: 'melee' | 'ranged' override of the skin's attack profile (a melee tower / Roshan hitter)
         juke: d.juke === 'pit' && pitRegion(w.map) ? { x: pitRegion(w.map).x, y: pitRegion(w.map).y, near: d.near || 500 } : null,   // v6 pit_trap
       });
       e.hpRegen = 0; e.base.hpRegen = 0;
@@ -591,6 +634,7 @@
       IT.Intent.attach(e, d, df.reaction * (vy ? vy.reactionMul : 1));
       jukeUnit(w, e, d, df, jlist.indexOf(d), jlist);   // v6 item 27: belief (chasers), Gem, re-catch items
       if (mot === 'chase' && !e.belief && IT.Belief) e.belief = IT.Belief.create(e, e.beliefP, { idx: 0, n: 1 });
+      extra.push([e, d, I0]);
       out.push(e);
     });
     // v6 item 27: named spots (sc.spots { name: spec }, resolved from the hero start after the units; a spec may sit relative to an earlier
@@ -598,6 +642,7 @@
     w.spots = {};
     for (const k of Object.keys(sc.spots || {})) w.spots[k] = spot(w, sc.spots[k], sp, placed, { pick: R.pick, role: 'hero' });
     w.goal = sc.obj.type === 'reach' && w.spots[sc.obj.spot] ? Object.assign({}, w.spots[sc.obj.spot], { r: sc.obj.r || GOAL_R }) : null;
+    funExtras(w, sc, sp, placed, R, extra);
     if (out.length) hero.facing = Math.atan2(out[0].y - hero.y, out[0].x - hero.x);   // start facing the first foe (Force Staff pushes that way)
     return out;
   }
@@ -644,6 +689,7 @@
     if (f === 'pit') { const p = pitRegion(w.map); return p ? { x: p.x, y: p.y, r: 380 } : null; }
     if (f === 'gate') return w.gate ? { x: w.gate.x, y: w.gate.y, r: w.gate.r } : null;
     if (f === 'tower') { const t = towerOf(w.map, base, { team: 1 }); return t ? { x: t.x, y: t.y, r: 700 } : null; }
+    if (f === 'ourTower') { const t = towerOf(w.map, base, { team: 0 }); return t ? { x: t.x, y: t.y, r: 500 } : null; }   // v6 item 28: our tower under attack
     if (f === 'goal') return w.goal ? { x: w.goal.x, y: w.goal.y, r: w.goal.r } : null;   // v6 item 27: the 'reach' ring
     if (typeof f === 'string' && f.indexOf('spot:') === 0) { const p = spotOf(w, f.slice(5)); return p ? { x: p.x, y: p.y, r: 300 } : null; }
     return null;
@@ -795,7 +841,8 @@
     };
 
     // used = step abilities that hit a foe (or, SELF_OK, were cast); hurt = a foe damaged the hero (escape: caught)
-    const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null, used: new Set(), castAt: {}, hurt: false, burned: 0, burnAt: null, unseenFrom: null });
+    const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null, used: new Set(), castAt: {}, hurt: false, burned: 0, burnAt: null, unseenFrom: null,
+      picked: null, allyDied: false, openInv: null });   // v6 item 28: first pickup { team, kind, unit }, ally fell, the hero's first cast came from invisibility
     function enter(w) {
       run.dummies = apply(w, run.pr);
       faceFoes(w, run.dummies);
@@ -867,11 +914,18 @@
         const f = w.get(p.unit), k = Object.assign({ id: p.unit }, st().last[p.unit] || {}, { t: w.t }), a = st().abil[p.unit];
         if (f && w.map) k.inside = inPit(w.map, f.x, f.y) ? 'pit' : null;   // v6: where it died (obj.how.inside)
         if (k.ability === 'attack' && a && w.t - a.t <= ASSIST) k.assist = Object.assign({}, a, { inside: k.inside });   // an ability hurt it just before the basic attack finished it
+        k.channel = f && f.channel ? f.channel.kind : null;   // v6 item 28: killed mid-channel (obj.how.channel: 'tp')
+        k.openInv = st().openInv === true;                    // v6 item 28: the hero opened from invisibility (obj.how.openInv)
+        if (k.assist) { k.assist.channel = k.channel; k.assist.openInv = k.openInv; }
         st().kills.push(k);
       });
+      w.on('pickup', p => { if (run.phase === 'play' && !st().picked) st().picked = { team: p.team, kind: p.kind, unit: p.unit }; });   // v6 item 28
+      w.on('allyDown', () => { if (run.phase === 'play') st().allyDied = true; });
       w.on('cast', p => {
         if (p.unit !== w.hero.id || run.phase !== 'play') return;
         const s = st(); s.casts[p.ability] = (s.casts[p.ability] || 0) + 1; s.castAt[p.ability] = w.t;
+        // v6 item 28: was the hero's first offensive cast made from Ghost Walk? (this listener runs before Ghost Walk's own break listener)
+        if (s.openInv == null && p.ability !== 'ghostwalk' && p.ability !== 'invoke') s.openInv = !!IT.Status.invisible(w.hero);
         if (SELF_OK[p.ability]) s.used.add(p.ability);
         if (p.ability === 'deafeningblast') s.blasts.push(new Set());
       });
@@ -917,6 +971,8 @@
       if (how.high && !(k.heroElev > k.foeElev)) return false;
       if (how.inv && !k.inv) return false;
       if (how.inside && k.inside !== how.inside) return false;
+      if (how.channel && k.channel !== how.channel) return false;   // v6 item 28: died mid-channel (TP)
+      if (how.openInv && !k.openInv) return false;                  // v6 item 28: the fight opened from Ghost Walk
       return true;
     };
     run.howOk = howOk;
@@ -943,10 +999,17 @@
       if (fail.indexOf('tower') >= 0) for (const e of w.ents) if (e.kind === 'tower' && e.team === 1 && !e.dead && e.hp > 0 && Math.hypot(e.x - h.x, e.y - h.y) < e.attack.range + (h.radius || 0)) return conclude(false, 'tower');
       // seen: an enemy noticed the hero (vision) before anything of ours had touched a foe
       if (fail.indexOf('seen') >= 0 && st.hit == null) for (const d of alive) if (d.kind === 'enemy' && d.aware) return conclude(false, 'seen');
+      // v6 item 28: our ally fell / our tower fell / a Town Portal finished (also a TP'd unit that left the map) / the pickup race
+      if (st.allyDied && fail.indexOf('allyDied') >= 0) return conclude(false, 'allyDied');
+      if (fail.indexOf('towerLost') >= 0 && st.towers.some(t => t.team === 0)) return conclude(false, 'towerLost');
+      for (const d of run.dummies) if (d.tpEscaped) return conclude(false, 'escaped');   // v6 #50 farm_then_tp / item 28 tpPlan: the Town Portal finished
+      if (o.type === 'pickup' && st.picked && (!o.kind || st.picked.kind === o.kind)) return st.picked.team === 0 ? conclude(true) : conclude(false, 'taken', st.picked.kind);
       // 'attack' => the toast says it was an auto-attack and names what the scenario wanted
       if (o.how) {
         const bad = st.kills.find(k => !killOk(k, o.how));
         if (bad && o.how.inside && bad.inside !== o.how.inside) return conclude(false, 'method', 'outside');   // v6 pit_trap: died outside the pit
+        if (bad && bad.ability !== 'attack' && o.how.channel && bad.channel !== o.how.channel) return conclude(false, 'method', 'channel');   // v6 item 28: not mid-TP
+        if (bad && bad.ability !== 'attack' && o.how.openInv && !bad.openInv) return conclude(false, 'method', 'openInv');                 // v6 item 28: not from Ghost Walk
         if (bad) return conclude(false, 'method', bad.ability === 'attack' ? 'attack' : 'other', bad.ability === 'attack' ? (o.how.ability || pr.need) : null);
       }
       // v6: a kill only counts once every step spell / item hit a foe (or, self ones, was cast); the toast names the missing ones.
@@ -988,13 +1051,13 @@
       }
       else if (o.type === 'hold') { if (el >= o.time) return conclude(true); return; }
       for (const d of alive) if ((d.scn.mot === 'flee' || fail.indexOf('escaped') >= 0) && Math.hypot(d.x - h.x, d.y - h.y) > ESCAPED) return conclude(false, 'escaped');
-      for (const d of alive) if (d.tpEscaped) return conclude(false, 'escaped');   // v6 #50 farm_then_tp: the Town Portal finished
       if (mode !== 'sandbox' && el >= pr.limit) return conclude(false, 'time');
     }
 
     // scripted dummies: flee (run directly away from the hero) / march (to the gate) / chase (by sight, see chase())
     function script(w) {
       const h = w.hero;
+      funTick(w, w.t - run.t0);   // v6 item 28: timed pickups, Roshan's ttl
       let seen = null;   // lazily: only chasers need it
       for (const d of run.dummies) {
         if (d.dead || (d.scn.mot !== 'flee' && d.scn.mot !== 'chase' && d.scn.mot !== 'march' && d.scn.mot !== 'kite') || w.t < d.scn.next || !IT.Status.canMove(d)) continue;

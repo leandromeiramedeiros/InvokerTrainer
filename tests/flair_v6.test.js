@@ -18,7 +18,7 @@ test('flair.js has the documented header', () => {
 });
 
 test('the table covers every character', () => {
-  for (const k of ['scarecrow', 'raven', 'default', 'renan', 'vitinho', 'pedro', 'nando']) assert.ok(T[k], k);
+  for (const k of ['scarecrow', 'raven', 'default', 'renan', 'vitinho', 'pedro', 'nando', 'ianzinho']) assert.ok(T[k], k);
   assert.ok(T.scarecrow.silent);
 });
 
@@ -53,7 +53,7 @@ test('situation names are known; hitBy ids are spells or items', () => {
 });
 
 test('main characters have 8+ lines in their core situations', () => {
-  for (const k of ['renan', 'vitinho', 'pedro', 'nando']) {
+  for (const k of ['renan', 'vitinho', 'pedro', 'nando', 'ianzinho']) {
     const L = T[k].lines;
     for (const sit of ['spawn', 'idle', 'idleLong', 'damaged', 'stunned', 'death', 'killedHero', 'playerMissed', 'caught']) assert.ok(L[sit] && L[sit].length >= 6, k + '/' + sit + ' ' + (L[sit] || []).length);
     for (const sit of ['nearDeath', 'heroInvisible', 'night', 'dustUsed', 'pitJuke', 'escaped', 'playerWhiffSunstrike']) assert.ok(L[sit] && L[sit].length >= 5, k + '/' + sit);
@@ -91,7 +91,7 @@ test('other characters use their signature icons', () => {
 
 test('CEO item 44: speaking skins have 6+ lines for the new situations; raven has its two wise ones', () => {
   const NEW = ['gotJuked', 'invokerEscaped', 'reacquired', 'dustHit', 'dustMiss'];
-  for (const k of ['default', 'renan', 'vitinho', 'pedro', 'nando']) for (const sit of NEW) {
+  for (const k of ['default', 'renan', 'vitinho', 'pedro', 'nando', 'ianzinho']) for (const sit of NEW) {
     const L = T[k].lines[sit] || [];
     assert.ok(L.length >= 6, k + '/' + sit + ' ' + L.length);
     for (const ln of L) assert.ok(typeof ln.t.en === 'string' && typeof ln.t.pt === 'string' && ((ln.t.en && ln.t.pt) || ln.icon), k + '/' + sit + ' needs en + pt (or an icon-only line)');
@@ -111,13 +111,14 @@ test('CEO item 44: unit.ally and unit.roshan exist in en and pt', () => {
   assert.strictEqual(IT.I18N.pt['unit.roshan'], 'Roshan');
 });
 
-test('no ian entry (CEO slot only)', () => {
+test('ianzinho (v6 #61) replaced the old ian TODO slot: skin id is ianzinho, no bare ian skin', () => {
+  assert.ok(T.ianzinho && F.raw.ianzinho);
   assert.strictEqual(T.ian, undefined);
-  assert.ok(!Object.keys(T).some(k => /^ian$/i.test(k)), 'no ian skin key');
-  assert.strictEqual(F.raw.ian, undefined);
+  assert.ok(!Object.keys(T).some(k => /^ian$/i.test(k)), 'no bare ian skin key');
   assert.ok(IT.GAME.SKINS.indexOf('ian') < 0 && !('ian' in IT.GAME.SKIN_NAMES));
+  assert.ok(IT.GAME.SKINS.indexOf('ianzinho') >= 0 && IT.GAME.SKIN_NAMES.ianzinho === 'Ianzinho');
   const src = fs.readFileSync(path.join(__dirname, '..', 'js/data/flair.js'), 'utf8');
-  assert.ok(/'ian': TODO/.test(src));
+  assert.ok(!/'ian': TODO/.test(src));
 });
 
 test('SKINS: default first, every skin has a name and an attack kind', () => {

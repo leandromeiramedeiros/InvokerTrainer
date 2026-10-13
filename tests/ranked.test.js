@@ -136,8 +136,11 @@ test('run: a failed scenario (time) breaks the streak and scores nothing', () =>
 
 test('run: the optional runSeconds clock ends the run, emits modeEnd, records the rating once', () => {
   R.reset();
+  // v6 item 28: this test map has no river / pit regions, so a pickup scenario's rune lands on the idle hero: no pickups here (idle never scores)
+  const held = IT.SCENARIOS.filter(s => s.pickups).map(s => [s, s.pickups]); for (const [s] of held) s.pickups = [];
   const m = mk({ runSeconds: 70 }), { run, w } = m;
   for (let i = 0; i < 3000 && !run.ended; i++) { if (run.frozen()) run.tick(1 / 30); else w.step(); }
+  for (const [s, p] of held) s.pickups = p;
   assert.equal(run.ended, true);
   assert.equal(R.RUN_SECONDS, undefined, 'dead constant gone');
   const end = m.events.filter(e => e[0] === 'modeEnd');

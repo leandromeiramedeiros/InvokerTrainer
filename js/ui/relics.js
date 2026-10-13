@@ -2,8 +2,8 @@
 // and the StatsCollector hooks (lifetime base for tier crossings, toast on a completed tier). Data: js/data/relics.js.
 // item 14: special relics (the 4 big rare ones) get a bigger card / shield with a gold + magenta ornament and a shimmer, list first in the end-splash
 // panel, and level up with a much bigger toast (glow sand + god rays + particles + bloom + relicSpecial fanfare) queued one at a time (~3 s each).
-// Stats screen: `collection(life)` = the client's 4-3-4-3 layout as a true HONEYCOMB of hexagon tiles (offset rows, hex frame + hex progress ring), RELICS n / 14, then the trainer relics.
-// #60: rows never shrink (min-height + flex:none: the old special row had overflow:hidden, so a short flex column squashed it); the end-splash panel shows the special relics as a honeycomb cluster, the rest as rows.
+// Stats screen: `collection(life)` = the client's 4-3-4-3 shield grid (RELICS n / 14), then the trainer relics.
+// #60: rows never shrink (min-height + flex:none: the old special row had overflow:hidden, so a short flex column squashed it). #64: the hex tiles are gone; specials = gold ornamented frame + shimmer + bigger icon + gold bar + badge, listed first.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -20,67 +20,12 @@
     return h('span', { class: 'rl-pips' }, out);
   }
 
-  // ---- layout model (pure; tests): row min-height / icon sizes (em) and the honeycomb row layout
-  const LAYOUT = { rowMinEm: 3.6, spRowMinEm: 4.6, iconEm: 2.6, spIconEm: 3.4, hexW: 8.4, hexWPanel: 7.2 };
-  // rows of a honeycomb: sizes = tiles per row; every odd row is shifted half a tile (indent in tile pitches), so 4-3-4-3 nests exactly
-  const honeycomb = sizes => sizes.map((n, i) => ({ i, n, indent: i % 2 ? 0.5 : 0 }));
-  // split ids into honeycomb rows cycling through `sizes` (e.g. [4, 3]); the last row keeps what is left
-  function honeyRows(ids, sizes) {
-    const out = []; let k = 0;
-    for (let i = 0; k < ids.length; i++) { const n = Math.max(1, sizes[i % sizes.length] | 0), row = ids.slice(k, k + n); k += row.length; out.push({ i, n: row.length, indent: i % 2 ? 0.5 : 0, ids: row }); }
-    return out;
-  }
-  // row sizes for the n special relics advanced in a run (end-splash cluster): 1 / 2 stay flat, 3 = 2 + 1 (triangle), 4 = 2 + 2
-  const clusterSizes = n => (n <= 2 ? [Math.max(1, n)] : [2, n - 2]);
+  // ---- layout model (pure; tests): row min-height / icon sizes (em)
+  const LAYOUT = { rowMinEm: 3.6, spRowMinEm: 4.6, iconEm: 2.6, spIconEm: 3.4 };
   const isSpec = id => !!(IT.RELICS && IT.RELICS.isSpecial(id));
   // special relics first, the rest keep their order (stable)
   const specialFirst = ids => ids.map((id, i) => ({ id, i })).sort((a, b) => (isSpec(b.id) ? 1 : 0) - (isSpec(a.id) ? 1 : 0) || a.i - b.i).map(o => o.id);
   const tipOf = (id, d) => (d.special ? '★ ' + IT.t('relics.special') + '\n' : '') + IT.t('relic.' + id + '.d') + '  [' + IT.t(d.dota ? 'relics.dota' : 'relics.trainer') + ']';
-
-  // hexagon tile geometry: pointy-top regular hexagon in a 100 x 115.47 box, scaled about its centre
-  const HEX = [[50, 0], [100, 28.87], [100, 86.6], [50, 115.47], [0, 86.6], [0, 28.87]];
-  const hexPts = k => HEX.map(([x, y]) => (50 + (x - 50) * k).toFixed(2) + ',' + (57.735 + (y - 57.735) * k).toFixed(2)).join(' ');
-  // svg markup of a tile: fill, frame (+ inner line when special), progress track, progress ring (from the top vertex, clockwise; pathLength = 100 so the dash = percent),
-  // and this run's gain segment (from -> frac)
-  function hexSvg(frac, from, special) {
-    const f = Math.max(0, Math.min(1, frac || 0)), a = Math.max(0, Math.min(f, from == null ? f : from));
-    const ring = f >= 0.999 ? '100 0' : (f * 100).toFixed(2) + ' 100';
-    const gain = f > a ? '<polygon class="hx-gain" points="' + hexPts(0.89) + '" pathLength="100" stroke-dasharray="' + ((f - a) * 100).toFixed(2) + ' 100" stroke-dashoffset="' + (-a * 100).toFixed(2) + '"/>' : '';
-    return '<svg class="rl-hx" viewBox="0 0 100 115.47" aria-hidden="true">'
-      + '<polygon class="hx-bg" points="' + hexPts(0.975) + '"/>'
-      + '<polygon class="hx-frame" points="' + hexPts(0.985) + '"/>'
-      + (special ? '<polygon class="hx-inner" points="' + hexPts(0.94) + '"/>' : '')
-      + '<polygon class="hx-track" points="' + hexPts(0.89) + '"/>'
-      + (f > 0 ? '<polygon class="hx-ring" points="' + hexPts(0.89) + '" pathLength="100" stroke-dasharray="' + ring + '"/>' : '')
-      + gain
-      + '<polygon class="hx-fill" points="' + hexPts(0.835) + '"/></svg>';
-  }
-  const svgNode = markup => { const w = doc.createElement('span'); w.innerHTML = markup; return w.firstChild; };
-
-  // one relic as a hexagon tile: hex frame + hex progress ring, icon, name, tier pips, this run's gain, lifetime / next. Special = gold ornamented hex with a badge + shimmer.
-  function hex(id, life, delta) {
-    const h = IT.UI.h, t = IT.t, R = IT.RELICS, d = R.get(id);
-    if (!d) return null;
-    life = life || 0; delta = delta || 0;
-    const pg = R.progress(id, life), sp = !!d.special, span = pg.next == null ? 1 : pg.next - pg.prev;
-    const from = pg.next == null ? 1 : Math.max(0, (Math.max(pg.prev, life - delta) - pg.prev) / span);
-    return h('div', { class: 'rl-hex t' + pg.tier + (sp ? ' special' : '') + (life > 0 ? ' on' : '') + (delta > 0 ? ' adv' : ''), 'data-relic': id, 'data-tip': tipOf(id, d) },
-      svgNode(hexSvg(pg.frac, delta > 0 ? from : pg.frac, sp)),
-      sp ? h('span', { class: 'rl-orn' }, h('i'), h('i')) : null,
-      h('div', { class: 'rl-hxin' },
-        sp ? h('small', { class: 'rl-spk', text: '★ ' + t('relics.special') }) : null,
-        icon(d.icon),
-        h('b', { class: 'rl-nm', text: name(id) }),
-        pips(pg.tier),
-        delta > 0 ? h('em', { class: 'rl-hd', text: t('relics.delta', { n: R.fmt(id, delta) }) }) : null,
-        h('span', { class: 'rl-val', text: pg.next == null ? t('relics.max') : R.fmt(id, life) + ' / ' + R.fmt(id, pg.next) })));
-  }
-  // honeycomb block: rows = [{ i, ids, indent }]; `tile(id)` builds each hexagon
-  function hexgrid(rows, tile, cls) {
-    const h = IT.UI.h;
-    return h('div', { class: 'rl-hexgrid' + (cls ? ' ' + cls : '') },
-      rows.map(r => h('div', { class: 'rl-hrow r' + (r.i + 1), style: { '--ind': r.indent } }, r.ids.map(tile))));
-  }
 
   // one relic row: icon, name, tier pips, progress bar to the next tier (this run's gain highlighted), lifetime + next threshold
   function card(id, life, delta) {
@@ -111,7 +56,7 @@
 
   // end-splash overlay: every relic advanced this run (delta, lifetime, next tier)
   function panel(deltas, life, onClose) {
-    const h = IT.UI.h, t = IT.t, ids = advanced(deltas), sp = ids.filter(isSpec), rest = ids.filter(id => !isSpec(id));
+    const h = IT.UI.h, t = IT.t, ids = advanced(deltas);
     life = life || lifeRelics();
     let over = null;
     const close = () => { if (over && over.parentNode) over.parentNode.removeChild(over); if (onClose) onClose(); };
@@ -119,27 +64,40 @@
       h('div', { class: 'rl-panel', role: 'dialog' },
         h('h3', { text: t('relics.run') }),
         ids.length ? h('div', { class: 'rl-list' },
-          sp.length ? hexgrid(honeyRows(sp, clusterSizes(sp.length)), id => hex(id, life[id] || deltas[id], deltas[id]), 'sp') : null,
-          rest.length ? h('div', { class: 'rl-rows' }, rest.map(id => card(id, life[id] || deltas[id], deltas[id]))) : null)
+          h('div', { class: 'rl-rows' }, ids.map(id => card(id, life[id] || deltas[id], deltas[id]))))
           : h('div', { class: 'rl-empty' }, h('p', { text: t('relics.none') }), h('p', { class: 'dim', text: t('relics.only') })),
         h('div', { class: 'rl-foot' }, h('button', { type: 'button', class: 'btn gold', 'data-relics-close': '1', onclick: close, text: t('relics.close') }))));
     return over;
   }
 
-  // ---- stats screen: one tile of the client's relic grid (old name kept): the hexagon tile
-  const shield = (id, life) => hex(id, life, 0);
-  // the whole collection: header "RELICS n / 14", a honeycomb of rows 4 (special) / 3 / 4 / 3 (Dota relics, the live client's layout; odd rows offset half a tile), then the trainer relics
+  // ---- stats screen: one shield of the client's relic grid (icon, name, tier pips, bar to the next tier, lifetime / next); special = gold ornamented shield + badge
+  function shield(id, life) {
+    const h = IT.UI.h, t = IT.t, R = IT.RELICS, d = R.get(id);
+    if (!d) return null;
+    life = life || 0;
+    const pg = R.progress(id, life), sp = !!d.special;
+    return h('div', { class: 'rl-tile' + (sp ? ' special' : ''), 'data-relic': id, 'data-tip': tipOf(id, d) },
+      h('div', { class: 'rl-sh t' + pg.tier + (sp ? ' special' : '') + (life > 0 ? ' on' : '') },
+        h('div', { class: 'rl-shin' },
+          sp ? h('span', { class: 'rl-orn' }, h('i'), h('i'), h('i')) : null,
+          sp ? h('small', { class: 'rl-spk', text: '★ ' + t('relics.special') }) : null,
+          icon(d.icon),
+          h('b', { class: 'rl-nm', text: name(id) }),
+          pips(pg.tier),
+          h('div', { class: 'rl-bar' }, h('i', { style: { width: (pg.frac * 100).toFixed(1) + '%' } })),
+          h('span', { class: 'rl-val', text: pg.next == null ? t('relics.max') : R.fmt(id, life) + ' / ' + R.fmt(id, pg.next) }))));
+  }
+  // the whole collection: header "RELICS n / 14", rows 4 (special) / 3 / 4 / 3 (Dota relics, the live client's layout), then the trainer relics
   function collection(life) {
     const h = IT.UI.h, t = IT.t, R = IT.RELICS;
     life = life || lifeRelics();
     const own = R.LIST.filter(r => r.dota && life[r.id] > 0).length;
-    const dota = honeycomb(R.ROWS.map(r => r.length)).map(r => Object.assign(r, { ids: R.ROWS[r.i] }));
-    const tile = id => shield(id, life[id] || 0);
+    const rows = R.ROWS.map((ids, i) => h('div', { class: 'rl-row r' + (i + 1) + (i === 0 ? ' sp' : '') }, specialFirst(ids).map(id => shield(id, life[id] || 0))));
     return h('div', { class: 'rl-coll' },
       h('div', { class: 'rl-chead' }, h('b', { text: t('relics.count', { n: own, m: R.DOTA }) })),
-      hexgrid(dota, tile, 'dota'),
+      h('div', { class: 'rl-grid' }, rows),
       R.TRAINER.length ? h('div', { class: 'rl-thead', text: t('relics.trainerHead') }) : null,
-      R.TRAINER.length ? hexgrid(honeyRows(R.TRAINER, [4, 3]), tile, 'tr') : null);
+      R.TRAINER.length ? h('div', { class: 'rl-row tr' }, R.TRAINER.map(id => shield(id, life[id] || 0))) : null);
   }
 
   // glow sand on the toast (IT.Sand.createGlow: additive hot grains + bloom): a gold burst from the icon falls onto the card's lower edge, piles up,
@@ -272,5 +230,5 @@
     IT.StatsCollector.hooks.base = lifeRelics;
     IT.StatsCollector.hooks.tier = toast;
   }
-  IT.UI.Relics = { LAYOUT, honeycomb, honeyRows, clusterSizes, specialFirst, hexSvg, hexPts, hex, hexgrid, card, shield, collection, panel, toast, advanced, lifeRelics, createQueue, queue: spQueue, SPECIAL_MS };
+  IT.UI.Relics = { LAYOUT, specialFirst, isSpec, card, shield, collection, panel, toast, advanced, lifeRelics, createQueue, queue: spQueue, SPECIAL_MS };
 })(typeof window !== 'undefined' ? window : globalThis);

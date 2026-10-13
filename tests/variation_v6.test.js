@@ -99,7 +99,7 @@ test('item 40: bot sweep with variation (easy seeds 1-6 clear, common seeds 1-3 
   const KNOWN = new Set(['triple_kill', 'shadow_strike', 'cataclysm_finish', 'plateau_escape', 'gauntlet', 'sun_flee']);   // bot-limited at baseline too (see levels_v6 KNOWN)
   const bad = [];
   for (const sc of SC) for (const [df, seeds] of [['easy', [1, 2, 3, 4, 5, 6]], ['common', [1, 2, 3]]]) for (const seed of seeds) {
-    if ((sc.tags || []).indexOf('juke') >= 0) continue;   // v6 item 27: covered by tests/juke_v6.test.js (belief + spot bot)
+    if ((sc.tags || []).indexOf('juke') >= 0 || sc.funBot) continue;   // v6 item 27: covered by tests/juke_v6.test.js (belief + spot bot); item 28 funBot: tests/fun_v6.test.js
     const { r, m } = H.botRun(sc.id, df, seed), e = H.early(m);
     if (df === 'common' && e.length && sc.id !== 'gauntlet') bad.push(sc.id + '|' + df + '|' + seed + ' early foe ' + e.join(','));
     if (df === 'easy' && !KNOWN.has(sc.id) && !(r && r.ok)) bad.push(sc.id + '|' + df + '|' + seed + ' ' + (r ? r.reason + '/' + r.detail : 'none'));

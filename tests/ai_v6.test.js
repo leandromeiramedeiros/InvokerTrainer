@@ -42,7 +42,7 @@ function cast(m, ab, t) {
   if (typeof off === 'function') off();
   return done;
 }
-const KINDS = ['flee_to_tower', 'chase', 'farm_then_tp', 'gank_from_fog', 'hold_highground', 'blink_in', 'kite', 'bait', 'march', 'defend', 'idle_guard'];
+const KINDS = ['flee_to_tower', 'chase', 'farm_then_tp', 'gank_from_fog', 'hold_highground', 'blink_in', 'kite', 'bait', 'march', 'defend', 'idle_guard', 'attack_ally'];   // v6 item 28: attack_ally
 const NEW = ['meteor_lane_kill', 'qop_blink_snipe', 'am_coldsnap_deny', 'blinker_tornado'];
 const hit = (m, e, ab, amt) => IT.Combat.damage(m.w, { src: m.h.id, target: e, ability: ab, type: 'pure', amount: amt });
 

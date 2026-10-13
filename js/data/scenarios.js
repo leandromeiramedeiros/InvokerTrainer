@@ -373,6 +373,67 @@
       [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.48, blinker: true, aware: 0.6 })],
       KILL, ['time'],
       [{ a: 'tornado', at: 'd0' }, { a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 } }),
+    // ---------------------------------------------------------------- v6 item 28: FUN set (docs/SCENARIO-RESEARCH.md; texts + scn.<id>.tip, the real
+    // Dota situation: js/data/i18n/scn.js). Mechanics (js/sim/units.js, ranked.js funExtras): unit tpPlan = a planned Town Portal (GAME.TP.dur s
+    // channel; stun / hex / lift / knockback cancel it, silence does not; finished = 'escaped'); sc.pickups + unit grab = a rune / Aegis race
+    // (obj pickup, fail 'taken'); sc.ally = a friendly hero the foe hits (intent attack_ally, fail 'allyDied'); sc.roshan (scriptHits = he falls
+    // on that many enemy hits, then the Aegis drops; ttl = he falls anyway); allyTowerHp / allyTowerBusy = our tower under attack (fail
+    // 'towerLost'); obj.how.channel 'tp' (killed mid-TP) / obj.how.openInv (the first spell came out of Ghost Walk); unit attack 'melee'.
+    // Bot-only step fields (tests/fun_v6.test.js): wait 'tp' | 'pickup', at 'pickup' | 'land' (Ice Wall where the lifted foe drops), untilEl
+    // (s of play), r (move radius). funBot = the generic scripted sweeps skip it (tests/fun_v6.test.js runs its own bot).
+    V('tp_snipe', 5, 'rad_safe_t1', ['fun', 'prediction', 'reaction'], 8, { lvl: 12 },
+      [U(SEEN([550, 750]), { hp: 0.38, mot: 'flee', tpPlan: { after: 1.2 } })],
+      { type: 'kill_with', how: { ability: ['sunstrike'], channel: 'tp' } }, ['method', 'escaped', 'time'],
+      [{ a: 'sunstrike', at: 'd0', wait: 'tp' }], { rand: { pick: 3 }, funBot: true }),
+    V('tornado_tp_cancel', 6, 'dire_off_t1', ['fun', 'reaction', 'combo'], 12, { lvl: 14 },
+      [U(SEEN([700, 900], { not: ['dtower'] }), { hp: 0.45, intent: 'farm_then_tp', aware: 0.6, tpPlan: { after: 2 } })], KILL, ['escaped', 'time'],
+      [{ a: 'tornado', at: 'd0', wait: 'tp' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 }, funBot: true }),
+    V('rune_contest', 3, 'river_top', ['fun', 'river', 'reaction'], 10,
+      { lvl: 8, at: W(['river'], { d: [0, 3000], i: 4, has: { where: ['river'], d: [1700, 1900] } }) },
+      [U(W(['river'], { d: [1700, 1900] }), { hp: 0.6, aware: 0.3, grab: { kinds: ['rune'] } })],
+      { type: 'pickup', kind: 'rune' }, ['taken', 'time'],
+      [{ a: 'move', at: 'spot:rune', r: 9999 }, { a: 'tornado', at: 'd0', untilEl: 2.6 }, { a: 'move', at: 'pickup', wait: 'pickup', r: 30 }],
+      { spots: { rune: { of: 0, side: 450 } }, pickups: [{ kind: 'rune', at: 'rune', t: 4 }], focus: ['spot:rune'],
+        rand: { pick: 1 }, vary: { posJit: 0 }, funBot: true }),   // fixed arena (i 4): a plain run loses the race at every tier, a Tornado wins it
+    V('pit_fight_blast', 7, 'roshan_pit', ['fun', 'pit', 'multi', 'burst'], 12, { lvl: 16, at: { pit: 'deep', dx: -1050, dy: 110 } },
+      [U({ pit: 'deep', dx: -170, dy: 110 }, { hp: 0.4, mot: 'still', aware: 0.3 }), U({ pit: 'deep', dx: -20, dy: 110 }, { hp: 0.4, mot: 'still', aware: 0.3 })],
+      { type: 'killN', n: 2, how: { ability: ['chaosmeteor', 'deafeningblast'] } }, ['method', 'time'],
+      [{ a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.4 }], { focus: ['pit'], vary: { posJit: [0, 40] }, funBot: true }),
+    V('bkb_tower_hitter', 6, 'rad_safe_t1', ['fun', 'towers', 'items'], 8, { lvl: 13, at: { tower: { team: 0 }, ahead: -750, side: 150 } },
+      [U({ tower: { team: 0 }, ahead: 160 }, { hp: 0.5, intent: { kind: 'attack_ally', target: 'tower' }, attack: 'melee', items: ['bkb'], bkbOn: true, aware: 0.5 })],
+      { type: 'kill_with', how: { ability: ['sunstrike'] } }, ['method', 'towerLost', 'time'], [{ a: 'sunstrike', at: 'd0' }],
+      { allyTowerHp: 120, allyTowerBusy: true, focus: ['ourTower'], vary: { posJit: 0 }, funBot: true }),
+    V('ghost_ambush', 7, 'rad_off_t1', ['fun', 'invisible', 'towers', 'awareness'], 14, { lvl: 15, at: { tower: { team: 0 }, ahead: -1300, side: 200 } },
+      [U({ tower: { team: 0 }, ahead: 160 }, { hp: 0.45, intent: { kind: 'attack_ally', target: 'tower' }, attack: 'melee', aware: 0.15 })],
+      { type: 'kill', how: { openInv: true } }, ['seen', 'method', 'time'],
+      [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0', r: 550 }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 0.3 }],
+      { allyTowerBusy: true, focus: ['ourTower'], vary: { posJit: 0 }, funBot: true }),
+    V('emp_tornado_trap', 5, 'outpost_rad', ['fun', 'combo', 'prediction'], 12, { lvl: 11, style: 'qw' },
+      [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.45, aware: 0.4 })],
+      { type: 'kill_with', how: { ability: ['emp', 'tornado'] } }, ['method', 'time'],
+      [{ a: 'tornado', at: 'd0' }, { a: 'emp', at: 'land' }], { rand: { pick: 3 }, funBot: true }),   // EMP (2.9 s) under the lifted foe outlasts the lift (<= 2.2 s at lvl 12): it lands in the field
+    V('tornado_icewall_landing', 6, 'rad_triangle', ['fun', 'combo', 'positioning'], 12, { lvl: 12 },
+      [U(SEEN([600, 800], { not: ['dtower'] }), { hp: 0.45, behavior: 'escape', aware: 0.6 })], KILL, ['escaped', 'time'],
+      [{ a: 'tornado', at: 'd0' }, { a: 'icewall', at: 'land' }, { a: 'chaosmeteor', at: 'd0' }], { rand: { pick: 3 }, funBot: true }),
+    V('smoke_gank_escape', 8, 'lotus_dire', ['fun', 'escape', 'invisible', 'fog'], 12, { lvl: 17, at: W(['level'], { d: [0, 4000], not: ['river'] }) },
+      [U(W(['level'], { d: [700, 900] }), { mot: 'chase', hp: 1, aware: 1 }), U({ of: 0, side: 240 }, { mot: 'chase', hp: 1, aware: 1 }), U({ of: 0, side: -240 }, { mot: 'chase', hp: 1, aware: 1 })],
+      { type: 'escape', time: 12, caught: 180, bump: 80 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }],
+      { rand: { pick: 3, jit: 100 }, funBot: true }),
+    // fixed arena: the Radiant high ground west of the mid tower; the marchers climb the ramp below the hero (tile 14,52) to the gate on top
+    V('icewall_ramp_defense', 8, 'rad_mid_t1', ['fun', 'highground', 'hold', 'multi'], 14, { lvl: 18, at: { dx: -2256, dy: -96 } },
+      [U({ dx: 192, dy: 1250 }, { hp: 0.35, mot: 'march' }), U({ of: 0, side: 200 }, { hp: 0.35, mot: 'march' })],
+      { type: 'hold', time: 14 }, ['cross', 'died'],
+      [{ a: 'icewall', at: 'd0', near: 750 }, { a: 'chaosmeteor', at: 'mid', near: 700 }, { a: 'deafeningblast', at: 'mid', w: 0.4 }],
+      { gate: { dx: 0, dy: -190, r: 220 }, focus: ['gate'], vary: { boots: false, posJit: 0 }, funBot: true }),
+    V('save_the_ally', 4, 'rad_off_t1', ['fun', 'combo', 'reaction'], 10, { lvl: 10 },
+      [U(SEEN([750, 950], { not: ['dtower'] }), { hp: 0.45, intent: 'attack_ally', attack: 'melee', aware: 0.5 })], KILL, ['allyDied', 'time'],
+      [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0' }],
+      { ally: [{ at: 'ally', frac: 0.35 }], spots: { ally: { of: 0, ahead: -140 } }, focus: ['spot:ally'], rand: { pick: 3, jit: 100 }, vary: { posJit: 0 }, funBot: true }),
+    V('aegis_snatch', 9, 'roshan_pit', ['fun', 'pit', 'reaction'], 10, { lvl: 20, at: { pit: 'deep', dx: -1250, dy: 110 } },
+      [U({ pit: 'deep', dx: -330, dy: 110 }, { hp: 0.5, intent: { kind: 'attack_ally', target: 'roshan' }, attack: 'melee', aware: 0.5, grab: { kinds: ['aegis'] } })],
+      { type: 'pickup', kind: 'aegis' }, ['taken', 'time'],
+      [{ a: 'move', at: 'spot:rosh', r: 450 }, { a: 'tornado', at: 'd0', wait: 'pickup' }, { a: 'move', at: 'pickup', r: 30 }],
+      { roshan: { at: 'rosh', frac: 0.05, scriptHits: 2, ttl: 8 }, spots: { rosh: { pit: 'deep', dx: -90, dy: 110 } }, focus: ['pit'], vary: { posJit: 0 }, funBot: true }),
   ];
 
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as
@@ -414,7 +475,9 @@
   const getter = (s, f, k) => Object.defineProperty(s, f, { enumerable: true, configurable: true, get: () => tr(k) });
   for (const s of V5) {
     for (const f of ['name', 'flair', 'desc', 'win', 'lose']) getter(s, f, 'scn.' + s.id + '.' + f);
-    getter(s, 'tip', 'scn.' + s.id + '.flair'); getter(s, 'goal', 'scn.' + s.id + '.desc');
+    // v6 item 28: the HUD tip prefers scn.<id>.tip (the real Dota situation) when the pack has one, else the story line
+    Object.defineProperty(s, 'tip', { enumerable: true, configurable: true, get: () => tr('scn.' + s.id + '.tip') || tr('scn.' + s.id + '.flair') });
+    getter(s, 'goal', 'scn.' + s.id + '.desc');
     s.dummies = s.units; s.sol = s.steps;
   }
   const all = LEGACY.concat(V5);
@@ -446,7 +509,8 @@
   const REVEAL = ['sun_flee', 'uphill_snipe', 'sun_snipe', 'fog_ambush', 'blink_fog',
     'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke',
     'edge_gank', 'long_lane_snipe', 'river_mouth_ambush', 'offlane_survival', 'pinned_escape',
-    'pit_in_out', 'pit_force_exit', 'pit_ghost', 'pit_mouth_snipe'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set
+    'pit_in_out', 'pit_force_exit', 'pit_ghost', 'pit_mouth_snipe',
+    'tp_snipe', 'pit_fight_blast', 'ghost_ambush', 'smoke_gank_escape', 'aegis_snatch'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set, v6 item 28 fun set
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)

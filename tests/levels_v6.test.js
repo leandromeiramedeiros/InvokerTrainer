@@ -244,7 +244,7 @@ test('item 11: countdown label "LV n"', () => {
 test('item 11: bot clears every scenario at easy, kills no foe early at common (seeds 1-6, known pre-existing fails excepted)', () => {
   const bad = [];
   for (const sc of SC) for (const df of ['easy', 'common']) for (const seed of SEEDS) {
-    if ((sc.tags || []).indexOf('juke') >= 0) continue;   // v6 item 27: juke runs need belief + day/night + the spot bot (tests/juke_v6.test.js)
+    if ((sc.tags || []).indexOf('juke') >= 0 || sc.funBot) continue;   // v6 item 27: juke runs need belief + day/night + the spot bot (tests/juke_v6.test.js); item 28 funBot: TP / pickup / ally steps, tests/fun_v6.test.js
     const key = sc.id + '|' + df + '|' + seed;
     const { r, m } = botRun(sc.id, df, seed), e = early(m);
     if (df === 'common' && e.length && sc.id !== 'gauntlet') bad.push(key + ' early foe ' + e.join(','));

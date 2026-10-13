@@ -348,6 +348,23 @@
       const u = w.get(p.unit);
       if (p.phase === 'hit' && u && u.kind === 'enemy' && u.ai && u.ai.behavior === 'disable_escape') u.ai.escaping = true;
     });
+    // v6 item 28: ally / Roshan deaths (combat.js only kills enemies), Roshan aggro + scripted death; a kill mid-TP ends the channel
+    // (e.channel is left set: ranked reads it for how.channel)
+    w.on('damage', (p) => {
+      const t = w.byId.get(p.target), s = w.get(p.src);
+      if (!t || t.dead || (t.kind !== 'ally' && t.kind !== 'roshan')) return;
+      if (t.kind === 'roshan') {
+        if (s && s.team !== t.team) t.rosh.aggro = s.id;
+        if (p.ability === 'attack' && s && s.team === 1 && t.rosh.scriptHits > 0 && ++t.rosh.hits >= t.rosh.scriptHits) t.hp = 0;
+        if (t.hp <= 0) killRoshan(w, t, p.src);
+        return;
+      }
+      if (t.hp <= 0) { t.hp = 0; t.killed = true; w.emit('allyDown', { unit: t.id, by: p.src }); w.remove(t); }
+    });
+    w.on('kill', (p) => {
+      const u = w.byId.get(p.unit);
+      if (u && u.channel && u.channel.kind === 'tp') w.emit('channelEnd', { unit: u.id, kind: 'tp', ok: false, interrupted: true, killed: true });
+    });
   }
 
   // ---------- AI ----------
@@ -734,7 +751,7 @@
   // ---- intents (v6 #50): what a scenario unit WANTS. d.intent = { kind, phases?: [{ on, then }] }; without one it is derived from the
   // old fields (mot / behavior / juke). engine(kind) = the mover that executes it: ranked script() mot (flee / chase / march / kite) or the
   // units.js behavior (guard / hold / defend / escape / farm / stationary). Phases switch the kind once each, after the tier reaction.
-  const KINDS = ['flee_to_tower', 'chase', 'farm_then_tp', 'gank_from_fog', 'hold_highground', 'blink_in', 'kite', 'bait', 'march', 'defend', 'idle_guard'];
+  const KINDS = ['flee_to_tower', 'chase', 'farm_then_tp', 'gank_from_fog', 'hold_highground', 'blink_in', 'kite', 'bait', 'march', 'defend', 'idle_guard', 'attack_ally'];
   const TRIGGERS = ['spotted', 'lowHp', 'spellLanded', 'allyHit', 'timer'];
   const GANK_PHASES = [{ on: 'spotted', then: 'chase' }, { on: 'allyHit', then: 'chase' }, { on: 'spellLanded', then: 'chase' }];
   function intentOf(d) {
@@ -756,6 +773,7 @@
       case 'gank_from_fog': return { mot: null, behavior: 'stationary' };
       case 'farm_then_tp': return { mot: null, behavior: 'farm' };
       case 'bait': return { mot: d.mot || null, behavior: d.behavior || 'stationary' };
+      case 'attack_ally': return { mot: null, behavior: 'stationary' };   // v6 item 28: hits our ally / tower / Roshan (tickAttackAlly)
       default: return d.mot === 'still' ? { mot: 'still', behavior: 'stationary' } : { mot: d.mot || null, behavior: d.behavior || 'guard' };
     }
   }
@@ -935,13 +953,31 @@
     }
     if (w.t < I.tpAt - 1e-9 || disabled(e) || e.tele) return false;
     if (!itemOk(w, e)) { I.tpAt = w.t + 2; return false; }
-    issueStop(w, e); a.moving = false;
-    const dur = (GM().TP && GM().TP.dur) || 3, p = tpDest(w, e);
+    return startTP(w, e);
+  }
+  // start a Town Portal channel (GAME.TP.dur s) to dest (default tpDest). o.remove: the unit leaves the map on arrival (still 'escaped')
+  function startTP(w, e, dest, o) {
+    if (!e || e.dead || (e.channel && e.channel.kind === 'tp')) return false;
+    issueStop(w, e); if (e.ai) e.ai.moving = false;
+    const dur = (GM().TP && GM().TP.dur) || 3, p = dest || tpDest(w, e);
     IT.Status.add(w, e, 'channel', dur + 0.5, { src: e.id, ability: 'enemyTp', data: { ability: 'enemyTp' } });
     e.channel = { kind: 'tp', t0: w.t, dur, x: p.x, y: p.y };
+    e.tpRemove = !!(o && o.remove);
     w.emit('channelStart', { unit: e.id, kind: 'tp', dur, x: p.x, y: p.y });
     w.emit('fx', { name: 'tpStart', x: e.x, y: e.y, unit: e.id, dur });
     return true;
+  }
+  // v6 item 28: a scenario-planned TP (e.tpPlan { after: s since the intent started, near?: only once the hero is within near u,
+  // dest?: {x,y}, remove? }): the fleeing target stops and channels once -- the Sun Strike / Tornado window
+  function thinkPlanTP(w, e) {
+    const P = e.tpPlan;
+    if (!P || P.done || e.tpEscaped || (e.intent && e.intent.tpDone)) return false;   // one TP per unit (farm_then_tp may have used it)
+    if (e.channel && e.channel.kind === 'tp') return true;
+    if (P.t0 == null) P.t0 = (e.intent && e.intent.t0 != null) ? e.intent.t0 : w.t;
+    if (w.t - P.t0 < (P.after || 0) - 1e-9 || disabled(e) || e.tele) return false;
+    if (P.near != null && !(w.hero && U.dist(e, w.hero) <= P.near)) return false;
+    P.done = true;
+    return startTP(w, e, P.dest || null, { remove: !!P.remove });
   }
   function tickTP(w, e) {
     const c = e.channel;
@@ -961,9 +997,126 @@
     e.channel = null; e.tpEscaped = true;
     if (e.intent) e.intent.tpDone = true;
     e.x = c.x; e.y = c.y; e.orders.length = 0; e.path.length = 0;
-    w.emit('channelEnd', { unit: e.id, kind: 'tp', ok: true });
+    w.emit('channelEnd', { unit: e.id, kind: 'tp', ok: true, interrupted: false });
     w.emit('fx', { name: 'tpArrive', x: c.x, y: c.y, unit: e.id });
+    if (e.tpRemove) { w.remove(e); return true; }
     return false;
+  }
+
+  // ---------- v6 item 28: pickups (rune / Aegis), a friendly ally hero, Roshan ----------
+  // spawnPickup: kind 'pickup' (pickKind / pick.kind), radius GAME.PICKUP.r. The 'pickups' system: the nearest hero / enemy (alive, not lifted)
+  // whose centre is within r takes it: the entity is removed, then 'pickup' { unit, kind, id, x, y, team } fires (render caches the spot).
+  function spawnPickup(w, o) {
+    hook(w);
+    const r = (GM().PICKUP && GM().PICKUP.r) || 100, k = o.kind === 'aegis' ? 'aegis' : 'rune';
+    return w.add({ kind: 'pickup', pickKind: k, pick: { kind: k }, team: -1, x: o.x, y: o.y, radius: r, visible: true, t0: w.t });
+  }
+  const PICKERS = { hero: 1, enemy: 1 };
+  IT.World.system('pickups', 22, (w) => {
+    for (const p of w.ents) {
+      if (p.dead || p.kind !== 'pickup') continue;
+      let best = null, bd = Infinity;
+      for (const u of w.ents) {
+        if (u.dead || !PICKERS[u.kind] || u.refill || hasS(u, 'lift') || !(u.hp > 0)) continue;
+        const d = U.dist(u, p);
+        if (d <= p.radius && d < bd) { bd = d; best = u; }
+      }
+      if (!best) continue;
+      w.remove(p);
+      w.emit('pickup', { unit: best.id, kind: p.pickKind, id: p.id, x: p.x, y: p.y, team: best.team });
+    }
+  });
+  // spawnAlly: a stationary friendly hero (team 0, not controllable) the enemy attacks. Dies at 0 hp ('allyDown'). o.frac = start hp fraction.
+  function spawnAlly(w, o) {
+    hook(w);
+    const A = GM().ALLY || { hp: 900, armor: 3, magicRes: 0.25, radius: 24, vision: 1800, visionNight: 800 };
+    const mx = o.hp || A.hp, hp = Math.max(1, Math.round(mx * (o.frac != null ? o.frac : 1)));
+    const vis = IT.DayNight ? IT.DayNight.lerp(w, A.vision, A.visionNight) : A.vision;
+    return w.add({
+      kind: 'ally', team: 0, x: o.x, y: o.y, radius: A.radius, vision: vis, visionDay: A.vision, visionNight: A.visionNight, visible: true,
+      hp, maxHp: mx, mana: 0, maxMana: 0, hpRegen: 0, manaRegen: 0, armor: A.armor, magicRes: A.magicRes, ms: 0, turnRate: 10,
+      base: { ms: 0, armor: A.armor, magicRes: A.magicRes, hpRegen: 0, manaRegen: 0, as: 100, dmgMin: 0, dmgMax: 0, bat: 1.7, attackRange: 0 },
+      skin: o.skin || 'default', name: o.name || '', facing: o.facing != null ? o.facing : -Math.PI / 2,
+    });
+  }
+  // spawnRoshan: kind 'roshan', team 2. Hits back whoever damaged it last (in reach of its pit spot; never walks). o.hp / o.frac / o.armor;
+  // o.scriptHits = dies on the Nth enemy (team 1) auto-attack hit (scenario pacing). Death: 'roshanDown' + an Aegis pickup at its spot.
+  function spawnRoshan(w, o) {
+    hook(w);
+    const R = GM().ROSHAN || { hp: 6000, armor: 20, magicRes: 0.25, radius: 80, min: 65, max: 65, bat: 2, point: 0.6, range: 100, vision: 800 };
+    const mx = o.hp || R.hp, hp = Math.max(1, Math.round(mx * (o.frac != null ? o.frac : 1))), armor = o.armor != null ? o.armor : R.armor;
+    return w.add({
+      kind: 'roshan', team: 2, x: o.x, y: o.y, radius: R.radius, vision: R.vision, visible: false, name: 'Roshan',
+      hp, maxHp: mx, mana: 0, maxMana: 0, hpRegen: 0, manaRegen: 0, armor, magicRes: R.magicRes, ms: 0, turnRate: 10,
+      base: { ms: 0, armor, magicRes: R.magicRes, hpRegen: 0, manaRegen: 0, as: 100, dmgMin: R.min, dmgMax: R.max, bat: R.bat, attackRange: R.range },
+      attack: { min: R.min, max: R.max, bat: R.bat, point: R.point, range: R.range, projSpeed: 0, next: 0, target: null },
+      home: { x: o.x, y: o.y }, rosh: { aggro: null, wind: null, next: 0, hits: 0, scriptHits: o.scriptHits || 0 }, facing: o.facing != null ? o.facing : Math.PI / 2,
+    });
+  }
+  function killRoshan(w, r, by) {
+    if (!r || r.dead || r.kind !== 'roshan') return;
+    r.hp = 0; r.killed = true;
+    w.emit('roshanDown', { unit: r.id, x: r.x, y: r.y, by: by != null ? by : null });
+    w.remove(r);
+    spawnPickup(w, { kind: 'aegis', x: r.x, y: r.y });
+  }
+  function tickRoshan(w, r) {
+    const S = r.rosh, at = r.attack, t = S.aggro != null ? w.get(S.aggro) : null;
+    const reach = u => U.dist(r, u) <= at.range + r.radius + (u.radius || 0) + 40;
+    if (!t || !IT.Status.canAttack(r) || hasS(t, 'lift') || !reach(t)) { if (S.wind) { S.wind = null; setAnim(r, 'idle'); } return; }
+    r.facing = Math.atan2(t.y - r.y, t.x - r.x);
+    if (S.wind) {
+      if (w.t < S.wind.at - 1e-9) return;
+      S.wind = null; setAnim(r, 'idle');
+      const dmg = at.min + Math.floor(rngOf(r)() * (at.max - at.min + 1));
+      w.emit('attackHit', { src: r.id, target: t.id });
+      IT.Combat.damage(w, { src: r.id, target: t, amount: dmg, type: 'physical', ability: 'attack' });
+      return;
+    }
+    if (w.t < S.next - 1e-9) return;
+    S.next = w.t + at.bat; S.wind = { at: w.t + at.point };
+    setAnim(r, 'attack');
+    w.emit('attackStart', { src: r.id, target: t.id });
+  }
+
+  // ---- v6 item 28 intent attack_ally: hit intent.target ('ally' | 'roshan' | 'tower': the nearest live one of that kind on another team)
+  function attackTarget(w, e) {
+    const k = (e.intent && e.intent.target) || 'ally';
+    let best = null, bd = Infinity;
+    for (const t of w.ents) {
+      if (t.dead || t.kind !== k || t.team === e.team || !(t.hp > 0)) continue;
+      const d = U.dist(e, t);
+      if (d < bd) { bd = d; best = t; }
+    }
+    return best;
+  }
+  function tickAttackAlly(w, e) {
+    const I = e.intent;
+    if (!I || I.kind !== 'attack_ally' || !e.attack) return false;
+    const t = attackTarget(w, e);
+    if (!t || !IT.Status.canAttack(e) || hasS(t, 'lift')) return false;
+    const cur = e.orders[0];
+    if (!cur || cur.type !== 'attack' || cur.target !== t.id) IT.Orders.issue(w, e, { type: 'attack', target: t.id });
+    return true;
+  }
+  // ---- v6 item 28 e.grab { kinds: ['rune'|'aegis'], at?: {x,y} }: a pickup of those kinds on the map -> walk onto it (after the tier
+  // reaction); none yet -> walk to `at` (the rune spot) and wait there
+  function tickGrab(w, e) {
+    const G = e.grab;
+    if (!G || !IT.Status.canMove(e)) return false;
+    let p = null, bd = Infinity;
+    for (const q of w.ents) if (!q.dead && q.kind === 'pickup' && G.kinds.indexOf(q.pickKind) >= 0) { const d = U.dist(e, q); if (d < bd) { bd = d; p = q; } }
+    const go = (x, y) => { const cur = e.orders[0]; if (!cur || cur.type !== 'move' || Math.hypot(cur.x - x, cur.y - y) > 20) issueMove(w, e, x, y); };
+    if (p) {
+      if (G.seen !== p.id) { G.seen = p.id; G.goAt = w.t + (e.reaction || 0); }   // a rune / Aegis is watched for: the plain tier reaction (no unaware penalty)
+      if (w.t < G.goAt - 1e-9) return !!G.at;
+      go(p.x, p.y);
+      return true;
+    }
+    if (!G.at) return false;
+    if (U.dist(e, G.at) > 30) go(G.at.x, G.at.y);
+    else if (e.orders.length && e.orders[0].type === 'move') issueStop(w, e);
+    return true;
   }
 
   // ---- behavior 'guard' (intent idle_guard) / 'farm': fidget around the post within exec.sway (0 = stand still); hard+ also dodge on foot
@@ -1047,7 +1200,8 @@
     if (tickGhostSense(w, e)) return;
     if (tickJuke(w, e)) return;
     if (e.tele) return;
-    if (thinkInnate(w, e) || thinkTP(w, e)) return;   // v6 #52 innate blink, #50 farm_then_tp
+    if (tickGrab(w, e)) return;   // v6 item 28: rune / Aegis contest
+    if (thinkInnate(w, e) || thinkTP(w, e) || thinkPlanTP(w, e)) return;   // v6 #52 innate blink, #50 farm_then_tp, item 28 planned TP
     // ground danger zones we stand in: dodge on foot (if mobile), else items
     if (IT.Status.canAct(e)) for (const t of w.ents) {
       if (t.dead || !t.danger || a.handled[t.id] || t.age < reactionOf(e)) continue;
@@ -1059,6 +1213,7 @@
       if (dest) { issueMove(w, e, dest.x, dest.y); a.moving = false; return; }
       if (defend(w, e, ['euls', 'blink', 'forcestaff', 'bkb'], away(t.danger, e))) return;
     }
+    if (tickAttackAlly(w, e)) return;   // v6 item 28
     if (!h) return;
     // v6: an unseen hero (Ghost Walk, fog, high ground) is never located: the AI runs from where it last saw it
     // v6 item 27: a unit with a belief (ranked chasers, IT.Belief) runs from its best guess (last seen / predicted) instead
@@ -1102,14 +1257,16 @@
 
   IT.World.system('unitsAI', 60, (w) => {
     for (const e of w.ents) {
+      if (e.kind === 'roshan' && !e.dead) { tickRoshan(w, e); continue; }
       if (e.dead || !e.ai) continue;
       if (e.kind === 'enemy' || e.kind === 'dummy') tickEnemy(w, e);
       else if (e.kind === 'spirit') tickSpirit(w, e);
     }
   });
 
-  IT.Intent = { KINDS, TRIGGERS, of: intentOf, engine, attach, set: setIntent, tick: tickIntent, held, fleeAng, jit, itemOk, newInnate, execOf, denyBlink, gwRadius };
+  IT.Intent = { KINDS, TRIGGERS, of: intentOf, engine, attach, set: setIntent, tick: tickIntent, held, fleeAng, jit, itemOk, newInnate, execOf, denyBlink, gwRadius, startTP, tpDest };
   IT.Units = {
     spawnDummy, spawnEnemy, bootBonus, eulsBonus, itemMs, rollMs, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, useItem, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnPickup, spawnAlly, spawnRoshan, killRoshan,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

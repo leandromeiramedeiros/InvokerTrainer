@@ -258,24 +258,48 @@ test('i18n: special relic keys exist (toast header, RELICS n / m, headers) and t
   assert.match(pack.en['relics.specialToast'], /\{t\}/); assert.match(pack.en['relics.count'], /\{n\}.*\{m\}/);
 });
 
-test('#60 row model: min-heights fit the icon, specials bigger; honeycomb offsets; special-first sort', () => {
+test('#60 row model: min-heights fit the icon, specials bigger; special-first sort', () => {
   const ui = load([...FILES, 'js/ui/relics.js']).UI.Relics, L = ui.LAYOUT;
   assert.ok(L.rowMinEm >= L.iconEm + 0.4, 'regular row fits its icon with padding');
   assert.ok(L.spRowMinEm >= L.spIconEm + 0.4 && L.spIconEm > L.iconEm && L.spRowMinEm > L.rowMinEm);
   assert.ok(L.iconEm * 16 >= 24 && L.spIconEm * 16 <= 64, 'icon 24px+ at 16px base');
-  assert.deepEqual(ui.honeycomb([4, 3, 4, 3]).map(r => r.indent), [0, 0.5, 0, 0.5], 'odd rows offset half a tile');
-  assert.deepEqual(ui.honeycomb([4, 3, 4, 3]).map(r => r.n), [4, 3, 4, 3]);
-  assert.deepEqual(ui.honeyRows(['a', 'b', 'c', 'd', 'e'], [2, 3]).map(r => r.ids.join('')), ['ab', 'cde']);
-  assert.deepEqual([1, 2, 3, 4, 5, 6].map(n => ui.clusterSizes(n).reduce((a, b) => a + b)), [1, 2, 3, 4, 5, 6]);
-  assert.deepEqual(ui.clusterSizes(4), [2, 2]);
   assert.equal(ui.specialFirst(['kills', 'stun_kills', 'multi_meteor', 'tornado_kills']).join(), 'multi_meteor,kills,stun_kills,tornado_kills', 'stable, specials first');
 });
 
-test('#60 hex ring: dasharray carries the fraction, gain arc only when gained; css has the row/hex classes', () => {
-  const ui = load([...FILES, 'js/ui/relics.js']).UI.Relics;
-  assert.equal(typeof ui.hexSvg, 'function'); assert.equal(ui.hexPts(0).split(' ').length, 6);
-  const css = fs.readFileSync(path.join(ROOT, 'css/relics.css'), 'utf8');
-  for (const c of ['.rl-hexgrid', '.rl-hrow', '.rl-hex.special', '.rl-card.special', '.rl-rows', '.rl-spk']) assert.ok(css.includes(c), c);
+// tiny DOM-less builder: nodes are { tag, attrs, kids }
+function fakeUI() {
+  const IT2 = load([...FILES, 'js/ui/relics.js']);
+  const flat = a => [].concat(...a.map(x => (Array.isArray(x) ? flat(x) : [x]))).filter(x => x != null);
+  IT2.UI.h = (tag, attrs, ...kids) => ({ tag, attrs: attrs || {}, kids: flat(kids) });
+  IT2.t = k => k;
+  return IT2;
+}
+const walk = (n, f) => { if (n && typeof n === 'object') { f(n); (n.kids || []).forEach(k => walk(k, f)); } };
+const classes = n => { const out = []; walk(n, x => out.push(x.attrs && x.attrs.class || '')); return out.join(' '); };
+
+test('#64 special relics: row/shield class names, special-first panel, no hex honeycomb left', () => {
+  const IT2 = fakeUI(), ui = IT2.UI.Relics, R = IT2.RELICS;
+  const sp = R.LIST.filter(r => r.special).map(r => r.id), plain = R.LIST.find(r => !r.special).id;
+  assert.ok(sp.length >= 1);
+  assert.match(ui.card(sp[0], 5, 0).attrs.class, /rl-card.*special/);
+  assert.doesNotMatch(ui.card(plain, 5, 0).attrs.class, /special/);
+  assert.match(classes(ui.card(sp[0], 5, 0)), /rl-spk/, 'special badge on the row');
+  assert.match(ui.card(sp[0], 5, 0).attrs['data-tip'], /relics\.special/, 'tooltip marks it special');
+  const shd = ui.shield(sp[0], 5);
+  assert.match(shd.attrs.class, /rl-tile special/); assert.match(classes(shd), /rl-sh t\d special on/); assert.match(classes(shd), /rl-orn/); assert.match(classes(shd), /rl-spk/);
+  assert.doesNotMatch(classes(ui.shield(plain, 5)), /special|rl-orn|rl-spk/);
+  const del = {}; del[plain] = 3; del[sp[0]] = 2;
+  const first = ui.panel(del, {}, null).kids[0].kids[1].kids[0].kids;   // panel > .rl-list > .rl-rows > cards
+  assert.deepEqual(first.map(c => c.attrs['data-relic']), [sp[0], plain], 'special listed first in the end-splash panel');
+  assert.deepEqual(ui.advanced(del), [sp[0], plain]);
+  const coll = ui.collection({}); assert.match(classes(coll), /rl-grid/); assert.match(classes(coll), /rl-row r1 sp/);
+});
+
+test('#64 css: gold special row + shield, reduced-motion safe shimmer; hex code gone', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css/relics.css'), 'utf8'), js = fs.readFileSync(path.join(ROOT, 'js/ui/relics.js'), 'utf8');
+  for (const c of ['.rl-card.special', '.rl-sh.special', '.rl-tile.special', '.rl-rows', '.rl-spk', '.rl-grid', '.rl-row']) assert.ok(css.includes(c), c);
   assert.match(css, /\.rl-card\{[^}]*min-height:3\.6em/);
-  assert.match(css, /prefers-reduced-motion[\s\S]*\.rl-hex\.special\.on::after\{animation:none/);
+  assert.match(css, /prefers-reduced-motion[\s\S]*\.rl-card\.special\.on::after,\.rl-sh\.on \.rl-shin::after\{animation:none/);
+  assert.match(css, /\.rl-card\.special\s*\{[^}]*border-image:var\(--orn-thin-gold\)/, 'gold ornament frame');
+  assert.doesNotMatch(css + js, /hexSvg|hexgrid|honeycomb|honeyRows|rl-hex|rl-hrow|hx-ring|hexPts/i);
 });

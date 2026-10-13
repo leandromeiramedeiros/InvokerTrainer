@@ -81,7 +81,7 @@ test('infinite: later laps are harder (bulkier foes, tighter timer, higher multi
   assert.ok(l1.dmgMul > base.dmgMul && l1.timer < base.timer && l1.mult > base.mult && l1.reaction < base.reaction);
   assert.equal(base.hpMul, IT.DIFFICULTY.get('bambam').hpMul, 'the base row is not mutated');
   const r = R.create({ mode: 'infinite', seed: 2 }); r.n = 0; r.next(); assert.equal(r.lap(), 0);
-  r.n = 40; r.next(); assert.ok(r.lap() >= 1); assert.ok(r.difficulty().hpMul > base.hpMul);
+  r.n = 400; r.next(); assert.ok(r.lap() >= 1);   // past one full pass (v6 item 28 grew the pool past 40) assert.ok(r.difficulty().hpMul > base.hpMul);
 });
 
 test('infinite: runs until the first fail, counts the clears, reports best-ever', () => {

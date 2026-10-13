@@ -32,6 +32,8 @@
     qop_blink_snipe: 'day',         // v6 #52: day sight 1800 keeps the 900 u blink landing in view (the snipe needs to see where she lands)
     blinker_tornado: 'day',         // v6 #52: foe 650-850 + a 900 u escape blink: stays inside day sight
     am_coldsnap_deny: { nightAt: 10 }, // v6 #52: the river darkens late: a blink you failed to deny vanishes into the night
+    ghost_ambush: 'night',          // v6 item 28: the tower hitter sees 800 u at night: Ghost Walk in from ~1450 u
+    smoke_gank_escape: 'night',     // v6 item 28: a smoked pack 700-900 u away bursts out of the dark (night sight 800)
   };
 
   const VALID = { day: 1, night: 1, cycle: 1 };

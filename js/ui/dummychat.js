@@ -19,7 +19,8 @@
   const DISABLES = { stun: 1, frozen: 1, hex: 1, lift: 1 };
   const HERO_CASTS = { icewall: 1, alacrity: 1, forgespirit: 1, ghostwalk: 1 };   // hitBy:<id> fired when the hero casts it (nothing "hits" the foe)
   // per-situation chance (x the skin's `chat`) so a DoT / a chatty character does not talk over every tick
-  const REACT_P = { damaged: 0.3, stunned: 0.6, nearDeath: 1, death: 0.8, playerMissed: 0.7, playerWhiffSunstrike: 0.8, heroInvisible: 0.8 };
+  const REACT_P = { damaged: 0.3, stunned: 0.6, nearDeath: 1, death: 0.8, playerMissed: 0.7, playerWhiffSunstrike: 0.8, heroInvisible: 0.8,
+    gotJuked: 0.8, invokerEscaped: 0.8, reacquired: 0.6, dustHit: 0.9, dustMiss: 1 };   // v6 #44/#61: belief + Dust situations
   const CLS = { praise: 'praise', heroLow: 'hurt', killedHero: 'hurt', comboFail: 'comboFail' };   // css colour classes in hud.css
 
   const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, ambAt: 0, now: 0, st: { last: {} }, pend: null, nd: new Set(), invAt: -99, rng: null };
@@ -296,7 +297,25 @@
     on('heroDown', p => { if (p.unit === hid()) say('killedHero', { alt: 'heroLow' }); });
     on('hit', p => {
       if (p.ability === 'stunbolt' && p.target === hid()) { say('heroLow', { p: 0.5 }); return; }
-      if (mine(p.src) && p.ability !== 'attack') { const u = foe(p.target); if (u) react(u, p.ability); }
+      if (mine(p.src) && p.ability !== 'attack') {
+        const u = foe(p.target); if (!u) return;
+        // a Dust cloud landed on the foe (revealed): half 'dustHit', half the item-hit bubble 'hitBy:dust' (each falls to the other, then to 'damaged')
+        if (p.ability === 'dust') { if (!u.dead) say(rnd() < 0.5 ? 'dustHit' : 'hitBy:dust', { pref: u, alt: hasLines(skinOf(skinName(u)), 'dustHit') ? 'dustHit' : 'damaged' }); }
+        else react(u, p.ability);
+      }
+    });
+    // belief (js/sim/belief.js): a chaser walked to the predicted spot and found nothing ('juked'), saw the hero again ('seen' + reacquired), or lost an invisible hero
+    on('belief', p => {
+      const u = foe(p.unit); if (!u || u.dead) return;
+      if (p.state === 'juked') { if (!p.dust) say('gotJuked', { pref: u }); }   // a Dust that found nothing has its own line (dustResult below)
+      else if (p.state === 'seen' && p.reacquired) say('reacquired', { pref: u });
+      else if (p.state === 'lost' && p.from === 'seen' && IT.Status && IT.Status.hidden(g.hero)) say('invokerEscaped', { pref: u });
+    });
+    // the foe's own Dust found nobody inside the cloud
+    on('dustResult', p => {
+      if (p.hit) return;
+      const u = foe(p.unit); if (!u || u.dead || !u.visible) return;
+      clearBubble(); D.lastSay = -99; say('dustMiss', { pref: u });
     });
     on('status', p => {
       const u = w.get(p.target); if (!u) return;
@@ -308,7 +327,7 @@
       if (!(p.dealt > 0) || p.target === hid()) return;
       const t = w.get(p.target); if (!t || t.team !== 1) return;
       D.lastDmg = w.t;
-      const u = foe(p.target); if (!u || !mine(p.src)) return;
+      const u = foe(p.target); if (!u || !mine(p.src) || p.ability === 'dust') return;   // Dust: the 'hit' event above speaks
       if (u.maxHp && u.hp / u.maxHp < NEAR_DEATH && u.hp > 0 && !D.nd.has(u.id)) { D.nd.add(u.id); if (say('nearDeath', { pref: u })) return; }
       react(u, p.ability);
     });

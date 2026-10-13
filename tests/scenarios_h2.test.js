@@ -202,7 +202,8 @@ test('every level 1-4 scenario has rand.jit (except the documented exemption)', 
   const low = SC.filter(s => s.level <= 4 && !s.legacy);
   assert.ok(low.length >= 9, 'low-level scenarios: ' + low.length);
   // v6 item 27: juke scenarios use a fixed arena on purpose (rand.pick 1, posJit 0: the route is the puzzle; tests/juke_v6.test.js)
-  for (const s of low) if (!JIT_EXEMPT.has(s.id) && (s.tags || []).indexOf('juke') < 0) assert.ok(s.rand && s.rand.jit > 0, s.id + ' jit');
+  // v6 item 28: rune_contest is a fixed race arena (the distances are the puzzle; tests/fun_v6.test.js)
+  for (const s of low) if (!JIT_EXEMPT.has(s.id) && (s.tags || []).indexOf('juke') < 0 && s.id !== 'rune_contest') assert.ok(s.rand && s.rand.jit > 0, s.id + ' jit');
 });
 
 test('jit moves the foes across seeds, stays deterministic per seed, and keeps spots valid', () => {
