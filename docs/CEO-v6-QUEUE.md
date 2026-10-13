@@ -74,6 +74,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [ ] #67 Roshan pit Deafening Blast push-in scenario: good design but the enemy never ends up inside. Make it a bit easier: start the enemy closer to/aligned with the pit entrance, slightly longer knockback or a larger "inside" area / entrance threshold; verify with the bot that a reasonable Blast angle lands him inside on every tier (tighter on hard/bambam).
 - [ ] #68 Enemy move speed too high on easy tiers: scale by difficulty on top of the per-skin base (suggest ian x0.82, easy x0.88, normal x0.95, hard x1.0, bambam x1.0 + items). Re-run scenario feasibility for chase/escape scenarios after.
 
+- [ ] #69 SHOP purchase feedback: the buy VFX is ugly and there is no sound. Redo: satisfying purchase moment (button press squash, points counter ticking down, coin/relic-point particles flying from the price into the item card, card flips to OWNED with a gold glow-sand burst + shine sweep, skin preview does a little idle/cast animation), plus SFX (coin clink on press, rising chime on unlock, short fanfare for premium skins like Vitinian); not-enough-points = shake + dull thud. Respect reduced-motion and the SFX volume setting.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
