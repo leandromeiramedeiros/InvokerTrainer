@@ -78,6 +78,7 @@
       'eb.cast': 'Cast point: {n}s', 'eb.warn': '(+{n}s warning)', 'eb.range': 'Range: {n}', 'eb.radius': 'Radius: {n}',
       'eb.cd': 'Cooldown: {n}s', 'eb.mana': 'Mana: {n}', 'eb.uses': 'Used {n}x',
       'eb.lock': 'Locked: {n}s (took damage)', 'eb.denied': 'Denied: {n}s',
+      'hint.dodged': 'It dodged: lock it first', 'cfail.method.dodged': 'it dodged: lock it first', 'scn.fail.method.dodged': 'It dodged: lock it first',   // v6 #30 I11
     },
     pt: {
       'pause.hint': 'Esc: continuar',
@@ -155,5 +156,6 @@
       'eb.cast': 'Ponto de conjuração: {n}s', 'eb.warn': '(+{n}s de aviso)', 'eb.range': 'Alcance: {n}', 'eb.radius': 'Raio: {n}',
       'eb.cd': 'Recarga: {n}s', 'eb.mana': 'Mana: {n}', 'eb.uses': 'Usado {n}x',
       'eb.lock': 'Travado: {n}s (levou dano)', 'eb.denied': 'Bloqueado: {n}s',
+      'hint.dodged': 'Ele desviou: prenda-o antes', 'cfail.method.dodged': 'ele desviou: prenda-o antes', 'scn.fail.method.dodged': 'Ele desviou: prenda-o antes',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

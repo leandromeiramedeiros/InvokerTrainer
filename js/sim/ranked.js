@@ -911,7 +911,7 @@
 
     // used = step abilities that hit a foe (or, SELF_OK, were cast); hurt = a foe damaged the hero (escape: caught)
     const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null, used: new Set(), castAt: {}, hurt: false, burned: 0, burnAt: null, unseenFrom: null,
-      picked: null, allyDied: false, openInv: null });   // v6 item 28: first pickup { team, kind, unit }, ally fell, the hero's first cast came from invisibility
+      picked: null, allyDied: false, openInv: null, dz: {}, dodged: new Set() });   // v6 item 28: first pickup { team, kind, unit }, ally fell, the hero's first cast came from invisibility
     function enter(w) {
       run.dummies = apply(w, run.pr);
       faceFoes(w, run.dummies);
@@ -1088,7 +1088,20 @@
       // playtest 2: area defence (every 'hold' and every gate / 'cross' scenario): wiping out every foe IS the defence -> an immediate win
       if ((o.type === 'hold' || (fail.indexOf('cross') >= 0 && w.gate)) && run.dummies.length && !alive.length) return conclude(true);
       // #30: in an escape a cast is enough (a chaser may BKB the Tornado)
-      const won = () => { const miss = (pr.need || []).filter(a => !st.used.has(a) && !(st.castAt[a] != null && w.t - st.castAt[a] <= IN_FLIGHT) && !(o.type === 'escape' && st.casts[a])); return miss.length ? conclude(false, 'method', 'missing', miss) : conclude(true); };
+      // #30 I11: a foe that stood in one of our ground zones (Sun Strike / Meteor / EMP) when it appeared and walked out of it on a tier with
+      // exec.dodge sidestepped it: a step of that spell that then misses is reported as 'dodged' (hint: lock it first), not a plain 'missing'
+      for (const z of w.ents) {
+        if (!z.danger || z.team !== h.team) continue;
+        let rec = st.dz[z.id];
+        if (!rec) { rec = st.dz[z.id] = { ab: z.ability, in: new Set() }; for (const d of alive) if (Math.hypot(d.x - z.danger.x, d.y - z.danger.y) <= z.danger.r + (d.radius || 0)) rec.in.add(d.id); }
+        for (const d of alive) if (rec.in.has(d.id) && d.exec && d.exec.dodge && Math.hypot(d.x - z.danger.x, d.y - z.danger.y) > z.danger.r + (d.radius || 0)) st.dodged.add(rec.ab);
+      }
+      const won = () => {
+        const miss = (pr.need || []).filter(a => !st.used.has(a) && !(st.castAt[a] != null && w.t - st.castAt[a] <= IN_FLIGHT) && !(o.type === 'escape' && st.casts[a]));
+        if (!miss.length) return conclude(true);
+        const dodged = miss.some(a => st.dodged.has(a)), hintsOff = IT.Settings && IT.Settings.get && IT.Settings.get().hints === false;   // the 'dodged' text is a hint: gated by the player hints setting
+        return conclude(false, 'method', dodged && !hintsOff ? 'dodged' : 'missing', miss);
+      };
       if (o.type === 'kill' || o.type === 'kill_with') { if (!alive.length) return won(); }
       else if (o.type === 'killN') {
         if (killsOk(o, st.kills)) return won();

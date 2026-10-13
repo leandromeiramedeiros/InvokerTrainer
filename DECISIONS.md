@@ -465,3 +465,12 @@ bonus_movement_speed 45; dota_english: AGI = 1 AS + armor, INT = 0.1% MR.
 - I10: GAME.ROSHAN = KV npc_dota_roshan: ArmorPhysical 30, MagicalResistance 55, AttackDamageMin/Max 75, AttackRange 150, Vision 1400.
 - I16: new relics `escape` (won escape/reach scenario), `alacrity_hits` (attacks landed under Alacrity), `orb_swap` (invoke within 1 s of a cast); ranked-only accrual; EN/PT in i18n/relics.js.
 - I9: Free Play roster rows apply the tier: `EnemyCard.spec` returns exec + msMul, `EnemyCard.build` spawns then sets `e.exec = df.exec`, ms x msMul; item use by chance from exec.itemP. Free Play side panel: fixed header (map, DPS, tools) + tabs Roster / Match (time of day, damage graph) / Combos; only the active tab scrolls (docs/UX-REVIEW-v6.md addendum). i18n in js/data/i18n/fp.js.
+
+## v6 package E: #77 I2/I5/I12/I13 + #30 I8/I11/I14/I15 (2026-10-13)
+- I2: new L9-10 scenarios `blink_chain_fog` (L9: fogged blinker, Tornado -> Cold Snap -> Sun Strike; bot 6/6 ian-hard, bambam 3/6 -> maxDf hard), `tp_snipe_far` (L9: TP channel starts 0.9 s in from 700-900 u; 6/6 every tier), `bkb_bait_duo` (L10: two BKB carriers, bait both then kill both; 6/6 ian/easy, maxDf easy, KNOWN common). tests/l910_v6.test.js.
+- I5: pit_in_out NOT clearable at hard: the stun bolt (1.2 s cast, lands ~2.0 s) hits as the hero reaches the crater; the route only works with chasers ~600 u away. Stays maxDf common (ian/easy/common 6/6).
+- I12: aegis_snatch Roshan script frac 0.05 / 3 hits / ttl 8, maxDf common cap removed; bot ok ian-bambam seeds 1-8 (was 0/6 at hard+). I13: triple_kill = 3 foes, one Cataclysm Sun Strike, hp 0.4: 6/6 every tier (4 KNOWN entries dropped).
+- I8: `hpMul` kept, documented as NON-KILL only (enemycard, hold/escape foes, infinite laps); kill-foe hp unchanged (foeHp identical at 1.05/1.1/1).
+- I11: ranked.js records a foe that stood in a Sun Strike / Meteor / EMP zone on a tier with exec.dodge and walked out -> missed step detail `dodged` (not `missing`); i18n `hint.dodged`, `cfail.method.dodged`, `scn.fail.method.dodged` EN/PT shown by the existing result card; suppressed when Settings.hints is off. Dodge is not gated by telegraph (units.js ~1229 waits only for reaction); left as is.
+- I14: KV invoker_deafening_blast has only knockback_duration (1.1..1.9) + disarm_duration, no distance/speed: KNOCK_SPEED 150 kept, source documented in spells.js.
+- I15: Cataclysm targets HEROISH kinds only (dummy, enemy, hero).

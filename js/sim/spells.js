@@ -11,7 +11,10 @@
   };
   // Non-KV constants (documented in DECISIONS.md "Spells").
   const LIFT_HEIGHT = 120;          // render hint only
-  const KNOCK_SPEED = 150;          // Deafening Blast knockback distance = knockback_duration * KNOCK_SPEED (no KV distance)
+  // Deafening Blast knockback distance = knockback_duration * KNOCK_SPEED. #30 I14 checked (tools/.cache npc_dota_hero_invoker.txt, baked D.deafeningblast):
+  // the KV has only knockback_duration (1.1..1.9 by quas level) and disarm_duration, no distance / speed (the push is an engine-side forced movement
+  // in the DLL), so 150 u/s stays a tuning estimate (pit_blast_in clears with it).
+  const KNOCK_SPEED = 150;
   const METEOR_SPACING = 1.5;       // extra meteors are spread perpendicular, METEOR_SPACING * area_of_effect apart
   const SPIRIT_RING = 90;           // forge spirit spawn ring radius
   const COMBATANT = { dummy: 1, enemy: 1, hero: 1, spirit: 1 };
@@ -129,7 +132,7 @@
       const self = o.target === c.id || (o.x != null && Math.hypot(o.x - c.x, o.y - c.y) <= 100);
       if (count > 0 && self) {
         const lo = val(c, d, 'cataclysm_min_range'), hi = val(c, d, 'cataclysm_max_range');
-        const targets = w.query(u => u.team !== c.team && COMBATANT[u.kind] && u.hp > 0);   // global, ignores vision; each strike gives vision (TODO 4)
+        const targets = w.query(u => u.team !== c.team && HEROISH[u.kind] && u.hp > 0);   // #30 I15: Cataclysm strikes every enemy HERO (dummies / enemies stand in), never forged spirits or other units;   // global, ignores vision; each strike gives vision (TODO 4)
         if (!c.cd) c.cd = {};
         c.cd.sunstrike = val(c, d, 'cataclysm_cooldown');
         const tr = tracker(w, c, 'sunstrike', Math.max(1, targets.length * count));

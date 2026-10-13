@@ -1,7 +1,8 @@
 // Difficulty ladder (Ranked ramp, infinite run, scenario sandbox). Data only. Owner: MODES.
 // Tiers (v4): ian < easy < common < hard < bambam.  IT.DIFFICULTY.get(id|index) -> row.  Old saved ids are migrated (ianzinho -> ian, normal -> common).
 // Enemy-facing numbers: telegraph = seconds an enemy shows an item before using it (0 = instant); awareness 0..1 + notice (a notice DELAY: it needs notice x (1 - awareness) seconds of plain sight to register you; 1 = at once);
-//   reaction = seconds before it answers a threat; hpMul / armorAdd = bulk (hp = scenario damage-to-kill x hpMul, armor = ENEMY.armor + armorAdd); dmgMul = x the enemy hero auto-attack damage; fights = enemies hit back when aware and in range (lower tiers only when cornered, or on 'defend'); timer = x scenario par for the time limit, slack = + s on it (#77 I6: ian 6 .. hard / bambam 1);
+//   reaction = seconds before it answers a threat; hpMul / armorAdd = bulk (hp = scenario damage-to-kill x hpMul; #30 I8: hpMul > 1 (hard 1.05, bambam 1.1) only scales NON-KILL units (enemycard, hold / escape foes, infinite laps):
+//   a kill foe's hp is min(HP_CAP 0.9, HP_SHARE 0.9 x hpMul) x the steps' damage (Ranked.foeHp), so the whole combo must always kill and there hard / bambam bulk is armorAdd only; armor = ENEMY.armor + armorAdd); dmgMul = x the enemy hero auto-attack damage; fights = enemies hit back when aware and in range (lower tiers only when cornered, or on 'defend'); timer = x scenario par for the time limit, slack = + s on it (#77 I6: ian 6 .. hard / bambam 1);
 //   hints = recipe hints on the HUD; mult = score multiplier; desc = hover text.
 // belief (v6 item 27, IT.Belief): predict = x extrapolation of the hero's last heading (0 = last-seen spot only), horizon = s of it, bias =
 //   pull toward likely paths (treeline gaps, ramps, the way home), half = confidence half-life s, confused = s a juked chaser stands lost,
