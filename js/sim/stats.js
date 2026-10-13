@@ -38,7 +38,8 @@
     const on = (t, f) => off.push(w.on(t, f));
 
     // ---- relics
-    const live = () => !!w.ranked;
+    // v6 #56: relic progress / points / toasts only in RANKED and INFINITE runs; Free Play and sandbox (practice) scenarios accrue nothing
+    const live = () => !!w.ranked && (w.ranked.mode === 'ranked' || w.ranked.mode === 'infinite');
     const ent = id => (w.get ? w.get(id) : w.byId.get(id));
     const isSpirit = id => { const e = ent(id); return !!(e && e.kind === 'spirit'); };
     const isFoeId = id => { const e = ent(id); return !!(e && (IT.Units && IT.Units.isFoe ? IT.Units.isFoe(e) : e.kind === 'dummy' || e.kind === 'enemy')); };
@@ -64,15 +65,18 @@
     const MULTI = { icewall: ['multi_icewall', 2, 6], emp: ['three_emp', 3, 4], deafeningblast: ['three_deafening', 3, 2.5], chaosmeteor: ['multi_meteor', 2, 7] };
     const win = {};
     const stunAt = {}, liftAt = {}, manaAt = {};
-    let lastDmg = null, blinkAt = -99, cataUntil = -1;
-    on('cast', p => { if (p.unit === hid() && MULTI[p.ability]) win[p.ability] = { set: new Set(), until: w.t + MULTI[p.ability][2], done: false }; });
+    let lastDmg = null, blinkAt = -99, cataUntil = -1, chain = 0, chainAt = -99;
+    // v6 #57: a hit set belongs to ONE cast (a new cast of the ability replaces it) and ONE round (scnStart drops every set + the kill chain)
+    let castSeq = 0;
+    on('cast', p => { if (p.unit === hid() && MULTI[p.ability]) win[p.ability] = { id: ++castSeq, set: new Set(), until: w.t + MULTI[p.ability][2], done: false }; });
+    on('scnStart', () => { for (const k in win) delete win[k]; chain = 0; chainAt = -99; });
     on('hit', p => {
       if (!mine(p.src)) return;
       if (p.ability === 'emp') { const e = ent(p.target); if (e) manaAt[p.target] = e.mana || 0; }
       const M = MULTI[p.ability];
       if (!M || !isFoeId(p.target)) return;
-      let c = win[p.ability];
-      if (!c || w.t > c.until) c = win[p.ability] = { set: new Set(), until: w.t + M[2], done: false };
+      const c = win[p.ability];
+      if (!c || w.t > c.until) return;   // no live cast window of this round: never count it
       c.set.add(p.target);
       if (!c.done && c.set.size >= M[1]) { c.done = true; relic(M[0], 1); }
     });
@@ -85,7 +89,7 @@
     on('blink', p => { if (p.unit === hid()) blinkAt = w.t; });
     on('fx', p => { if (p.name === 'cataclysm') cataUntil = w.t + 3; });
     // Dota multi-kill rule: each kill within 18 s of the previous one extends the chain (3 = Triple Kill, 5 = Rampage); a Killing Spree = 3 kills in a row without dying
-    let chain = 0, chainAt = -99, streak = 0;
+    let streak = 0;
     on('kill', p => {
       if (p.unit === hid()) { streak = 0; chain = 0; return; }
       const same = lastDmg && lastDmg.target === p.unit, by = p.by != null ? p.by : same ? lastDmg.src : null;

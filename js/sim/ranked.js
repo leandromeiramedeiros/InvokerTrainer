@@ -579,8 +579,8 @@
         juke: d.juke === 'pit' && pitRegion(w.map) ? { x: pitRegion(w.map).x, y: pitRegion(w.map).y, near: d.near || 500 } : null,   // v6 pit_trap
       });
       e.hpRegen = 0; e.base.hpRegen = 0;
-      // scripted movers: tier speed + the boot item's KV bonus_movement_speed (v6 item 40); a msMul unit already models its boots (playtest 2): msMul only
-      if (mot === 'flee' || mot === 'chase' || mot === 'march') { const ms = (mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase) + (d.msMul ? 0 : IT.Units.bootBonus(items)); e.ms = ms; e.base.ms = ms; }
+      // scripted movers: max(rolled base, tier speed) + the boot item's KV bonus_movement_speed (v6 item 40); a msMul unit already models its boots (playtest 2): msMul only
+      if (mot === 'flee' || mot === 'chase' || mot === 'march') { const tier = mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase, ms = Math.max(e.msBase, tier) + (d.msMul ? 0 : IT.Units.itemMs(items)); e.ms = ms; e.base.ms = ms; }   // v6 #46: never below the rolled hero base (tier speed only raises it)
       if (d.msMul && mot) { e.ms = Math.round(e.ms * d.msMul); e.base.ms = e.ms; }
       if (tw === 'swift') { e.ms = Math.round(e.ms * 1.15); e.base.ms = e.ms; }
       e.scn = { mot: mot || null, next: 0, lastSeen: null, search: null, idx: i, n: (sc.units || sc.dummies || []).length };

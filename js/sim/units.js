@@ -33,7 +33,9 @@
   const enemies = w => w.query(e => e.kind === 'enemy');
   const foes = w => w.query(isFoe);
   const disabled = e => !IT.Status.canAct(e) || hasS(e, 'hex') || hasS(e, 'knockback');
-  const canBlink = e => IT.Status.canAct(e) && !hasS(e, 'root') && !hasS(e, 'atosRoot') && !hasS(e, 'hex');
+  // Blink Dagger is disabled for blink_damage_cooldown (KV, 3 s) after damage from an enemy unit (items.js sets e._blinkLock) -- scripted blinks too (v6 #51)
+  const blinkLocked = (w, e) => e._blinkLock != null && w.t < e._blinkLock - 1e-9;
+  const canBlink = (w, e) => IT.Status.canAct(e) && !hasS(e, 'root') && !hasS(e, 'atosRoot') && !hasS(e, 'hex') && !blinkLocked(w, e);
 
   // ---------- spawning ----------
   function newAI(behavior, x, y, t) {
@@ -94,6 +96,22 @@
     try { const v = Number(IT.Values.item(GM().ITEM_DOTA[id], 'bonus_movement_speed')); return isFinite(v) ? v : 0; } catch (e) { return 0; }
   }
 
+  // v6 #46: Euls' passive ms (KV item_cyclone bonus_movement_speed) -- carried by an enemy it adds to the base like boots
+  function eulsBonus(items) {
+    if (!Array.isArray(items) || items.indexOf('euls') < 0) return 0;
+    try { const v = Number(IT.Values.item(GM().ITEM_DOTA.euls, 'bonus_movement_speed')); return isFinite(v) ? v : 0; } catch (e) { return 0; }
+  }
+  // total ms an enemy's items add on top of its base (only one boot counts; Euls stacks)
+  const itemMs = items => bootBonus(items) + eulsBonus(items);
+  // v6 #46: the unit's rolled BASE move speed: per hero (skin) a fixed value in ENEMY.msBase [285..320], +- ENEMY.msJitter per unit (hash of skin / name /
+  // spot -- no rng draw, so seeded runs stay identical). Never below msBase[0].
+  function rollMs(o, E) {
+    const r = E.msBase || [285, 320], str = String(o.skin || '') + '|' + (o.name || '') + '|' + Math.round(o.x || 0) + ',' + Math.round(o.y || 0);
+    const hs = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
+    const skinPart = Math.round(r[0] + hs(String(o.skin || '')) * (r[1] - r[0])), j = (E.msJitter || 0);
+    return Math.max(r[0], Math.min(r[1] + j, skinPart + Math.round((hs(str) * 2 - 1) * j)));
+  }
+
   // Enemy NPC hero (v4). opts: x, y, skin, hp, armor, magicRes, ms, mana, behavior, items, awareness, reaction, telegraph, preset,
   // scenario ({stunBolt, ...} hooks), useBkb, refill. Dies at 0 hp (combat.js emits 'kill') unless opts.refill (training dummy: refills
   // below 25% hp instead, always aware, no auto-attack, 800 vision, ignored by towers; Free Play Standard / Expert go through spawnDummy).
@@ -103,11 +121,12 @@
     const pick = (k) => o[k] != null ? o[k] : p && p[k] != null ? p[k] : E[k];
     const behavior = o.behavior || 'stationary';
     const items = Array.isArray(o.items) ? o.items.filter(id => G_.ENEMY_ITEMS.includes(id)) : undefined;
-    const bb = bootBonus(items);   // v6 item 40: boots / travels add the KV bonus_movement_speed
+    const baseMs = o.ms != null ? o.ms : p && p.ms != null ? p.ms : rollMs(o, E), bb = itemMs(items);   // v6 item 40 / #46: rolled base + the KV bonus_movement_speed of boots / travels / Euls
     const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
       hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
-      ms: pick('ms') + bb, reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
+      ms: baseMs + bb, reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
     });
+    e.msBase = baseMs; e.msBonus = bb;   // v6 #46: rolled base + item bonus (e.base.ms = both; the stats system never goes below base without a slow)
     e.ai = newAI(behavior, o.x, o.y, w.t);
     e.ai.useBkb = !!o.useBkb;
     if (behavior === 'disable_escape') e.scenario.stunBolt = true;   // disables the hero (stun bolt), then escapes
@@ -382,7 +401,7 @@
     if (bl.used) return false;
     if (!bl.pending && sc.dummyEscape === 'blink_after_seconds' && w.t - bl.t0 >= sc.blinkAfter) bl.pending = true;
     if (!bl.pending) return false;
-    if (!canBlink(d)) { if (bl.tellEnd) { bl.tellEnd = 0; setAnim(d, 'idle'); } return false; }
+    if (!canBlink(w, d)) { if (bl.tellEnd) { bl.tellEnd = 0; setAnim(d, 'idle'); } return false; }
     if (!bl.tellEnd) {
       bl.tellEnd = w.t + tell;
       cancelBolt(w, d, 'blink');
@@ -729,6 +748,6 @@
   });
 
   IT.Units = {
-    spawnDummy, spawnEnemy, bootBonus, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, useItem, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, bootBonus, eulsBonus, itemMs, rollMs, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, useItem, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

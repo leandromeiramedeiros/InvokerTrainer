@@ -89,14 +89,16 @@
   }
 
   // ---- visibility: hysteresis + fades (enemies/dummies popped in and out at fog edges and when vision ticked unevenly) ----
-  const HOLD = 0.4, FADE_IN = 0.14, FADE_OUT = 0.3, INVIS_A = 0.2;
+  // gem / tower / ward true sight (the sim's e.visible already folds it in; this keeps the gate honest when vision lags a tick)
+  const trueSighted = (R, e) => { try { return !!(e.team === 1 && IT.Vision && IT.Vision.trueSighted && IT.Vision.trueSighted(R.w, 0, e)); } catch (err) { return false; } };
+  const HOLD = 0.4, FADE_IN = 0.14, FADE_OUT = 0.3, INVIS_A = 0.5;   // detected stealth: half-transparent
   function visible(R, e) {
     if (e.dead) return false;
     if (!fadey(e)) return true;
     const S = st(R, e);
     if (S.vT === R.time) return S.va > 0.02;
     const dt = S.vT == null ? 1 : clamp(R.time - S.vT, 0, 0.25); S.vT = R.time;
-    const inv = hiddenKind(e), rev = inv && (revealedOf(e) || e.revealed === true);
+    const inv = hiddenKind(e), rev = inv && (revealedOf(e) || e.revealed === true || trueSighted(R, e));
     let seen = R.w.fog === false ? true : e.kind === 'roshan' ? litAt(R, e.x, e.y) : !!e.visible;
     if (inv && !rev && !has(e, 'invisFade')) seen = false;   // Shadow Blade/Ghost Walk: gone unless dusted/revealed (fade phase: still shimmering)
     let tg;
@@ -314,6 +316,11 @@
     if (inv) {
       shimmer(cx, img, dx, dy, R.time, Av);
       cx.globalAlpha = (0.1 + 0.08 * Math.sin(R.time * 7)) * Av; cx.drawImage(PX.tinted(img, '#a890ff'), dx, dy);
+      if (!top) {   // detected (dust / gem / tower true sight): a faint pulsing shimmer outline
+        const ol = PX.tinted(img, '#c8b8ff');
+        cx.globalAlpha = (0.3 + 0.12 * Math.sin(R.time * 7)) * Av;
+        cx.drawImage(ol, dx - 1, dy); cx.drawImage(ol, dx + 1, dy); cx.drawImage(ol, dx, dy - 1); cx.drawImage(ol, dx, dy + 1);
+      }
     } else if (ghost) {
       cx.globalAlpha = 0.65 * Av; cx.drawImage(PX.dithered(img, (R.time * 6) & 1), dx, dy);
     } else if (bl) {

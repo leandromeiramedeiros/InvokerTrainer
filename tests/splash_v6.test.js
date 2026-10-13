@@ -86,3 +86,10 @@ test('ranked summary records the per-turn log; share data carries the timeline',
   assert.equal(d.timeline.length, 8);
   assert.deepEqual(d.timeline.map(x => x.state).slice(0, 2), ['ok', 'fail']);
 });
+
+test('#59 title diamonds are child elements, no .sp-head pseudo (v2.css ribbon owns ::before)', () => {
+  const css = fs.readFileSync(require('node:path').join(__dirname, '..', 'css/splash.css'), 'utf8');
+  assert.ok(!/\.sp-head::(before|after)/.test(css.replace(/\/\*[\s\S]*?\*\//g, '')), 'no sp-head pseudo-elements');
+  assert.match(css, /\.sp-head \.sp-dia/);
+  assert.equal(typeof SP.headEl, 'function');
+});

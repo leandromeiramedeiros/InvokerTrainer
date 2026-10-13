@@ -257,3 +257,25 @@ test('i18n: special relic keys exist (toast header, RELICS n / m, headers) and t
   }
   assert.match(pack.en['relics.specialToast'], /\{t\}/); assert.match(pack.en['relics.count'], /\{n\}.*\{m\}/);
 });
+
+test('#60 row model: min-heights fit the icon, specials bigger; honeycomb offsets; special-first sort', () => {
+  const ui = load([...FILES, 'js/ui/relics.js']).UI.Relics, L = ui.LAYOUT;
+  assert.ok(L.rowMinEm >= L.iconEm + 0.4, 'regular row fits its icon with padding');
+  assert.ok(L.spRowMinEm >= L.spIconEm + 0.4 && L.spIconEm > L.iconEm && L.spRowMinEm > L.rowMinEm);
+  assert.ok(L.iconEm * 16 >= 24 && L.spIconEm * 16 <= 64, 'icon 24px+ at 16px base');
+  assert.deepEqual(ui.honeycomb([4, 3, 4, 3]).map(r => r.indent), [0, 0.5, 0, 0.5], 'odd rows offset half a tile');
+  assert.deepEqual(ui.honeycomb([4, 3, 4, 3]).map(r => r.n), [4, 3, 4, 3]);
+  assert.deepEqual(ui.honeyRows(['a', 'b', 'c', 'd', 'e'], [2, 3]).map(r => r.ids.join('')), ['ab', 'cde']);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(n => ui.clusterSizes(n).reduce((a, b) => a + b)), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(ui.clusterSizes(4), [2, 2]);
+  assert.equal(ui.specialFirst(['kills', 'stun_kills', 'multi_meteor', 'tornado_kills']).join(), 'multi_meteor,kills,stun_kills,tornado_kills', 'stable, specials first');
+});
+
+test('#60 hex ring: dasharray carries the fraction, gain arc only when gained; css has the row/hex classes', () => {
+  const ui = load([...FILES, 'js/ui/relics.js']).UI.Relics;
+  assert.equal(typeof ui.hexSvg, 'function'); assert.equal(ui.hexPts(0).split(' ').length, 6);
+  const css = fs.readFileSync(path.join(ROOT, 'css/relics.css'), 'utf8');
+  for (const c of ['.rl-hexgrid', '.rl-hrow', '.rl-hex.special', '.rl-card.special', '.rl-rows', '.rl-spk']) assert.ok(css.includes(c), c);
+  assert.match(css, /\.rl-card\{[^}]*min-height:3\.6em/);
+  assert.match(css, /prefers-reduced-motion[\s\S]*\.rl-hex\.special\.on::after\{animation:none/);
+});

@@ -332,6 +332,12 @@
       h('div', { class: 'sp-dlist' }, rows));
   }
 
+  // title with the tier 3+ gold diamonds either side (children, never ::before: that pseudo is the v2.css ribbon)
+  function headEl(tier, text) {
+    const h = IT.UI.h, dia = () => h('i', { class: 'sp-dia', 'aria-hidden': 'true' });
+    return h('div', { class: 'sp-head' }, tier >= 3 ? [dia(), h('span', { text }), dia()] : h('span', { text }));
+  }
+
   function splash(info) {
     const { h, btn } = IT.UI, t = IT.t, A = IT.App;
     const m = info.mode || {}, inf = m.mode === 'infinite', cur = IT.StatsCollector.curated(info.stats, m);
@@ -402,7 +408,7 @@
 
     root.append(calm ? null : sandCv, fx, h('div', { class: 'sp-flash' }),
       h('div', { class: 'sp-body' },
-        h('div', { class: 'sp-head', text: t(inf ? 'end.sp.infinite' : 'end.sp.ranked') }),
+        headEl(tier, t(inf ? 'end.sp.infinite' : 'end.sp.ranked')),
         h('div', { class: 'sp-hero' }, stage, side),
         h('div', { class: 'sp-grid' }, tiles, damageBlock(cur.damage)),
         timelineBlock(cells),
@@ -426,6 +432,6 @@
     return root;
   }
 
-  IT.UI.Splash = { FX, fxOf, FAILS, timeline, bestCombo, mostUsed, abbr, failText, fmtTile, shareData, breakdown, PAL, BG, medalCanvas, srcName, srcIcon, DMG_COL, fmtN };
+  IT.UI.Splash = { headEl, FX, fxOf, FAILS, timeline, bestCombo, mostUsed, abbr, failText, fmtTile, shareData, breakdown, PAL, BG, medalCanvas, srcName, srcIcon, DMG_COL, fmtN };
   IT.UI.endSplash = splash;
 })(typeof window !== 'undefined' ? window : globalThis);

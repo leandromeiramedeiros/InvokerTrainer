@@ -6,6 +6,42 @@
 
   const MM_W = 135, MM_H = 75;
 
+  // ---- minimap helpers (v6 items 47/48/53), pure ----
+  // Dota-style directional pin: a teardrop whose tip points along `facing` (radians, world axes: y down = minimap y down).
+  // Round body radius `size` centred on (x, y); the tip sits TIP x size ahead. -> [[x, y], ...] (tip first, then the arc round the back)
+  const TIP = 1.9, PIN_ARC = 10;
+  function pin(x, y, facing, size) {
+    const a = Math.acos(1 / TIP), pts = [[x + Math.cos(facing) * size * TIP, y + Math.sin(facing) * size * TIP]];
+    for (let i = 0; i <= PIN_ARC; i++) {
+      const t = facing + a + (Math.PI * 2 - 2 * a) * (i / PIN_ARC);
+      pts.push([x + Math.cos(t) * size, y + Math.sin(t) * size]);
+    }
+    return pts;
+  }
+  // stealth that hides a unit from the player's team: Vision.isHidden (Ghost Walk / Shadow Blade / invisible flag) or the Shadow Blade fade-out
+  function stealthy(e) {
+    if (IT.Vision && IT.Vision.isHidden && IT.Vision.isHidden(e)) return true;
+    if (e.invisible === true) return true;
+    const st = e.statuses; if (!st) return false;
+    for (let i = 0; i < st.length; i++) if (st[i].type === 'invisFade' || st[i].type === 'invisible' || st[i].type === 'shadowblade' || st[i].type === 'ghost') return true;
+    return false;
+  }
+  // true sight on `e` for the player team (team 0): own dust ('revealed'), a gem carrier / tower / ward within its trueSight radius
+  function detected(w, e) {
+    if (e.revealed === true || (IT.Status && IT.Status.revealed && IT.Status.revealed(e))) return true;
+    return !!(IT.Vision && IT.Vision.trueSighted && IT.Vision.trueSighted(w, 0, e));
+  }
+  // does the minimap show unit e? the player's side always; any other stealthy unit only while detected
+  function showsUnit(w, e) {
+    if (e.team === 0 || e.kind === 'hero') return true;
+    return !stealthy(e) || detected(w, e);
+  }
+  // detected-but-stealthy units draw half-transparent on the minimap too
+  const unitAlpha = (w, e) => (e.team !== 0 && e.kind !== 'hero' && stealthy(e) ? 0.5 : 1);
+  const MM_COL = { hero: '#6dff8a', foe: '#ff4a4a', ally: '#3fe0cc', roshan: '#a01818', spirit: '#ff9a30' };
+  const MM_SIZE = { hero: 2.5, foe: 2.1, ally: 1.8, roshan: 2.7, spirit: 1.4 };
+  const mmClass = e => e.kind === 'hero' ? 'hero' : e.kind === 'ally' ? 'ally' : e.kind === 'roshan' ? 'roshan' : e.kind === 'spirit' ? 'spirit' : 'foe';
+
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX;
     let VW = GM.VIEW_W, VH = GM.VIEW_H;   // live: R.resize() follows scroll-wheel zoom
@@ -170,17 +206,23 @@
         cx.drawImage(mmFog, MMX, MMY);
       }
       const sx = MM_W / w.map.W, sy = MM_H / w.map.H;
-      for (const e of w.ents) {
-        if (e.dead || !IT.UnitDraw.isUnit(e) || !IT.UnitDraw.visible(R, e)) continue;
-        const px = MMX + Math.round(e.x * sx), py = MMY + Math.round(e.y * sy);
-        cx.fillStyle = e.kind === 'hero' ? '#6dff8a' : e.kind === 'spirit' ? '#ff9a30' : '#ff4a4a';
-        cx.fillRect(px - 1, py - 1, e.kind === 'hero' ? 3 : 2, e.kind === 'hero' ? 3 : 2);
-      }
       for (const e of w.ents) {      // towers: always drawn (also in fog), green allied / red enemy / grey destroyed
         if (e.dead || e.kind !== 'tower') continue;
         const px = MMX + Math.round(e.x * sx), py = MMY + Math.round(e.y * sy);
         cx.fillStyle = '#000'; cx.fillRect(px - 2, py - 2, 5, 5);
         cx.fillStyle = e.destroyed ? '#7a7a82' : e.team === 0 ? '#5dff7a' : '#ff5a4a'; cx.fillRect(px - 1, py - 1, 3, 3);
+      }
+      cx.lineJoin = 'round'; cx.lineWidth = 1;
+      for (let pass = 0; pass < 2; pass++) for (const e of w.ents) {      // pass 0: everyone, pass 1: the hero on top
+        if (e.dead || !IT.UnitDraw.isUnit(e) || (e.kind === 'hero') !== (pass === 1) || !IT.UnitDraw.visible(R, e) || !showsUnit(w, e)) continue;
+        const cl = mmClass(e), pts = pin(MMX + e.x * sx, MMY + e.y * sy, e.facing || 0, MM_SIZE[cl]);
+        cx.globalAlpha = unitAlpha(w, e);
+        cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) cx.lineTo(pts[i][0], pts[i][1]);
+        cx.closePath();
+        cx.strokeStyle = 'rgba(0,0,0,0.85)'; cx.stroke();
+        cx.fillStyle = MM_COL[cl]; cx.fill();
+        cx.globalAlpha = 1;
       }
       cx.strokeStyle = '#fff'; cx.lineWidth = 1;
       // viewport rect, clipped to the map (the camera may overscroll past it)
@@ -325,4 +367,5 @@
   }
 
   IT.Render = { create, MM_W, MM_H };
+  IT.Minimap = { pin, showsUnit, stealthy, detected, unitAlpha, TIP, COL: MM_COL, SIZE: MM_SIZE };
 })(typeof window !== 'undefined' ? window : globalThis);
