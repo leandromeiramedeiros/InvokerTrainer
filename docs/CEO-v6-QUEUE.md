@@ -61,6 +61,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #59 BUG end splash (PT "PARTIDA R..." title, Crusader-ish medal with laurel): a diagonal purple/gold bar-shaped sprite floats top-left of the medal, overlapping the title (CEO screenshot images/31.png). Probably a medal part (ribbon/sash/ornament or tier-scaled shine/ray from 2b5d8a5) drawn at the wrong offset/rotation. Find it in js/ui/endsplash.js / css/splash.css / medal art, fix placement or remove; check every tier x EN/PT.
 
+- [ ] #60 BUG end splash "RELÍQUIAS QUE AVANÇARAM NESTA PARTIDA" list (images/32.png): rows are clipped — row height too small, so relic icon and name text are cut in half at the top, the progress bar overlaps the text, the shield pips + "sem nível ainda" are squeezed right. Fix row layout (min-height, icon 24-32px fully visible, name line, then bar, pips/level aligned), test with long PT names, all screen sizes; keep the panel scrollable.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - Ogre two-headed enemy portrait: v2 preview in session scratchpad (ogre/v2, 48x32 wide recommended). CEO: "don't replace yet" — awaiting approve/v3; name TBD (Ian?).
