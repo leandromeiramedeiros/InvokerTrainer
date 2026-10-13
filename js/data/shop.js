@@ -10,7 +10,7 @@
 
   // ---- pricing (see DECISIONS.md "Skin shop pricing"): a normal player earns REF_RUN points per 8-turn run (measured with tools/score_sample.mjs),
   // a run lasts RUN_MIN minutes; the whole catalogue costs TOTAL points = TOTAL / REF_RUN runs x RUN_MIN min = ~25 min of normal play.
-  const PRICING = { REF_RUN: 200, RUN_MIN: 4.5, MIN: 20, MAX: 35 };
+  const PRICING = { REF_RUN: 250, RUN_MIN: 4.5, MIN: 20, MAX: 30 };
   const CATALOG = [
     { kind: 'player', skin: 'default', price: 0 },
     { kind: 'player', skin: 'kid', price: 80 },

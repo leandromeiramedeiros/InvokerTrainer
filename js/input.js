@@ -83,7 +83,9 @@
     if (!d) return;
     // playtest 2: a spell that is not invoked does nothing -- fail SFX only, no "Not invoked" toast (the reason string is gone from i18n)
     if (d.kind === 'spell' && IT.Abilities.check(w, hero, id, null) === 'notInvoked') { sfx('fail'); return; }
-    if (d.target === 'none') { In.cancel(true); issueCast({ type: 'cast', ability: id, queued: !!queued }); return; }
+    const tk = IT.Abilities.targetKind ? IT.Abilities.targetKind(w, hero, id) : d.target;
+    if (tk === 'vector') { vecCast(id, how, queued, snap); return; }
+    if (tk === 'none') { In.cancel(true); issueCast({ type: 'cast', ability: id, queued: !!queued }); return; }
     const normal = S().castMode === 'normal';
     if (how !== 'click' && (normal || how === 'hud')) {
       // pre-check castability so we don't arm something that cannot be used
@@ -106,6 +108,56 @@
     }
     if (how !== 'click') In.armed = null;
     issueCast(o);
+  }
+
+  // ---------------------------------------------------------------- vector targeting (v6 #71: Ice Wall + Scepter on Quas = Ice Floe)
+  // Normal cast / HUD: arm -> 1st click (or key re-press) sets the START (clamped to the vector range) -> drag-release or 2nd click
+  // (or key press) sets the direction start -> cursor. Quick cast: start = cursor, direction = hero -> cursor. Esc / RMB cancel (In.cancel).
+  const vecRange = id => { const d = IT.Abilities.get(id), c = In.ctx; return d && d.vectorRange ? d.vectorRange(c.w, c.hero) || 0 : 0; };
+  function vecStart(id, p) {
+    const { hero } = In.ctx, R = vecRange(id);
+    let dx = p.x - hero.x, dy = p.y - hero.y; const dd = Math.hypot(dx, dy);
+    if (R > 0 && dd > R) { dx *= R / dd; dy *= R / dd; }
+    return { x: hero.x + dx, y: hero.y + dy };
+  }
+  // direction from the start toward `p`; a zero-length drag falls back to hero -> start (the sim falls back to facing)
+  function vecDir(s, p) {
+    const { hero } = In.ctx; let dx = p.x - s.x, dy = p.y - s.y;
+    if (Math.hypot(dx, dy) < 1) { dx = s.x - hero.x; dy = s.y - hero.y; }
+    return { dx, dy };
+  }
+  function vecFire(a, p, shift) {
+    const s = a.start, v = vecDir(s, p), queued = !!(shift || a.queued);
+    if (shift) { a.start = null; a.down = null; } else In.armed = null;   // shift: keep aiming the next one
+    issueCast({ type: 'cast', ability: a.id, x: s.x, y: s.y, dx: v.dx, dy: v.dy, queued });
+  }
+  // left press while a vector cast is armed: set the start, else fire toward the cursor
+  function vecClick(shift) {
+    const a = In.armed, p = worldMouse();
+    if (!a.start) { a.start = vecStart(a.id, p); a.down = { x: p.x, y: p.y }; a.shift = !!shift; return; }
+    fireVecOrStart(a, p, shift);
+  }
+  function fireVecOrStart(a, p, shift) { if (!a.start) { a.start = vecStart(a.id, p); return; } vecFire(a, p, shift || a.shift); }
+  // left release: a drag (cursor moved ~DRAG_PX since the start press) fires; a plain click waits for the 2nd click
+  function vecRelease() {
+    const a = In.armed; if (!a || !a.vector || !a.down || !In.ctx) return;
+    const p = worldMouse(), moved = Math.hypot(p.x - a.down.x, p.y - a.down.y) >= DRAG_PX * P;
+    a.down = null;
+    if (moved) vecFire(a, p, a.shift);
+  }
+  function vecCast(id, how, queued, snap) {
+    const { w, hero } = In.ctx, a = In.armed && In.armed.vector && In.armed.id === id ? In.armed : null;
+    if (a && how !== 'click') { fireVecOrStart(a, snap ? snap.p : worldMouse(), queued); return; }   // key re-press while aiming
+    if (how !== 'click' && (S().castMode === 'normal' || how === 'hud')) {
+      const why = IT.Abilities.check(w, hero, id, null);
+      if (why) { fail(why); return; }
+      In.armed = { id, queued: !!queued, vector: true, start: null, down: null };
+      sfx('click');
+      return;
+    }
+    const p = snap ? snap.p : worldMouse(), s = vecStart(id, p);
+    In.armed = null;
+    issueCast({ type: 'cast', ability: id, x: s.x, y: s.y, dx: p.x - hero.x, dy: p.y - hero.y, queued: !!queued });
   }
 
   // Self-cast: alacrity -> hero; blink -> max range toward the bottom-left corner (fountain). Others: not self-castable.
@@ -529,6 +581,7 @@
       mmDrag = false; sbDrag = null;
       if (!ev || ev.button === 2 || ev.button === undefined) In._rmb = null;
       if (In._drag && (!ev || ev.button === 0 || ev.button === undefined)) finishDrag(ev);
+      if (!ev || ev.button === 0 || ev.button === undefined) vecRelease();
       In._ctrlEv = false;
     };
     const onCtx = ev => ev.preventDefault();
@@ -586,6 +639,7 @@
           const a = In.armed;
           if (a.place) { const ok = In.hooks.placeEnemy && In.hooks.placeEnemy(worldMouse()); if (ok && !ev.shiftKey) In.armed = null; return; }   // Free Play "Place enemy"
           if (a.attack) { attackClick(ev.shiftKey || a.queued); return; }
+          if (a.vector) { vecClick(ev.shiftKey); return; }
           cast(a.id, 'click', ev.shiftKey || a.queued); afterClick(a, ev.shiftKey);
           return;
         }
@@ -765,7 +819,19 @@
         }
         break;
       }
-      case 'icewall': {   // target-less: a wall across the facing direction
+      case 'icewall': {   // target-less: a wall across the facing direction; Scepter on Quas: vector aim (start marker, arrow, rotating footprint)
+        const geo = IT.Spells && IT.Spells.iceWallGeom, R = vecRange(id);
+        if (geo && R > 0) {
+          const a = In.armed && In.armed.vector && In.armed.id === id ? In.armed : null;
+          const s = a && a.start ? a.start : vecStart(id, m), dv = a && a.start ? vecDir(s, m) : { dx: m.x - hx, dy: m.y - hy };
+          const gm = geo(w, hero, { x: s.x, y: s.y, dx: dv.dx, dy: dv.dy }), width = v('wall_width');
+          const sl = Math.hypot(gm.bx - gm.ax, gm.by - gm.ay) || 1, nx = -(gm.by - gm.ay) / sl * width, ny = (gm.bx - gm.ax) / sl * width;   // thickness across the segment
+          const sh = [{ k: 'circle', x: hx, y: hy, r: R, st: 'range' }];
+          sh.push({ k: 'poly', pts: [[gm.ax + nx, gm.ay + ny], [gm.bx + nx, gm.by + ny], [gm.bx - nx, gm.by - ny], [gm.ax - nx, gm.ay - ny]], st: 'aoe' });
+          sh.push({ k: 'circle', x: gm.sx, y: gm.sy, r: 28, st: 'tgt' });
+          sh.push({ k: 'line', a: [gm.sx, gm.sy], b: [gm.sx + gm.ux * 260, gm.sy + gm.uy * 260], st: 'aoe', arrow: true });
+          return { shapes: sh, range: R, inRange: true, point: !(a && a.start), vector: true, start: a && a.start ? s : null };
+        }
         const f = hero.facing || 0, len = v('wall_total_length'), place = v('wall_place_distance'), width = v('wall_width');
         const fx = Math.cos(f), fy = Math.sin(f), cx = hx + fx * place, cy = hy + fy * place, h = len / 2;
         if (len > 0) out.push({ k: 'poly', pts: [[cx + fy * h - fx * width, cy - fx * h - fy * width], [cx - fy * h - fx * width, cy + fx * h - fy * width], [cx - fy * h + fx * width, cy + fx * h + fy * width], [cx + fy * h + fx * width, cy - fx * h + fy * width]], st: 'aoe' });
@@ -801,7 +867,7 @@
   function previewId() {
     const c = In.ctx; if (!c) return null;
     if (In.armed && !In.armed.attack && !In.armed.place) return In.armed.id;
-    const noTarget = id => { const d = id && id !== '__none' && IT.Abilities.get(id); return !!d && d.target === 'none'; };
+    const noTarget = id => { const d = id && id !== '__none' && IT.Abilities.get(id); return !!d && (IT.Abilities.targetKind ? IT.Abilities.targetKind(c.w, c.hero, d) : d.target) === 'none'; };
     const pv = typeof In.preview === 'function' ? In.preview() : In.preview;   // HUD hover: id or a resolver (slots change on invoke)
     return noTarget(pv) ? pv : null;
   }

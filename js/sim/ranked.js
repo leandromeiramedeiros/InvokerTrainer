@@ -105,7 +105,7 @@
     const esc = sc.obj.type === 'escape' || sc.obj.type === 'hold';
     const limit = esc ? sc.obj.time : sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK);
     const kill = !!KILL_TYPES[sc.obj.type];
-    const pr = { sc, df, lo, fog: true, par: sc.par, limit, skin: lo.skin, twist: null, hp: kill ? foeHp(sc, df, lo) : null, need: kill ? needOf(sc) : [], vary: null };
+    const pr = { sc, df, lo, fog: true, par: sc.par, limit, skin: lo.skin, twist: null, hp: kill ? foeHp(sc, df, lo) : null, need: kill || survive(sc) ? needOf(sc) : [], vary: null };
     if (vrng) pr.vary = variation(sc, df, pr, lo.heroLevel, vrng);   // v6 item 40: per-play variation (seeded by the run)
     return pr;
   }
@@ -179,6 +179,9 @@
   // step abilities that cannot hit a foe: they count once the hero casts them (Ice Wall is a zone in front of the hero: a slow / block, not a hit)
   const SELF_OK = { ghostwalk: 1, alacrity: 1, blink: 1, refresher: 1, forcestaff: 1, bkb: 1, boots: 1, travels: 1, icewall: 1 };
   const needOf = sc => (sc.steps || []).map(s => s.a).filter((a, i, l) => !NO_NEED[a] && l.indexOf(a) === i);
+  // #30: a timed escape (no `unseen` streak) also needs its recipe: chasers at ian-common (<= 307 u/s from 1100+ u) never reach a hero
+  // walking straight away (Invoker 280) inside 12-14 s, so plain walking cleared ghost_escape / pinned_escape / smoke_gank_escape ...
+  const survive = sc => sc.obj.type === 'escape' && !sc.obj.unseen;
   const SPELL_DOTA = { coldsnap: 'invoker_cold_snap', icewall: 'invoker_ice_wall', emp: 'invoker_emp', tornado: 'invoker_tornado', alacrity: 'invoker_alacrity',
     sunstrike: 'invoker_sun_strike', forgespirit: 'invoker_forge_spirit', chaosmeteor: 'invoker_chaos_meteor', deafeningblast: 'invoker_deafening_blast' };
   const num = v => (typeof v === 'number' && isFinite(v) ? v : 0);
@@ -602,7 +605,7 @@
       const p = spot(w, d, sp, placed, { pick: R.pick, jit: d.of != null ? 0 : (R.jit || 0) + (vy ? vy.posJit : 0), rng: vy ? IT.U.mulberry32((vy.seed + i * 7919) >>> 0) : null, role: 'unit' });
       placed[i] = p;
       if (!tierOn(d, df)) return;   // v6 item 27: unit `minDf` (tier id) = only at that tier and above (its spot stays placed for `of` offsets)
-      const items0 = d.items || (df.useBkb || d.useBkb ? ['bkb'] : undefined);
+      const items0 = d.items || ((df.useBkb && mot !== 'march') || d.useBkb ? ['bkb'] : undefined);   // #30: the tier BKB skips marchers (a BKB wave beats any Invoker hold)
       const items = boot ? (items0 || []).filter(x => x !== boot).concat(boot) : items0;
       const skin = SK[(s0 + i) % SK.length], lap = Math.floor(i / SK.length);   // every foe wears a different NPC hero skin + name
       // real enemy NPC, dies at 0 hp. Kill scenarios: hp = min(HP_CAP, HP_SHARE x tier hpMul) x the damage of the scenario's own steps (foeHp); the others keep
@@ -618,7 +621,7 @@
         scenario: { stunBolt: df.stunBolt, dummyEscape: 'none', blinkAfter: null },
         useBkb: !!(df.useBkb || d.useBkb), items,
         telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction * (vy ? vy.reactionMul : 1),
-        dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
+        dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee' && mot !== 'march',   // #30: a marcher keeps marching (fighting made hold scenarios an auto-attack win at hard+)
         attack: d.attack || undefined,   // v6 item 28: 'melee' | 'ranged' override of the skin's attack profile (a melee tower / Roshan hitter)
         juke: d.juke === 'pit' && pitRegion(w.map) ? { x: pitRegion(w.map).x, y: pitRegion(w.map).y, near: d.near || 500 } : null,   // v6 pit_trap
       });
@@ -856,7 +859,7 @@
       run.result = null; run.caught = false; run.died = false; run.t0 = w.t;
       // kill_with, and (v6) every kill scenario whose steps must all hit: the hero does not auto-acquire (as on Hold), so a stray auto-attack
       // cannot finish the foe before the combo lands; an explicit attack / attack-move order still works
-      if (w.hero) { if (run.pr.sc.obj.type === 'kill_with' || (run.pr.need && run.pr.need.length)) w.hero.autoAttack = false; else delete w.hero.autoAttack; }
+      if (w.hero) { if (run.pr.sc.obj.type === 'kill_with' || (run.pr.need && run.pr.need.length && KILL_TYPES[run.pr.sc.obj.type])) w.hero.autoAttack = false; else delete w.hero.autoAttack; }
       run.maxLevel = Math.max(run.maxLevel, run.pr.sc.level || 0);
       run.phase = run.countdown > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
       w.paused = run.phase !== 'play';
@@ -1020,7 +1023,8 @@
       // burn that finishes the foe a moment before the last nuke lands is not a fail
       // playtest 2: area defence (every 'hold' and every gate / 'cross' scenario): wiping out every foe IS the defence -> an immediate win
       if ((o.type === 'hold' || (fail.indexOf('cross') >= 0 && w.gate)) && run.dummies.length && !alive.length) return conclude(true);
-      const won = () => { const miss = (pr.need || []).filter(a => !st.used.has(a) && !(st.castAt[a] != null && w.t - st.castAt[a] <= IN_FLIGHT)); return miss.length ? conclude(false, 'method', 'missing', miss) : conclude(true); };
+      // #30: in an escape a cast is enough (a chaser may BKB the Tornado)
+      const won = () => { const miss = (pr.need || []).filter(a => !st.used.has(a) && !(st.castAt[a] != null && w.t - st.castAt[a] <= IN_FLIGHT) && !(o.type === 'escape' && st.casts[a])); return miss.length ? conclude(false, 'method', 'missing', miss) : conclude(true); };
       if (o.type === 'kill' || o.type === 'kill_with') { if (!alive.length) return won(); }
       else if (o.type === 'killN') {
         if (killsOk(o, st.kills)) return won();
@@ -1048,7 +1052,7 @@
         if (o.type === 'reach') { if (burnOk && w.goal && Math.hypot(h.x - w.goal.x, h.y - w.goal.y) < w.goal.r) return conclude(true); }
         else {
           if (o.unseen && burnOk && st.unseenFrom != null && w.t - st.unseenFrom >= o.unseen - 1e-9) return conclude(true);
-          if (el >= o.time) return !burnOk ? conclude(false, 'method', 'burn') : o.unseen ? conclude(false, 'time') : conclude(true);
+          if (el >= o.time) return !burnOk ? conclude(false, 'method', 'burn') : o.unseen ? conclude(false, 'time') : won();
           return;
         }
       }

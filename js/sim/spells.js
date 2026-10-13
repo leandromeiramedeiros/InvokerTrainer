@@ -187,16 +187,38 @@
   });
 
   // ---------------------------------------------------------------- Ice Wall
+  // v6 #71: Scepter on Quas (KV vector_cast_range > 0) makes it vector-targeted (Ice Floe). Order {x, y, dx, dy}: start point
+  // (clamped to castRange + vector_cast_range from the caster) + direction. No x/y (bots, old callers) -> the plain placement.
+  const FLOE_ALONG = false;   // false: wall centred on the start point, perpendicular to the direction (DECISIONS.md "#71"); true: runs from the start along it
+  const num = v => typeof v === 'number' && isFinite(v);
+  const iwVecRange = (w, c) => { const a = A.get('icewall'); return val(c, D.icewall, 'vector_cast_range') > 0 ? (a.range(w, c) || 0) + val(c, D.icewall, 'vector_cast_range') : 0; };
+  // Wall segment A-B for caster `c` and order `o` (shared with the input preview). Returns { cx, cy, ax, ay, bx, by, ux, uy, sx, sy, vec, range }.
+  function iceWallGeom(w, c, o) {
+    const d = D.icewall, len = val(c, d, 'wall_total_length'), place = val(c, d, 'wall_place_distance'), h = len / 2;
+    const R = iwVecRange(w, c), vec = R > 0 && !!o && num(o.x) && num(o.y);
+    let cx, cy, ux = Math.cos(c.facing || 0), uy = Math.sin(c.facing || 0);
+    if (vec) {
+      let sx = o.x - c.x, sy = o.y - c.y; const sd = Math.hypot(sx, sy);
+      if (sd > R) { sx *= R / sd; sy *= R / sd; }
+      cx = c.x + sx; cy = c.y + sy;
+      const dl = num(o.dx) && num(o.dy) ? Math.hypot(o.dx, o.dy) : 0, hl = Math.hypot(sx, sy);
+      if (dl > 1e-6) { ux = o.dx / dl; uy = o.dy / dl; } else if (hl > 1) { ux = sx / hl; uy = sy / hl; }
+    } else { cx = c.x + ux * place; cy = c.y + uy * place; }
+    const sx = cx, sy = cy;
+    if (vec && FLOE_ALONG) { cx += ux * h; cy += uy * h; }
+    const px = FLOE_ALONG && vec ? ux : -uy, py = FLOE_ALONG && vec ? uy : ux;
+    return { cx, cy, ax: cx - px * h, ay: cy - py * h, bx: cx + px * h, by: cy + py * h, ux, uy, sx, sy, vec, range: R };
+  }
   A.def('icewall', {
     kind: 'spell', dota: D.icewall, target: 'none',
-    cast(w, c) {
+    vector(w, c) { return iwVecRange(w, c) > 0; },
+    vectorRange: iwVecRange,
+    cast(w, c, o) {
       const d = D.icewall;
-      const dur = val(c, d, 'duration'), len = val(c, d, 'wall_total_length'), place = val(c, d, 'wall_place_distance');
+      const dur = val(c, d, 'duration');
       const width = val(c, d, 'wall_width'), pct = -val(c, d, 'slow') / 100, linger = val(c, d, 'slow_duration');
       const iv = val(c, d, 'tick_interval'), dps = val(c, d, 'damage_per_second');
-      const f = c.facing, cx = c.x + Math.cos(f) * place, cy = c.y + Math.sin(f) * place;
-      const px = -Math.sin(f), py = Math.cos(f), h = len / 2;
-      const ax = cx - px * h, ay = cy - py * h, bx = cx + px * h, by = cy + py * h;
+      const { cx, cy, ax, ay, bx, by } = iceWallGeom(w, c, o);
       const tr = tracker(w, c, 'icewall', 1);
       // Scepter on Quas = Ice Floe (KV special_bonus_scepter_1): the wall rises after glacier_formation_delay; an enemy hero (dummies stand in)
       // that stays inside for root_delay seconds is rooted for root_duration and takes root_damage magic damage (once per cast).
@@ -503,5 +525,5 @@
     },
   });
 
-  IT.Spells = { freezeColdSnap: freeze, foes, tracker, LIFT_HEIGHT, KNOCK_SPEED, METEOR_SPACING, SPIRIT_RING };
+  IT.Spells = { freezeColdSnap: freeze, foes, tracker, iceWallGeom, LIFT_HEIGHT, KNOCK_SPEED, METEOR_SPACING, SPIRIT_RING };
 })(typeof window !== 'undefined' ? window : globalThis);

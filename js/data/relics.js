@@ -78,7 +78,7 @@
   // points = (delta / (step x goalpost)) x base x diffMul x POINTS_K.  base: 5 for the 4 specials (`pts`), 1 for the others.
   // diffMul: ian 0.5 .. bambam 1.5 (0.5 + 0.25 x tierIdx). goalpost ("move the goalpost"): the level step grows on easy, shrinks on hard,
   // steps x (1.5 - 0.25 x tierIdx) clamped 0.5..1.5, so easy cannot farm. Only the points use it: displayed relic tiers keep the Dota steps.
-  const POINTS_K = 40, DIFF_COMMON = 2;
+  const POINTS_K = 56, DIFF_COMMON = 2;
   const clampIdx = i => (typeof i === 'number' && isFinite(i) ? Math.max(0, Math.min(4, Math.round(i))) : DIFF_COMMON);
   const diffMul = i => 0.5 + 0.25 * clampIdx(i);
   const goalpost = i => Math.max(0.5, Math.min(1.5, 1.5 - 0.25 * clampIdx(i)));

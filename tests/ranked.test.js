@@ -127,7 +127,8 @@ test('run: a failed scenario (time) breaks the streak and scores nothing', () =>
   const kind = run.pr.sc.obj.type;
   w.step();
   assert.equal(run.phase, 'result');
-  assert.equal(run.result.ok, kind === 'escape');   // escape scenarios are won by surviving
+  // escape scenarios are won by surviving (#30: a timed escape also needs its step spells cast -> 'method' fail here, nothing was cast)
+  assert.equal(run.result.ok, kind === 'escape' && !run.pr.need.length);
   if (kind !== 'escape') {
     assert.equal(run.result.reason, 'time'); assert.equal(run.failed, 1); assert.equal(run.streak, 0); assert.equal(run.score, 0);
     assert.ok(m.events.some(e => e[0] === 'comboFail'));

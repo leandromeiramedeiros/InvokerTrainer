@@ -24,6 +24,14 @@
 
   function get(id) { return defs[id]; }
 
+  // Target kind for `caster` right now: d.target ('none' | 'point' | 'unit'), or 'vector' when the def's optional vector(w, c)
+  // says so (v6 #71: Ice Wall + Scepter on Quas). Orders keep reading d.target (vector casts carry {x, y, dx, dy}; the def clamps).
+  function targetKind(w, caster, id) {
+    const d = typeof id === 'string' ? defs[id] : id;
+    if (!d) return null;
+    return d.vector && caster && d.vector(w, caster) ? 'vector' : d.target;
+  }
+
   // Can `caster` use `id` now (ignoring range)? Returns null or a reason key.
   function check(w, caster, id, order) {
     const d = defs[id];
@@ -54,5 +62,5 @@
     caster.cd[id] = d.cooldown(w, caster);
   }
 
-  IT.Abilities = { def, get, check, spend, defs, SPELLS };
+  IT.Abilities = { def, get, targetKind, check, spend, defs, SPELLS };
 })(typeof window !== 'undefined' ? window : globalThis);

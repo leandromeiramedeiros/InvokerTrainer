@@ -25,7 +25,7 @@ function rig(o) {
   if (o.castMode) IT.Settings.data.castMode = o.castMode;
   const map = o.map ? IT.Map.build(IT.MAPDEF) : null;
   const lo = Object.assign(IT.Loadout.default(), { heroLevel: 30, orbs: { quas: 8, wex: 8, exort: 8 }, items: o.items || [] });
-  if (o.scepter) { lo.scepter = true; lo.scepterOrb = 'exort'; }
+  if (o.scepter) { lo.scepter = true; lo.scepterOrb = o.scepterOrb || 'exort'; }
   const w = IT.World.create({ seed: 5, fog: false, autoAttack: o.autoAttack !== false, map: map || undefined, loadout: IT.Loadout.normalize(lo) });
   const sp = map ? map.spawns.hero : { x: 4000, y: 2000 };
   const h = IT.Hero.create(w, lo, sp.x, sp.y);

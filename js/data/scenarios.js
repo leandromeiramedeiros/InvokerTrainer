@@ -272,7 +272,7 @@
     V('gauntlet', 10, 'dire_mid_t1', ['towers', 'escape', 'invisible', 'items'], 16,
       { lvl: 30, items: ['blink', 'dust'], at: { tower: { team: 1 }, ahead: -1700 } },
       [U({ tower: { team: 1 }, ahead: -950 }, { hp: 0.45, behavior: 'escape', items: ['shadowblade', 'blink'], aware: 1 })], KILL, ['escaped', 'died', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }], { vary: { boots: false, posJit: 0 } }),
+      [{ a: 'dust', at: 'self' }, { a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }], { vary: { boots: false, posJit: 0 } }),
     V('blink_denial', 10, 'rad_triangle', ['reaction', 'escape', 'items'], 14, { lvl: 30, items: ['atos', 'blink'] },
       [U(SEEN([750, 950]), { hp: 0.5, behavior: 'disable_escape', items: ['blink', 'forcestaff'], aware: 1 })], KILL, ['escaped', 'time'],
       [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { vary: { posJit: 0 } }),   // item 40: the bot's Atos timing is position sensitive

@@ -667,6 +667,7 @@
   }
 
   // first usable item of `chain` against a threat; `ang` = direction away from it
+  const piercesBkb = ab => { const n = ab && IT.GAME.SPELL_DOTA && IT.GAME.SPELL_DOTA[ab], a = n && IT.DOTA && IT.DOTA.abilities && IT.DOTA.abilities[n]; return !!a && a.spellImmunity === 'ENEMIES_YES'; };
   function defend(w, e, chain, ang) {
     if (e.juke) return false;   // a pit juker spends its items on the juke only and then holds the pit
     if (!itemOk(w, e)) return false;   // v6 #50: tier execution (exec.itemP)
@@ -1211,7 +1212,9 @@
       const mobile = (a.behavior === 'guard' || a.behavior === 'farm' ? execOf(e).dodge : a.behavior !== 'stationary' && a.behavior !== 'defend' && a.behavior !== 'hold') && IT.Status.canMove(e);
       const dest = mobile ? dodgeTarget(e, t.danger, w.map, w.t) : null;
       if (dest) { issueMove(w, e, dest.x, dest.y); a.moving = false; return; }
-      if (defend(w, e, ['euls', 'blink', 'forcestaff', 'bkb'], away(t.danger, e))) return;
+      // #30: no BKB against a zone that pierces it (KV SpellImmunityType ENEMIES_YES: Sun Strike / Cataclysm): bambam marchers burned it on
+      // the opening Sun Strike, then walked through the rest of the defence immune (every hold scenario 0/6 at bambam)
+      if (defend(w, e, piercesBkb(t.ability) ? ['euls', 'blink', 'forcestaff'] : ['euls', 'blink', 'forcestaff', 'bkb'], away(t.danger, e))) return;
     }
     if (tickAttackAlly(w, e)) return;   // v6 item 28
     if (!h) return;
