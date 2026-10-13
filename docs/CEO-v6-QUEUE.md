@@ -59,6 +59,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #58 Ghost Walk slow awareness (belief model): Ghost Walk's slow aura leaks Invoker's position. On higher tiers, an enemy that gets the Ghost Walk slow debuff recognises it -> infers Invoker is within the aura radius (Dota GW aura 400) -> narrows its prediction to that ring/sector (factor in its own facing + last-seen) and uses Dust if it has one (hard: often, bambam: almost always, reaction scaled by tier; ian/easy: ignore or rarely). Show it via #49 indicators ("!" on dust hit, "?" if dust misses). Balance so Ghost Walk escapes stay possible on bambam: player counterplay = keep >400 from enemies, juke after dust expires, break line with trees/high ground.
 
+- [ ] #59 BUG end splash (PT "PARTIDA R..." title, Crusader-ish medal with laurel): a diagonal purple/gold bar-shaped sprite floats top-left of the medal, overlapping the title (CEO screenshot images/31.png). Probably a medal part (ribbon/sash/ornament or tier-scaled shine/ray from 2b5d8a5) drawn at the wrong offset/rotation. Find it in js/ui/endsplash.js / css/splash.css / medal art, fix placement or remove; check every tier x EN/PT.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - Ogre two-headed enemy portrait: v2 preview in session scratchpad (ogre/v2, 48x32 wide recommended). CEO: "don't replace yet" — awaiting approve/v3; name TBD (Ian?).
