@@ -7,6 +7,7 @@
   const LEG = ['Y', 'V', 'G', 'C', 'X', 'Z', 'T', 'F', 'D', 'B'];
   const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'stats', 'refresh'];
   const RESERVED = ['Escape', 'Tab'];
+  const LIGHTING = ['off', 'low', 'medium', 'high'];   // v6 #76 L5: IT.GL.LEVELS keys
   // keybind migration: stored bindings still equal to the pre-v6 default move to the new default (custom ones stay)
   const KEYS_VERSION = 2;
   const KEY_MIG = { center: ['Space', 'F1'], cheat: ['F1', 'I'], stats: ['K', 'O'] };
@@ -18,7 +19,7 @@
     for (let i = 1; i <= 6; i++) legacy['item' + i] = String(i);
     return {
       castMode: 'quick', scheme: 'slots', autoAttack: true, camLock: false, edgeScroll: true,
-      bloom: true, fogShade: true, sound: true, hints: true, lang: 'en',
+      bloom: true, lighting: 'low', fogShade: true, sound: true, hints: true, lang: 'en',
       camSpeed: 1,                 // 0.5..2 multiplier on camera scroll speed
       zoom: 1,                     // scroll-wheel zoom step (GAME.ZOOMS)
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
@@ -73,6 +74,7 @@
     base.keysVersion = KEYS_VERSION;
     if (base.castMode !== 'quick' && base.castMode !== 'normal') base.castMode = 'quick';
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
+    if (!LIGHTING.includes(base.lighting)) base.lighting = 'off';   // key missing in an old save keeps the default 'low' (merge skips it); an unknown value reads as off
     if (!IT.I18N[base.lang]) base.lang = 'en';
     if (base.heroSkin !== 'kid' && base.heroSkin !== 'dark') base.heroSkin = 'default';
     if (!(IT.GAME.ZOOMS || [1]).includes(base.zoom)) base.zoom = 1;
@@ -103,7 +105,7 @@
     CapsLock: 'Caps', Mouse4: 'Mouse 4', Mouse5: 'Mouse 5', NumEnter: 'Num Ent' }[k] || (/^Num[0-9+\-*\/.]$/.test(k || '') ? 'Num ' + k.slice(3) : k) || '-');
 
   const S = {
-    data: defaults(), SPELLS, COMMON, RESERVED, KEY_MIG, KEYS_VERSION, keyName, isMod, label, defaults, merge,
+    data: defaults(), SPELLS, COMMON, RESERVED, LIGHTING, KEY_MIG, KEYS_VERSION, keyName, isMod, label, defaults, merge,
     load() {
       let raw = null;
       try { raw = JSON.parse(G.localStorage.getItem(KEY)); } catch (e) { raw = null; }
@@ -153,6 +155,7 @@
     apply(langChanged) {
       const d = S.data;
       if (G.document && G.document.body) G.document.body.classList.toggle('nobloom', !d.bloom);
+      if (IT.GL && IT.GL.setLighting) { try { IT.GL.setLighting(d.lighting); } catch (e) { /* ignore */ } }   // L5: independent of the accessibility settings
       if (typeof G.SFX !== 'undefined') G.SFX.enabled = !!d.sound;
       if (langChanged || IT.lang !== d.lang) IT.setLang(d.lang);
       for (const f of S.listeners) { try { f(d); } catch (e) { /* ignore */ } }
@@ -284,6 +287,7 @@
         return [
           sh(t('set.h.display')),
           list(chk(draft, 'bloom', t('set.bloom'), () => G.document.body.classList.toggle('nobloom', !draft.bloom)),
+            row(t('set.lighting'), rg('lighting', draft.lighting, LIGHTING.map(k => [k, t('set.lighting.' + k)]), v => { draft.lighting = v; })),
             chk(draft, 'fogShade', t('set.fogShade')),
             row(t('set.fullscreen'), fs),
             chk(draft, 'pointerLock', t('set.pointerLock')),

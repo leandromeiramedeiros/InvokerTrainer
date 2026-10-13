@@ -78,7 +78,20 @@
     const len = Math.min(SH_LMAX, d / lz), kr = dy / d * len;
     return { sx: 1, shear: dx / d * len, len, ky: (kr < 0 ? -1 : 1) * Math.max(0.5 * Math.abs(kr), SH_FLAT * len) };
   }
-  const SH_MAX = 120, SH_TREES = 40, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 10, SH_REC = 400;   // per-frame caps; light candidates per caster; record cap
+  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 10, SH_REC = 400;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
+
+  // L5: lighting cost = G-buffer taps + shadow pass + present, averaged over LC_WIN lit frames. Logs once if 'high' averages > LC_WARN ms; never downgrades.
+  const LC = { avg: 0, n: 0, sum: 0, level: 'off', warned: false };
+  function lcSample(ms, level) {
+    if (level !== LC.level) { LC.level = level; LC.n = 0; LC.sum = 0; }
+    LC.sum += ms; if (++LC.n < LC_WIN) return;
+    LC.avg = LC.sum / LC.n; LC.n = 0; LC.sum = 0;
+    if (level === 'high' && LC.avg > LC_WARN && !LC.warned) {
+      LC.warned = true;
+      try { console.info('[Lighting] high averages ' + LC.avg.toFixed(1) + ' ms/frame over ' + LC_WIN + ' frames (budget ' + LC_WARN + ' ms); consider Medium'); } catch (e) { /* ignore */ }
+    }
+  }
+  const lightingCost = () => ({ avg: LC.avg, level: LC.level, over: LC.level === 'high' && LC.avg > LC_WARN, budget: LC_WARN, window: LC_WIN });
 
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX;
@@ -202,7 +215,7 @@
     // ---- v6 #76 L3: G-buffer canvas (view size, opaque), filled only while lighting is on: terrain normals blitted at the camera offset, then every
     // drawImage of the y-sorted pass is mirrored with that image's pillow normals (IT.Normals.fromCanvas, cached per source canvas: mirrored west
     // frames, skins and scaled copies get their own correct normals), same rect, same order. Faint overlays (alpha < .5) and additive draws are skipped.
-    let gCv = null, gCx = null, gMat = -1, gBudget = 0, gVis = null;
+    let gCv = null, gCx = null, gMat = -1, gBudget = 0, gVis = null, gT = 0;
     // L4: casters recorded by the same drawImage tap (units / trees / buildings, >= 6 px), drawn once the frame's lights are known
     let shCv = null, shCx = null, sN = 0, sOn = false, sBudget = 0, gFootX = NaN, gFootY = 0, gTree = false, shDrawn = 0;
     const sRec = [], sCache = new WeakMap();
@@ -237,14 +250,15 @@
       r.src = img; r.sx = sx; r.sy = sy; r.sw = sw; r.sh = sh; r.dx = dx; r.dy = dy; r.dw = dw; r.dh = dh; r.fx = gFootX; r.fy = gFootY; r.tree = gTree;
     }
     // u: screen-px light uniforms (strongest first). Per caster: the `per` strongest lights whose radius reaches the foot, one sheared silhouette each.
-    function drawShadows(u, per) {
+    function drawShadows(u, per, LV) {
       shDrawn = 0;
+      const cMax = (LV && LV.casters) || SH_MAX, tMax = (LV && LV.trees) || SH_TREES;
       if (!sN || !per || !u.count) return null;
       const g = shCanvas(), nL = Math.min(u.count, SH_CAND), P3 = u.pos, R2 = u.rad;
       let trees = 0;
-      for (let i = 0; i < sN && shDrawn < SH_MAX; i++) {
+      for (let i = 0; i < sN && shDrawn < cMax; i++) {
         const r = sRec[i];
-        if (r.tree && trees >= SH_TREES) continue;
+        if (r.tree && trees >= tMax) continue;
         let b1 = -1, s1 = SH_MINSC, b2 = -1, s2 = SH_MINSC;
         for (let l = 0; l < nL; l++) {
           const d = Math.hypot(r.fx - P3[l * 3], r.fy - P3[l * 3 + 1]), rad = R2[l * 2];
@@ -294,11 +308,13 @@
       const a = arguments;
       drawImg.apply(this, a);
       if (gMat < 0 || this.globalAlpha < 0.5 || this.globalCompositeOperation !== 'source-over') return;
+      const tg = performance.now();   // L5: G-buffer cost = everything after the albedo draw
       if (sOn && (gMat === 1 || gMat === 2)) record(img, a);
-      const n = gNormal(img, gMat); if (!n) return;
+      const n = gNormal(img, gMat); if (!n) { gT += performance.now() - tg; return; }
       if (a.length === 3) gCx.drawImage(n, a[1], a[2]);
       else if (a.length === 5) gCx.drawImage(n, a[1], a[2], a[3], a[4]);
       else if (a.length === 9) gCx.drawImage(n, a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]);
+      gT += performance.now() - tg;
     }
     // terrain part, same rect as IT.Terrain.draw; the void off the map is flat ground
     function gTerrain() {
@@ -450,7 +466,7 @@
       items.sort((a, b) => a.y - b.y);
       if (lit) {     // same order / rects into the G-buffer: tap the scene context's drawImage for the pass
         sceneCx.drawImage = gDraw;
-        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = 6;
+        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = 6; gT = 0;
         try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
         finally { gMat = -1; delete sceneCx.drawImage; }
       } else { sN = 0; for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); } }
@@ -495,11 +511,12 @@
           const lb = light.buf, n = lb.w * lb.h;
           if (!gVis || gVis.length !== n) gVis = new Uint8Array(n);
           const u = IT.GL.toScreen(LT.uniforms({ x: R.camX * P, y: R.camY * P, w: VW * P, h: VH * P }, comp.levelInfo().lights), P);
-          litArg = { gbuf: gCv, shadow: sOn ? drawShadows(u, comp.levelInfo().shadows) : null, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
-          S.dyn = u.count; S.shd = shDrawn;
+          litArg = { gbuf: gCv, shadow: sOn ? drawShadows(u, comp.levelInfo().shadows, comp.levelInfo()) : null, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
+          S.dyn = u.count; S.shd = shDrawn; 
         }
         const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'), litArg);
         tComp = performance.now() - tc;
+        if (lit) lcSample(gT + tComp, comp.lighting);   // G-buffer taps + (uniforms + shadows + present, all inside tComp; present includes the base composite)
         gameCx.clearRect(0, 0, VW, VH);        // overlay: unlit HUD only
         if (!ok) {                              // present() failed mid-frame: redo this frame's lighting on the 2D path next frame
           setGL(false);
@@ -534,6 +551,6 @@
     return R;
   }
 
-  IT.Render = { create, shadowXform, SH_LMAX, SH_MAX, SH_TREES, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
+  IT.Render = { create, shadowXform, lightingCost, lcSample, LC_WARN, LC_WIN, SH_LMAX, SH_MAX, SH_TREES, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
   IT.Minimap = { pin, showsUnit, stealthy, detected, unitAlpha, TIP, COL: MM_COL, SIZE: MM_SIZE };
 })(typeof window !== 'undefined' ? window : globalThis);

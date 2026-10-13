@@ -42,10 +42,11 @@
   const MAXL = 32, HZ = 24, ZMIN = 10;   // HZ: px of height for G-buffer h = 1; ZMIN: lights sit >= 10 px above the ground (no grazing)
   const LEVELS = {
     // shadows: lights per caster for silhouette shadows (0 = none); march: 6-step height-channel ray-march toward the 2 strongest lights
-    off:    { lights: 0,  half: false, rim: false, glow: false, shadows: 0, march: false },
-    low:    { lights: 8,  half: true,  rim: false, glow: false, shadows: 0, march: false },
-    medium: { lights: 16, half: false, rim: true,  glow: false, shadows: 1, march: false },
-    high:   { lights: 32, half: false, rim: true,  glow: true,  shadows: 2, march: true },
+    // casters / trees: per-frame shadow-draw budget (all casters / of which trees), read by render.js drawShadows
+    off:    { lights: 0,  half: false, rim: false, glow: false, shadows: 0, march: false, casters: 0,   trees: 0 },
+    low:    { lights: 8,  half: true,  rim: false, glow: false, shadows: 0, march: false, casters: 0,   trees: 0 },
+    medium: { lights: 16, half: false, rim: true,  glow: false, shadows: 1, march: false, casters: 60,  trees: 20 },
+    high:   { lights: 32, half: false, rim: true,  glow: true,  shadows: 2, march: true,  casters: 120, trees: 40 },
   };
   // L4 shadows: silhouette shadow buffer (alpha = shadowed) darkens the diffuse / glow on ground pixels only; the march walks <= MARCH_RANGE px toward a light
   const SHK = 0.85, MARCH_STEPS = 6, MARCH_RANGE = 40, MARCH_LIGHTS = 2;
