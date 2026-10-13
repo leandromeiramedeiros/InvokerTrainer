@@ -102,6 +102,14 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
   L5 tuning + perf: 60 fps at 1920x1080 with 2306 trees, cap/LOD, settings toggle (Lighting: Off/Low/High), reduced-motion unaffected, readability check day+night, screenshots before/after.
   Libraries considered: pixi-lights / Phaser Light2D (need renderer port, rejected), illuminated.js (2D polygon shadows, too slow), Laigter/SpriteIlluminator (replaced by our bake-time generator). Write our own (~300-500 lines).
 
+## CEO decisions on Fable's report (8295c87)
+- [ ] #67 APPROVED: build pit_blast_in (foe on the bank by the pit mouth, Deafening Blast pushes him in with mouth tolerance, kill inside). Bot-verify every tier.
+- [ ] #71b Scepter Ice Wall vector cast, CEO definition, NO switch (remove FLOE_ALONG): press on ground = wall CENTRE at the click; while held, the wall orientation follows the cursor through 360 degrees (live preview); release = cast. Quick-cast: centre at cursor, orientation from hero->cursor. The wall's long axis follows the cursor direction from the centre.
+- [ ] #77 GAMEPLAY-REVIEW picks:
+  I1 YES fix the bambam x L9-10 curve break. I2 OK, a bit more: grow the L9-10 pool (window/recency + promote hard L7-8 variants, add a few). I3 COUNT bambam BKB in foe HP credit. I4 enemy awareness proportional to difficulty in unseen jukes (no walk-away at ian/easy; tiered search/prediction). I5 FIX pit_in_out. I7 FIX relic points concentration / dead relics. I6 FIX timers too loose at hard+. I9 FIX Free Play rows: rows apply tier execution; THINK HARD about the Free Play side panel layout + settings (redesign proposal + implement). I16 ADD escape / Alacrity / orb-swap skill as RELICS. I10 MATCH Roshan stats to KV.
+  Shop pricing (~24.5 min unlock-all): OK for now.
+- [ ] #78 Raven (dummy) flair: Raven is a STATIONARY dummy: remove juke/chase/escape-type lines; speaks only very sporadically (long cooldowns, low chance): when left alone/not attacked for a while, when the player fumbles a skill onto empty ground, rare reactions to being hit/killed. Wise, sparse, short.
+
 ## Open for CEO
 - #71 Ice Floe orientation: built perpendicular to the drag (spec); KV hints Dota may lay it ALONG the drag ("in its wake", glacier_formation_speed 600). Flip `FLOE_ALONG` in spells.js if the CEO confirms.
 - #30 top-10 in docs/GAMEPLAY-REVIEW-v6.md (level 9-10 pool too small/too hard at bambam, juke escapes trivial at ian/easy, pit_in_out unclearable, Roshan stats vs KV, Cataclysm hits non-heroes).
