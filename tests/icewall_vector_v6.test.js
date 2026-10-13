@@ -23,12 +23,20 @@ function env(extra) {
   return { IT, w, h, run, cast, wall, V, dummy };
 }
 const FLOE = { scepter: true, scepterOrb: 'quas' };
-// wall checks: centred on (x, y), perpendicular to (dx, dy), full KV length
-function perp(e, x, y, dx, dy) {
+// wall checks: centred on (x, y), long axis ALONG (dx, dy) (v6 #71b), full KV length
+function along(e, x, y, dx, dy) {
   const s = e.wall(); assert.ok(s, 'wall thinker');
   near((s.ax + s.bx) / 2, x, 'cx'); near((s.ay + s.by) / 2, y, 'cy');
   near(Math.hypot(s.bx - s.ax, s.by - s.ay), e.V('wall_total_length'), 'length');
-  near(((s.bx - s.ax) * dx + (s.by - s.ay) * dy) / Math.hypot(dx, dy), 0, 'perpendicular');
+  near(((s.bx - s.ax) * dy - (s.by - s.ay) * dx) / Math.hypot(dx, dy), 0, 'long axis along the direction');
+  return s;
+}
+
+// plain (non-vector) wall: across the facing direction
+function across(e, x, y, dx, dy) {
+  const s = e.wall(); assert.ok(s, 'wall thinker');
+  near((s.ax + s.bx) / 2, x, 'cx'); near((s.ay + s.by) / 2, y, 'cy');
+  near((s.bx - s.ax) * dx + (s.by - s.ay) * dy, 0, 'perpendicular');
   return s;
 }
 
@@ -40,38 +48,47 @@ test('KV: Scepter on Quas -> vector kind, range = castRange 0 + vector_cast_rang
   for (const x of [{}, { scepter: true, scepterOrb: 'exort' }]) { const f = env(x); assert.strictEqual(f.IT.Abilities.targetKind(f.w, f.h, 'icewall'), 'none', JSON.stringify(x)); }
 });
 
-test('vector cast: wall centred on the start point, perpendicular to the direction, scepter width', () => {
+test('vector cast: wall centred on the click, long axis along the direction, scepter width', () => {
   const e = env(FLOE);
   e.cast({ x: 300, y: 100, dx: 0, dy: 1 });
-  const s = perp(e, 300, 100, 0, 1);
+  const s = along(e, 300, 100, 0, 1);
   assert.strictEqual(s.r, 150);
   const f = env(FLOE);
   f.cast({ x: -200, y: 250, dx: 3, dy: -4 });   // any angle
-  perp(f, -200, 250, 3, -4);
+  along(f, -200, 250, 3, -4);
+});
+
+test('360 degrees: the long axis follows every direction around the centre', () => {
+  for (let k = 0; k < 12; k++) {
+    const a = k * Math.PI / 6, e = env(FLOE);
+    e.cast({ x: 100, y: -50, dx: Math.cos(a) * 7, dy: Math.sin(a) * 7 });
+    const s = along(e, 100, -50, Math.cos(a), Math.sin(a));
+    assert.ok((s.bx - s.ax) * Math.cos(a) + (s.by - s.ay) * Math.sin(a) > 0);
+  }
 });
 
 test('range clamp: start beyond castRange + vector_cast_range (600) is pulled back toward the hero; direction kept', () => {
   const e = env(FLOE);
   e.cast({ x: 2000, y: 0, dx: 0, dy: 1 });
-  perp(e, 600, 0, 0, 1);
+  along(e, 600, 0, 0, 1);
   const f = env(FLOE);
   f.cast({ x: 590, y: 0, dx: 0, dy: 1 });   // inside: untouched
-  perp(f, 590, 0, 0, 1);
+  along(f, 590, 0, 0, 1);
 });
 
 test('no direction -> hero -> start; no start (bots / old callers) -> the plain wall in front of the facing', () => {
   const e = env(FLOE);
   e.cast({ x: 0, y: 400 });
-  perp(e, 0, 400, 0, 1);
+  along(e, 0, 400, 0, 1);
   const f = env(FLOE);
   f.cast();
-  perp(f, f.V('wall_place_distance'), 0, 1, 0);
+  across(f, f.V('wall_place_distance'), 0, 1, 0);
 });
 
 test('non-scepter unchanged: x/y/dx/dy ignored, wall wall_place_distance in front, width 105', () => {
   const e = env();
   e.cast({ x: 300, y: 300, dx: 1, dy: 0 });
-  const s = perp(e, e.V('wall_place_distance'), 0, 1, 0);
+  const s = across(e, e.V('wall_place_distance'), 0, 1, 0);
   assert.strictEqual(s.r, 105);
 });
 
@@ -97,7 +114,7 @@ test('input quick-cast: start at the cursor, direction hero -> cursor, one press
   assert.ok(o, 'cast issued'); assert.strictEqual(r.In.armed, null);
   near(o.x, r.dummy.x); near(o.y, r.dummy.y); assert.ok(o.dx > 0 && Math.abs(o.dy) < 1e-9);
   r.at(200);
-  perp({ wall: () => r.w.query(t => t.ability === 'icewall')[0], V: k => r.IT.Values.get('invoker_ice_wall', k, r.h.ctx) }, r.dummy.x, r.dummy.y, 1, 0);
+  along({ wall: () => r.w.query(t => t.ability === 'icewall')[0], V: k => r.IT.Values.get('invoker_ice_wall', k, r.h.ctx) }, r.dummy.x, r.dummy.y, 1, 0);
   const q = vrig('quick'); q.mw.x = q.h.x + 1000; q.mw.y = q.h.y;   // beyond 600: clamped start, same direction
   q.In.castId('icewall');
   const p = lastCast(q); near(p.x, q.h.x + 600); assert.ok(p.dx > 0);

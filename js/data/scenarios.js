@@ -399,6 +399,13 @@
       [U({ pit: 'deep', dx: -170, dy: 110 }, { hp: 0.4, mot: 'still', aware: 0.3 }), U({ pit: 'deep', dx: -20, dy: 110 }, { hp: 0.4, mot: 'still', aware: 0.3 })],
       { type: 'killN', n: 2, how: { ability: ['chaosmeteor', 'deafeningblast'] } }, ['method', 'time'],
       [{ a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.4 }], { focus: ['pit'], vary: { posJit: [0, 40] }, funBot: true }),
+    // v6 #67: a foe stands on the bank 90 u outside the pit mouth (the crater's open west edge). Deafening Blast shoves him ~150-285 u (KNOCK_SPEED x
+    // knockback_duration) AWAY from the hero, so the hero must stand on the far side of him: the push direction (hero -> foe) decides inside / outside.
+    // The kill only counts inside the pit, within the tier's mouth tolerance (ranked MOUTH_TOL: how.mouth). fixed arena like pit_fight_blast.
+    V('pit_blast_in', 6, 'roshan_pit', ['fun', 'pit', 'burst'], 12, { lvl: 16, at: { pit: 'deep', dx: -1050, dy: 100 } },
+      [U({ pit: 'deep', dx: -400, dy: 100 }, { hp: 0.45, mot: 'still', aware: 0.3 })],
+      { type: 'kill', how: { inside: 'pit', mouth: true } }, ['method', 'time'],
+      [{ a: 'deafeningblast', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.6 }], { focus: ['pit'], vary: { posJit: [0, 30] }, funBot: true }),
     V('bkb_tower_hitter', 6, 'rad_safe_t1', ['fun', 'towers', 'items'], 8, { lvl: 13, at: { tower: { team: 0 }, ahead: -750, side: 150 } },
       [U({ tower: { team: 0 }, ahead: 160 }, { hp: 0.5, intent: { kind: 'attack_ally', target: 'tower' }, attack: 'melee', items: ['bkb'], bkbOn: true, aware: 0.5 })],
       { type: 'kill_with', how: { ability: ['sunstrike'] } }, ['method', 'towerLost', 'time'], [{ a: 'sunstrike', at: 'd0' }],
@@ -510,7 +517,7 @@
     'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke',
     'edge_gank', 'long_lane_snipe', 'river_mouth_ambush', 'offlane_survival', 'pinned_escape',
     'pit_in_out', 'pit_force_exit', 'pit_ghost', 'pit_mouth_snipe',
-    'tp_snipe', 'pit_fight_blast', 'ghost_ambush', 'smoke_gank_escape', 'aegis_snatch'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set, v6 item 28 fun set
+    'tp_snipe', 'pit_fight_blast', 'pit_blast_in', 'ghost_ambush', 'smoke_gank_escape', 'aegis_snatch'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set, v6 item 28 fun set
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)

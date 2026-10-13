@@ -189,7 +189,7 @@
   // ---------------------------------------------------------------- Ice Wall
   // v6 #71: Scepter on Quas (KV vector_cast_range > 0) makes it vector-targeted (Ice Floe). Order {x, y, dx, dy}: start point
   // (clamped to castRange + vector_cast_range from the caster) + direction. No x/y (bots, old callers) -> the plain placement.
-  const FLOE_ALONG = false;   // false: wall centred on the start point, perpendicular to the direction (DECISIONS.md "#71"); true: runs from the start along it
+  // v6 #71b: the vector wall is centred on the start point and its long axis runs ALONG the direction (360 degrees), no switch.
   const num = v => typeof v === 'number' && isFinite(v);
   const iwVecRange = (w, c) => { const a = A.get('icewall'); return val(c, D.icewall, 'vector_cast_range') > 0 ? (a.range(w, c) || 0) + val(c, D.icewall, 'vector_cast_range') : 0; };
   // Wall segment A-B for caster `c` and order `o` (shared with the input preview). Returns { cx, cy, ax, ay, bx, by, ux, uy, sx, sy, vec, range }.
@@ -205,8 +205,7 @@
       if (dl > 1e-6) { ux = o.dx / dl; uy = o.dy / dl; } else if (hl > 1) { ux = sx / hl; uy = sy / hl; }
     } else { cx = c.x + ux * place; cy = c.y + uy * place; }
     const sx = cx, sy = cy;
-    if (vec && FLOE_ALONG) { cx += ux * h; cy += uy * h; }
-    const px = FLOE_ALONG && vec ? ux : -uy, py = FLOE_ALONG && vec ? uy : ux;
+    const px = vec ? ux : -uy, py = vec ? uy : ux;   // vector: long axis along the direction; plain: across the facing
     return { cx, cy, ax: cx - px * h, ay: cy - py * h, bx: cx + px * h, by: cy + py * h, ux, uy, sx, sy, vec, range: R };
   }
   A.def('icewall', {

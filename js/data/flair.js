@@ -74,42 +74,15 @@
     // DUMMY: the scarecrow never talks.
     scarecrow: { silent: true, cd: 99, chat: 0, lines: {} },
 
-    // DUMMY (buyable later): the raven. A few wise one-liners, rarely.
+    // DUMMY (buyable later): the raven. STATIONARY: never juke / chase / escape lines. Speaks very rarely (long cd, low chat):
+    // left alone for a while (idleLong, fired by dummychat.js), a fumbled skill (playerMissed / playerWhiffSunstrike), a rare hit or death.
     raven: {
-      cd: 14, chat: 0.35, lineCd: 120, lines: {
-        gotJuked: [
-          ['You moved while I looked away. The crow saw it.', 'Você se moveu enquanto eu olhava para o lado. O corvo viu.'],
-          ['A false path is still a path. Walk it.', 'Um caminho falso ainda é um caminho. Ande por ele.'],
-          ['The one who fools you teaches you. Caw.', 'Quem te engana te ensina. Crá.'],
-          ['You went where I was not. Learn from that.', 'Você foi onde eu não estava. Aprenda com isso.'],
-          ['The shadow was not the wolf. Not yet.', 'A sombra não era o lobo. Ainda não.'],
-          ['Patience is the stillest form of motion.', 'Paciência é a forma mais quieta de movimento.'],
-        ],
-        invokerEscaped: [
-          ['He is gone into the not-seen. Wait.', 'Ele foi para o não visto. Espere.'],
-          ['Invisible is a door. The door closed. Breathe.', 'Invisível é uma porta. A porta fechou. Respire.'],
-          ['The wizard left the field, and the field remembers.', 'O mago deixou o campo, e o campo se lembra.'],
-          ['Escape is also a form of teaching.', 'Fuga também é uma forma de ensinar.'],
-          ['Ghost steps leave no tracks. Be still.', 'Passos de fantasma não deixam rastro. Fique quieto.'],
-          ['Gone. Caw. The sky keeps what it takes.', 'Sumiu. Crá. O céu guarda o que leva.'],
-        ],
-        spawn: [
-          ['The field is quiet. The quiet is a teacher.', 'O campo está quieto. O silêncio ensina.'],
-          ['I have watched many wizards. You are one of them.', 'Já vi muitos magos. Você é um deles.'],
-          ['Begin. Or do not. The crows will wait.', 'Comece. Ou não. Os corvos esperam.'],
-          ['Every great combo starts with a small breath.', 'Todo grande combo começa com um respiro.'],
-          ['Caw. Good luck.', 'Crá. Boa sorte.'],
-        ],
-        idle: [
-          ['A still hand learns nothing. A moving one learns twice.', 'Mão parada não aprende. Mão em movimento aprende em dobro.'],
-          ['The sun does not hurry, yet the day is done.', 'O sol não corre, e o dia termina.'],
-          ['I eat what falls. Be careful what you drop.', 'Eu como o que cai. Cuidado com o que larga.'],
-          ['Even fog is only water that forgot to fall.', 'Até a névoa é só água que esqueceu de cair.'],
-        ],
+      cd: 60, chat: 0.35, lineCd: 300, lines: {
         idleLong: [
-          ['Hesitation is also a spell. A weak one.', 'Hesitar também é magia. Das fracas.'],
-          ['The clock eats the patient and the hasty alike.', 'O relógio come o paciente e o apressado.'],
-          ['Choose. The branch is not getting any sturdier.', 'Escolha. O galho não vai ficar mais firme.'],
+          ['Stillness is also a lesson.', 'Ficar parado também é uma lição.'],
+          ['The branch waits. So do I.', 'O galho espera. Eu também.'],
+          ['Choose, or the day will choose for you.', 'Escolha, ou o dia escolhe por você.'],
+          ['Nothing moves, and that is information. Caw.', 'Nada se move, e isso também é informação. Crá.'],
         ],
         damaged: [
           ['A feather lost. A lesson gained.', 'Uma pena perdida. Uma lição ganha.'],
@@ -124,25 +97,13 @@
           ['I return to the wind. Caw.', 'Volto ao vento. Crá.'],
           ['Do not mourn the raven. Mourn the aim.', 'Não chore pelo corvo. Chore pela mira.'],
         ],
-        night: [
-          ['Night is my hour. Nothing is hidden from me.', 'A noite é minha hora. Nada se esconde de mim.'],
-          ['Dark outside, dark inside. Calm, still.', 'Escuro fora, escuro dentro. Calma, ainda.'],
-        ],
-        heroInvisible: [
-          ['You vanish, but I hear the wings of your mana.', 'Você some, mas ouço as asas da sua mana.'],
-          ['What cannot be seen can still be known.', 'O que não se vê ainda pode ser sabido.'],
-        ],
         playerMissed: [
-          ['The arrow forgives the target, never the archer.', 'A flecha perdoa o alvo, nunca o arqueiro.'],
-          ['A miss is a map of where not to look.', 'Um erro é um mapa de onde não olhar.'],
+          ['A miss is a map of where not to look.', 'Um erro é um mapa de onde não olhar.', { cd: 120 }],
+          ['The arrow forgives the target, never the archer.', 'A flecha perdoa o alvo, nunca o arqueiro.', { cd: 120 }],
         ],
-        praise: [
-          ['Well flown, wizard.', 'Bem voado, mago.'],
-          ['Patience, then speed. That is the whole art.', 'Paciência, depois velocidade. Essa é toda a arte.'],
-        ],
-        comboFail: [
-          ['The fall teaches the wing.', 'A queda ensina a asa.'],
-          ['Again. The sky is not going anywhere.', 'De novo. O céu não vai a lugar nenhum.'],
+        playerWhiffSunstrike: [
+          ['The sun looked for you and found the ground.', 'O sol procurou você e achou o chão.', { cd: 120 }],
+          ['Even the sun misses. It never apologizes.', 'Até o sol erra. Nunca pede desculpa.', { cd: 120 }],
         ],
       },
     },

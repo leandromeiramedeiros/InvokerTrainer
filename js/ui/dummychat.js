@@ -12,6 +12,7 @@
   const LIFE = 2.5;       // bubble lifetime (real seconds, unpaused)
   const FADE = 0.45;
   const IDLE_AFTER = 6;   // seconds without damage dealt while a scenario runs
+  const RAVEN_IDLE = 40;  // v6 #78: a stationary raven dummy (no scenario) speaks 'idleLong' once per this many seconds left alone (chance x chat)
   const PRAISE_P = 0.4;   // chance of a grudging compliment on comboDone
   const DODGE_P = 0.6;
   const HEAD = 40;        // px above the dummy's feet
@@ -25,7 +26,7 @@
     gotJuked: 0.8, invokerEscaped: 0.8, reacquired: 0.6, dustHit: 0.9, dustMiss: 1 };   // v6 #44/#61: belief + Dust situations
   const CLS = { praise: 'praise', heroLow: 'hurt', killedHero: 'hurt', comboFail: 'comboFail' };   // css colour classes in hud.css
 
-  const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, ambAt: 0, now: 0, st: { last: {} }, pend: null, nd: new Set(), invAt: -99, rng: null, bubs: [], seq: null };
+  const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, ambAt: 0, ravenAt: 0, now: 0, st: { last: {} }, pend: null, nd: new Set(), invAt: -99, rng: null, bubs: [], seq: null };
 
   // ---- seeded rng (mulberry32); tests can pass their own to pickFlair
   function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -274,7 +275,14 @@
       const since = w.t - Math.max(D.lastDmg, D.idleAt);
       if (since > IDLE_AFTER && say('idleLong')) D.idleAt = w.t;
       if (D.ambAt && w.t >= D.ambAt) { say('idle', { amb: true }); D.ambAt = w.t + 16 + rnd() * 20; }
-    } else D.idleAt = w.t;
+    } else {
+      D.idleAt = w.t;
+      // v6 #78: a raven dummy (stationary, no scenario) left alone: a rare 'idleLong' after RAVEN_IDLE s without damage
+      let rv = null;
+      for (const d of w.ents) if (d.kind === 'dummy' && d.skin === 'raven' && d.visible && !d.dead) { rv = d; break; }
+      if (!rv) D.ravenAt = w.t;
+      else if (w.t - Math.max(D.lastDmg, D.ravenAt) > RAVEN_IDLE) { say('idleLong', { pref: rv, p: 0.5 }); D.ravenAt = w.t; }
+    }
     // low HP (edge triggered with hysteresis)
     const h = D.g.hero;
     if (h && h.maxHp) {
@@ -290,7 +298,7 @@
 
   function attach(w, g) {
     detach();
-    D.w = w; D.g = g; D.last = {}; D.lastSay = -99; D.lastDmg = w.t; D.idleAt = w.t; D.ambAt = 0; D.hurtArm = true; D.st = { last: {} }; D.pend = null; D.nd = new Set(); D.invAt = -99;
+    D.w = w; D.g = g; D.last = {}; D.lastSay = -99; D.lastDmg = w.t; D.idleAt = w.t; D.ambAt = 0; D.hurtArm = true; D.st = { last: {} }; D.pend = null; D.nd = new Set(); D.invAt = -99; D.ravenAt = w.t;
     const on = (n, f) => D.off.push(w.on(n, f)), hid = () => g.hero && g.hero.id;
     const mine = id => id === hid() || (w.get(id) && w.get(id).team === 0 && w.get(id).kind !== 'enemy');   // hero + its spirits / summons
     const foe = id => { const u = w.get(id); return u && u.team === 1 && talker(u) ? u : null; };

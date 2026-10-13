@@ -111,8 +111,8 @@
   }
 
   // ---------------------------------------------------------------- vector targeting (v6 #71: Ice Wall + Scepter on Quas = Ice Floe)
-  // Normal cast / HUD: arm -> 1st click (or key re-press) sets the START (clamped to the vector range) -> drag-release or 2nd click
-  // (or key press) sets the direction start -> cursor. Quick cast: start = cursor, direction = hero -> cursor. Esc / RMB cancel (In.cancel).
+  // Normal cast / HUD: arm -> press sets the wall CENTRE (clamped to the vector range); while held the wall orientation follows the cursor
+  // (360 degrees, live preview) and release casts; a plain click (no drag) keeps aiming: 2nd click / key press casts, direction centre -> cursor. Quick cast: start = cursor, direction = hero -> cursor. Esc / RMB cancel (In.cancel).
   const vecRange = id => { const d = IT.Abilities.get(id), c = In.ctx; return d && d.vectorRange ? d.vectorRange(c.w, c.hero) || 0 : 0; };
   function vecStart(id, p) {
     const { hero } = In.ctx, R = vecRange(id);

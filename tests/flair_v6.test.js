@@ -113,12 +113,34 @@ test('CEO item 44: speaking skins have 6+ lines for the new situations; raven ha
     assert.ok(L.length >= 6, k + '/' + sit + ' ' + L.length);
     for (const ln of L) assert.ok(typeof ln.t.en === 'string' && typeof ln.t.pt === 'string' && ((ln.t.en && ln.t.pt) || ln.icon), k + '/' + sit + ' needs en + pt (or an icon-only line)');
   }
-  for (const sit of ['gotJuked', 'invokerEscaped']) {
-    const L = T.raven.lines[sit] || [];
-    assert.ok(L.length >= 6, 'raven/' + sit + ' ' + L.length);
-    for (const ln of L) assert.ok(ln.t.en && ln.t.pt, 'raven/' + sit + ' needs en + pt');
-  }
   for (const sit of F.SITUATIONS.filter(s => NEW.indexOf(s) >= 0)) assert.ok(F.SITUATIONS.indexOf(sit) >= 0, sit);
+});
+
+test('CEO task 78: raven is stationary: no juke / chase / escape / spawn / idle lines', () => {
+  const gone = ['gotJuked', 'invokerEscaped', 'heroInvisible', 'spawn', 'idle', 'night', 'praise', 'comboFail'];
+  for (const sit of gone) assert.ok(!T.raven.lines[sit], 'raven/' + sit + ' should be gone');
+  const txt = Object.values(T.raven.lines).flat().map(l => l.t.en + ' ' + l.t.pt).join(' ');
+  assert.ok(!/juke|chase|escap|fled|flee|vanish|gone|shadow|sombra|fuga|sumiu|invis/i.test(txt), 'juke/chase/escape wording');
+  assert.ok(T.raven.lines.idleLong && T.raven.lines.idleLong.length >= 2, 'raven idleLong');
+  assert.ok(T.raven.lines.playerMissed && T.raven.lines.playerWhiffSunstrike, 'raven fumble lines');
+  assert.ok(T.raven.lines.damaged && T.raven.lines.death, 'raven hit / death lines');
+});
+
+test('CEO task 78: raven lines are short (<= 60 chars) and sparse: long cooldowns, low chance', () => {
+  for (const [sit, arr] of Object.entries(T.raven.lines)) for (const ln of arr) {
+    assert.ok(ln.t.en.length <= 60 && ln.t.pt.length <= 60, 'raven/' + sit + ' too long: ' + ln.t.en);
+  }
+  assert.ok(T.raven.cd >= 30, 'raven cd ' + T.raven.cd);
+  assert.ok(T.raven.lineCd >= 120, 'raven lineCd ' + T.raven.lineCd);
+  assert.ok(T.raven.chat <= 0.5, 'raven chat ' + T.raven.chat);
+  assert.ok(Object.values(T.raven.lines).flat().length <= 20, 'raven total lines');
+});
+
+test('CEO task 78: raven fumble and idle lines exist in en and pt, PT keeps the wise tone (not word for word)', () => {
+  for (const sit of ['idleLong', 'playerMissed', 'playerWhiffSunstrike']) {
+    for (const ln of T.raven.lines[sit]) assert.ok(ln.t.en && ln.t.pt && ln.t.pt !== ln.t.en, 'raven/' + sit);
+  }
+  for (const sit of ['playerMissed', 'playerWhiffSunstrike', 'idleLong']) assert.ok(F.SITUATIONS.indexOf(sit) >= 0, sit);
 });
 
 test('CEO item 44: unit.ally and unit.roshan exist in en and pt', () => {

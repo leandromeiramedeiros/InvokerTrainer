@@ -388,6 +388,15 @@
     return out;
   }
   const inPit = (map, x, y) => { const p = pitRegion(map); return !!p && p.tiles.has(map.toTile(y) * map.w + map.toTile(x)); };
+  // v6 #67 pit_blast_in: obj.how.mouth = a foe dying within MOUTH_TOL[tier] u of a crater tile (the bank by the mouth) counts as inside:
+  // looser at the low tiers, tight at hard / bambam. Distance to the nearest crater tile (centre, half-tile slack).
+  const MOUTH_TOL = { ian: 90, easy: 70, common: 50, hard: 30, bambam: 15 };
+  function pitGap(map, x, y) {
+    const p = pitRegion(map); if (!p) return Infinity;
+    let best = Infinity;
+    p.tiles.forEach(i => { const c = map.center(i % map.w, Math.floor(i / map.w)); best = Math.min(best, Math.hypot(c.x - x, c.y - y)); });
+    return Math.max(0, best - map.tile / 2);
+  }
   // a Force Staff push (KV push_length) from p toward the pit's deepest point: the walkable end of the push (walls stop it)
   function pushEnd(map, p, to, len) {
     const a = Math.atan2(to.y - p.y, to.x - p.x);
@@ -935,7 +944,7 @@
       w.on('kill', p => {
         if (run.phase !== 'play' || !foeOf(p.unit)) return;
         const f = w.get(p.unit), k = Object.assign({ id: p.unit }, st().last[p.unit] || {}, { t: w.t }), a = st().abil[p.unit];
-        if (f && w.map) k.inside = inPit(w.map, f.x, f.y) ? 'pit' : null;   // v6: where it died (obj.how.inside)
+        if (f && w.map) k.inside = inPit(w.map, f.x, f.y) || (run.pr && run.pr.sc.obj.how && run.pr.sc.obj.how.mouth && pitGap(w.map, f.x, f.y) <= (MOUTH_TOL[run.difficulty().id] || 0)) ? 'pit' : null;   // v6: where it died (obj.how.inside; how.mouth = + the tier's mouth tolerance)
         if (k.ability === 'attack' && a && w.t - a.t <= ASSIST) k.assist = Object.assign({}, a, { inside: k.inside });   // an ability hurt it just before the basic attack finished it
         k.channel = f && f.channel ? f.channel.kind : null;   // v6 item 28: killed mid-channel (obj.how.channel: 'tp')
         k.openInv = st().openInv === true;                    // v6 item 28: the hero opened from invisibility (obj.how.openInv)
@@ -1321,7 +1330,7 @@
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,
-    profile, record, reset, load, prepare, pitRegion, inPit, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS, variation, VARY,
+    profile, record, reset, load, prepare, pitRegion, inPit, pitGap, MOUTH_TOL, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS, variation, VARY,
     comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
