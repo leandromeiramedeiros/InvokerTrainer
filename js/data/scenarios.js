@@ -314,7 +314,7 @@
     // (PAT / PJC / PSP, see above), same juke contract as above (fixed arenas, spot bot cover -> hide: tests/juke_v6.test.js + tests/pit_v6.test.js).
     // night: duck into the crater (they lose you), out past the mouth and around the wall while they walk in after you
     V('pit_in_out', 5, 'roshan_pit_top', ['juke', 'fun', 'pit', 'fog'], 20, { lvl: 10, at: PAT(-960, 576) }, PJC(2, 624, 96),
-      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, JS, Object.assign(JX(PSP([-624, -480], [-732, -1508])), { maxDf: 'common' })),   // #77 I5: the west lip of the crater, out and around the west wall (bot: ian-common 18/18, hard caught)
+      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, JS, Object.assign(JX(PSP([-624, -480], [-732, -1508])), { maxDf: 'common' })),   // #77 I5: the west lip of the crater, out and around the west wall (bot: ian-common 18/18; hard caught: #78 tried a 2 s bolt cast, slower chasers, other covers/hides, no fair fix)
     // walk in, wait for them to follow, then Force Staff out past the mouth: inside the crater they cannot see you leave
     V('pit_force_exit', 6, 'roshan_pit', ['juke', 'fun', 'pit', 'items'], 20, { lvl: 12, items: ['forcestaff'], at: PAT(1392, -240) }, PJC(2, 288, 240),
       { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, PFS, JX(PSP([144, 0], [-384, 480], [0, -48]))),
@@ -388,7 +388,8 @@
     V('bkb_bait_duo', 10, 'outpost_dire', ['reaction', 'items', 'multi'], 30, { lvl: 26, scepter: 'exort' },
       [U(SEEN([650, 900], { not: ['dtower'] }), { hp: 0.3, behavior: 'defend', items: ['bkb'], useBkb: true, aware: 1 }), U({ of: 0, side: 120 }, { hp: 0.3, behavior: 'defend', items: ['bkb'], useBkb: true, aware: 1 })],
       { type: 'killN', n: 2, one: false, span: 30 }, ['died', 'time'],
-      [{ a: 'coldsnap', at: 'd0' }, { a: 'tornado', at: 'd0', w: 6 }, { a: 'sunstrike', at: 'd0', w: 0.3 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { maxDf: 'easy' }),
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'tornado', at: 'd0', w: 6 }, { a: 'sunstrike', at: 'd0', w: 0.3 }, { a: 'deafeningblast', at: 'd0', w: 0.6 },
+        { a: 'coldsnap', at: 'd1', w: 3 }, { a: 'attack', at: 'd1', w: 0.2 }], { maxDf: 'common' }),   // #78: bait + burst the first carrier, then Cold Snap bait + hit the second (bot: ian-common 6/6)
     // ---------------------------------------------------------------- v6 item 28: FUN set (docs/SCENARIO-RESEARCH.md; texts + scn.<id>.tip, the real
     // Dota situation: js/data/i18n/scn.js). Mechanics (js/sim/units.js, ranked.js funExtras): unit tpPlan = a planned Town Portal (GAME.TP.dur s
     // channel; stun / hex / lift / knockback cancel it, silence does not; finished = 'escaped'); sc.pickups + unit grab = a rune / Aegis race

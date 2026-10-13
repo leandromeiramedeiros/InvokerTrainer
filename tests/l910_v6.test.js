@@ -9,7 +9,7 @@ const IT = load(['js/data/i18n.js', 'js/data/i18n/scn.js', 'js/data/dota.js', 'j
 const SET = {
   blink_chain_fog: [['ian', 'easy', 'common', 'hard'], 'hard'],
   tp_snipe_far: [['ian', 'easy', 'common', 'hard', 'bambam'], null],
-  bkb_bait_duo: [['ian', 'easy'], 'easy'],   // two BKBs: a frame-perfect bot cannot burst the pair above easy
+  bkb_bait_duo: [['ian', 'easy', 'common'], 'common'],   // two BKBs, one carrier at a time (#78); hard/bambam: 'method'/'time' (the bot's single Cold Snap + hit cannot beat a held BKB)
 };
 for (const id of Object.keys(SET)) {
   test('l910: ' + id + ' is level 9-10, has EN+PT text, and the bot clears its tiers', () => {
