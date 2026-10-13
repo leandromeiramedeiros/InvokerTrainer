@@ -116,6 +116,13 @@ Known open: #16 follow-up (between-round card, splash tiers 1/4/7, Infinite Run,
   Shop pricing (~24.5 min unlock-all): OK for now.
 - [ ] #78 Raven (dummy) flair: Raven is a STATIONARY dummy: remove juke/chase/escape-type lines; speaks only very sporadically (long cooldowns, low chance): when left alone/not attacked for a while, when the player fumbles a skill onto empty ground, rare reactions to being hit/killed. Wise, sparse, short.
 
+- [ ] #76b LIGHTING art direction (CEO, amends #76 + docs/LIGHTING-v6.md): ALL spells/orbs emit light, not only Exort. Intensity hierarchy by element:
+  EXORT strongest by far (sun + fire): warm orange-gold, large radius, flicker (Sun Strike, Chaos Meteor, Forge Spirits, Exort orbs, Alacrity's fiery tint).
+  WEX strong, PULSATING purple + white electric flashes / lightning-strike bursts (EMP charge + detonation, Tornado sparks, Alacrity, Wex orbs): short bright strobes, irregular timing.
+  QUAS faintest: faint, steady cool-blue glow (Cold Snap, Ice Wall, Ghost Walk, Quas orbs, Ice Floe).
+  Mixed spells blend per orb share (e.g. Deafening Blast = Q+W+E colours, Tornado = Q+W).
+  Settings: Lighting OFF / LOW / MEDIUM / HIGH (4 levels, not 3). HIGH = more passes (rim + glow + shadow ray-march) and more active lights; LOW = few lights, no ray-march; OFF = today's look.
+
 ## Open for CEO
 - #71 Ice Floe orientation: built perpendicular to the drag (spec); KV hints Dota may lay it ALONG the drag ("in its wake", glacier_formation_speed 600). Flip `FLOE_ALONG` in spells.js if the CEO confirms.
 - #30 top-10 in docs/GAMEPLAY-REVIEW-v6.md (level 9-10 pool too small/too hard at bambam, juke escapes trivial at ian/easy, pit_in_out unclearable, Roshan stats vs KV, Cataclysm hits non-heroes).
