@@ -7,6 +7,10 @@
 //   pull toward likely paths (treeline gaps, ramps, the way home), half = confidence half-life s, confused = s a juked chaser stands lost,
 //   ring0 / grow / ringMax = search ring, split = chasers fan out (alternative predictions, own search bearings), detect = Dust at the
 //   prediction once confident, recatch = items a juke scenario's `recatch` chaser gets to close the gap after reacquiring. (v6: fog of war is always on in every scenario, no per-tier flag)
+// exec (v6 #50 / #52 / #58) = EXECUTION only (the scenario's intent never changes with the tier): jitter = +-u of waypoint error on scripted
+//   moves (pathing quality), itemP = chance a defensive item / innate blink is used when it should be, predict = 0..1 lead on the hero's
+//   heading when aiming a blink, sway = u a guard fidgets around its post, dodge = sidesteps ground danger zones on foot,
+//   gwDust / gwReact = chance + s before a Ghost-Walk-slowed foe dusts its own feet, blinkCast = innate blink cast point s.
 // revealLinger (v6 item 45) = s the intro start-reveal ring (and its vision) stays on each unseen foe, counted from the camera ARRIVING on it.
 // Legacy dummy fields (preset/behavior/stunBolt/escape/blinkAfter/orbCut/useBkb/flee/chase) still drive the fallback foe when the enemy entity is missing.
 (function (G) {
@@ -16,6 +20,7 @@
   const D = {
     order: ['ian', 'easy', 'common', 'hard', 'bambam'],
     ian: {
+      exec: { jitter: 220, itemP: 0.35, predict: 0.2, sway: 0, dodge: false, gwDust: 0, gwReact: 1.6, blinkCast: 0.35 },
       revealLinger: 2.5,
       telegraph: 1.5, awareness: 0.15, notice: 4, reaction: 1.4, hpMul: 0.8, armorAdd: 0, dmgMul: 0.35, fights: false, timer: 2, hints: true, mult: 0.6,
       belief: { predict: 0, bias: 0, half: 3, confused: 1.4, ring0: 120, grow: 70, ringMax: 600, recatch: [] },
@@ -24,6 +29,7 @@
         'Tranquilo: os inimigos demoram a te notar, mostram cada item bem antes de usar e o tempo sobra. As dicas da receita ficam ligadas.'),
     },
     easy: {
+      exec: { jitter: 160, itemP: 0.55, predict: 0.45, sway: 0, dodge: false, gwDust: 0.1, gwReact: 1.2, blinkCast: 0.32 },
       revealLinger: 2.0,
       telegraph: 1.0, awareness: 0.35, notice: 3.6, reaction: 1.0, hpMul: 0.9, armorAdd: 0, dmgMul: 0.6, fights: false, timer: 1.5, hints: true, mult: 0.8,
       belief: { predict: 0.6, horizon: 1, bias: 0, half: 4, confused: 1.1, grow: 90, ringMax: 700, recatch: [] },
@@ -32,6 +38,7 @@
         'Fácil: reações lentas, avisos claros de item e um tempo folgado. As dicas continuam ligadas.'),
     },
     common: {
+      exec: { jitter: 100, itemP: 0.8, predict: 0.7, sway: 120, dodge: false, gwDust: 0.45, gwReact: 0.8, blinkCast: 0.27 },
       revealLinger: 1.5,
       telegraph: 0.6, awareness: 0.6, notice: 3.2, reaction: 0.6, hpMul: 1, armorAdd: 1, dmgMul: 1, fights: false, timer: 1.3, hints: false, mult: 1,
       belief: { predict: 1, horizon: 2.5, bias: 0.5, half: 5, confused: 0.8, recatch: [] },
@@ -40,6 +47,7 @@
         'Comum: os inimigos andam por aí, te notam a tempo e avisam pouco antes de usar um item. Sem dicas.'),
     },
     hard: {
+      exec: { jitter: 50, itemP: 0.92, predict: 0.9, sway: 150, dodge: true, gwDust: 0.8, gwReact: 0.5, blinkCast: 0.2 },
       revealLinger: 1.1,
       telegraph: 0.3, awareness: 0.85, notice: 2.8, reaction: 0.35, hpMul: 1.05, armorAdd: 3, dmgMul: 1.25, fights: true, timer: 1.1, hints: false, mult: 1.35,
       belief: { predict: 1, horizon: 3, bias: 0.7, half: 6, confused: 0.5, split: true, detect: true, recatch: ['forcestaff'], grow: 130, ringMax: 1000 },
@@ -48,6 +56,7 @@
         'Difícil: inimigos atentos com reações rápidas, quase sem aviso de item, mais armadura e tempo apertado.'),
     },
     bambam: {
+      exec: { jitter: 15, itemP: 1, predict: 1, sway: 180, dodge: true, gwDust: 0.97, gwReact: 0.3, blinkCast: 0.15 },
       revealLinger: 0.8,
       telegraph: 0, awareness: 1, notice: 2.4, reaction: 0.25, hpMul: 1.1, armorAdd: 4, dmgMul: 1.5, fights: true, timer: 0.9, hints: false, mult: 1.8,
       belief: { predict: 1, horizon: 3.5, bias: 0.85, half: 7, confused: 0.3, split: true, detect: true, recatch: ['blink', 'forcestaff'], grow: 150, ringMax: 1100, dustConf: 0.35 },

@@ -33,6 +33,11 @@
 //   pitJuke              an enemy taunts as it blinks / dives for the pit juke (speaker = that enemy)
 //   caught               the scenario failed because the hero got caught
 //   escaped              the scenario failed because the foe got away
+//   gotJuked             the speaker chased the hero and was juked: it walked to the predicted spot and found nothing (belief 'juked')
+//   invokerEscaped       the hero went invisible and got away (the chasers lost him)
+//   reacquired           the speaker saw the hero again after losing him (belief 'reacquired')
+//   dustHit              a Dust cloud landed on the speaker: it is revealed (hitBy:dust is the item-hit bubble)
+//   dustMiss             the speaker's own Dust found nothing inside the cloud
 //   -- generic reactions (a character may leave these out: `fallback: 'default'` borrows the grunt's lines) --
 //   playerFail playerNoMana playerCooldown playerWrong comboFail dodge heroLow praise
 //
@@ -59,6 +64,22 @@
     // DUMMY (buyable later): the raven. A few wise one-liners, rarely.
     raven: {
       cd: 14, chat: 0.35, lineCd: 120, lines: {
+        gotJuked: [
+          ['You moved while I looked away. The crow saw it.', 'Você se moveu enquanto eu olhava para o lado. O corvo viu.'],
+          ['A false path is still a path. Walk it.', 'Um caminho falso ainda é um caminho. Ande por ele.'],
+          ['The one who fools you teaches you. Caw.', 'Quem te engana te ensina. Crá.'],
+          ['You went where I was not. Learn from that.', 'Você foi onde eu não estava. Aprenda com isso.'],
+          ['The shadow was not the wolf. Not yet.', 'A sombra não era o lobo. Ainda não.'],
+          ['Patience is the stillest form of motion.', 'Paciência é a forma mais quieta de movimento.'],
+        ],
+        invokerEscaped: [
+          ['He is gone into the not-seen. Wait.', 'Ele foi para o não visto. Espere.'],
+          ['Invisible is a door. The door closed. Breathe.', 'Invisível é uma porta. A porta fechou. Respire.'],
+          ['The wizard left the field, and the field remembers.', 'O mago deixou o campo, e o campo se lembra.'],
+          ['Escape is also a form of teaching.', 'Fuga também é uma forma de ensinar.'],
+          ['Ghost steps leave no tracks. Be still.', 'Passos de fantasma não deixam rastro. Fique quieto.'],
+          ['Gone. Caw. The sky keeps what it takes.', 'Sumiu. Crá. O céu guarda o que leva.'],
+        ],
         spawn: [
           ['The field is quiet. The quiet is a teacher.', 'O campo está quieto. O silêncio ensina.'],
           ['I have watched many wizards. You are one of them.', 'Já vi muitos magos. Você é um deles.'],
@@ -116,6 +137,51 @@
     default: {
       // the bland hooded grunt: every line the old dummy chat had (js/data/i18n/s3.js dc.*, scn.js dc.juke.*), unchanged
       cd: 4, chat: 1, lineCd: 25, lines: {
+        gotJuked: [
+          ['I went where you pointed me. Nothing was there.', 'Fui para onde você apontou. Não tinha nada lá.'],
+          ['Okay, that was a fake out. Good one.', 'Ok, isso foi um fake. Boa.'],
+          ['I was confident. Then I was wrong.', 'Eu estava confiante. Aí errei.'],
+          ['Juked. That is a new word for me.', 'Driblado. Essa palavra é nova pra mim.'],
+          ['Fine. You win this round. Enjoy it.', 'Tudo bem. Você ganhou essa. Aproveite.'],
+          ['Search party, form a line.', 'Equipe de busca, formem fila.'],
+          ['Where exactly did you think I would be?', 'Onde exatamente você achou que eu estaria?'],
+        ],
+        invokerEscaped: [
+          ['He vanished. Invisible is not an excuse.', 'Ele sumiu. Invisível não é desculpa.'],
+          ['Gone. Where? Nobody knows.', 'Sumiu. Pra onde? Ninguém sabe.'],
+          ['That was a disappearing act. Impressive.', 'Isso foi um truque de sumiço. Impressionante.'],
+          ['I see nothing. Which means nothing sees me either.', 'Não vejo nada. Logo, nada me vê também.'],
+          ['Lost him. Back to standing around.', 'Perdi ele. De volta a ficar parado.'],
+          ['Escape by invisibility. Noted.', 'Fuga por invisibilidade. Anotado.'],
+          ['Ghost Walk? Fine. Let the ghost go.', 'Ghost Walk? Tudo bem. Deixa o fantasma ir.'],
+        ],
+        reacquired: [
+          ['Oh, there you are. Again.', 'Ah, aí está você. De novo.'],
+          ['Found you! Sort of.', 'Achei você! Mais ou menos.'],
+          ['Spotted. Do not move. I am serious.', 'Avistado. Não se mexa. Estou falando sério.'],
+          ['Back on you. The chase resumes.', 'De volta em você. A perseguição continua.'],
+          ['I see you. Hello again.', 'Estou vendo você. Oi de novo.'],
+          ['There! Right where I said you would be.', 'Aí! Bem onde eu disse que você estaria.'],
+          ['Found you. Hello again, friend.', 'Achei você. Olá de novo, amigo.'],
+        ],
+        dustHit: [
+          ['Dust. Now everyone can see me. Great.', 'Dust. Agora todo mundo me vê. Ótimo.'],
+          ['Revealed. Please do not stare.', 'Revelado. Por favor, não fiquem olhando.'],
+          ['Cough. That is dust in my eyes.', 'Cof. Isso é poeira nos meus olhos.'],
+          ['Well, that is a bad look.', 'Bom, essa aparência não ajuda.'],
+          ['Dust. The most embarrassing item in the game.', 'Dust. O item mais constrangedor do jogo.'],
+          ['I am visible now. Yes, I know.', 'Agora estou visível. Sim, eu sei.'],
+          ['Dust. Of course. Why not.', 'Dust. Claro. Por que não.'],
+        ],
+        dustMiss: [
+          ['The dust missed. Missing is part of the job.', 'A poeira errou. Errar faz parte do trabalho.'],
+          ['Nothing to reveal. Oops.', 'Nada para revelar. Ops.'],
+          ['Empty cloud. Very atmospheric.', 'Nuvem vazia. Muito atmosférico.'],
+          ['Missed. I will blame the wind.', 'Errei. Vou culpar o vento.'],
+          ['Dust in the air, nobody in it.', 'Poeira no ar, ninguém nela.'],
+          ['That cloud did nothing. Sorry, cloud.', 'Essa nuvem não fez nada. Desculpa, nuvem.'],
+          ['Miss. Plan B is also dust.', 'Erro. O plano B também é dust.'],
+        ],
         playerFail: [
           ['Was that supposed to do something?', 'Isso era pra fazer alguma coisa?'],
           ['Bold strategy. Let\'s see if it pays off.', 'Estratégia ousada. Vamos ver se funciona.'],
@@ -310,6 +376,51 @@
     // loves goiaba, walks barefoot, programmer / vibecoder.
     pedro: {
       cd: 3.5, chat: 0.9, lineCd: 40, fallback: 'default', lines: {
+        gotJuked: [
+          ['Wait-I-went-the-wrong-way. Ok. Ok.', 'Espera-fui-pro-lado-errado. Ok. Ok.'],
+          ['Juked! Like a bug that fixes itself. Hm.', 'Driblado! Tipo bug que se conserta sozinho. Hm.'],
+          ['My back hurts from turning around so fast.', 'Minha coluna doeu de virar tão rápido.'],
+          ['Pit! No. Juke! Yes. Juke. Ok.', 'Fosso! Não. Drible! Sim. Drible. Ok.'],
+          ['Confused. Barefoot. Still chasing. Ok. Chasing.', 'Confuso. Descalço. Ainda perseguindo. Ok. Perseguindo.'],
+          ['Ok, I will re-plan. Re-plan. Re-plan-re-plan.', 'Ok, vou replanejar. Replanejar. Replanejar-replanejar.'],
+          ['You are a genius and I hate it. Goiaba, though.', 'Você é um gênio e eu odeio. Goiaba, porém.', { icon: 'goiaba' }],
+        ],
+        invokerEscaped: [
+          ['Invisible! Ok ok ok. Where is the ghost. Where.', 'Invisível! Ok ok ok. Cadê o fantasma. Cadê.'],
+          ['Gone-gone-gone. I need a nap now.', 'Sumiu-sumiu-sumiu. Preciso de uma soneca agora.'],
+          ['Zombie posture: I cannot turn to look. Hm. Gone.', 'Postura de zumbi: não consigo virar pra olhar. Hm. Sumiu.'],
+          ['Escape by ghost walk. Is it in the patch notes?', 'Fuga por ghost walk. Está nas notas da atualização?'],
+          ['Ok, I am going to debug this. Debug. Debug.', 'Ok, vou debugar isso. Debugar. Debugar.'],
+          ['You vanished! My deploy is at 3. What now.', 'Você sumiu! Meu deploy é às 3. E agora.'],
+          ['Gone, like the goiaba from my fridge. Hm.', 'Sumiu, igual a goiaba da minha geladeira. Hm.', { icon: 'goiaba' }],
+        ],
+        reacquired: [
+          ['Found-found-found! Hi! Hello! Hi again!', 'Achei-achei-achei! Oi! Olá! Oi de novo!'],
+          ['Back! I see you! My eyes are open now. Hm.', 'De volta! Eu vejo você! Meus olhos estão abertos agora. Hm.'],
+          ['Reacquired. Yes. Ok. Yes. Chasing. Chasing.', 'Reencontrado. Sim. Ok. Sim. Perseguindo. Perseguindo.'],
+          ['My back is screaming. But I see you.', 'Minha coluna está gritando. Mas eu vejo você.'],
+          ['You again! Ok, ok, let us go!', 'Você de novo! Ok, ok, vamos!'],
+          ['Barefoot tracking. Very efficient, I promise.', 'Rastreamento descalço. Muito eficiente, eu prometo.'],
+          ['The Tab key found it. Ctrl-F found you.', 'A tecla Tab achou. O Ctrl-F achou você.'],
+        ],
+        dustHit: [
+          ['Dust! Glitter! I am sparkly again! Ugh!', 'Dust! Brilho! Estou brilhando de novo! Ugh!'],
+          ['Revealed! My cover was a single TODO comment!', 'Revelado! Meu disfarce era um comentário TODO!'],
+          ['Achoo-achoo! Dust allergy-allergy! Gesundheit!', 'Atchim-atchim! Alergia-alergia a poeira! Saúde!'],
+          ['Dust in the goiaba. Dust in everything!', 'Poeira na goiaba. Poeira em tudo!', { icon: 'goiaba' }],
+          ['Revealed. Hm. Ok. I am visible. Ok.', 'Revelado. Hm. Ok. Estou visível. Ok.'],
+          ['Revealed, barefoot, and dusty. A complete vibe.', 'Revelado, descalço e empoeirado. Vibe completa.'],
+          ['Revealed! Ctrl-Z! Ctrl-Z! Ctrl-Z!', 'Revelado! Ctrl-Z! Ctrl-Z! Ctrl-Z!'],
+        ],
+        dustMiss: [
+          ['Dust missed. Ok. Dust is not a blocking bug.', 'Dust errou. Ok. Poeira não é bug bloqueante.'],
+          ['Empty cloud! Zero players! Wow. Ok.', 'Nuvem vazia! Zero jogadores! Uau. Ok.'],
+          ['It went right past you. Pass-through. Feature.', 'Passou direto por você. Atravessou. Feature.'],
+          ['Miss-miss-miss. Hm. Reroll. Reroll.', 'Erro-erro-erro. Hm. Rolar de novo. Rolar de novo.'],
+          ['The dust hit the goiaba tree. Wrong target. Ok.', 'A poeira bateu na goiabeira. Alvo errado. Ok.', { icon: 'goiaba' }],
+          ['Dust fell like my productivity. Ok. Ok.', 'Poeira caiu igual minha produtividade. Ok. Ok.'],
+          ['Missed! Sorry, cloud. The vibes were off. Hm.', 'Errei! Desculpa, nuvem. As vibes estavam estranhas. Hm.'],
+        ],
         spawn: [
           ['Okaywaitwhatdidyousayoh-combat-right-hi.', 'Tábompeeeraoquevocêfaloualaha-combate-né-oi.'],
           ['Hold on, I almost had a bug fixed. Nope. Hi.', 'Pera, eu quase consertei um bug. Não. Oi.'],
@@ -576,6 +687,51 @@
     // balding (and fine with it).
     renan: {
       cd: 4, chat: 0.85, lineCd: 40, fallback: 'default', lines: {
+        gotJuked: [
+          ['Wait, you moved! Great angle of nothing!', 'Espera, você se mexeu! Que ângulo ótimo do nada!'],
+          ['I was framing the wrong spot! Tragic! Beautiful, though.', 'Enquadrei o lugar errado! Trágico! Mas bonito.'],
+          ['You juked me! Five stars for the technique!', 'Você me driblou! Cinco estrelas pela técnica!'],
+          ['Ugh, I focused on the empty tree. Terrible lighting.', 'Ugh, foquei na árvore vazia. Luz péssima.'],
+          ['No worries, I will reshoot it. For free.', 'Sem problema, refaço a foto. De graça.'],
+          ['Okay. New spot. Smile at the camera, please!', 'Ok. Novo lugar. Sorria pra câmera, por favor!', { icon: 'camera' }],
+          ['I did not plan that shot. Still, nice work.', 'Não planejei esse enquadramento. Ainda assim, bom trabalho.'],
+        ],
+        invokerEscaped: [
+          ['Gone! The shot is ruined. Ruined, but beautiful.', 'Sumiu! A foto estragou. Estragou, mas ficou bonita.'],
+          ['You vanished from my viewfinder. Rude.', 'Você sumiu do meu visor. Falta de educação.'],
+          ['Escaped and invisible? Two stars. Kidding, five.', 'Fugiu e invisível? Duas estrelas. Brincadeira, cinco.'],
+          ['Where are you? I cannot shoot an empty room.', 'Cadê você? Não dá pra fotografar sala vazia.'],
+          ['Hold still and I might see you. Maybe. Hm.', 'Fica parado que talvez eu te veja. Hm.'],
+          ['The Invoker left the frame. Very Hollywood.', 'O Invoker saiu do quadro. Muito Hollywood.'],
+          ['Great exit. I would not pay for that photo.', 'Ótima saída. Mas não pagaria por essa foto.'],
+        ],
+        reacquired: [
+          ['There you are! Back in focus!', 'Aí está você! De volta ao foco!'],
+          ['Got you in the lens again. Smile!', 'Te peguei na lente de novo. Sorria!'],
+          ['Focus locked. Do not blink.', 'Foco travado. Não pisque.'],
+          ['I found you! Free portrait, as always.', 'Achei você! Retrato grátis, como sempre.'],
+          ['Ah, the return of the Invoker! Dramatic!', 'Ah, o retorno do Invoker! Dramático!'],
+          ['Right here, perfect light. Pose!', 'Bem aqui, luz perfeita. Posa!'],
+          ['Found you. My hairline came back too, in my head.', 'Achei você. Meu cabelo voltou também, na minha cabeça.'],
+        ],
+        dustHit: [
+          ['Dust in my lens! Now the photo is artsy!', 'Poeira na lente! Agora a foto ficou artística!'],
+          ['Dust! Revealed! Photographers hate this one trick.', 'Dust! Revelado! Fotógrafos odeiam esse truque.'],
+          ['My eyes! My lens! My budget for lenses!', 'Meus olhos! Minha lente! Meu orçamento de lente!'],
+          ['Glitter everywhere. Ruined and gorgeous.', 'Purpurina em tudo. Arruinado e lindo.'],
+          ['I am visible, which is good for my portfolio.', 'Estou visível, o que é bom pro meu portfólio.'],
+          ['Revealed like a bad selfie. Thanks for the lighting.', 'Revelado tipo selfie ruim. Obrigado pela luz.'],
+          ['Dust! My agent will hear about this.', 'Dust! Meu agente vai ficar sabendo disso.'],
+        ],
+        dustMiss: [
+          ['Missed! The dust went for a walk. Lovely walk.', 'Errou! A poeira foi passear. Passeio lindo.'],
+          ['No one in the cloud. Shame, the lighting was perfect.', 'Ninguém na nuvem. Que pena, a luz estava perfeita.'],
+          ['Dust in the air, zero models. Very moody.', 'Poeira no ar, zero modelos. Muito dramático.'],
+          ['Empty shot. At least I am not charging for it.', 'Foto vazia. Pelo menos não vou cobrar por ela.'],
+          ['Dust missed. Like my last haircut.', 'Dust errou. Igual meu último corte de cabelo.'],
+          ['A miss! I will call it a creative choice.', 'Errou! Vou chamar isso de escolha criativa.'],
+          ['Nothing! Let me try again, on the house.', 'Nada! Deixa eu tentar de novo, por conta da casa.'],
+        ],
         spawn: [
           ['Good vibes only! Hold that pose, let me frame this.', 'Só energia boa! Segura a pose, deixa eu enquadrar.', { icon: 'camera' }],
           ['Beautiful light today! Is this fight free? Great.', 'Que luz linda hoje! Essa luta é de graça? Ótimo.'],
@@ -829,6 +985,51 @@
     // very stressed, plays off-meta heroes in unthinkable roles, buys exquisite items.
     vitinho: {
       cd: 4, chat: 0.85, lineCd: 40, fallback: 'default', lines: {
+        gotJuked: [
+          ['You juked me?! I have a deadline in five minutes!', 'Você me driblou?! Tenho um prazo em cinco minutos!'],
+          ['Ooh ooh! Fake-out! The Clan did not see that coming!', 'Ooh ooh! Fake! O Clã não viu isso chegando!'],
+          ['Wrong spot! I should have read the spreadsheet!', 'Lugar errado! Devia ter lido a planilha!'],
+          ['Uncle Sam did not teach me to chase shadows!', 'O tio Sam não me ensinou a perseguir sombra!'],
+          ['Monkeys would have caught you. Monkeys always catch.', 'Macacos teriam te pegado. Macaco sempre pega.', { icon: 'monkey' }],
+          ['Juked! Five stars for you, zero for me.', 'Driblado! Cinco estrelas pra você, zero pra mim.', { icon: 'star' }],
+          ['Juked again. I am taking this personally.', 'Driblado de novo. Estou levando para o lado pessoal.'],
+        ],
+        invokerEscaped: [
+          ['Invisible?! That is cheating! Is it cheating?', 'Invisível?! Isso é trapaça! É trapaça?'],
+          ['You escaped! The Clan is disappointed in all of us.', 'Você fugiu! O Clã está decepcionado com todos nós.'],
+          ['Gone! Like my budget! Ooh ooh!', 'Sumiu! Igual meu orçamento! Ooh ooh!'],
+          ['Escape by ghost! Not in the rules!', 'Fuga por fantasma! Não está no regulamento!'],
+          ['I am stressed and you vanished. Double stress.', 'Estou estressado e você sumiu. Estresse em dobro.'],
+          ['Escaped invisible. Respect, but I hate it.', 'Fugiu invisível. Respeito, mas odeio.'],
+          ['Where is the Invoker? Somebody call the monkeys!', 'Cadê o Invoker? Alguém chama os macacos!', { icon: 'monkey' }],
+        ],
+        reacquired: [
+          ['Ooh! There you are! Do not move, I have a meeting!', 'Ooh! Aí está você! Não se mexa, tenho uma reunião!'],
+          ['Found you! I am a professional tracker, basically.', 'Achei você! Sou um rastreador profissional, basicamente.'],
+          ['Back on you! The Clan approves!', 'De volta em você! O Clã aprova!'],
+          ['I see you! I see you! Ooh ooh!', 'Eu vejo você! Eu vejo você! Ooh ooh!'],
+          ['Visible again. Thank the stars, and the monkeys.', 'Visível de novo. Obrigado às estrelas e aos macacos.', { icon: 'star' }],
+          ['Reacquired! Put that in the report.', 'Reencontrado! Coloca isso no relatório.'],
+          ['There you go. Now the Clan is happy.', 'Pronto. Agora o Clã está feliz.'],
+        ],
+        dustHit: [
+          ['Dust! I am revealed! Like my tax return!', 'Dust! Estou revelado! Igual minha declaração de imposto!'],
+          ['Dust in the eyes! I cannot see the spreadsheet!', 'Poeira nos olhos! Não consigo ver a planilha!'],
+          ['Revealed in front of the whole Clan! Shame!', 'Revelado na frente do Clã inteiro! Vergonha!'],
+          ['Ooh ooh! Who ordered the glitter? Not me!', 'Ooh ooh! Quem pediu o glitter? Não fui eu!'],
+          ['My secrets are out, my monkey friends!', 'Meus segredos saíram, meus amigos macacos!', { icon: 'monkey' }],
+          ['Dust! Shocking. Just shocking.', 'Dust! Chocante. Só chocante.'],
+          ['I am visible and very stressed about it.', 'Estou visível e muito estressado com isso.'],
+        ],
+        dustMiss: [
+          ['Dust missed! Budget for dust: zero!', 'Dust errou! Orçamento de dust: zero!'],
+          ['Empty cloud. Like my calendar this week.', 'Nuvem vazia. Igual minha agenda essa semana.'],
+          ['Ooh no. The Clan will be furious.', 'Ooh não. O Clã vai ficar furioso.'],
+          ['Nothing to reveal. Maybe next quarter.', 'Nada pra revelar. Quem sabe no próximo trimestre.'],
+          ['I aimed at the wrong monkey. Again!', 'Mirei no macaco errado. De novo!', { icon: 'monkey' }],
+          ['The dust went to the wrong country.', 'A poeira foi pro país errado.'],
+          ['Missed! Let me redo the plan, quickly!', 'Errei! Vou refazer o plano, rápido!'],
+        ],
         spawn: [
           ['The Clan has been summoned. I am your leader. Monkeys, assemble!', 'O Clã foi convocado. Eu sou o líder. Macacos, em formação!', { icon: 'monkey' }],
           ['God bless America! And whoever is in this lobby!', 'Deus abençoe a América! E quem está nesse lobby!', { icon: 'star' }],
@@ -1084,6 +1285,52 @@
     // SPRITE TODO: no art yet. 'nando' is not in IT.GAME.SKINS, so he never spawns (a stray unit would render as pedro) until a sheet is drawn.
     nando: {
       cd: 4, chat: 0.9, lineCd: 40, fallback: 'default', lines: {
+        gotJuked: [
+          ['Hahaha, you juked me! Do it again, I love it!', 'Hahaha, você me driblou! Faz de novo, eu amo!'],
+          ['Ah, I went down the wrong street! Like São Paulo traffic!', 'Ah, fui pela rua errada! Igual trânsito de São Paulo!'],
+          ['Nice juke! Come to Ubatuba, I teach you the sea juke!', 'Belo drible! Vem pra Ubatuba, eu te ensino o drible do mar!'],
+          ['I was so sure. Then the sure went away.', 'Eu tinha certeza. Aí a certeza foi embora.'],
+          ['Ops, I make a U-turn in the middle of traffic.', 'Ops, faço um retorno no meio do trânsito.'],
+          ['I was looking at the wrong apartment! Ha!', 'Eu estava olhando pro apartamento errado! Ha!'],
+          ['I was about to say something big and then—', 'Eu ia dizer uma coisa grande e então—'],
+          ['', '', { icon: 'muted' }],
+        ],
+        invokerEscaped: [
+          ['Ghost! You disappeared! Hahaha, nice magic!', 'Fantasma! Você sumiu! Hahaha, mágica boa!'],
+          ['Invisible and gone! Come back to the beach, please!', 'Invisível e sumiu! Volta pra praia, por favor!'],
+          ['Escaped! Ubatuba is far, but I will wait!', 'Fugiu! Ubatuba é longe, mas eu espero!'],
+          ['Gone like the Rodoanel at rush hour. Impossible!', 'Sumiu igual Rodoanel na hora do rush. Impossível!'],
+          ['Invisible! I am going to my apartment to cry, hmm—', 'Invisível! Vou pro meu apartamento chorar, hmm—'],
+          ['Wow! The best escape in the whole city!', 'Uau! A melhor fuga da cidade inteira!'],
+          ['Where did you go?! Ghost, come home!', 'Cadê você?! Fantasma, volta pra casa!'],
+        ],
+        reacquired: [
+          ['There you are! I can see you from my apartment!', 'Aí está você! Eu te vejo do meu apartamento!'],
+          ['Found you! Like the ocean view, always here!', 'Achei você! Igual a vista do mar, sempre aqui!'],
+          ['Visible again! Come back, we will have a party!', 'Visível de novo! Volta, vamos fazer uma festa!'],
+          ['Oh! I see you! My eyes are back! Hahaha!', 'Ah! Te vejo! Meus olhos voltaram! Hahaha!'],
+          ['Back on you! Dinner in Ubatuba after this?', 'De volta em você! Janta em Ubatuba depois disso?'],
+          ['I see the hero! I see the hero! Hahaha!', 'Vejo o herói! Vejo o herói! Hahaha!'],
+          ['I got you again—', 'Peguei você de novo—'],
+        ],
+        dustHit: [
+          ['DUST! Sparkle for everybody, even you! Hahaha!', 'DUST! Brilho pra todo mundo, até pra você! Hahaha!'],
+          ['Revealed! São Paulo smog and dust, same thing!', 'Revelado! Smog de São Paulo e dust, mesma coisa!'],
+          ['Dust in my eyes! Ubatuba beach would be better!', 'Poeira nos olhos! A praia de Ubatuba seria melhor!'],
+          ['I am visible! Good, now everybody sees my outfit!', 'Estou visível! Bom, agora todo mundo vê meu look!'],
+          ['Dust! I have to call my mom in Ubatuba!', 'Dust! Preciso ligar pra minha mãe em Ubatuba!'],
+          ['Revealed, sorry, I only wanted to dance!', 'Revelado, desculpa, eu só queria dançar!'],
+          ['Ah, the dust is on me now, so—', 'Ah, a poeira está em mim agora, então—'],
+        ],
+        dustMiss: [
+          ['Dust missed! Nobody under the cloud! Hahaha!', 'Dust errou! Ninguém embaixo da nuvem! Hahaha!'],
+          ['Empty cloud! Like my apartment on Sunday!', 'Nuvem vazia! Igual meu apartamento no domingo!'],
+          ['Missed! Come to Ubatuba, the sea is much better!', 'Errei! Vem pra Ubatuba, o mar é muito melhor!'],
+          ['Dust misses! Sorry, I was dancing—', 'Dust errou! Desculpa, eu estava dançando—'],
+          ['', '', { icon: 'muted' }],
+          ['No hit, no reward. Next time, Ubatuba!', 'Sem acerto, sem prêmio. Próxima vez, Ubatuba!'],
+          ['Empty cloud, wasted sparkle. Hahaha, ok.', 'Nuvem vazia, brilho desperdiçado. Hahaha, ok.'],
+        ],
         spawn: [
           ['LET\'S GOOO! Sao Paulo in the house!', 'BORA! São Paulo na área!'],
           ['Hey! You should come to my place in Ubatuba! It has a—', 'Ei! Vem pro meu apê em Ubatuba! Ele tem—'],
@@ -1358,7 +1605,8 @@
   const ICONS = ['muted', 'camera', 'monkey', 'star', 'goiaba'];
   const SITUATIONS = ['spawn', 'idle', 'idleLong', 'damaged', 'stunned', 'nearDeath', 'death', 'killedHero', 'playerMissed',
     'playerWhiffSunstrike', 'heroInvisible', 'night', 'dustUsed', 'pitJuke', 'caught', 'escaped',
-    'playerFail', 'playerNoMana', 'playerCooldown', 'playerWrong', 'comboFail', 'dodge', 'heroLow', 'praise'];
+    'playerFail', 'playerNoMana', 'playerCooldown', 'playerWrong', 'comboFail', 'dodge', 'heroLow', 'praise',
+    'gotJuked', 'invokerEscaped', 'reacquired', 'dustHit', 'dustMiss'];
 
   IT.Flair = { raw: RAW, table: table, ICONS: ICONS, SITUATIONS: SITUATIONS };
 })(typeof window !== 'undefined' ? window : globalThis);

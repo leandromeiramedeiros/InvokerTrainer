@@ -59,6 +59,15 @@
       shadowRange: 900,      // 'escape': pops Shadow Blade when an aware hero is closer than this
       leash: 150,            // 'defend' / fights-back: chases the hero this far beyond its attack range, then goes home
       dustAt: 80,            // v6 Dust: a chaser dusts only standing within this of the hero's last-seen spot
+      // v6 #50 scenario intents (IT.Intent in js/sim/units.js): lowHp = the 'lowHp' trigger (hp fraction), kite = the band a kiter keeps
+      // (runs inside min, holds outside max), gank = a fog ganker breaks cover once the hero shows within this, towerBend = max rad a
+      // flee_to_tower runner bends its straight-away line toward a friendly tower, rethink = s between jittered waypoints (pathing quality)
+      intent: { lowHp: 0.5, kite: { min: 650, max: 1050 }, gank: 900, towerBend: 1.0, rethink: 1.6, holdLeash: 0 },
+      // v6 #52 innate blink (QoP / Anti-Mage style, NOT the dagger: usable while damaged). range = blink distance, cd = cooldown after a
+      // blink, turn = rad/s turn rate while it faces the destination, recover = s it stands after landing, deny = s a Cold-Snapped /
+      // stunned blinker stays denied (it holds and retries, the window a 1.7 s Sun Strike needs), near = a blink_in engager jumps from
+      // this far to `land` u short of the hero
+      blink: { range: 900, cd: 8, turn: 12, recover: 0.35, deny: 3.5, near: 1200, land: 250 },
     },
     // Hero auto-attack of an enemy NPC (Dota hero baseline: ~50 dmg, 1.7 BAT; no per-hero KV is baked, only the forged spirit). Scaled by the tier's dmgMul.
     ENEMY_ATTACK: {

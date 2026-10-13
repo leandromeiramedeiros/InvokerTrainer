@@ -308,8 +308,8 @@
   // scenario's fog (always on, v6); only Free Play (pr null) honours the loadout's "Fog of war" checkbox (opts.fog, default on)
   const worldFog = (opts, pr) => (pr ? pr.fog !== false : !(opts && opts.fog === false));
 
-  // tier dummy behaviour -> enemy NPC behaviour ('evasive' foes wander and dodge ground danger on foot)
-  const ENEMY_BEHAVIOR = { stationary: 'stationary', wander: 'wander', evasive: 'wander' };
+  // v6 #50: a scenario foe's behaviour comes from its intent (IT.Intent.engine); the tier row's behavior / escape / blinkAfter only drive
+  // the legacy fallback dummy (Free Play presets). The tier scales EXECUTION (df.exec) only.
 
   // ---------------------------------------------------------------- spots (v5): a hero / unit / gate position spec -> walkable {x, y}
   // Specs never hold absolute coordinates; they are relative to the map's arenas, towers, structures or other spots:
@@ -555,7 +555,8 @@
     w._placed = placed; w.spots = {};   // v6 item 27: spot filters relative to placed units (unseenBy / far); named spots resolve after the units
     const ulist = sc.units || sc.dummies || [], jlist = ulist.filter(d => tierOn(d, df));
     ulist.forEach((d, i) => {
-      const mot = d.mot, boot = vy ? vy.boots[i] : null;
+      // v6 #50: the unit's intent (scenario data, IT.Intent.of derives one from mot / behavior) -> its engine (script mot / AI behavior)
+      const I0 = IT.Intent.of(d), eng = IT.Intent.engine(I0.kind, d), mot = eng.mot, boot = vy ? vy.boots[i] : null;
       const p = spot(w, d, sp, placed, { pick: R.pick, jit: d.of != null ? 0 : (R.jit || 0) + (vy ? vy.posJit : 0), rng: vy ? IT.U.mulberry32((vy.seed + i * 7919) >>> 0) : null, role: 'unit' });
       placed[i] = p;
       if (!tierOn(d, df)) return;   // v6 item 27: unit `minDf` (tier id) = only at that tier and above (its spot stays placed for `of` offsets)
@@ -571,8 +572,8 @@
       const aw = clamp((d.aware != null ? d.aware + (df.awareness - 0.6) * 0.5 : df.awareness) + (tw === 'alert' ? 0.3 : 0), 0, 1);
       const e = IT.Units.spawnEnemy(w, {
         x: p.x, y: p.y, skin, name: IT.GAME.SKIN_NAMES[skin] + (lap ? ' ' + (lap + 1) : ''), hp, armor: E.armor + (df.armorAdd || 0),
-        behavior: d.behavior || (mot ? 'stationary' : ENEMY_BEHAVIOR[df.behavior] || 'stationary'),
-        scenario: { stunBolt: df.stunBolt, dummyEscape: mot || d.juke ? 'none' : df.escape, blinkAfter: d.juke ? null : df.blinkAfter },   // a pit juker's only jump is the juke
+        behavior: eng.behavior,   // v6 #50: the tier no longer picks stand / wander / scripted blink; it only scales execution (e.exec)
+        scenario: { stunBolt: df.stunBolt, dummyEscape: 'none', blinkAfter: null },
         useBkb: !!(df.useBkb || d.useBkb), items,
         telegraph: df.telegraph, awareness: aw, notice: df.notice, reaction: mot === 'still' ? 99 : df.reaction * (vy ? vy.reactionMul : 1),
         dmgMul: df.dmgMul, fights: !!df.fights && mot !== 'flee',
@@ -580,11 +581,16 @@
       });
       e.hpRegen = 0; e.base.hpRegen = 0;
       // scripted movers: max(rolled base, tier speed) + the boot item's KV bonus_movement_speed (v6 item 40); a msMul unit already models its boots (playtest 2): msMul only
-      if (mot === 'flee' || mot === 'chase' || mot === 'march') { const tier = mot === 'flee' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase, ms = Math.max(e.msBase, tier) + (d.msMul ? 0 : IT.Units.itemMs(items)); e.ms = ms; e.base.ms = ms; }   // v6 #46: never below the rolled hero base (tier speed only raises it)
+      if (mot === 'flee' || mot === 'chase' || mot === 'march' || mot === 'kite') { const tier = mot === 'flee' || mot === 'kite' ? 330 * df.flee : mot === 'march' ? 270 * df.chase : 380 * df.chase, ms = Math.max(e.msBase, tier) + (d.msMul ? 0 : IT.Units.itemMs(items)); e.ms = ms; e.base.ms = ms; }   // v6 #46: never below the rolled hero base (tier speed only raises it)
       if (d.msMul && mot) { e.ms = Math.round(e.ms * d.msMul); e.base.ms = e.ms; }
       if (tw === 'swift') { e.ms = Math.round(e.ms * 1.15); e.base.ms = e.ms; }
       e.scn = { mot: mot || null, next: 0, lastSeen: null, search: null, idx: i, n: (sc.units || sc.dummies || []).length };
+      e.exec = df.exec || null;   // v6 #50: tier EXECUTION (jitter, item / blink probability, prediction, sway, dodge, Ghost-Walk Dust)
+      if (IT.Belief) e.beliefP = IT.Belief.params(df);
+      if (d.blinker || I0.kind === 'blink_in') e.innate = IT.Intent.newInnate(w);   // v6 #52 innate blink
+      IT.Intent.attach(e, d, df.reaction * (vy ? vy.reactionMul : 1));
       jukeUnit(w, e, d, df, jlist.indexOf(d), jlist);   // v6 item 27: belief (chasers), Gem, re-catch items
+      if (mot === 'chase' && !e.belief && IT.Belief) e.belief = IT.Belief.create(e, e.beliefP, { idx: 0, n: 1 });
       out.push(e);
     });
     // v6 item 27: named spots (sc.spots { name: spec }, resolved from the hero start after the units; a spec may sit relative to an earlier
@@ -982,6 +988,7 @@
       }
       else if (o.type === 'hold') { if (el >= o.time) return conclude(true); return; }
       for (const d of alive) if ((d.scn.mot === 'flee' || fail.indexOf('escaped') >= 0) && Math.hypot(d.x - h.x, d.y - h.y) > ESCAPED) return conclude(false, 'escaped');
+      for (const d of alive) if (d.tpEscaped) return conclude(false, 'escaped');   // v6 #50 farm_then_tp: the Town Portal finished
       if (mode !== 'sandbox' && el >= pr.limit) return conclude(false, 'time');
     }
 
@@ -990,12 +997,16 @@
       const h = w.hero;
       let seen = null;   // lazily: only chasers need it
       for (const d of run.dummies) {
-        if (d.dead || (d.scn.mot !== 'flee' && d.scn.mot !== 'chase' && d.scn.mot !== 'march') || w.t < d.scn.next || !IT.Status.canMove(d)) continue;
+        if (d.dead || (d.scn.mot !== 'flee' && d.scn.mot !== 'chase' && d.scn.mot !== 'march' && d.scn.mot !== 'kite') || w.t < d.scn.next || !IT.Status.canMove(d)) continue;
         if (d.orders[0] && d.orders[0].type === 'attack') continue;   // a chaser that has reached the hero is busy hitting it
+        if (IT.Intent && IT.Intent.held(w, d)) continue;   // v6 #52: innate blink wind-up / Cold Snap deny / TP channel
         d.scn.next = w.t + 0.35;
-        if (d.scn.mot === 'march') { if (w.gate && (!d.orders[0] || d.orders[0].type !== 'move')) IT.Orders.issue(w, d, { type: 'move', x: w.gate.x, y: w.gate.y }); }   // walks to the line it must not cross
+        const J = IT.Intent ? IT.Intent.jit : () => ({ x: 0, y: 0 });   // v6 #50: tier waypoint error (exec.jitter)
+        if (d.scn.mot === 'march') {   // walks to the line it must not cross
+          if (w.gate && (!d.orders[0] || d.orders[0].type !== 'move')) { const j = J(w, d, Math.min(1, 0.6 * w.gate.r / Math.max(1, (d.exec && d.exec.jitter) || 1))); IT.Orders.issue(w, d, { type: 'move', x: w.gate.x + j.x, y: w.gate.y + j.y }); }
+        } else if (d.scn.mot === 'kite') kite(w, d, h);
         else if (d.scn.mot === 'flee') {
-          const a = Math.atan2(d.y - h.y, d.x - h.x);
+          const a = (d.intent && d.intent.kind === 'flee_to_tower' && IT.Intent ? IT.Intent.fleeAng(w, d, h) : Math.atan2(d.y - h.y, d.x - h.x));
           let x = d.x + Math.cos(a) * 900, y = d.y + Math.sin(a) * 900;
           if (!w.map.walkable(x, y)) {   // wall ahead: slide sideways
             const p = IT.Nav.nearestWalkable(w.map, x, y); if (p) { x = p.x; y = p.y; }
@@ -1018,7 +1029,7 @@
       if (seen) {
         c.lastSeen = { x: h.x, y: h.y, t: w.t }; c.search = null;
         if (recatch(w, d, h, B)) return;
-        IT.Orders.issue(w, d, { type: 'move', x: h.x, y: h.y }); return;
+        IT.Orders.issue(w, d, { type: 'move', x: h.x, y: h.y }); return;   // (chase quality per tier = the belief params, df.belief)
       }
       if (!B.last) {   // never saw it: search around itself (no '?': it was never fooled)
         B.last = { x: d.x, y: d.y, t: w.t }; B.pred = { x: d.x, y: d.y }; B.own = true;
@@ -1028,8 +1039,9 @@
       const L = { x: B.pred.x, y: B.pred.y, t: B.last.t };   // Dust spot = the prediction (= last seen for a standing hero)
       if (d.tele) return;   // telegraphing an item
       if (B.state === 'lost') return;   // a beat before it commits to a guess (LOST_HOLD)
+      const sensed = !!(B.last && B.last.sensed);   // v6 #58: a Ghost-Walk guess: no early mid-walk Dust (the tier-rolled one is units.js tickGhostSense)
       if (B.state === 'predicted') {
-        if (P.detect && !B.own && B.conf >= P.dustConf && Math.hypot(d.x - L.x, d.y - L.y) <= dustR() * 0.5 && IT.Units.useDust(w, d, { x: d.x, y: d.y, t: B.last.t })) { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
+        if (P.detect && !B.own && !sensed && B.conf >= P.dustConf && Math.hypot(d.x - L.x, d.y - L.y) <= dustR() * 0.5 && IT.Units.useDust(w, d, { x: d.x, y: d.y, t: B.last.t })) { if (d.orders.length) IT.Orders.issue(w, d, { type: 'stop' }); return; }
         if (Math.hypot(d.x - L.x, d.y - L.y) > Bel.ARRIVE) {
           const o = d.orders[0];
           if (!o || o.type !== 'move' || Math.hypot(o.x - L.x, o.y - L.y) > 30) IT.Orders.issue(w, d, { type: 'move', x: L.x, y: L.y });
@@ -1063,6 +1075,16 @@
       }
       if (has('forcestaff') && dd > 300 && dd < 800 && IT.Units.useItem(w, d, 'forcestaff', { face: ang })) { d.facing = ang; tell(); return true; }
       return false;
+    }
+    // v6 #50 intent 'kite': keep ENEMY.intent.kite.min..max from the hero (back off along the tower-bent flee line, close in while seen)
+    function kite(w, d, h) {
+      const K = IT.GAME.ENEMY.intent.kite, B = d.belief, seen = heroSeen(w);
+      const at = seen ? h : (B && IT.Belief ? IT.Belief.where(B) : null) || (d.ai && d.ai.heroAt) || null;
+      if (!at) return;
+      const dd = Math.hypot(at.x - d.x, at.y - d.y), j = IT.Intent.jit(w, d, 0.5);
+      if (dd < K.min) { const a = IT.Intent.fleeAng(w, d, at), p = nearWalk(w, d.x + Math.cos(a) * 400 + j.x, d.y + Math.sin(a) * 400 + j.y); IT.Orders.issue(w, d, { type: 'move', x: p.x, y: p.y }); }
+      else if (dd > K.max && seen) { const a = Math.atan2(at.y - d.y, at.x - d.x), k = dd - (K.min + K.max) / 2, p = nearWalk(w, d.x + Math.cos(a) * k + j.x, d.y + Math.sin(a) * k + j.y); IT.Orders.issue(w, d, { type: 'move', x: p.x, y: p.y }); }
+      else if (d.orders.length && d.orders[0].type === 'move') IT.Orders.issue(w, d, { type: 'stop' });
     }
     // the pre-belief chase (no IT.Belief loaded): last seen spot, Dust, then a widening ring around it
     function chaseRing(w, d, h, seen) {

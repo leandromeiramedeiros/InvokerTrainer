@@ -159,6 +159,32 @@
     S.to = p;
     return p;
   }
+  // v6 #58: Ghost Walk awareness. The chaser at `at` is slowed by the hero's Ghost Walk aura, so the hero is within r (KV area_of_effect).
+  // The guess = 0.6 r along the bearing between its facing and the last-seen spot (the sector it was walking into); it replaces the
+  // last-seen point (B.last.sensed: the arrival Dust is skipped, units.js tickGhostSense owns that roll) and the chaser walks there.
+  function sense(w, B, at, r, face) {
+    if (!B || B.state === 'seen' || !at) return B;
+    let ang = face || 0;
+    if (B.last && dist(B.last, at) > 40) {
+      const la = Math.atan2(B.last.y - at.y, B.last.x - at.x);
+      ang = Math.atan2(Math.sin(ang) + Math.sin(la), Math.cos(ang) + Math.cos(la));
+    }
+    const g = reachAlong(w.map, at, ang, r * 0.6);
+    B.last = { x: g.x, y: g.y, t: w.t, sensed: true }; B.vel.x = 0; B.vel.y = 0; B.obs = null;
+    B.pred = { x: g.x, y: g.y }; B.conf = 1; B.own = false; B.search = null; B.cand = null;
+    B.ring = { x: at.x, y: at.y, r, t: w.t };
+    if (B.state === 'predicted') w.emit('belief', { unit: B.unit, state: 'predicted', from: 'predicted', x: g.x, y: g.y, px: g.x, py: g.y, sensed: true });
+    else set(w, B, 'predicted', { sensed: true });
+    return B;
+  }
+  // a Dust that revealed nothing: the chaser is fooled ('juked': '?' over it), then searches around its guess
+  function miss(w, B) {
+    if (!B || B.state === 'seen' || B.state === 'idle') return B;
+    B.jukedAt = w.t;
+    if (B.state === 'juked') B.since = w.t;
+    else set(w, B, 'juked', { dust: true });
+    return B;
+  }
   // the best guess of the hero's position (units.js routes the AI's heroAt through it)
   const where = B => (!B || !B.last ? null : B.state === 'seen' ? B.last : B.pred || B.last);
 
@@ -170,5 +196,5 @@
     return !S || S.beliefUI !== false;
   }
 
-  IT.Belief = { DEF, LOST_HOLD, ARRIVE, params, create, sees, observe, predict, refresh, juke, probe, where, features, home, uiOn, reachAlong };
+  IT.Belief = { DEF, LOST_HOLD, ARRIVE, params, create, sees, observe, predict, refresh, juke, probe, where, features, home, uiOn, reachAlong, sense, miss };
 })(typeof window !== 'undefined' ? window : globalThis);

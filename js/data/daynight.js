@@ -29,6 +29,9 @@
     night_juke: 'night',            // v6 item 27: the pack starts 620-760 u away (night sight 800); the other juke scenarios play by day (sight 1800)
     river_mouth_ambush: { nightAt: 4 }, // v6 item 29: the sentry stands 1000-1300 u away in the mist: strike before the dark closes in
     pit_in_out: 'night',            // v6 item 55: the pack starts ~630 u away (night sight 800): duck into Roshan's pit, out past the mouth, around the wall
+    qop_blink_snipe: 'day',         // v6 #52: day sight 1800 keeps the 900 u blink landing in view (the snipe needs to see where she lands)
+    blinker_tornado: 'day',         // v6 #52: foe 650-850 + a 900 u escape blink: stays inside day sight
+    am_coldsnap_deny: { nightAt: 10 }, // v6 #52: the river darkens late: a blink you failed to deny vanishes into the night
   };
 
   const VALID = { day: 1, night: 1, cycle: 1 };

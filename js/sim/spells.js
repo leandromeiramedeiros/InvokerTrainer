@@ -81,7 +81,7 @@
     if (w._coldsnapHook) return;
     w._coldsnapHook = true;
     w.on('damage', p => {
-      const t = w.get(p.target); if (!t) return;
+      const t = w.get(p.target); if (!t || (t.kind === 'enemy' && t.hp <= 0)) return;   // v6 #52: no proc off the killing blow (a 2nd 'kill' stole the credit)
       const s = IT.Status.find(t, 'coldsnap');
       if (!s || s.data.inFreeze || w.t < s.data.next || p.raw < s.data.trigger) return;
       freeze(w, t, s, true);

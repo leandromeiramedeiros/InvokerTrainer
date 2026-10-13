@@ -306,7 +306,7 @@
       { type: 'escape', time: 20, unseen: 7 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['high'], 0, 0, { strict: true }))),
     // a Dust carrier: let it dust where it THINKS you are (a hit = caught), then stay unseen 5 s
     V('dust_bait', 9, 'dire_mid_t2', ['juke', 'fun', 'invisible', 'items'], 25, { lvl: 20, at: JH(['level'], 0) }, JC(2, null, [{ items: ['dust'] }]),
-      { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] }))),
+      { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [JS[0], { a: 'ghostwalk', at: 'self' }, JS[1]], JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] }))),
     V('no_invis_juke', 10, 'rad_off_t1', ['juke', 'fun'], 20, { lvl: 24, at: JH(['choke'], 0) }, JC(3, null, [{ recatch: true }, { recatch: true }]),
       { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, JX(JSP(3, ['level'], 0, 0, { strict: true }))),
     // ---------------------------------------------------------------- v6 item 55: PIT jukes (Roshan's pit vision rule, js/sim/vision.js)
@@ -353,6 +353,26 @@
       { lvl: 12, at: W(['edgeE', 'rimE'], { d: [0, 6000], not: ['rimS', 'rimN'] }) },
       [U(W([], { d: [600, 800], not: ['rimE'] }), { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 }), U({ of: 0, side: 260 }, { mot: 'chase', hp: 1, aware: 1, msMul: 1.15 })],
       { type: 'escape', time: 12, caught: 180, bump: 80 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3, jit: 120 } }),
+    // ---------------------------------------------------------------- v6 #52: early mid lane (hero lvl 5-8). blinker = an innate blink (Queen of Pain /
+    // Anti-Mage style, js/sim/units.js startBlink: NOT the dagger, it works while damaged): hurt -> after its reaction it turns, winds up the
+    // tier cast point (exec.blinkCast, telegraphed: fx blinkWindup + item sound + 'channel') and blinks ENEMY.blink.range away toward its
+    // tower. A stun / Cold Snap freeze / hex / silence in the wind-up cancels it and every freeze denies blinking for ENEMY.blink.deny s.
+    // Counterplay: snipe the landing spot, or freeze it before it blinks (Cold Snap procs), or Tornado -> Cold Snap on landing -> Sun Strike.
+    // farm_then_tp = farms, sees you -> Town Portal (GAME.TP.dur channel): any disable cancels it (then it runs for its tower).
+    V('meteor_lane_kill', 5, 'rad_mid_t1', ['fun', 'midlane', 'blink', 'reaction'], 12, { lvl: 6 },
+      [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.42, intent: 'farm_then_tp', aware: 0.6 })], KILL, ['escaped', 'time'],
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0' }], { rand: { pick: 3 } }),
+    V('qop_blink_snipe', 6, 'dire_mid_t1', ['fun', 'midlane', 'blink', 'prediction'], 12, { lvl: 6 },
+      [U(SEEN([600, 800]), { hp: 0.4, blinker: true, aware: 0.6 })],
+      { type: 'kill_with', how: { ability: ['sunstrike'] } }, ['method', 'time'],
+      [{ a: 'deafeningblast', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.3 }], { rand: { pick: 3 } }),
+    V('am_coldsnap_deny', 7, 'mid_river', ['fun', 'midlane', 'blink', 'combo'], 12, { lvl: 7 },
+      [U(SEEN([600, 800]), { hp: 0.42, blinker: true, aware: 0.6, intent: { kind: 'idle_guard', phases: [{ on: 'spellLanded', then: 'flee_to_tower' }] } })],
+      KILL, ['escaped', 'time'], [{ a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 } }),
+    V('blinker_tornado', 8, 'rad_mid_t1', ['fun', 'midlane', 'blink', 'combo'], 14, { lvl: 8 },
+      [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.48, blinker: true, aware: 0.6 })],
+      KILL, ['time'],
+      [{ a: 'tornado', at: 'd0' }, { a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 } }),
   ];
 
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as
@@ -398,6 +418,20 @@
     s.dummies = s.units; s.sol = s.steps;
   }
   const all = LEGACY.concat(V5);
+  // ---- v6 #50: every foe gets an explicit scenario intent (IT.Intent, js/sim/units.js): the tier scales only how well it is executed
+  //      (difficulty.js exec). Kinds: flee_to_tower chase farm_then_tp gank_from_fog hold_highground blink_in kite bait march defend idle_guard;
+  //      optional phases [{ on: 'spotted'|'lowHp'|'spellLanded'|'timer:<s>'|'allyHit', then: kind }]. Default from mot / behavior (Intent.of);
+  //      INTENTS overrides per scenario (one entry per unit). Audit before -> after: DECISIONS.md "v6 #50".
+  const INTENTS = {
+    uphill_snipe: ['hold_highground'],   // the high-ground lookout holds its post (was: idle_guard)
+    pit_trap: ['bait'], blink_denial: ['bait'],   // they wait for you to commit, then juke / disable-escape
+  };
+  const autoIntent = u => u.mot === 'chase' ? 'chase' : u.mot === 'flee' ? 'flee_to_tower' : u.mot === 'march' ? 'march' : u.juke ? 'bait'
+    : u.behavior === 'escape' ? 'flee_to_tower' : u.behavior === 'disable_escape' ? 'bait' : u.behavior === 'defend' ? 'defend' : 'idle_guard';
+  for (const s of all) {
+    const ov = INTENTS[s.id] || [];
+    (s.units || []).forEach((u, i) => { if (!u.intent) u.intent = ov[i] || autoIntent(u); });
+  }
   for (const s of all) s.tier = s.level <= 3 ? 1 : s.level <= 7 ? 2 : 3;
   // ---- v6 boots everywhere: Boots of Travel where the plan needs > ~1200 u of running within par (hold / gate / escape / tower scenarios),
   //      Boots of Speed elsewhere. Max 6 items (no scenario carries more than 2 others).

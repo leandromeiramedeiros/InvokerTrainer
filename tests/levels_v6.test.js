@@ -40,7 +40,8 @@ function bot(id, diff, seed, trace) {
   const step = n => { for (let i = 0; i < (n || 1) && live(); i++) { const s0 = Math.floor(w.t); w.step(); if (trace && Math.floor(w.t) > s0) w.emit('trace1s', {}); trail.push(run.dummies.map(d => ({ x: d.x, y: d.y }))); if (trail.length > 10) trail.shift(); } };
   const al = () => run.dummies.filter(d => !d.dead);
   if (trace) { for (const n of ['kill', 'damage', 'cast', 'heroDown', 'towerDown', 'scnResult']) w.on(n, p => console.log(w.t.toFixed(2), n, JSON.stringify(p).slice(0, 140))); console.log('hero', h.x | 0, h.y | 0, run.dummies.map(d => [d.x | 0, d.y | 0, d.hp | 0].join(':')).join(' '), w.gate ? 'gate ' + (w.gate.x | 0) + ':' + (w.gate.y | 0) + ':' + w.gate.r : ''); w.on('trace1s', () => { console.log(w.t.toFixed(1), 'pos', run.dummies.map(d => d.dead ? '-' : (d.x | 0) + ':' + (d.y | 0) + '@' + (Math.hypot(d.x - h.x, d.y - h.y) | 0)).join(' ')); }); }
-  let casts = 0, tornT = null; w.on('cast', p => { if (p.unit === h.id) { casts++; if (p.ability === 'tornado') tornT = w.t; } });
+  let casts = 0, tornT = null, lifted = false, castT = -99; w.on('cast', p => { if (p.unit === h.id) { casts++; castT = w.t; if (p.ability === 'tornado') { tornT = w.t; lifted = false; } } });
+  w.on('status', p => { if (p.status === 'lift' && p.src === h.id) lifted = true; });   // v6 #52: the Tornado already lifted (and maybe dropped) its target
   if (m.pr.sc.fail.includes('method')) h.autoAttack = false;   // a player going for a specific kill keeps auto-attack off (or holds Stop)
   for (const s of m.pr.sc.steps) {
     if (!live()) break;
@@ -48,9 +49,24 @@ function bot(id, diff, seed, trace) {
     while (live() && w.t < until - 1e-6) { prep(w, h, s.a); step(); }
     // Sun Strike on a Tornado-lifted foe: cast so the beam lands just after the drop (lift time left <= the 1.7 s delay)
     // (a Tornado still on its way: wait for the lift first)
-    if (s.a === 'sunstrike' && tornT != null && w.t - tornT < 3) for (let k = 0; k < 30 * 3 && live() && !al().some(q => IT.Status.find(q, 'lift')); k++) { prep(w, h, s.a); step(); }
+    if (s.a === 'sunstrike' && tornT != null && w.t - tornT < 3 && !lifted) for (let k = 0; k < 30 * 3 && live() && !al().some(q => IT.Status.find(q, 'lift')); k++) { prep(w, h, s.a); step(); }
     if (s.a === 'sunstrike') for (let k = 0; k < 30 * 5 && live(); k++) { const f = al().find(q => IT.Status.find(q, 'lift')); if (!f || IT.Status.find(f, 'lift').until - w.t <= 1.62) break; prep(w, h, s.a); step(); }
     for (let k = 0; k < 400 && IT.GAME.SPELL_ORBS[s.a] && !h.inv.slots.includes(s.a) && live(); k++) { prep(w, h, s.a); step(); }
+    // v6 #52: a unit-target spell waits for a Tornado-lifted target to land (Cold Snap on landing)
+    if ((IT.Abilities.get(s.a) || {}).target === 'unit' && s.at === 'd0') {
+      if (tornT != null && w.t - tornT < 2) for (let k = 0; k < 30 * 2 && live() && !lifted; k++) { prep(w, h, s.a); step(); }   // the Tornado is still on its way
+      for (let k = 0; k < 30 * 4 && live(); k++) { const q = al()[0]; if (!q || !IT.Status.find(q, 'lift')) break; prep(w, h, s.a); step(); }
+    }
+    // v6 #52: Sun Strike on an innate blinker that is free to blink (not frozen / denied, off cooldown): let the last hit land, watch the
+    // wind-up, then aim at the landing spot (a player reads the telegraph and snipes where it lands)
+    if (s.a === 'sunstrike' && s.at === 'd0') {
+      const q = al()[0], n = q && q.innate, free = () => n && w.t >= n.denyUntil && w.t >= n.readyAt;
+      if (n && free()) for (let k = 0; k < 30 * 1.5 && live() && !(q.lastHit >= castT); k++) { prep(w, h, s.a); step(); }
+      if (n) for (let k = 0; k < 30 * 4 && live(); k++) {
+        const pend = n.wind || w.t < n.recover + 0.2 || (free() && (n.want || q.lastHit > n.hitT));
+        if (!pend) break; prep(w, h, s.a); step();
+      }
+    }
     // near: hold until the target walks within that range (a defender waits for marchers to come to him)
     const pickT = () => { const f = al().filter(q => !IT.Status.find(q, 'lift')), d = f.length ? f : al(); return s.at === 'd1' ? (d[1] || d[0]) : (d[0] || al()[0]); };
     if (s.near) for (let k = 0; k < 30 * 10 && live(); k++) { const q = pickT(); if (!q || Math.hypot(q.x - h.x, q.y - h.y) <= s.near) break; prep(w, h, s.a); step(); }

@@ -16,7 +16,7 @@ const OBJ = ['kill', 'kill_with', 'killN', 'push', 'destroyTower', 'rootAll', 'e
 const FAIL = ['time', 'died', 'cross', 'seen', 'method', 'escaped', 'caught', 'tower'];
 const DIFFS = ['ian', 'easy', 'common', 'hard', 'bambam'];
 // scenarios the scripted bot cannot play fairly (foes that read the hero and run / dodge with items: the bot has no chase logic)
-const NO_BOT = new Set([]);   // ids the scripted bot cannot play (none so far)
+const NO_BOT = new Set(['qop_blink_snipe']);   // ids the scripted bot cannot play. qop_blink_snipe (v6 #52): the Sun Strike must be aimed at the innate blink's landing spot, read from the wind-up telegraph -> played by the levels_v6 bot (easy/common seeds 1-6)
 
 function build(id, diff, seed, mode) {
   const run = R.create({ mode: mode || 'practice', diff: diff || 'easy', scenario: id, seed: seed || 5 });

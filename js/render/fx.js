@@ -108,6 +108,14 @@
         break;
       case 'boltTelegraph': tele.set(p.unit, { t0: R_.time, dur: p.dur || 1.2, target: p.target }); break;
       case 'blinkTell': tele.set(p.unit, { t0: R_.time, dur: p.dur || 0.35, kind: 'blink' }); break;
+      // v6 #52: an innate blink wind-up (turn + cast point, units.js startBlink) -> contracting ring + dotted line to the landing spot;
+      // denied (Cold Snap / a disable mid wind-up) -> the ring shatters
+      case 'blinkWindup': tele.set(p.unit, { t0: R_.time, dur: p.dur || 0.3, kind: 'blinkWindup', tx: p.tx, ty: p.ty }); break;
+      case 'blinkDenied':
+        tele.delete(p.unit);
+        addFx({ k: 'wave', x, y, r0: 30, r1: 6, dur: 0.25, color: '#bff4ff' });
+        burst(x, y, 'ice', 16, { spread: 18, speed: 50, up: 60 });
+        break;
       case 'boltHit':
         addFx({ k: 'wave', x, y, r0: 10, r1: 90, dur: 0.3, color: '#d8a8ff' });
         burst(x, y, 'purple', 30, { spread: 20, speed: 70, up: 90 });
@@ -550,6 +558,12 @@
       R.interp(e);
       const x = pxs(R, R.ix), y = pys(R, R.iy), f = clamp((t - tl.t0) / tl.dur, 0, 1);
       if (tl.kind === 'blink') { dring(R, x, y, 18 * (1 - f) + 4, '#b070ff', 0.9); continue; }
+      if (tl.kind === 'blinkWindup') {
+        dring(R, x, y, 34 * (1 - f) + 6, f > 0.6 ? '#e0a0ff' : '#b070ff', 0.95);
+        dring(R, x, y, 10, '#6cb8ff', 0.4 + 0.5 * f);
+        if (tl.tx != null) { const qx = pxs(R, tl.tx), qy = pys(R, tl.ty); PX.dotted(cx, x, y, x + (qx - x) * f, y + (qy - y) * f, '#b070ff', 4, -t * 16); }
+        continue;
+      }
       const r = 26 - f * 14;
       PX.ring(cx, x, y, r, f > 0.7 ? '#ff4a6a' : '#c070ff', -t * 0.4, 3);
       dring(R, x, y, 6 + f * 14, '#ff6a8a', 0.35);
@@ -1508,7 +1522,7 @@
     }
     // stun bolt telegraph "!" + off-screen arrows
     for (const [id, tl] of tele) {
-      if (tl.kind === 'blink') continue;
+      if (tl.kind === 'blink' || tl.kind === 'blinkWindup') continue;
       const e = w.byId.get(id); if (!e || e.dead || !UD().visible(R, e)) continue;
       R.interp(e);
       const x = pxs(R, R.ix), y = pys(R, R.iy);

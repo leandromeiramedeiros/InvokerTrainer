@@ -62,6 +62,7 @@
       'gd.pin': 'Click to follow this combo (a guide strip pins at the top).', 'gd.unpin': 'Click again to remove the guide strip.', 'gd.done': 'Done', 'gd.count': '{n}x',
       'set.beliefUI': 'Enemy belief markers',
       'sbx.reset': 'Reset targets', 'sbx.grant': 'Grant items', 'sbx.open': 'Open the sandbox panel', 'ros.row.diff': 'Difficulty: reaction and capabilities only', 'ros.home': 'Back to the placed spot', 'sc.cat.fun': 'FUN',
+      'unit.ally': 'Ally', 'unit.roshan': 'Roshan',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -123,5 +124,6 @@
       'gd.pin': 'Clique para seguir este combo (uma faixa guia fixa no topo).', 'gd.unpin': 'Clique de novo para remover a faixa guia.', 'gd.done': 'Feito', 'gd.count': '{n}x',
       'set.beliefUI': 'Marcadores de percepção inimiga',
       'sbx.reset': 'Reiniciar alvos', 'sbx.grant': 'Liberar itens', 'sbx.open': 'Abrir o painel do sandbox', 'ros.row.diff': 'Dificuldade: só reação e capacidades', 'ros.home': 'Volta ao lugar colocado', 'sc.cat.fun': 'DIVERSÃO',
+      'unit.ally': 'Aliado', 'unit.roshan': 'Roshan',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

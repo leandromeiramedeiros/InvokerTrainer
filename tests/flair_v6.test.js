@@ -89,8 +89,31 @@ test('other characters use their signature icons', () => {
   assert.ok(Object.values(T.pedro.lines).flat().some(l => l.icon === 'goiaba'));
 });
 
+test('CEO item 44: speaking skins have 6+ lines for the new situations; raven has its two wise ones', () => {
+  const NEW = ['gotJuked', 'invokerEscaped', 'reacquired', 'dustHit', 'dustMiss'];
+  for (const k of ['default', 'renan', 'vitinho', 'pedro', 'nando']) for (const sit of NEW) {
+    const L = T[k].lines[sit] || [];
+    assert.ok(L.length >= 6, k + '/' + sit + ' ' + L.length);
+    for (const ln of L) assert.ok(typeof ln.t.en === 'string' && typeof ln.t.pt === 'string' && ((ln.t.en && ln.t.pt) || ln.icon), k + '/' + sit + ' needs en + pt (or an icon-only line)');
+  }
+  for (const sit of ['gotJuked', 'invokerEscaped']) {
+    const L = T.raven.lines[sit] || [];
+    assert.ok(L.length >= 6, 'raven/' + sit + ' ' + L.length);
+    for (const ln of L) assert.ok(ln.t.en && ln.t.pt, 'raven/' + sit + ' needs en + pt');
+  }
+  for (const sit of F.SITUATIONS.filter(s => NEW.indexOf(s) >= 0)) assert.ok(F.SITUATIONS.indexOf(sit) >= 0, sit);
+});
+
+test('CEO item 44: unit.ally and unit.roshan exist in en and pt', () => {
+  assert.strictEqual(IT.I18N.en['unit.ally'], 'Ally');
+  assert.strictEqual(IT.I18N.pt['unit.ally'], 'Aliado');
+  assert.strictEqual(IT.I18N.en['unit.roshan'], 'Roshan');
+  assert.strictEqual(IT.I18N.pt['unit.roshan'], 'Roshan');
+});
+
 test('no ian entry (CEO slot only)', () => {
   assert.strictEqual(T.ian, undefined);
+  assert.ok(!Object.keys(T).some(k => /^ian$/i.test(k)), 'no ian skin key');
   assert.strictEqual(F.raw.ian, undefined);
   assert.ok(IT.GAME.SKINS.indexOf('ian') < 0 && !('ian' in IT.GAME.SKIN_NAMES));
   const src = fs.readFileSync(path.join(__dirname, '..', 'js/data/flair.js'), 'utf8');
