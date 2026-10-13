@@ -55,10 +55,16 @@
   const NAMES = Object.keys(LEVELS);
   const SHK = 0.85, MARCH_STEPS = 6, MARCH_RANGE = 40, MARCH_LIGHTS = 2;
   const RIMK = 0.9, GLOWK = 0.35;
+  // Lighting v2 S2: screen-space silhouette-edge rim (litFS uMode 2). Per light (first RIM_L strongest + the key) a pixel of material 1-2 steps 1 and 2 px
+  // toward the light in screen xy and reads the G-buffer there: ground (material 0) or another material (unit vs tree / tower) = light-facing silhouette edge (1 px: 1, 2nd px: .5).
+  // (A height-drop test is unusable: the pillow dome rises ~5 px of HZ per px from the silhouette, so it would fire across the sprite body.)
+  // Colour = light colour mixed RIM_MIX toward white, weighted by attenuation. Output (rim buffer, own texture, NOT capped by lightCap): rgb = clamp(colour x
+  // strength), strength = max channel; FS_MAIN_LIT quantises it to 2 levels (RIM_ON / RIM_HOT, off below RIM_T1) and screen-blends it after the light multiply.
+  const RIM_L = 8, RIM_MIX = 0.45, RIM_T1 = 0.3, RIM_T2 = 0.7, RIM_ON = 0.6;
   // key light: fixed upper-left direction (screen px, y down, z up; toward the light), warm high sun by day, cool dimmer moon at night.
   // down / up: shading gain on the side facing away / toward it (sprites + terrain slopes; flat ground = 1); sh: ground darkening in its shadow; rim: key rim.
   const KEY_DIR = (() => { const v = [-0.45, -0.5, 0.74], m = Math.hypot(v[0], v[1], v[2]); return v.map(x => x / m); })();
-  const SUN = { tint: [1.0, 0.82, 0.55], down: 0.55, up: 1.2, sh: 0.5, rim: 0.6 }, MOON = { tint: [0.55, 0.7, 1.0], down: 0.4, up: 1.0, sh: 0.36, rim: 0.5 };
+  const SUN = { tint: [1.0, 0.82, 0.55], down: 0.55, up: 1.2, sh: 0.5, rim: 0.55 }, MOON = { tint: [0.55, 0.7, 1.0], down: 0.4, up: 1.0, sh: 0.36, rim: 0.45 };
   const KEY_OFF = { dir: [0, 0, 1], tint: [0, 0, 0], down: 0, up: 0, sh: 0, rim: 0, len: 0, soft: 0 };
   function keyLight(night, lv) {
     const L = LEVELS[lv] || LEVELS.off, n = night > 0 ? Math.min(1, night) : 0, mx = (a, b) => a + (b - a) * n;
@@ -66,8 +72,9 @@
     return { dir: KEY_DIR.slice(), tint: SUN.tint.map((v, i) => mx(v, MOON.tint[i])), down: mx(SUN.down, MOON.down), up: mx(SUN.up, MOON.up),
       sh: L.keyLen ? mx(SUN.sh, MOON.sh) : 0, rim: L.rim ? L.rim * mx(SUN.rim, MOON.rim) : 0, len: L.keyLen, soft: L.soft };
   }
-  // art rule: the dynamic term tops out at +15 % by day, +60 % at night (night = Light.night, already smoothstepped)
-  const lightCap = night => { const n = night > 0 ? Math.min(1, night) : 0; return 0.15 + 0.45 * n; };
+  // art rule: the dynamic diffuse / glow term tops out at +30 % by day, +90 % at night (night = Light.night, already smoothstepped); FS_MAIN_LIT no longer
+  // pre-scales the ambient grid by 1.25, so the day grid (0.86-0.9) leaves headroom and pools on flat ground show. The rim is not subject to this cap.
+  const lightCap = night => { const n = night > 0 ? Math.min(1, night) : 0; return 0.3 + 0.6 * n; };
   // G-buffer B channel: height 0..1 (6 bits) + material 0..3
   const packB = (h, mat) => ((Math.max(0, Math.min(63, Math.round(h * 63))) << 2) | (mat & 3));
   // IT.Lights.uniforms(world cam) -> screen px in place: pos / P (z >= ZMIN px), radius / P. Returns u.
@@ -78,7 +85,7 @@
     }
     return u;
   }
-  // uMode 0: diffuse sum (multiplies albedo), 1: rim + glow (additive). Output = cap * (1 - e^-2x) * vision (fog stays unlit).
+  // uMode 0: diffuse sum (multiplies albedo), 1: glow (additive, capped), 2: rim (own buffer, uncapped: see RIM_L). Output = cap * (1 - e^-2x) * vision (fog stays unlit).
   // litFS(n lights, march steps, march range px, march lights): one program per level (array size + loop bounds are constants in GLSL ES 1.00)
   const litFS = (nl, ms, mr, mlt) => PREC + 'varying vec2 uv;uniform sampler2D uG,uLight,uShadow;uniform vec2 uRes;uniform float uShOn,uMarch;' +
     'float march(vec3 P,vec3 Lp){vec2 dv=Lp.xy-P.xy;float dd=length(dv);if(dd<1.)return 0.;vec2 dir=dv/dd;float rng=min(dd,' + mr + '.);float occ=0.;' +
@@ -88,11 +95,22 @@
     'occ=max(occ,(step(ms,.5)+step(1.5,ms)*step(ms,2.5))*clamp((hs-zr)/3.,0.,1.));}return occ;}' +
     'uniform vec3 uLP[' + nl + '],uLC[' + nl + '];uniform vec2 uLR[' + nl + '];uniform int uN;uniform float uMode,uRim,uGlow,uCap;' +
     'uniform vec3 uK,uKT;uniform vec4 uKP;' +                           // key light: dir (toward it), tint, (down, up, shadow, rim)
+    // rim (mode 2): rimE = light-facing silhouette edge at px (d = screen step toward the light, dominant axis 1 px); rimAt = rim colour sum of the strongest lights + key
+    'float rimE(vec2 px,vec2 d,float m){float e=0.;' +
+    'for(int s=1;s<=2;s++){float ms=mod(floor(texture2D(uG,(px+d*float(s))/uRes).b*255.+.5),4.);' +
+    'float o=ms<.5?1.:ms>2.5?0.:abs(ms-m)>.5?1.:0.;e=max(e,o/float(s));}return e;}' +   // ground or another material (unit vs tree / tower) = outside the silhouette
+
+    'vec3 rimAt(vec3 P,float m){vec3 pr=vec3(0.);' +
+    'for(int j=0;j<' + Math.min(nl, RIM_L) + ';j++){if(j>=uN)break;vec3 D=uLP[j]-P;float a=clamp(1.-length(D)/uLR[j].x,0.,1.);float dl=max(abs(D.x),abs(D.y));' +
+    'if(a>0.&&dl>.5)pr+=mix(uLC[j],vec3(1.),' + f(RIM_MIX) + ')*(rimE(P.xy,D.xy/dl,m)*a*clamp(.5+uLR[j].y,0.,1.)*clamp(dl/4.,0.,1.));}' +
+    'vec3 kr=uKP.w>0.?mix(uKT,vec3(1.),' + f(RIM_MIX) + ')*(rimE(P.xy,uK.xy/max(max(abs(uK.x),abs(uK.y)),.01),m)*uKP.w):vec3(0.);' +
+    'return min(pr*uRim+kr,vec3(1.));}' +
     'void main(){' +
     'vec2 px=floor(uv*uRes)+.5;vec4 g=texture2D(uG,uv);' +
     'float b=floor(g.b*255.+.5);float mat=mod(b,4.);float h=floor(b/4.)/63.;' +
     'vec2 nx=g.rg*2.-1.;vec3 N=vec3(nx,sqrt(max(0.,1.-dot(nx,nx))));vec3 P=vec3(px,h*' + HZ + '.);' +
-    'float rk=uRim*pow(1.-N.z,3.)*step(.5,mat)*step(mat,2.5);' +       // rim only on units / trees (material 1-2)
+    'float rk=0.;' +                                                   // (pillow-normal rim retired: the rim is the screen-space pass below)
+    'if(uMode>1.5){gl_FragColor=(mat<.5||mat>2.5)?vec4(0.):vec4(rimAt(P,mat)*texture2D(uLight,uv).a,1.);return;}' +   // rim only on units / trees (material 1-2), fog unlit
     'vec3 dif=vec3(0.),add=vec3(0.);' +
     'for(int i=0;i<' + nl + ';i++){if(i>=uN)break;' +
     'vec3 D=uLP[i]-P;float d=length(D),r=uLR[i].x;float a=clamp(1.-d/r,0.,1.);a=a*a*uLR[i].y;' +
@@ -110,16 +128,18 @@
     'vec3 o=uMode<.5?dif:add;' +
     'gl_FragColor=vec4(uCap*(1.-exp(-2.*o))*vis,clamp(mix(1.,kf,vis)*.5,0.,1.));}';   // alpha = key factor / 2 (fog stays unlit: 1)
   const FS_LIT = litFS(MAXL, MARCH_STEPS, MARCH_RANGE, MARCH_LIGHTS);
-  const FS_MAIN_LIT = PREC + 'varying vec2 uv;uniform sampler2D uScene,uLight,uBloom,uDyn,uAdd;uniform vec2 uRes,uCam;uniform float uBloomOn,uAddOn,uCap;uniform vec3 uKT;' + BAYER +
+  const FS_MAIN_LIT = PREC + 'varying vec2 uv;uniform sampler2D uScene,uLight,uBloom,uDyn,uAdd,uRimT;uniform vec2 uRes,uCam;uniform float uBloomOn,uAddOn,uRimOn,uCap;uniform vec3 uKT;' + BAYER +
     'void main(){' +
     'vec2 px=floor(uv*uRes);vec2 c=(px+.5)/uRes;' +
     'vec3 s=texture2D(uScene,c).rgb;vec4 dy=texture2D(uDyn,c);' +
-    'vec3 l=texture2D(uLight,c).rgb*1.25+dy.rgb;' +                    // ambient (day/night) + 2D cell lights + fog, plus the dynamic diffuse
+    'vec3 l=texture2D(uLight,c).rgb+dy.rgb;' +                           // ambient (day/night) + 2D cell lights + fog (no x1.25: day headroom), plus the dynamic diffuse
     'float kf=dy.a*2.;vec3 kc=kf>1.?1.+(kf-1.)*uKT:vec3(kf);' +        // key light: sun / moon tint on the lit side, neutral shade on the far side
     'float bay=bayer(mod(px+uCam,4.));' +
     'l=clamp(floor(min(l,1.)*kc*9.+bay)/9.,0.,1.5);' +
     'vec3 col=s*l;' +
     'if(uAddOn>.5)col=min(col+floor(texture2D(uAdd,c).rgb/uCap*4.+bay)/4.*uCap,1.);' +   // rim + glow: 4 shade steps
+    'if(uRimOn>.5){vec3 rm=texture2D(uRimT,c).rgb;float rs=max(rm.r,max(rm.g,rm.b));float rq=rs>' + f(RIM_T2) + '?1.:rs>' + f(RIM_T1) + '?' + f(RIM_ON) + ':0.;' +
+    'col=1.-(1.-col)*(1.-rm/max(rs,.001)*rq);}' +                      // rim: 2 levels (on / hot), uncapped, screen-blended over the lit scene
     'if(uBloomOn>.5){vec3 b=texture2D(uBloom,uv).rgb;col+=.85*b*(1.-col);}' +
     'gl_FragColor=vec4(col,1.);}';
 
@@ -133,7 +153,7 @@
     let light8 = new Uint8ClampedArray(LW * LH * 4);
     let progMain, progH, progV, vbo, texScene, texLight, texGlow, texA, texB, texN = [null, null], normSrc = [null, null], fboA, fboB, uM, uH, uV, curW = 0, curH = 0;
     // L3 lighting state: programs built lazily on the first non-off level; buffers follow the view size and the level's half-res flag
-    let level = 'off', lits = {}, progLit = null, progML = null, uL = null, uML = null, texSh = null, texG = null, texDyn = null, texAdd = null, fboDyn = null, fboAdd = null, dynW = 0, dynH = 0, gW = 0, gH = 0;
+    let level = 'off', lits = {}, progLit = null, progML = null, uL = null, uML = null, texSh = null, texG = null, texDyn = null, texAdd = null, texRim = null, fboDyn = null, fboAdd = null, fboRim = null, dynW = 0, dynH = 0, gW = 0, gH = 0;
 
     function shader(type, src) {
       const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
@@ -171,7 +191,7 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE); gl.disable(gl.DITHER);
-      lits = {}; progLit = progML = texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;   // (re)built lazily by litReady()
+      lits = {}; progLit = progML = texSh = texG = texDyn = texAdd = texRim = fboDyn = fboAdd = fboRim = null; dynW = dynH = gW = gH = 0;   // (re)built lazily by litReady()
       textures();
       for (let k = 0; k < 2; k++) if (normSrc[k]) upNormals(k);   // context restored: re-upload the G-buffer inputs
       if (gl.getError() !== gl.NO_ERROR) throw new Error('gl error at init');
@@ -218,14 +238,14 @@
 
     // ---- L3 lighting: units 6 (G-buffer), 7 (diffuse buffer); the rim/glow buffer is bound on unit 3 (blur scratch) for the final pass only
     function freeLit() {
-      try { [texSh, texG, texDyn, texAdd].forEach(t => t && gl.deleteTexture(t)); [fboDyn, fboAdd].forEach(b => b && gl.deleteFramebuffer(b)); } catch (e) { /* lost */ }
-      texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;
+      try { [texSh, texG, texDyn, texAdd, texRim].forEach(t => t && gl.deleteTexture(t)); [fboDyn, fboAdd, fboRim].forEach(b => b && gl.deleteFramebuffer(b)); } catch (e) { /* lost */ }
+      texSh = texG = texDyn = texAdd = texRim = fboDyn = fboAdd = fboRim = null; dynW = dynH = gW = gH = 0;
     }
     function litReady() {
       const L = LEVELS[level], loc = (p, n) => gl.getUniformLocation(p, n);
       if (!progML) {
         progML = program(FS_MAIN_LIT);
-        uML = { flip: loc(progML, 'uFlip'), scene: loc(progML, 'uScene'), light: loc(progML, 'uLight'), bloom: loc(progML, 'uBloom'), dyn: loc(progML, 'uDyn'), add: loc(progML, 'uAdd'),
+        uML = { flip: loc(progML, 'uFlip'), scene: loc(progML, 'uScene'), light: loc(progML, 'uLight'), bloom: loc(progML, 'uBloom'), dyn: loc(progML, 'uDyn'), add: loc(progML, 'uAdd'), rimT: loc(progML, 'uRimT'), rimOn: loc(progML, 'uRimOn'),
           res: loc(progML, 'uRes'), cam: loc(progML, 'uCam'), on: loc(progML, 'uBloomOn'), addOn: loc(progML, 'uAddOn'), cap: loc(progML, 'uCap'), kt: loc(progML, 'uKT') };
       }
       let pl = lits[level];
@@ -243,6 +263,7 @@
         texSh = tex(VW, VH, gl.NEAREST);
         bindTex(7, texDyn = tex(w, h, gl.LINEAR)); fboDyn = fbo(texDyn);
         texAdd = tex(w, h, gl.LINEAR); fboAdd = fbo(texAdd);
+        texRim = tex(w, h, gl.NEAREST); fboRim = fbo(texRim);   // rim buffer: bound on unit 4 in the final pass only (the normal atlases are not sampled in GL)
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         dynW = w; dynH = h;
       }
@@ -302,7 +323,7 @@
     function lightPass(lit, L) {
       litReady();
       bindTex(6, texG); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, lit.gbuf);
-      const u = lit.u, cap = lightCap(lit.night), add = L.rim || L.glow;
+      const u = lit.u, cap = lightCap(lit.night), add = !!L.glow, rim = !!L.rim;
       gl.viewport(0, 0, dynW, dynH);
       gl.useProgram(progLit);
       gl.uniform1f(uL.flip, 0); gl.uniform1i(uL.g, 6); gl.uniform1i(uL.light, 1); gl.uniform2f(uL.res, VW, VH);
@@ -317,7 +338,8 @@
       gl.uniform3fv(uL.k, K.dir); gl.uniform3fv(uL.kt, K.tint); gl.uniform4f(uL.kp, K.down, K.up, K.sh, K.rim);
       gl.uniform1f(uL.mode, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, fboDyn); gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (add) { gl.uniform1f(uL.mode, 1); gl.bindFramebuffer(gl.FRAMEBUFFER, fboAdd); gl.drawArrays(gl.TRIANGLES, 0, 3); }
-      return { cap, add, kt: K.tint };
+      if (rim) { gl.uniform1f(uL.mode, 2); gl.bindFramebuffer(gl.FRAMEBUFFER, fboRim); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+      return { cap, add, rim, kt: K.tint };
     }
 
     // scene: 2D canvas (unlit, opaque); lightmap: Light instance (already folded); glowCv: additive glow canvas;
@@ -351,10 +373,10 @@
         gl.viewport(0, 0, curW, curH);
         if (lp) {
           gl.useProgram(progML);
-          bindTex(7, texDyn); bindTex(3, texAdd);
+          bindTex(7, texDyn); bindTex(3, texAdd); bindTex(4, texRim);
           gl.uniform1f(uML.flip, 1); gl.uniform1i(uML.scene, 0); gl.uniform1i(uML.light, 1); gl.uniform1i(uML.bloom, 2); gl.uniform1i(uML.dyn, 7); gl.uniform1i(uML.add, 3);
           gl.uniform2f(uML.res, VW, VH); gl.uniform2f(uML.cam, Math.floor(camX) & 3, Math.floor(camY) & 3); gl.uniform1f(uML.on, bloom ? 1 : 0);
-          gl.uniform1f(uML.addOn, lp.add ? 1 : 0); gl.uniform1f(uML.cap, lp.cap); gl.uniform3fv(uML.kt, lp.kt);
+          gl.uniform1i(uML.rimT, 4); gl.uniform1f(uML.rimOn, lp.rim ? 1 : 0); gl.uniform1f(uML.addOn, lp.add ? 1 : 0); gl.uniform1f(uML.cap, lp.cap); gl.uniform3fv(uML.kt, lp.kt);
         } else {
           gl.useProgram(progMain);
           gl.uniform1f(uM.flip, 1); gl.uniform1i(uM.scene, 0); gl.uniform1i(uM.light, 1); gl.uniform1i(uM.bloom, 2);
@@ -379,7 +401,7 @@
   }
   IT.GL = {
     create(cv, VW, VH, LW, LH) { const C = create(cv, VW, VH, LW, LH); if (C) C.setLighting(wantLevel); return C; },
-    setSize, GW, LEVELS, NAMES, KEY_DIR, SUN, MOON, keyLight, litFS, SHK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
+    setSize, GW, LEVELS, NAMES, KEY_DIR, SUN, MOON, keyLight, litFS, SHK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, RIM_L, RIM_MIX, RIM_T1, RIM_T2, RIM_ON, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
     SHADERS: { FS_MAIN, FS_LIT, FS_MAIN_LIT, FS_BLUR_H, FS_BLUR_V, VS },
   };
 })(typeof window !== 'undefined' ? window : globalThis);
