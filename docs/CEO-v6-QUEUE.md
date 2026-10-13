@@ -85,6 +85,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #71 Scepter Ice Wall = VECTOR TARGETING (confirmed in baked KV js/data/dota.js: invoker_ice_wall vector_cast_range 0 -> +600 with scepter, wall_width +45, root_delay/duration/damage). With scepter: press = start point (within vector_cast_range), drag/second click = direction; wall spawns at the start point along that vector (Dota vector cast: quick-cast uses hero->cursor direction). Show the vector preview (start marker + arrow + wall footprint). Without scepter keep the current no-target wall in front of the hero. Verify exact semantics (start point, wall centre vs end, length) against game files/DLL strings in the local Dota install if unsure. Tests.
 
+- [ ] #72 SHOP button (title screen): position is good, but it must be WAY more noticeable so players don't miss it: bigger, gold/ornamented frame, idle shimmer + gentle pulse/glow (glow-sand sparkle), coin icon, badge showing current relic points, and a "NEW"/"!" badge when the player can afford something not yet owned. Respect reduced-motion.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
