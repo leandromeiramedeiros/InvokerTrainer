@@ -53,7 +53,7 @@
 .rl-sptxt small{font-size:.72em}.rl-toast small{font-size:.8em}
 .splash .tl-sub{font-size:.76em;color:#b4c0cc}
 /* hud */
-.hc{font-size:max(1em,10px)}
+.hc{font-size:max(1em,11px)}
 .bf-hint{font-size:max(calc(var(--g)*.95),12px);color:#cfc7ee;opacity:1}
 .sc-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:.15em}
 .sc-tab{flex:none;font-size:.88em;padding:.4em .75em;letter-spacing:.05em}
@@ -65,3 +65,17 @@
 .sbx-add .ac{font-size:max(.9em,10px)}
 .ci-steps .ab{font-size:max(.85em,10px)}
 .sbx-ib kbd{font-size:max(.75em,10px)}
+
+/* v6 #16b */
+.pause .ph-hint{margin-top:.9em;text-align:center;font-size:max(.9em,11px);color:#b4aadb;letter-spacing:.06em}
+/* end splash floors (11px): tile / damage captions, timeline cells, notes */
+.splash .sp-tile span,.splash .sp-dlab,.splash .sp-dleg,.splash .sp-kick,.splash .tl-top,.splash .tl-name,.splash .tl-sub,.splash .sp-dnone,.splash .sp-tbest small,.splash .sp-on{font-size:max(.78em,11px)}
+.splash .sp-dnone,.splash .sp-on{font-size:max(.85em,11px)}
+.splash .tl-sub,.splash .tl-top,.splash .sp-tile span,.splash .sp-dlab{color:#b4bfcc}
+/* HUD hero stats and floating-panel header hint: 11px floor */
+.hc{font-size:max(1em,11px)}
+.chead span{font-size:max(.8em,11px)}
+/* relic toasts: 11px floor */
+.rl-toast small,.rl-sptxt small{font-size:max(.8em,11px)}
+.rl-pts-line{font-size:max(.78em,11px)}
+.rl-sptxt .rl-val{font-size:max(.74em,11px)}

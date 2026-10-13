@@ -59,3 +59,18 @@ test('Stats panel can use its full 72em width; the special-relic badge cannot ov
   assert.match(css, /\.scr\.st6 \.panel\{width:100%\}/);
   assert.match(css, /\.rl-shin \.rl-spk\{[^}]*max-width:100%/);
 });
+
+test('#16b: splash/HUD/toast floors are 11px, pause has an Esc hint, briefing panel closes before countdown fades in', () => {
+  const css = rd('css/diffbar.css');
+  assert.match(css, /\.splash \.tl-sub[^{]*\{font-size:max\(\.78em,11px\)\}/);
+  assert.match(css, /\.hc\{font-size:max\(1em,11px\)\}/);
+  assert.match(css, /\.chead span\{font-size:max\(\.8em,11px\)\}/);
+  assert.match(css, /\.rl-pts-line\{font-size:max\(\.78em,11px\)\}/);
+  assert.match(css, /\.pause \.ph-hint\{/);
+  assert.match(rd('css/briefing.css'), /\.rkp\.cd\{transition:opacity \.2s ease-out \.28s\}/);
+  assert.match(rd('js/ui/menus.js'), /IT\.t\('pause\.hint'\)/);
+  const ctx = { IT: { i18nAdd(p) { ctx.p = p; } } };
+  vm.runInNewContext(rd('js/data/i18n/v6.js'), ctx);
+  assert.equal(ctx.p.en['pause.hint'], 'Esc: resume');
+  assert.equal(ctx.p.pt['pause.hint'], 'Esc: continuar');
+});

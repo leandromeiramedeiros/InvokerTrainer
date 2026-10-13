@@ -251,7 +251,8 @@
           btn('ui.loadout', () => A.go('loadout'), 'slt'),
           btn('pause.settings', () => A.pauseSettings(), 'slt'),
           btn('ui.endRun', () => A.endRun(), 'slt'),
-          btn('ui.quit', () => A.go('title'), 'slt dim'))));
+          btn('ui.quit', () => A.go('title'), 'slt dim')),
+        h('div', { class: 'ph-hint', text: IT.t('pause.hint') })));
   }
 
   // ---- global ESC outside play: one level up (IT.App.back). In play, IT.Input routes ESC to hooks.pause.

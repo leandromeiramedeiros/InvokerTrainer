@@ -1,7 +1,7 @@
 /* v6 items 13 / 45 / 66: scenario intro (js/ui/briefing.js). One element centre-stage at a time over a dimmed + blurred world, each then flies to its
    slot in the HUD's countdown panel. Sizes follow the stage unit --u. */
 body.bf-text #hud .rkp.cd{opacity:0}   /* the countdown panel stays hidden while the tokens fly to its slots, then cross-fades in */
-body.briefing #hud .rkp.cd{transition:opacity .25s ease-out}
+body.briefing #hud .rkp.cd{transition:opacity .2s ease-out .28s}   /* v6 #16b: fades in only after the briefing layer (.25 s) has closed, so the two never overlap */
 
 .brief{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:hidden}
 .brief.on{display:block}

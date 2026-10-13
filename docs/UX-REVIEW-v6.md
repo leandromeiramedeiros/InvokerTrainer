@@ -20,13 +20,30 @@ Severity: S = broken/unreadable, M = clearly poor, L = polish.
 | 12 | Settings | all | Key-group captions (Orbs, Invoke, ...) 9.8px, nav sub items dim, fine text dim | L | .8em, lighter grey |
 | 13 | Splash | all | `.tl-sub` .66em grey | L | .76em, lighter |
 | 14 | Shop, Pause, Title, Settings frame, Stats frame | both | Fit one screen, no overflow, ornaments consistent, no clipped text (EN + PT) | OK | none |
-| 15 | Briefing countdown panel | 1280 | Briefing panel overlaps the countdown panel while it closes | L | left (animation owner) |
-| 16 | Pause | all | No on-screen hint that Esc resumes | L | left |
-| 17 | Between-round card, end splash tiers 1/4/7, Infinite Run, floating I/O panels, toasts | - | Not visually walked in this pass; only the shared font floors apply (`rccont`, toast, panel text all >= 10px) | - | needs a follow-up walk |
+| 15 | Briefing countdown panel | 1280 | Briefing panel overlaps the countdown panel while it closes | L | Fixed in #16b |
+| 16 | Pause | all | No on-screen hint that Esc resumes | L | Fixed in #16b |
+| 17 | Between-round card, end splash tiers 1/4/7, Infinite Run, floating I/O panels, toasts | - | Not visually walked in this pass; only the shared font floors apply (`rccont`, toast, panel text all >= 10px) | - | Walked in #16b |
 
-Counts: S 1, M 10, L 3 (fixed: all S/M; L #12, #13 fixed, #15/#16 left).
+Counts: S 1, M 10, L 3 (fixed: all S/M; L #12, #13 fixed; #15/#16 fixed in the #16b follow-up).
 
 Tests: `tests/ux_v6.test.js` (font floors >= 10px, dim colour, ribbon, buttons, Scenarios Tags row, hint position, i18n keys). `node --test tests/*.test.js` green.
+
+## Follow-up walk (#16b)
+
+Method: same in-page audit. Browser: splash tiers 1/4/7 + Infinite, toasts (generic, relic), pause, I/O panels, ranked/infinite intro+HUD at 1280 and 1920, EN and PT. Result card (`rccont`, 12 failure reasons + success) audited by injected DOM at 1280 EN/PT only (1920 scales proportionally; real play phase not reachable, rAF throttled). #15 verified by code only.
+
+| # | Screen | Size / lang | Issue | Sev | Fix |
+|---|--------|-------------|-------|-----|-----|
+| 18 | End splash | 1280, EN+PT | Tiles, damage legend/labels, kicker, tier-list text .78em, under 11px | M | 11px floors, lighter grey (`css/diffbar.css`) |
+| 19 | End splash | all | "none" / "on" notes under 11px | L | 11px floor |
+| 20 | Result card / HUD | 1280 | `.hc` 10px, `.chead span` small | M | 11px floors |
+| 21 | Relic toast / special panel | 1280 | `small`, points line, value text under 11px | M | 11px floors |
+| 22 | Briefing | 1280 | #15 panel overlaps countdown while closing | L | `.rkp.cd` fade delayed .28s (after .25s close) |
+| 23 | Pause | all | #16 no Esc hint | L | `.ph-hint` "Esc: resume" / "Esc: continuar" (`pause.hint`) |
+| 24 | Between-round card, Infinite screen/HUD, I/O panels, generic toast | both | Clean | OK | none |
+
+Counts: S 0, M 4, L 2 found and fixed (+ #15, #16 closed).
+
 
 ## Free Play panel redesign (#77 I9)
 

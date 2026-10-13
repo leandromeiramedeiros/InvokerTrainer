@@ -2,6 +2,7 @@
 // en/pt key parity + placeholders are tested (tests/menu_v6.test.js).
 (function (G) { 'use strict'; const IT = G.IT; IT.i18nAdd({
     en: {
+      'pause.hint': 'Esc: resume',
       'set.lighting': 'Lighting', 'set.lighting.off': 'Off', 'set.lighting.low': 'Low', 'set.lighting.medium': 'Medium', 'set.lighting.high': 'High',
       'title.free': 'FREE PLAY', 'title.free.d': 'Pick a map, add enemies, build your Invoker',
       'title.scn': 'SCENARIOS', 'title.scn.d': 'Practice any scenario, no rating',
@@ -79,6 +80,7 @@
       'eb.lock': 'Locked: {n}s (took damage)', 'eb.denied': 'Denied: {n}s',
     },
     pt: {
+      'pause.hint': 'Esc: continuar',
       'set.lighting': 'Iluminação', 'set.lighting.off': 'Desligada', 'set.lighting.low': 'Baixa', 'set.lighting.medium': 'Média', 'set.lighting.high': 'Alta',
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
       'title.scn': 'CENÁRIOS', 'title.scn.d': 'Pratique qualquer cenário, sem ranking',
