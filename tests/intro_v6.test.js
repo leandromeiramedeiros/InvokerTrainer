@@ -49,7 +49,7 @@ test('13: the intro is 12 s; tour = hero -> foe groups -> gate -> hero, ends on 
   assert.equal(last.x, m.h.x); assert.equal(last.y, m.h.y);
   assert.ok(last.t + last.glide <= 12 - 0.5, 'arrives on the hero >= 0.5 s before go');
   // item 45: text first -- the camera stays on the hero through the text phase, the pan starts after it; <= 4 s on a foe stop
-  assert.ok(I.text.hold >= 3 && I.text.hold <= 6, 'text phase 3-6 s: ' + I.text.hold);
+  assert.ok(I.text.hold >= 4 && I.text.hold <= 7, 'text phase 4-7 s: ' + I.text.hold);
   assert.ok(I.stops[1].t >= I.text.hold - 1e-9, 'first pan stop after the text phase');
   I.stops.forEach((s, i) => { if (s.kind === 'foes') assert.ok(I.stops[i + 1].t - (s.t + s.glide) <= 4 + 1e-9, 'at most 4 s on the enemy'); });
   for (let i = 1; i < I.stops.length; i++) assert.ok(I.stops[i].t >= I.stops[i - 1].t + I.stops[i - 1].glide - 1e-9, 'no overlapping glides');
@@ -192,24 +192,103 @@ test('45: linger from arrival per tier: ian 2.5, easy 2.0, common 1.5, hard 1.1,
   assert.equal(reveals(n.w).length, 0, 'bambam 0.8 s of play');
 });
 
-test('45: the text phase length comes from the reading length (words x 0.25 s + 0.4 s per block, 3-6 s); blocks animate one after the other', () => {
-  const fake = (name, win, lose, n) => ({ sc: { name: { en: name }, win: { en: win }, lose: { en: lose }, steps: Array.from({ length: n }, () => ({ a: 'sunstrike' })) } });
-  const short = R.textPlan(fake('A', 'B', 'C', 0), 12), long = R.textPlan(fake('word '.repeat(10), 'word '.repeat(30), 'word '.repeat(30), 7), 12);
-  assert.equal(short.hold, 3); assert.equal(long.hold, 6);
-  const mid = R.textPlan(fake('one two three four', 'win it all now and then', 'lose it', 0), 12);
-  assert.ok(Math.abs(mid.raw - ((4 + 6 + 6) * 0.25 + 3 * 0.4)) < 1e-9, 'raw = ' + mid.raw);   // title 4 + win 6 + lose 2+4 words, 3 blocks
-  assert.equal(mid.hold, mid.raw); assert.ok(mid.hold > 3 && mid.hold < 6);
-  for (const p of [short, mid, long]) {
-    for (let i = 1; i < p.blocks.length; i++) assert.ok(Math.abs(p.blocks[i].at - (p.blocks[i - 1].at + p.blocks[i - 1].d)) < 1e-9, 'one after the other');
-    const e = p.blocks[p.blocks.length - 1]; assert.ok(e.at + e.d <= p.hold + 1e-9, 'all blocks fit the text phase');
+test('66: the text phase = one element centre-stage at a time (stage + fly each), length from the element count, 4-7 s', () => {
+  const fake = (name, win, lose, n) => ({ sc: { name: { en: name }, win: { en: win }, lose: { en: lose }, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
+  const EPS = 1e-9;
+  const short = R.textPlan(fake('A', 'B', 'C', 0), 12), three = R.textPlan(fake('A', 'B', 'C', 3), 12), long = R.textPlan(fake('word '.repeat(10), 'word '.repeat(30), 'word '.repeat(30), 7), 12);
+  assert.equal(R.TEXT_MIN, 4); assert.equal(R.TEXT_MAX, 7);
+  assert.equal(short.hold, 4, 'a bare title / win / lose still holds 4 s'); assert.equal(long.hold, 7, 'many elements clamp at 7 s');
+  assert.ok(three.hold >= 4 && three.hold <= 7);
+  for (const p of [short, three, long]) {
+    // order: title, VICTORY, DEFEAT, then the steps one by one; strictly one after the other (stage then fly), nothing overlaps
+    assert.deepEqual(p.blocks.slice(0, 3).map(b => b.id), ['title', 'win', 'lose']);
+    p.blocks.slice(3).forEach((b, i) => { assert.equal(b.id, 'step'); assert.equal(b.i, i); });
     assert.equal(p.blocks[0].at, 0);
+    for (let i = 1; i < p.blocks.length; i++) assert.ok(Math.abs(p.blocks[i].at - (p.blocks[i - 1].at + p.blocks[i - 1].d)) < EPS, 'one after the other');
+    for (const b of p.blocks) assert.ok(Math.abs(b.d - (b.stage + b.fly)) < EPS, 'd = stage + fly');
+    const e = p.blocks[p.blocks.length - 1];
+    assert.ok(Math.abs(p.end - (e.at + e.d)) < EPS); assert.ok(p.end <= p.hold - 0.3 + EPS, 'the last fly lands >= 0.3 s before the pan: ' + p.end + ' vs ' + p.hold);
   }
-  assert.ok(R.textPlan(fake('a', 'b', 'c', 0), 6).hold <= 3, 'a short countdown halves the text phase');
-  // the real plan is on the intro: title, VICTORY, DEFEAT first, then the steps; the pan starts after it
+  // per-element timings when nothing is squeezed: title 0.8 + 0.3, steps 0.5 + 0.3, win / lose 0.5-0.8 + 0.3
+  const b3 = three.blocks;
+  assert.ok(Math.abs(b3[0].stage - 0.8) < EPS && Math.abs(b3[0].fly - 0.3) < EPS, 'title');
+  for (const b of b3.slice(1, 3)) assert.ok(b.stage >= 0.5 - EPS && b.stage <= 0.8 + EPS && Math.abs(b.fly - 0.3) < EPS, b.id);
+  for (const b of b3.slice(3)) assert.ok(Math.abs(b.stage - 0.5) < EPS && Math.abs(b.fly - 0.3) < EPS, 'step');
+  assert.ok(Math.abs(three.raw - (0.8 + 0.3 + 2 * (0.5 + 0.3) + 0.3 + 3 * 0.8 + 0.2)) < 0.5, 'raw ~ sum of stages + flies: ' + three.raw);
+  // squeezed (7 steps, long texts): every stage / fly shrinks together, the plan still fits
+  assert.ok(long.blocks.every(b => b.stage < 0.8 + EPS && b.fly < 0.3 + EPS) && long.blocks[0].stage < 0.8);
+  assert.ok(long.end <= 7 - 0.3 + EPS);
+  assert.ok(R.textPlan(fake('a', 'b', 'c', 0), 6).hold <= 0.6 * 6 + EPS, 'a short countdown shortens the text phase');
+  // the real plan is on the intro for every scenario: element order, within bounds, the pan starts only after the text phase
+  for (const sc of SC) {
+    const m = build(sc.id, 'common'), tp = m.run.intro.text;
+    assert.deepEqual(tp.blocks.slice(0, 3).map(b => b.id), ['title', 'win', 'lose'], sc.id);
+    assert.ok(tp.hold >= 4 - EPS && tp.hold <= 7 + EPS, sc.id + ': ' + tp.hold);
+    assert.ok(m.run.intro.stops[1].t >= tp.hold - EPS, sc.id + ': pan after the text phase');
+    assert.ok(tp.blocks.length <= 3 + 7, sc.id);
+  }
+  // frozen camera through the text phase: the first tourFocus after the hero stop starts at the end of the text phase
   const m = build('river_guard', 'common');
-  assert.deepEqual(m.run.intro.text.blocks.slice(0, 3).map(b => b.id), ['title', 'win', 'lose']);
-  assert.ok(m.run.intro.text.hold >= 3 && m.run.intro.text.hold <= 6);
-  assert.ok(m.run.intro.stops[1].t >= m.run.intro.text.hold);
+  for (let k = 0; k < Math.floor((m.run.intro.text.hold - 0.05) / DT); k++) m.run.tick(DT);
+  assert.equal(m.ev.filter(e => e.ev === 'tourFocus' && e.i > 0).length, 0, 'no pan during the text phase');
+});
+
+test('66: the briefing drives stage -> fly -> done per element from the intro clock; the cancel path drops everything at once', () => {
+  // a minimal DOM harness: nodes keep class strings / styles / children; the real js/ui/briefing.js runs against it
+  const fs = require('fs'), vm = require('vm'), path = require('path');
+  const mkNode = () => {
+    const n = { className: '', style: {}, kids: [], setAttribute() {}, offsetWidth: 300, offsetHeight: 120, animate() { return {}; }, getAnimations: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }),
+      set textContent(v) { n.kids = []; }, get textContent() { return ''; },
+      appendChild(c) { if (c) n.kids.push(c); return c; }, querySelector: () => mkNode() };
+    const cl = () => n.className.split(' ').filter(Boolean);
+    n.classList = { add: c => { if (!cl().includes(c)) n.className = cl().concat(c).join(' '); }, remove: c => { n.className = cl().filter(x => x !== c).join(' '); }, contains: c => cl().includes(c), toggle(c, v) { v ? this.add(c) : this.remove(c); } };
+    return n;
+  };
+  const flat = a => a.reduce((q, x) => q.concat(Array.isArray(x) ? flat(x) : x), []);
+  const body = mkNode(), stage = mkNode(), stings = [], shakes = [];
+  const ctx = vm.createContext({ console, Math, Array, Object, String, Promise, Map, Set, RegExp });
+  ctx.window = ctx; ctx.globalThis = ctx;
+  ctx.document = { body, getElementById: () => stage, querySelectorAll: () => [], createElementNS: () => mkNode(), createTextNode: x => x };
+  const intro = { t: 0, text: { hold: 5, end: 4, blocks: [{ id: 'title', i: 0, at: 0, stage: 0.8, fly: 0.3, d: 1.1 }, { id: 'win', i: 0, at: 1.1, stage: 0.6, fly: 0.3, d: 0.9 },
+    { id: 'lose', i: 0, at: 2.0, stage: 0.6, fly: 0.3, d: 0.9 }, { id: 'step', i: 0, at: 2.9, stage: 0.5, fly: 0.3, d: 0.8 }, { id: 'step', i: 1, at: 3.7, stage: 0.5, fly: 0.3, d: 0.8 }] } };
+  const w = { ranked: { intro }, hero: { items: [] } }; let phase = 'countdown';
+  ctx.IT = { t: k => k, hasT: () => false, lang: 'en', GAME: { SPELL_ORBS: {} }, Settings: { get: () => ({ hints: true }), data: { scheme: 'q' }, label: x => String(x), keyOf: x => x },
+    HudSteps: { derive: () => [{ k: 'spell', id: 'sunstrike' }, { k: 'spell', id: 'coldsnap' }], loseKeys: () => [], heroLv: () => 'LV 1' },
+    SCENARIOS: { get: () => ({ win: { en: 'Kill it' }, lose: { en: 'Die' } }) },
+    UI: { h: (tag, o, ...k) => { const n = mkNode(); n.className = String((o && o.class) || ''); flat(k).forEach(c => n.appendChild(typeof c === 'string' ? mkNode() : c)); return n; }, icon: () => mkNode() },
+    Sfx: { sting: id => stings.push(id) }, Ranked: { hud: () => ({ phase, id: 'x', scenario: { en: 'Title' }, diff: 'common', countdown: 5, hints: true }) } };
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js/ui/briefing.js'), 'utf8'), ctx, { filename: 'briefing.js' });
+  const B = ctx.IT.Briefing; B.onShake = (a) => shakes.push(a);
+  // per-element states: stage -> fly -> done, strictly one element on stage at a time
+  const tb = intro.text.blocks;
+  for (let t = 0; t < 4; t += 0.05) assert.ok(tb.filter(b => B.stateAt(b, t) === 'stage' || B.stateAt(b, t) === 'fly').length <= 1, 'one element at a time @' + t);
+  assert.deepEqual([0, 0.79, 0.81, 1.09, 1.11].map(t => B.stateAt(tb[0], t)), ['stage', 'stage', 'fly', 'fly', 'done']);
+  assert.equal(B.stateAt(tb[1], 0.5), 'p');
+  // run the real overlay: the title slams at 0 (sting + shake), VICTORY / DEFEAT next, then each step punches (lighter sting)
+  B.update(w, 0, false);
+  const brief = stage.kids[0], toks = brief.kids[2].kids;
+  assert.ok(brief.className.includes('on') && body.className.includes('briefing') && body.className.includes('bf-text'), 'overlay up, HUD panel hidden while the tokens fly');
+  assert.equal(toks.length, 5, 'title, win, lose, 2 steps');
+  assert.ok(!toks[0].className.split(' ').includes('p') && toks.slice(1).every(n => n.className.split(' ').includes('p')), 'only the title is on stage');
+  assert.deepEqual(stings, ['introSlam']); assert.deepEqual(shakes, [5]);
+  intro.t = 0.9; B.update(w, 0, false);
+  assert.ok(toks[0].style.transition.startsWith('transform'), 'the title flies to its slot');
+  intro.t = 1.2; B.update(w, 0, false);
+  assert.deepEqual(stings.slice(0, 3), ['introSlam', 'introWhoosh', 'introWin']);
+  intro.t = 2.1; B.update(w, 0, false); intro.t = 3.0; B.update(w, 0, false);
+  assert.equal(stings.filter(s => s === 'introPunch').length, 1);
+  intro.t = 3.8; B.update(w, 0, false);
+  assert.equal(stings.filter(s => s === 'introPunch').length, 2); assert.ok(stings.indexOf('introLose') > stings.indexOf('introWin'));
+  intro.t = 4.8; B.update(w, 0, false);
+  assert.ok(brief.className.includes('fin') && !body.className.includes('bf-text'), 'the dim lifts and the real panel shows once the text phase ends');
+  // the cancel path: an action ends the countdown -> overlay + dim + tokens vanish at once (no out animation)
+  phase = 'play'; B.update(w, 0, false);
+  assert.equal(brief.className, 'brief'); assert.equal(brief.kids.length, 0); assert.ok(!body.className.includes('briefing') && !body.className.includes('bf-text'));
+  // ...also mid-slam: a fresh intro cancelled while the title is on stage
+  phase = 'countdown'; w.ranked.intro = { t: 0.2, text: intro.text }; B.update(w, 0, false);
+  assert.ok(stage.kids[0].className.includes('on') && body.className.includes('bf-text'));
+  phase = 'play'; B.update(w, 0, false);
+  assert.equal(stage.kids[0].className, 'brief'); assert.ok(!body.className.includes('bf-text') && !body.className.includes('briefing'));
 });
 
 test('45: every moving foe already FACES the way it moves next (flee: away from the hero, march: toward the gate, chase: toward the hero)', () => {

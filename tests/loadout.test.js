@@ -5,7 +5,7 @@ const IT = require('./_load.js')(['js/data/dota.js', 'js/data/rules.js', 'js/dat
 test('default loadout is valid level 30', () => {
   const l = IT.Loadout.default();
   assert.equal(l.heroLevel, 30);
-  assert.deepEqual(l.items, []);
+  assert.deepEqual(l.items, [null, null, null, null, null, null]);
   assert.ok(IT.Loadout.validate(l).ok);
 });
 test('item validation', () => {
@@ -19,7 +19,7 @@ test('item validation', () => {
 });
 test('normalize fills defaults and ctx works', () => {
   const n = IT.Loadout.normalize({ heroLevel: 5, orbs: { quas: 2 } });
-  assert.equal(n.orbs.wex, 0); assert.deepEqual(n.items, []);
+  assert.equal(n.orbs.wex, 0); assert.deepEqual(n.items, [null, null, null, null, null, null]);
   assert.equal(IT.Loadout.ctx(n).orbs.quas, 2);
 });
 test('hero stats level 1 vs 30', () => {

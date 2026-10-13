@@ -333,17 +333,15 @@
     // drag it out onto the catalogue / pane to remove it; the catalogue is a compact icon + name grid: click to add, or drag an item onto a slot.
     const itemBox = reg('items', 'items');
     const slotKey = i => { try { const S = IT.Settings; return S && S.label ? S.label(S.keyOf('item' + (i + 1))) : String(i + 1); } catch (e) { return String(i + 1); } };
-    const isBoots = id => IT.Loadout.BOOTS.includes(id);
-    function moveSlot(from, to) {   // swap with a full slot; an empty target sends the item to the end of the row (the list has no holes)
-      const a = lo.items; if (from === to || from >= a.length) return;
-      if (to >= a.length) a.push(a.splice(from, 1)[0]); else { const x = a[from]; a[from] = a[to]; a[to] = x; }
-    }
-    function addItem(id, at) {   // at: slot index to drop onto (replaces a full slot) or undefined = first free
+    // lo.items is always exactly 6 entries (id | null = hole); slot i == hotkey i. Nothing here ever packs the list.
+    const LO = IT.Loadout, setItems = a => { if (!a) return false; lo.items = a; return true; };
+    const moveSlot = (from, to) => setItems(LO.moveSlot(lo.items, from, to));
+    const removeAt = i => setItems(LO.clearSlot(lo.items, i));
+    const removeId = id => removeAt(lo.items.indexOf(id));
+    function addItem(id, at) {   // at: slot index to drop onto (replaces a full slot) or undefined = first empty slot
       if (lo.items.includes(id)) { flash(t('item.' + id)); return false; }
-      const rest = lo.items.filter(x => !(isBoots(id) && isBoots(x)));
-      if (at != null && at < rest.length) rest[at] = id; else rest.push(id);
-      if (rest.length > 6) { flash(t('tip.itemsFull')); return false; }
-      lo.items = rest; return true;
+      if (!setItems(LO.placeItem(lo.items, id, at))) { flash(t('tip.itemsFull')); return false; }
+      return true;
     }
     // Pointer drag via the shared state machine (IT.UI.ItemDrag, mode 'loadout'): slot -> slot reorders, catalogue -> slot adds, slot -> pane (not a slot) removes.
     // Catalogue entries are only sources (never targets) so the list can never be reordered. HTML5 drag-and-drop is not used (the app blocks dragstart).
@@ -361,7 +359,7 @@
       return pane && e && pane.contains(e) ? { kind: 'bin' } : null;
     };
     const dm = ID.create({
-      canDrag: src => src.kind === 'slot' ? src.i < lo.items.length : !lo.items.includes(src.id),
+      canDrag: src => src.kind === 'slot' ? !!lo.items[src.i] : !lo.items.includes(src.id),
       onStart: src => {
         const id = src.kind === 'slot' ? lo.items[src.i] : src.id;
         itemBox.classList.add('dragging');
@@ -375,14 +373,14 @@
         itemBox.classList.toggle('rm', !!tg && tg.kind === 'bin' && dm.src && dm.src.kind === 'slot');
       },
       onClick: src => {
-        if (src.kind === 'slot') { if (src.i < lo.items.length) { lo.items.splice(src.i, 1); changed(); } return; }
-        if (lo.items.includes(src.id)) lo.items = lo.items.filter(x => x !== src.id); else if (!addItem(src.id)) return;
+        if (src.kind === 'slot') { if (removeAt(src.i)) changed(); return; }
+        if (lo.items.includes(src.id)) removeId(src.id); else if (!addItem(src.id)) return;
         changed();
       },
       onDrop: (src, tg, act) => {
         dragClear();
-        if (act.type === 'swap') moveSlot(act.from, act.to);
-        else if (act.type === 'remove') { if (act.from < lo.items.length) lo.items.splice(act.from, 1); else return; }
+        if (act.type === 'swap') { if (!moveSlot(act.from, act.to)) return; }
+        else if (act.type === 'remove') { if (!removeAt(act.from)) return; }
         else if (act.type === 'add') { if (!addItem(act.id, act.at)) return; }
         else return;
         changed();
@@ -403,18 +401,18 @@
           class: 'islot' + (id ? ' full' : ''), role: 'button', tabindex: '0', 'data-i': String(i),
           'data-tip': id ? t('item.' + id) + ' (' + key + '). ' + t('lo.itemDrag') : t('lo.itemSlotKey', { n: i + 1, key }),
           onmousedown: ev => { if (id) press({ kind: 'slot', i }, ev); },
-          onkeydown: ev => { if (id && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Delete')) { ev.preventDefault(); lo.items.splice(i, 1); changed(); } },
+          onkeydown: ev => { if (id && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Delete')) { ev.preventDefault(); removeAt(i); changed(); } },
         }, id ? icon(id) : null, h('span', { class: 'skey', text: key })));
       }
       const pool = h('div', { class: 'ipool' });
       for (const id of GM.ITEMS_MAIN.concat(GM.ITEMS_EXTRA)) {
-        const on = lo.items.includes(id), full = !on && lo.items.length >= 6;
+        const on = lo.items.includes(id), full = !on && !lo.items.includes(null);
         pool.appendChild(h('button', {
           type: 'button', class: 'iopt' + (on ? ' on' : '') + (full ? ' dis' : ''), 'data-id': id, 'data-tip': full ? t('tip.itemsFull') : t('item.' + id),
           onmousedown: ev => press({ kind: 'cat', id }, ev),
           onclick: ev => {   // keyboard activation only (a mouse click is handled by the drag machine on release)
             if (ev.detail) return;
-            if (on) lo.items = lo.items.filter(x => x !== id);
+            if (on) removeId(id);
             else if (!addItem(id)) return;
             changed();
           },

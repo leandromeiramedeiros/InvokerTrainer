@@ -53,6 +53,70 @@
     });
   }
 
+  // v6 item 69 (shop): coin clink on press, rising chime on unlock, short fanfare for premium skins, dull thud when you cannot afford it
+  if (SFX && SFX.define && SFX.T && SFX.N) {
+    const T = SFX.T, N = SFX.N;
+    SFX.define('shopCoin', b => {
+      N(b, { nk: 'white', ft: 'highpass', f: 5000, d: 0.025, g: 0.05, a: 0 });
+      T(b, { type: 'sine', f: 2637, d: 0.22, g: 0.07, a: 0.001, mr: 2.76, mi: 0.9, mdec: 0.05 });
+      T(b, { type: 'sine', f: 3951, d: 0.3, g: 0.05, a: 0.001, at: 0.06, mr: 2.76, mi: 0.8, mdec: 0.05 });
+    });
+    SFX.define('shopChime', b => {
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
+        const at = i * 0.07;
+        T(b, { type: 'sine', f, d: 0.6, g: 0.07, a: 0.003, at, mr: 3.5, mi: 1, mdec: 0.04 });
+        T(b, { type: 'triangle', f: f * 2, d: 0.35, g: 0.025, a: 0.003, at });
+      });
+      N(b, { nk: 'pink', ft: 'highpass', f: 6500, d: 0.5, g: 0.025, at: 0.3, q: 0.7 });
+    });
+    SFX.define('shopFanfare', b => {
+      T(b, { type: 'sine', f: 110, f2: 55, d: 0.5, g: 0.12, a: 0.004 });
+      [[392, 0], [523.25, 0.09], [659.25, 0.18], [783.99, 0.27], [1046.5, 0.38]].forEach(([f, at]) => {
+        T(b, { type: 'sawtooth', f, d: 0.34, g: 0.035, a: 0.01, at, lp: 2400 });
+        T(b, { type: 'sawtooth', f: f * 1.006, d: 0.34, g: 0.026, a: 0.01, at, lp: 2400 });
+        T(b, { type: 'sine', f: f * 2, d: 0.7, g: 0.05, a: 0.002, at, mr: 3.5, mi: 1.1, mdec: 0.04 });
+      });
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => T(b, { type: 'sawtooth', f, d: 1.1, g: 0.03, a: 0.03, at: 0.5, lp: 2400 }));
+      T(b, { type: 'triangle', f: 2093, d: 1, g: 0.035, a: 0.004, at: 0.55 });
+      N(b, { nk: 'pink', ft: 'highpass', f: 6000, d: 0.9, g: 0.035, at: 0.5, q: 0.7 });
+    });
+    SFX.define('shopThud', b => {
+      T(b, { type: 'sine', f: 140, f2: 55, d: 0.2, g: 0.2, a: 0.003 });
+      N(b, { nk: 'brown', ft: 'lowpass', f: 420, f2: 180, d: 0.14, g: 0.12, a: 0, q: 0.7 });
+    });
+  }
+
+  // v6 item 66 (scenario intro stings): introSlam = the title slam (sub boom + noise crack + a brass hit), introWin = bright rising triad, introLose = low
+  // falling minor hit, introPunch = a short tick + thump (one combo step punching in, lighter), introWhoosh = a soft swoosh as an element flies to the HUD
+  if (SFX && SFX.define && SFX.T && SFX.N) {
+    const T = SFX.T, N = SFX.N;
+    SFX.define('introSlam', b => {
+      T(b, { type: 'sine', f: 120, f2: 34, d: 0.7, g: 0.2, a: 0.002 });
+      N(b, { nk: 'white', ft: 'bandpass', f: 2400, f2: 400, d: 0.22, g: 0.1, a: 0, q: 0.8 });
+      N(b, { nk: 'brown', ft: 'lowpass', f: 900, f2: 120, d: 0.5, g: 0.1, a: 0.002, q: 0.7 });
+      [196, 293.66, 392].forEach(f => { T(b, { type: 'sawtooth', f, d: 0.55, g: 0.04, a: 0.006, at: 0.02, lp: 1800 }); T(b, { type: 'sawtooth', f: f * 1.007, d: 0.55, g: 0.03, a: 0.006, at: 0.02, lp: 1800 }); });
+      T(b, { type: 'sine', f: 1568, d: 0.5, g: 0.04, a: 0.002, at: 0.05, mr: 3.5, mi: 1, mdec: 0.05 });
+    });
+    SFX.define('introWin', b => {
+      N(b, { nk: 'pink', ft: 'highpass', f: 3000, d: 0.12, g: 0.05, a: 0 });
+      [523.25, 659.25, 783.99].forEach((f, i) => { T(b, { type: 'triangle', f, d: 0.4, g: 0.07, a: 0.004, at: i * 0.07 }); T(b, { type: 'sine', f: f * 2, d: 0.5, g: 0.04, a: 0.002, at: i * 0.07, mr: 3.5, mi: 0.8, mdec: 0.04 }); });
+      T(b, { type: 'sine', f: 90, f2: 55, d: 0.3, g: 0.1, a: 0.003 });
+    });
+    SFX.define('introLose', b => {
+      T(b, { type: 'sine', f: 100, f2: 40, d: 0.55, g: 0.16, a: 0.003 });
+      N(b, { nk: 'brown', ft: 'lowpass', f: 700, f2: 150, d: 0.4, g: 0.09, a: 0.003 });
+      [185, 220, 277.18].forEach((f, i) => T(b, { type: 'sawtooth', f, f2: f * 0.94, d: 0.5, g: 0.04, a: 0.01, at: i * 0.04, lp: 1100 }));
+    });
+    SFX.define('introPunch', b => {
+      T(b, { type: 'sine', f: 180, f2: 70, d: 0.14, g: 0.12, a: 0.001 });
+      N(b, { nk: 'white', ft: 'highpass', f: 3500, d: 0.03, g: 0.05, a: 0 });
+      T(b, { type: 'square', f: 880, f2: 1320, d: 0.06, g: 0.03, a: 0.001, lp: 3000 });
+    });
+    SFX.define('introWhoosh', b => {
+      N(b, { nk: 'pink', ft: 'bandpass', f: 500, f2: 3200, d: 0.28, g: 0.04, a: 0.08, q: 1.2 });
+    });
+  }
+
   // v6 item 27 (juke): two short belief stings. beliefHuh = a chaser reached its guess and you are not there (a falling, wobbling
   // two-note "huh?"); beliefAlert = it found you again (a bright rising double ping + click).
   if (SFX && SFX.define && SFX.T && SFX.N) {
@@ -158,6 +222,12 @@
       SFX.playEx(id, { vol, pan: a.pan, dur: opt && opt.dur, verb: m.verb, prio: m.prio, low: m.low });
       return true;
     },
+    // v6 item 66: a flat (unattenuated, centred) UI sting for the scenario intro (js/ui/briefing.js)
+    sting(id, vol) {
+      if (!SFX || !SFX.playEx || !soundOn() || !SFX.has(id)) return false;
+      SFX.playEx(id, { vol: vol || 1, pan: 0, verb: 0.2, prio: 1 });
+      return true;
+    },
     // starts a loop bed; pos optional (static position). Returns a handle {stop,set,alive}
     loop(spec, pos, maxSec) {
       if (!SFX || !SFX.loop || !soundOn()) return { stop() {}, set() {}, alive() { return false; } };
@@ -179,6 +249,14 @@
       if (!SFX || !SFX.playEx || !SFX.has('relicSpecial') || !soundOn() || !once('relicSpecial', 800)) return false;
       this.calls++;
       SFX.playEx('relicSpecial', { vol: 0.8, pan: 0, tier, verb: 0.45, prio: 1 });
+      return true;
+    },
+    // v6 item 69 (shop purchase feedback): unpositioned, on the sfx bus (follows the SFX volume); kinds: coin | unlock | premium | poor
+    shop(kind) {
+      const id = kind === 'coin' ? 'shopCoin' : kind === 'unlock' ? 'shopChime' : kind === 'premium' ? 'shopFanfare' : kind === 'poor' ? 'shopThud' : null;
+      if (!id || !SFX || !SFX.playEx || !SFX.has(id) || !soundOn() || !once(id, 120)) return false;
+      this.calls++;
+      SFX.playEx(id, { vol: kind === 'poor' ? 0.9 : 0.8, pan: 0, verb: kind === 'premium' ? 0.4 : 0.2, prio: 1 });
       return true;
     },
     detach() {

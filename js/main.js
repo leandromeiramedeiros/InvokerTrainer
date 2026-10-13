@@ -62,6 +62,8 @@
     w.on('scnGo', () => { if (g && g.w === w) g.cam.release(); });
   }
   // per frame while frozen / playing: the tour owns the camera (lock / follow ignored); F1 (center: cam.follow) ends only the tour
+  // v6 item 66: the title slam / VICTORY / DEFEAT punches shake the screen (js/ui/briefing.js calls this; the camera itself stays frozen)
+  if (IT.Briefing) IT.Briefing.onShake = (a, d) => { if (g && g.R && g.R.shake) g.R.shake(a, d); };
   function tourSync() {
     const r = g && g.run; if (!r || !r.touring) { if (g) g.cam.script = false; return; }
     if (r.touring() && g.cam.follow && !g.menu) r.skipTour();

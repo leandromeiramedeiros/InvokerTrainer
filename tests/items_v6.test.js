@@ -74,8 +74,8 @@ test('boots: Travel replaces Speed in the loadout normalizer; one boots slot eve
     assert.equal(n.filter(x => L.BOOTS.includes(x)).length, 1, JSON.stringify(items));
     if (items.includes('travels')) assert.ok(n.includes('travels') && !n.includes('boots'));
   }
-  assert.deepEqual(L.normalize(Object.assign({}, base, { items: ['blink', 'boots', 'bkb', 'travels'] })).items, ['blink', 'bkb', 'travels']);
-  assert.deepEqual(L.normalize(Object.assign({}, base, { items: ['boots', 'blink'] })).items, ['boots', 'blink']);
+  assert.deepEqual(L.normalize(Object.assign({}, base, { items: ['blink', 'boots', 'bkb', 'travels'] })).items, ['blink', null, 'bkb', 'travels', null, null]);   // 6 fixed slots: the dropped boots leaves a hole
+  assert.deepEqual(L.normalize(Object.assign({}, base, { items: ['boots', 'blink'] })).items, ['boots', 'blink', null, null, null, null]);
   assert.ok(!L.validate(Object.assign({}, base, { items: ['boots', 'travels'] })).ok, 'validate still rejects both');
   // sim: both listed (bypassing the normalizer) -> only Travel's ms
   const w = IT.World.create({ seed: 1, fog: false, loadout: L.normalize(base) });

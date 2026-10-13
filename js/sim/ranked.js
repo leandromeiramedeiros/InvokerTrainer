@@ -664,7 +664,7 @@
   // and runs on the countdown clock. The foe already faces the way it will move next (faceFoes). Reveals the pan never reached (a cancelled intro,
   // F1) appear at round start and linger in play.
   const INTRO_MIN = 5, GROUP_R = 900, TOUR_MAX = 4, REVEAL_LINGER = 1.5, REVEAL_R = 250, REVEAL_VIS = 260;
-  const WORD_S = 0.25, BLOCK_S = 0.4, TEXT_MIN = 3, TEXT_MAX = 6, TEXT_TAIL = 0.6, STAY_MAX = 4, STAY_OTHER = 1.0;
+  const STAGE_MIN = 0.5, STAGE_MAX = 0.8, FLY_S = 0.3, TEXT_MIN = 4, TEXT_MAX = 7, TEXT_TAIL = 0.3, STAY_MAX = 4, STAY_OTHER = 1.0;
   const revealOn = () => true;   // item 45: every tier gets the tiny start reveal
   const revealLinger = df => (df && df.revealLinger > 0 ? df.revealLinger : REVEAL_LINGER);
   const wordsOf = t => (String(t == null ? '' : t).trim().match(/\S+/g) || []).length;
@@ -673,17 +673,20 @@
     const l = IT.HudSteps && IT.HudSteps.derive ? IT.HudSteps.derive(sc) : (sc.steps || sc.sol || []).map(s => ({ k: 'spell', id: s && (s.a || s.ability) }));
     return l.filter((a, i, q) => !(i && q[i - 1].k === a.k && q[i - 1].id === a.id)).slice(0, 7);
   }
-  // reading plan of the text phase for a prepared scenario (pr) in a T s countdown
+  // item 66, the text phase = one element centre-stage at a time: STAGE s big in the middle (title 0.8, VICTORY / DEFEAT 0.5-0.8 by length, each step 0.5),
+  // then FLY 0.3 s to its HUD slot, then the next. hold = sum + TEXT_TAIL, clamped TEXT_MIN-TEXT_MAX (and <= 0.6 T); too long -> every stage / fly shrinks
+  // together, too short -> a settled tail. blocks[] = { id, i, at, stage, fly, d (= stage + fly) } read by js/ui/briefing.js
   function textPlan(pr, T) {
-    const sc = pr.sc, blocks = [{ id: 'title', i: 0, n: wordsOf(loc(sc.name)) }, { id: 'win', i: 0, n: wordsOf(loc(sc.win || sc.goal)) },
-      { id: 'lose', i: 0, n: wordsOf(loc(sc.lose)) + 4 }];
-    introSteps(sc).forEach((a, i) => blocks.push({ id: 'step', i, n: 2 }));
-    const raw = blocks.reduce((q, b) => q + (b.rd = b.n * WORD_S + BLOCK_S), 0);
-    const hold = Math.min(Math.max(raw, TEXT_MIN), TEXT_MAX, 0.5 * T);
-    const sc2 = Math.min(1, Math.max(0.1, hold - TEXT_TAIL) / raw);
+    const sc = pr.sc, wd = n => Math.min(STAGE_MAX, Math.max(STAGE_MIN, STAGE_MIN + n * 0.03));
+    const blocks = [{ id: 'title', i: 0, st: STAGE_MAX }, { id: 'win', i: 0, st: wd(wordsOf(loc(sc.win || sc.goal))) },
+      { id: 'lose', i: 0, st: wd(wordsOf(loc(sc.lose)) + 4) }];
+    introSteps(sc).forEach((a, i) => blocks.push({ id: 'step', i, st: STAGE_MIN }));
+    const raw = blocks.reduce((q, b) => q + b.st + FLY_S, 0);
+    const hold = Math.min(Math.max(raw + TEXT_TAIL, TEXT_MIN), TEXT_MAX, 0.6 * T);
+    const k = Math.min(1, Math.max(0.1, hold - TEXT_TAIL) / raw);
     let at = 0;
-    for (const b of blocks) { b.at = at; b.d = b.rd * sc2; at += b.d; delete b.n; delete b.rd; }
-    return { hold, raw, blocks };
+    for (const b of blocks) { b.at = at; b.stage = b.st * k; b.fly = FLY_S * k; b.d = b.stage + b.fly; at += b.d; delete b.st; }
+    return { hold, raw, end: at, blocks };
   }
   function focusSpot(w, f, base) {
     if (f === 'pit') { const p = pitRegion(w.map); return p ? { x: p.x, y: p.y, r: 380 } : null; }
@@ -1269,7 +1272,7 @@
   }
 
   IT.Ranked = {
-    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
+    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, STAGE_MIN, STAGE_MAX, FLY_S, TEXT_MIN, TEXT_MAX, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,

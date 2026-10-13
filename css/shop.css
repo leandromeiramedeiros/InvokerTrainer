@@ -56,3 +56,28 @@
 .shop-msg.bad{color:#ff8a8a}
 .shop-hint{text-align:center;color:#9a8fc0;font-size:.78em}
 @media (prefers-reduced-motion:reduce){.shop-bal-n.pulse,.shop-card.flash::after{animation:none}.shopside{transition:none}}
+
+/* ---- v6 #69 purchase moment: press squash, shake (not enough), gems, flip, god rays, glow-sand rain, UNLOCKED banner */
+.shop-card.fx{z-index:6}
+.shop-act.sq{animation:shopSquash .22s cubic-bezier(.3,1.6,.5,1) both;pointer-events:none}
+@keyframes shopSquash{0%{transform:scale(1)}35%{transform:scale(.86,.78)}70%{transform:scale(1.07,1.1)}100%{transform:scale(1)}}
+.shop-card.shake{animation:shopShake .46s linear both}
+@keyframes shopShake{0%,100%{transform:translateX(0)}12%{transform:translateX(-7px)}28%{transform:translateX(6px)}44%{transform:translateX(-5px)}60%{transform:translateX(4px)}76%{transform:translateX(-2px)}}
+.shop-card.shake .shop-price{color:#ff8a8a}
+.shop-fly{position:absolute;left:0;top:0;width:14px;height:14px;pointer-events:none;z-index:5;image-rendering:pixelated;filter:drop-shadow(0 0 5px #ffd45a);will-change:transform}
+.shop-card.fx-out{animation:shopFlipOut .11s ease-in both}
+.shop-card.fx-in{animation:shopFlipIn .12s ease-out both}
+@keyframes shopFlipOut{from{transform:perspective(700px) rotateY(0)}to{transform:perspective(700px) rotateY(90deg)}}
+@keyframes shopFlipIn{from{transform:perspective(700px) rotateY(-90deg)}to{transform:perspective(700px) rotateY(0)}}
+.shop-card.fx-in{box-shadow:0 0 1.2em #f2c444aa,0 0 3em #f2c44466}
+.shop-raybox{position:absolute;left:50%;top:42%;width:var(--rs,300px);height:var(--rs,300px);margin:calc(var(--rs,300px)/-2) 0 0 calc(var(--rs,300px)/-2);z-index:-1;pointer-events:none;mix-blend-mode:screen;opacity:0;
+  animation:shopRaysIn var(--rt,3.2s) ease-in-out both}
+.shop-raybox .shop-rays{display:block;width:100%;height:100%;animation:shopRaysSpin 9s linear infinite;filter:blur(.4px)}
+@keyframes shopRaysIn{0%{opacity:0;transform:scale(.4)}18%{opacity:.85;transform:scale(1)}40%{opacity:.6}55%{opacity:.85}100%{opacity:0;transform:scale(1.15)}}
+@keyframes shopRaysSpin{to{transform:rotate(360deg)}}
+.shop-sand{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated;z-index:4}
+.shop-unl{position:absolute;left:50%;top:22%;z-index:5;pointer-events:none;white-space:nowrap;font-weight:bold;letter-spacing:.14em;color:#fff4a8;text-shadow:0 0 .5em #f2c444,0 .1em 0 #5a3500;
+  transform:translate(-50%,0);animation:shopUnl 1.7s ease-out both}
+.shop-unl.prem{color:#fff;text-shadow:0 0 .6em #ffb020,0 0 1.4em #ff6a3d,0 .1em 0 #5a3500;font-size:1.15em}
+@keyframes shopUnl{0%{opacity:0;transform:translate(-50%,10px) scale(.5)}15%{opacity:1;transform:translate(-50%,0) scale(1.25)}28%{transform:translate(-50%,0) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-14px) scale(1)}}
+@media (prefers-reduced-motion:reduce){.shop-act.sq,.shop-card.shake,.shop-card.fx-in,.shop-card.fx-out,.shop-raybox,.shop-raybox .shop-rays,.shop-unl{animation:none!important}.shop-raybox,.shop-unl{display:none}}
