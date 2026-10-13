@@ -54,6 +54,9 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #55 Roshan pit vision rule (Dota): units OUTSIDE the pit have no vision INSIDE it; a unit INSIDE sees the pit but loses vision of everything OUTSIDE. Applies to player, enemies (belief model: enemy inside can't see Invoker outside and vice versa), towers/wards. Pit needs a defined area + entrance in maps.js. Then add juke scenarios around the pit (enter/exit to break vision, blink/force in or out, Ghost Walk in the pit, enemy hiding in the pit, pit-entrance Sun Strike reads).
 
+- [ ] #56 No relic toast and no relic message in Free Play and Scenario modes (Ranked only). Default unless CEO says otherwise: relic progress/points also accrue ONLY in Ranked (avoids farming points in Free Play).
+- [ ] #57 BUG: multi-kill relics (Multi-Hero Ice Wall/Chaos Meteor, Three Hero EMP/Deafening Blast, etc.) count enemies across different rounds. Scope the hit/kill set per cast AND per round; reset on round transition. Add a test.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - Ogre two-headed enemy portrait: v2 preview in session scratchpad (ogre/v2, 48x32 wide recommended). CEO: "don't replace yet" — awaiting approve/v3; name TBD (Ian?).
