@@ -28,8 +28,9 @@
   function drawPreview(cv, kind, skin, t) {
     const A = IT.Art, x = cv.getContext('2d'), sheet = sheetFor(kind, skin), def = A.sheets[sheet];
     x.clearRect(0, 0, PW, PH);
-    // ground shadow
-    x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(FX - 8, FY, 16, 1); x.fillRect(FX - 6, FY + 1, 12, 1); x.fillRect(FX - 10, FY - 1, 20, 1);
+    // ground shadow (v6 #65: widens with the sprite frame: the 34-px Vitinian gets a bulkier blob)
+    const sw = kind === 'enemy' && IT.Skins && IT.Skins.meta ? Math.max(0, Math.round((IT.Skins.meta(skin).w - 20) / 4)) : 0;
+    x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(FX - 8 - sw, FY, 16 + sw * 2, 1); x.fillRect(FX - 6 - sw, FY + 1, 12 + sw * 2, 1); x.fillRect(FX - 10 - sw, FY - 1, 20 + sw * 2, 1);
     if (!def) return;
     const n = Math.max(1, A.count(sheet, 'idle', 's')), i = Math.floor(t * 4) % n;
     const cs = A.canvas(sheet, `idle_s_${i}`, false) || A.canvas(sheet, 'idle_s_0', false);

@@ -408,10 +408,10 @@
       { type: 'kill', how: { openInv: true } }, ['seen', 'method', 'time'],
       [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0', r: 550 }, { a: 'chaosmeteor', at: 'd0' }, { a: 'deafeningblast', at: 'd0', w: 0.3 }],
       { allyTowerBusy: true, focus: ['ourTower'], vary: { posJit: 0 }, funBot: true }),
-    V('emp_tornado_trap', 5, 'outpost_rad', ['fun', 'combo', 'prediction'], 12, { lvl: 11, style: 'qw' },
+    V('tornado_emp_drop', 5, 'outpost_rad', ['fun', 'combo', 'prediction'], 12, { lvl: 11, style: 'qw' },
       [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.45, aware: 0.4 })],
       { type: 'kill_with', how: { ability: ['emp', 'tornado'] } }, ['method', 'time'],
-      [{ a: 'tornado', at: 'd0' }, { a: 'emp', at: 'land' }], { rand: { pick: 3 }, funBot: true }),   // EMP (2.9 s) under the lifted foe outlasts the lift (<= 2.2 s at lvl 12): it lands in the field
+      [{ a: 'tornado', at: 'd0' }, { a: 'emp', at: 'land' }], { rand: { pick: 3 }, funBot: true }),   // v6 #67b: was emp_tornado_trap (old id aliased in IT.SCENARIOS.get). Tornado first, then EMP under the lifted foe: it outlasts the lift (<= 2.2 s at lvl 12), so it goes off after he lands in the field
     V('tornado_icewall_landing', 6, 'rad_triangle', ['fun', 'combo', 'positioning'], 12, { lvl: 12 },
       [U(SEEN([600, 800], { not: ['dtower'] }), { hp: 0.45, behavior: 'escape', aware: 0.6 })], KILL, ['escaped', 'time'],
       [{ a: 'tornado', at: 'd0' }, { a: 'icewall', at: 'land' }, { a: 'chaosmeteor', at: 'd0' }], { rand: { pick: 3 }, funBot: true }),
@@ -514,5 +514,6 @@
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)
-  IT.SCENARIOS.get = id => IT.SCENARIOS.find(s => s.id === id) || null;
+  IT.SCENARIOS.ALIAS = { emp_tornado_trap: 'tornado_emp_drop' };   // v6 #67b: renamed scenario ids (saved data / old links keep working)
+  IT.SCENARIOS.get = id => IT.SCENARIOS.find(s => s.id === id) || IT.SCENARIOS.find(s => s.id === IT.SCENARIOS.ALIAS[id]) || null;
 })(typeof window !== 'undefined' ? window : globalThis);

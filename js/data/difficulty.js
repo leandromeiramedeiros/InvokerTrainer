@@ -11,6 +11,7 @@
 //   moves (pathing quality), itemP = chance a defensive item / innate blink is used when it should be, predict = 0..1 lead on the hero's
 //   heading when aiming a blink, sway = u a guard fidgets around its post, dodge = sidesteps ground danger zones on foot,
 //   gwDust / gwReact = chance + s before a Ghost-Walk-slowed foe dusts its own feet, blinkCast = innate blink cast point s.
+// msMul (v6 #68) = x the enemy's scripted move speed (flee / chase / march / kite): (max(rolled hero base, tier speed) x msMul) + boots / travels / Euls bonus.
 // revealLinger (v6 item 45) = s the intro start-reveal ring (and its vision) stays on each unseen foe, counted from the camera ARRIVING on it.
 // Legacy dummy fields (preset/behavior/stunBolt/escape/blinkAfter/orbCut/useBkb/flee/chase) still drive the fallback foe when the enemy entity is missing.
 (function (G) {
@@ -20,6 +21,7 @@
   const D = {
     order: ['ian', 'easy', 'common', 'hard', 'bambam'],
     ian: {
+      msMul: 0.82,
       exec: { jitter: 220, itemP: 0.35, predict: 0.2, sway: 0, dodge: false, gwDust: 0, gwReact: 1.6, blinkCast: 0.35 },
       revealLinger: 2.5,
       telegraph: 1.5, awareness: 0.15, notice: 4, reaction: 1.4, hpMul: 0.8, armorAdd: 0, dmgMul: 0.35, fights: false, timer: 2, hints: true, mult: 0.6,
@@ -29,6 +31,7 @@
         'Tranquilo: os inimigos demoram a te notar, mostram cada item bem antes de usar e o tempo sobra. As dicas da receita ficam ligadas.'),
     },
     easy: {
+      msMul: 0.88,
       exec: { jitter: 160, itemP: 0.55, predict: 0.45, sway: 0, dodge: false, gwDust: 0.1, gwReact: 1.2, blinkCast: 0.32 },
       revealLinger: 2.0,
       telegraph: 1.0, awareness: 0.35, notice: 3.6, reaction: 1.0, hpMul: 0.9, armorAdd: 0, dmgMul: 0.6, fights: false, timer: 1.5, hints: true, mult: 0.8,
@@ -38,6 +41,7 @@
         'Fácil: reações lentas, avisos claros de item e um tempo folgado. As dicas continuam ligadas.'),
     },
     common: {
+      msMul: 0.95,
       exec: { jitter: 100, itemP: 0.8, predict: 0.7, sway: 120, dodge: false, gwDust: 0.45, gwReact: 0.8, blinkCast: 0.27 },
       revealLinger: 1.5,
       telegraph: 0.6, awareness: 0.6, notice: 3.2, reaction: 0.6, hpMul: 1, armorAdd: 1, dmgMul: 1, fights: false, timer: 1.3, hints: false, mult: 1,
@@ -47,6 +51,7 @@
         'Comum: os inimigos andam por aí, te notam a tempo e avisam pouco antes de usar um item. Sem dicas.'),
     },
     hard: {
+      msMul: 1,
       exec: { jitter: 50, itemP: 0.92, predict: 0.9, sway: 150, dodge: true, gwDust: 0.8, gwReact: 0.5, blinkCast: 0.2 },
       revealLinger: 1.1,
       telegraph: 0.3, awareness: 0.85, notice: 2.8, reaction: 0.35, hpMul: 1.05, armorAdd: 3, dmgMul: 1.25, fights: true, timer: 1.1, hints: false, mult: 1.35,
@@ -56,6 +61,7 @@
         'Difícil: inimigos atentos com reações rápidas, quase sem aviso de item, mais armadura e tempo apertado.'),
     },
     bambam: {
+      msMul: 1,
       exec: { jitter: 15, itemP: 1, predict: 1, sway: 180, dodge: true, gwDust: 0.97, gwReact: 0.3, blinkCast: 0.15 },
       revealLinger: 0.8,
       telegraph: 0, awareness: 1, notice: 2.4, reaction: 0.25, hpMul: 1.1, armorAdd: 4, dmgMul: 1.5, fights: true, timer: 0.9, hints: false, mult: 1.8,

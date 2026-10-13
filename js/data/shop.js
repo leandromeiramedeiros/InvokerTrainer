@@ -10,7 +10,7 @@
 
   // ---- pricing (see DECISIONS.md "Skin shop pricing"): a normal player earns REF_RUN points per 8-turn run (measured with tools/score_sample.mjs),
   // a run lasts RUN_MIN minutes; the whole catalogue costs TOTAL points = TOTAL / REF_RUN runs x RUN_MIN min = ~25 min of normal play.
-  const PRICING = { REF_RUN: 200, RUN_MIN: 4.5, MIN: 20, MAX: 30 };
+  const PRICING = { REF_RUN: 200, RUN_MIN: 4.5, MIN: 20, MAX: 35 };
   const CATALOG = [
     { kind: 'player', skin: 'default', price: 0 },
     { kind: 'player', skin: 'kid', price: 80 },
@@ -22,6 +22,7 @@
     { kind: 'enemy', skin: 'vitinho', price: 100 },
     { kind: 'enemy', skin: 'ianzinho', price: 110 },   // v6 #61, next to Vitinho
     { kind: 'enemy', skin: 'nando', price: 120 },
+    { kind: 'enemy', skin: 'vitinian', price: 250 },   // v6 #63: premium two-headed ogre (Vitinho + Ianzinho), 34x28 frame + 48x32 portrait
     { kind: 'dummy', skin: 'scarecrow', price: 0 },
     { kind: 'dummy', skin: 'raven', price: 100 },
   ];

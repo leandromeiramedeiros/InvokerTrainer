@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const { IT, build, bot } = require('./_funbot.js');
 const R = IT.Ranked, U = IT.Units;
 const FUN = IT.SCENARIOS.filter(s => s.funBot);
-const IDS = ['tp_snipe', 'tornado_tp_cancel', 'rune_contest', 'pit_fight_blast', 'bkb_tower_hitter', 'ghost_ambush', 'emp_tornado_trap',
+const IDS = ['tp_snipe', 'tornado_tp_cancel', 'rune_contest', 'pit_fight_blast', 'bkb_tower_hitter', 'ghost_ambush', 'tornado_emp_drop',
   'tornado_icewall_landing', 'smoke_gank_escape', 'icewall_ramp_defense', 'save_the_ally', 'aegis_snatch'];
 
 const thaw = m => { for (let i = 0; i < 600 && m.run.frozen(); i++) m.run.tick(1 / 30); return m; };

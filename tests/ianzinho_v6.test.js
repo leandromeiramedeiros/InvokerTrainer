@@ -126,14 +126,13 @@ test('ianzinho flair: no slurs, no sexual content, no real politicians', () => {
   assert.ok(!/\b(lula|bolsonaro|trump|biden|putin|stalin|hitler|mussolini|castro|dilma|temer|haddad|maduro|obama|sanders)\b/i.test(all));
 });
 
-test('CEO #62: Vitinho has big-weed-enjoyer lines across several situations, personality otherwise intact', () => {
-  const V = T.vitinho, weed = /herb|puff|4:20|green|smoke|stoned|high\b|joint|erva|tapa|chapado|verdinho|fuma/i;
-  const sits = Object.keys(V.lines).filter(s => V.lines[s].some(l => weed.test(l.t.en) && weed.test(l.t.pt)));
-  assert.ok(sits.length >= 12, 'weed lines in ' + sits.length + ' situations');
-  const n = Object.values(V.lines).flat().filter(l => weed.test(l.t.en)).length;
-  assert.ok(n >= 15, 'weed lines ' + n);
+test('CEO #62 (revised): Vitinho weed toned down (<= 2), no monkey-era tics, personality otherwise intact', () => {
+  const V = T.vitinho, weed = /weed|herb|ervinha|maconha|baseado|puff|4:20|stoned|chapado|verdinho/i;
+  const all = Object.values(V.lines).flat();
+  const n = all.filter(l => weed.test(l.t.en + ' ' + l.t.pt)).length;
+  assert.ok(n >= 1 && n <= 2, 'weed lines ' + n);
   assert.strictEqual(V.cd, 4); assert.strictEqual(V.chat, 0.85); assert.strictEqual(V.fallback, 'default');
-  assert.ok(Object.values(V.lines).flat().some(l => l.icon === 'monkey') && Object.values(V.lines).flat().some(l => /Clan|Clã/.test(l.t.en + l.t.pt)));
+  assert.ok(!all.some(l => l.icon === 'monkey' || /Ooh|Clã|Clan|primate|macaco/i.test(l.t.en + l.t.pt)));
   for (const sit of F.SITUATIONS.filter(s => V.lines[s])) assert.ok(V.lines[sit].length >= 5, sit);
   for (const sit of Object.keys(V.lines)) for (const ln of V.lines[sit]) assert.ok(ln.t.en.length <= 90 && ln.t.pt.length <= 90, ln.t.en);
 });

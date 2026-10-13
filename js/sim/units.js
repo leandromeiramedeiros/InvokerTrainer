@@ -125,7 +125,7 @@
     const baseMs = o.ms != null ? o.ms : p && p.ms != null ? p.ms : rollMs(o, E), bb = itemMs(items);   // v6 item 40 / #46: rolled base + the KV bonus_movement_speed of boots / travels / Euls
     const e = body(w, Object.assign({}, o, { items, preset: o.preset || 'enemy' }), 'enemy', {
       hp: pick('hp'), mana: pick('mana'), hpRegen: pick('hpRegen'), manaRegen: pick('manaRegen'), armor: pick('armor'), magicRes: pick('magicRes'),
-      ms: baseMs + bb, reaction: pick('reaction'), radius: E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
+      ms: baseMs + bb, reaction: pick('reaction'), radius: IT.Skins && IT.Skins.meta ? IT.Skins.meta(o.skin).hull : E.radius, vision: o.refill ? G_.DUMMY.vision : enemyVision(w),
     });
     e.msBase = baseMs; e.msBonus = bb;   // v6 #46: rolled base + item bonus (e.base.ms = both; the stats system never goes below base without a slow)
     e.ai = newAI(behavior, o.x, o.y, w.t);

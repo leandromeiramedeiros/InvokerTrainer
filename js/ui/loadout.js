@@ -566,7 +566,7 @@
   const SCN_CATS = ['all', 'basics', 'combo', 'escape', 'multi', 'items', 'terrain', 'vision', 'juke', 'fun'];
   const SCN_CAT_TAGS = {
     basics: ['basics', 'movement'], combo: ['combo', 'burst'], escape: ['escape', 'invisible', 'blink'], multi: ['multi', 'hold', 'positioning'], items: ['items'],
-    terrain: ['river', 'highground', 'pit', 'towers', 'edge'], vision: ['fog', 'vision', 'awareness', 'prediction', 'reaction'], juke: ['juke'], fun: ['fun'],
+    terrain: ['river', 'highground', 'pit', 'towers', 'edge', 'midlane'], vision: ['fog', 'vision', 'awareness', 'prediction', 'reaction'], juke: ['juke'], fun: ['fun'],
   };
   const SCN_PRIMARY = ['juke', 'fun', 'escape', 'terrain', 'vision', 'multi', 'items', 'combo', 'basics'];   // category() picks the first of these a scenario belongs to
   const SCN_SORTS = ['level', 'levelDesc', 'name', 'todo'];

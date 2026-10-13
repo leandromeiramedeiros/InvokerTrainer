@@ -36,9 +36,16 @@
     return z;
   }
 
+  // drawn sprite of e: [w, h, anchorX, anchorY]; enemy / dummy / ally skins read IT.GAME.SKIN_META (v6 #65: the 34x28 Vitinian is bigger than the 20x24 default)
+  function sprOf(e) {
+    if (e.kind === 'dummy' && e.scarecrow) return SCARECROW;
+    if ((e.kind === 'enemy' || e.kind === 'dummy' || e.kind === 'ally') && e.skin && IT.Skins && IT.Skins.meta) { const m = IT.Skins.meta(e.skin); return [m.w, m.h, m.anchor[0], m.anchor[1]]; }
+    return SPR[e.kind] || SPR.enemy;
+  }
+
   function boxOf(e, P) {
     P = P || unitPx();
-    const spr = (e.kind === 'dummy' && e.scarecrow) ? SCARECROW : (SPR[e.kind] || SPR.enemy);
+    const spr = sprOf(e);
     const k = isFoeKind(e) && (e.bkb || hasS(e, 'magicImmune')) ? BKB_SCALE : 1;
     const w = spr[0] * k, h = spr[1] * k, ax = spr[2] * k, ay = spr[3] * k;
     const up = liftOf(e);
@@ -80,5 +87,5 @@
     return best;
   }
 
-  IT.Pick = { boxOf, unitAt, liftOf, SPR, RANK, HOVER };
+  IT.Pick = { boxOf, unitAt, liftOf, sprOf, SPR, RANK, HOVER };
 })(typeof window !== 'undefined' ? window : globalThis);

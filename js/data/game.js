@@ -37,8 +37,18 @@
     // v6 item 22: 'default' (bland hooded grunt) is FIRST: the skin a plain enemy wears. Flair lines per skin live in js/data/flair.js.
     // v6 item 15: ranked rotates IT.Skins.pool('enemy') = the free 'default' + the enemy skins bought in the SHOP (js/data/shop.js); 'nando' is a shop enemy.
     // v6 #61: 'ianzinho' (js/art/ianzinho.js) is a shop enemy too (owned only, like nando).
-    SKINS: ['default', 'pedro', 'renan', 'vitinho', 'nando', 'ianzinho'],
-    SKIN_NAMES: { default: 'Grunt', pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho', nando: 'Nando', ianzinho: 'Ianzinho' },
+    // v6 #63: 'vitinian' (js/art/vitinian.js) is the premium two-headed ogre (Vitinho + Ianzinho): bigger frame, wide portrait, bulkier hull (SKIN_META).
+    SKINS: ['default', 'pedro', 'renan', 'vitinho', 'nando', 'ianzinho', 'vitinian'],
+    SKIN_NAMES: { default: 'Grunt', pedro: 'Pedro', renan: 'Renan', vitinho: 'Vitinho', nando: 'Nando', ianzinho: 'Ianzinho', vitinian: 'Vitinian' },
+    // v6 #65: per-skin drawn size, in px: frame w x h, anchor = the feet point inside the frame, HUD portrait [w, h], hull = sim collision radius (world units).
+    // Every skin in SKINS has an entry; IT.Skins.meta(id) falls back to SKIN_META_DEFAULT for ids without one. Read by render/units.js, sim/pick.js, sim/units.js, ui/hud.js.
+    SKIN_META_DEFAULT: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 },
+    SKIN_META: {
+      default: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 }, pedro: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 },
+      renan: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 }, vitinho: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 },
+      nando: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 }, ianzinho: { w: 20, h: 24, anchor: [10, 22], portrait: [32, 32], hull: 24 },
+      vitinian: { w: 34, h: 28, anchor: [17, 26], portrait: [48, 32], hull: 32 },
+    },
     // Dummy stat presets. Behavior: stationary | wander | evasive.
     DUMMY_PRESETS: {
       training: { hp: 2500, mana: 800, armor: 0, magicRes: 0.25, ms: 0, behavior: 'stationary', hpRegen: 0, manaRegen: 0, reaction: 0 },
@@ -74,7 +84,7 @@
       ranged: { min: 46, max: 54, bat: 1.7, point: 0.4, range: 600, projSpeed: 1250 },
       melee: { min: 50, max: 60, bat: 1.7, point: 0.4, range: 150, projSpeed: 0 },
     },
-    ENEMY_ATTACK_KIND: { default: 'ranged', pedro: 'ranged', renan: 'melee', vitinho: 'ranged', nando: 'ranged', ianzinho: 'ranged' },   // skin -> ENEMY_ATTACK profile
+    ENEMY_ATTACK_KIND: { default: 'ranged', pedro: 'ranged', renan: 'melee', vitinho: 'ranged', nando: 'ranged', ianzinho: 'ranged', vitinian: 'ranged' },   // skin -> ENEMY_ATTACK profile
     DUMMY: {
       refillBelow: 0.25,     // refill to full when HP drops below 25%
       radius: 24, vision: 800,
@@ -137,5 +147,10 @@
     }
     return hsl2rgb(nh, Math.max(0, Math.min(1, s * T.sm)), Math.max(0, Math.min(0.97, l * T.lm + T.lb)));
   }
-  IT.Skins = { FREE, pool, tintRgb, TINT, has: (kind, s) => (LISTS()[kind] || []).indexOf(s) >= 0 };
+  // meta(skin) -> { w, h, anchor, portrait, hull } for any skin id (unknown / default skins get SKIN_META_DEFAULT)
+  function meta(skin) {
+    const G_ = IT.GAME, D = G_.SKIN_META_DEFAULT, m = (G_.SKIN_META || {})[skin];
+    return m ? Object.assign({}, D, m) : D;
+  }
+  IT.Skins = { FREE, pool, tintRgb, TINT, meta, has: (kind, s) => (LISTS()[kind] || []).indexOf(s) >= 0 };
 })(typeof window !== 'undefined' ? window : globalThis);

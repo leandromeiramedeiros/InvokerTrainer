@@ -84,9 +84,26 @@ test('nando has muted-mic lines and cut-off "—" lines; icons render for all', 
 
 test('other characters use their signature icons', () => {
   assert.ok(Object.values(T.renan.lines).flat().some(l => l.icon === 'camera'));
-  assert.ok(Object.values(T.vitinho.lines).flat().some(l => l.icon === 'monkey'));
   assert.ok(Object.values(T.vitinho.lines).flat().some(l => l.icon === 'star'));
   assert.ok(Object.values(T.pedro.lines).flat().some(l => l.icon === 'goiaba'));
+});
+
+test('vitinho (v6 #62 revised): weed <= 2 lines, no monkey-era tics, pseudo-philosophy in several situations, macho + apolitical kept', () => {
+  const all = [];
+  for (const [sit, arr] of Object.entries(T.vitinho.lines)) for (const l of arr) all.push({ sit, en: l.t.en, pt: l.t.pt, icon: l.icon });
+  const weed = all.filter(l => /weed|ganja|herb|ervinha|maconha|baseado|high|420|chapad/i.test(l.en + ' ' + l.pt));
+  assert.ok(weed.length >= 1 && weed.length <= 2, 'weed lines ' + weed.length);
+  const bad = all.filter(l => /Ooh|Clã|Clan|primate|macaco|monkey/i.test(l.en + ' ' + l.pt) || l.icon === 'monkey');
+  assert.deepStrictEqual(bad.map(l => l.en), [], 'monkey-era tics');
+  const phil = all.filter(l => /Stoic|estoic|Nietzsche|Socrates|Sócrates|Plato|Platão|Camus|Seneca|Sêneca|Epict|Heraclit|Descartes|free will|livre-arbítrio|memento mori|existential|existencial/i.test(l.en + ' ' + l.pt));
+  assert.ok(phil.length >= 8, 'philosophy lines ' + phil.length);
+  assert.ok(new Set(phil.map(l => l.sit)).size >= 5, 'philosophy spread over situations');
+  assert.ok(all.some(l => /not even vote|nem voto/i.test(l.en + ' ' + l.pt)), 'apolitical');
+  assert.ok(all.some(l => /not a man|not scared|homem|medo/i.test(l.en + ' ' + l.pt)), 'macho jabs');
+  assert.ok(all.some(l => /America|Uncle Sam|Tio Sam|América/i.test(l.en + ' ' + l.pt)), 'America');
+  assert.ok(all.some(l => /exquisite|requintad/i.test(l.en + ' ' + l.pt)), 'exquisite items');
+  assert.ok(all.some(l => /deadline|prazo|work|trabalh/i.test(l.en + ' ' + l.pt)), 'work');
+  assert.ok(all.some(l => l.icon === 'star'));
 });
 
 test('CEO item 44: speaking skins have 6+ lines for the new situations; raven has its two wise ones', () => {

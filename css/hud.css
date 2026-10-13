@@ -121,6 +121,10 @@
 .dchat::after{content:"";position:absolute;left:var(--tx,50%);bottom:-.65em;margin-left:-.4em;border-style:solid;border-width:.5em .4em 0;border-color:var(--mag) transparent transparent}
 .dchat.dc-praise{border-color:var(--good)}.dchat.dc-praise::after{border-top-color:var(--good)}
 .dchat.dc-hurt,.dchat.dc-comboFail{border-color:var(--bad)}.dchat.dc-hurt::after,.dchat.dc-comboFail::after{border-top-color:var(--bad)}
+/* v6 #63 Vitinian: head tag on the tail side (white head = Vitinho on the left, dark head = Ianzinho on the right) */
+.dchat.dc-head-w,.dchat.dc-head-d{display:flex;align-items:center;gap:.5em}
+.dchat.dc-head-w{text-align:left}.dchat.dc-head-d{flex-direction:row-reverse;text-align:right}
+.dchat .dc-hd{flex:none;height:1.6em!important;width:1.6em!important;margin:0!important;vertical-align:baseline}
 
 
 /* ---- v6 WP9 ornaments: HUD frame scale follows the stage scale (art px = 0.75 stage px, integer); data URLs from js/art/ornaments.js */

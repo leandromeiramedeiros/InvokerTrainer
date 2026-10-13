@@ -89,14 +89,14 @@ test('item 40: chasers / fleers / marchers carry boots (travels from level 16), 
   assert.ok(seenBoots > 0 && seenTravels > 0, 'boots ' + seenBoots + ' travels ' + seenTravels);
   const df = DF.get('common'), m = H.build('dust_escape', 'common', 2), d = m.run.dummies[0], bt = m.pr.vary.boots[0];
   assert.ok(bt, 'dust_escape chaser has boots');
-  assert.equal(d.ms, Math.max(d.msBase, 380 * df.chase) + IT.Units.bootBonus([bt]));   // v6 #46: tier speed only raises the hero base
+  assert.equal(d.ms, Math.round(Math.max(d.msBase, 380 * df.chase) * df.msMul) + IT.Units.bootBonus([bt]));   // v6 #46: tier speed only raises the hero base; v6 #68: x tier msMul, then the boots
   assert.equal(IT.Units.bootBonus(['boots']), 45);
   assert.equal(IT.Units.bootBonus(['boots', 'travels']), 90);
   assert.equal(IT.Units.bootBonus(['bkb']), 0);
 });
 
 test('item 40: bot sweep with variation (easy seeds 1-6 clear, common seeds 1-3 kill no foe early)', () => {
-  const KNOWN = new Set(['triple_kill', 'shadow_strike', 'cataclysm_finish', 'plateau_escape', 'gauntlet', 'sun_flee']);   // bot-limited at baseline too (see levels_v6 KNOWN)
+  const KNOWN = new Set(['triple_kill', 'shadow_strike', 'cataclysm_finish', 'plateau_escape', 'gauntlet', 'sun_flee', 'jungle_hold']);   // jungle_hold easy s2: v6 #68 slower marchers vs the fixed-delay bot (levels_v6 KNOWN)   // bot-limited at baseline too (see levels_v6 KNOWN)
   const bad = [];
   for (const sc of SC) for (const [df, seeds] of [['easy', [1, 2, 3, 4, 5, 6]], ['common', [1, 2, 3]]]) for (const seed of seeds) {
     if ((sc.tags || []).indexOf('juke') >= 0 || sc.funBot) continue;   // v6 item 27: covered by tests/juke_v6.test.js (belief + spot bot); item 28 funBot: tests/fun_v6.test.js

@@ -76,22 +76,22 @@ test('#46: enemy ms = rolled hero base (285..320 +- jitter) + boots / travels / 
   assert.equal(same.msBase, IT.Units.rollMs({ skin: skins[0], x: h.x + 100, y: h.y + 300 }, E), 'deterministic (no rng draw)');
 });
 
-test('#46: every scenario foe at every tier keeps ms >= its hero base (a Boots of Travel chaser = base + 90, no tier slowdown)', () => {
+test('#46 / #68: every scenario foe keeps ms >= its hero base x the tier msMul (a Boots of Travel chaser = base + 90 on top)', () => {
   const all = [];
   for (const sc of IT.SCENARIOS) for (const df of ['easy', 'common', 'ian']) {
     const m = H.build(sc.id, df, 2);
     m.run.dummies.forEach(d => {
       if (!d || d.kind !== 'enemy') return;
       assert.ok(d.msBase >= 285, sc.id + ' base ' + d.msBase);
-      assert.ok(d.ms >= d.msBase, sc.id + ' ' + df + ' ms ' + d.ms + ' < base ' + d.msBase);
+      assert.ok(d.ms >= Math.round(d.msBase * DF.get(df).msMul), sc.id + ' ' + df + ' ms ' + d.ms + ' < base x msMul ' + d.msBase);
       all.push(d.ms);
     });
   }
-  assert.ok(all.length > 50 && Math.min(...all) >= 285, 'min ' + Math.min(...all));
+  assert.ok(all.length > 50 && Math.min(...all) >= 285 * 0.82 - 1, 'min ' + Math.min(...all));
   const m = H.build('dust_escape', 'easy', 2), d = m.run.dummies[0], bt = m.pr.vary.boots[0];
   assert.ok(bt, 'booted chaser');
-  assert.equal(d.ms, Math.max(d.msBase, 380 * DF.get('easy').chase) + IT.Units.bootBonus([bt]));
-  assert.ok(d.ms >= d.msBase + IT.Units.bootBonus([bt]));
+  assert.equal(d.ms, Math.round(Math.max(d.msBase, 380 * DF.get('easy').chase) * DF.get('easy').msMul) + IT.Units.bootBonus([bt]));   // v6 #68: base x msMul, then the boots
+  assert.ok(d.ms >= Math.round(d.msBase * DF.get('easy').msMul) + IT.Units.bootBonus([bt]));
 });
 
 // ---------------------------------------------------------------- #57

@@ -174,7 +174,8 @@ const KNOWN = new Set(['triple_kill|easy|3', 'triple_kill|easy|6', 'triple_kill|
   'cataclysm_finish|common|2', 'cataclysm_finish|common|4', 'cataclysm_finish|common|5',
   'plateau_escape|common|1', 'plateau_escape|common|6',
   'triple_kill|easy|5', 'triple_kill|common|5', 'plateau_escape|common|4',   // item 40: variation shifts which seeds hit these bot-limited scenarios
-  'sun_flee|easy|4', 'sun_flee|common|4', 'plateau_escape|easy|1', 'plateau_escape|easy|4', 'plateau_escape|easy|6',   // v6 #46: enemies never below their hero base ms
+  'plateau_escape|easy|6',   // v6 #68: sun_flee + plateau_escape easy 1/4 now clear (tier msMul); s6 is walked into a Dire tower by the straight-away bot (speed independent)
+  'jungle_hold|easy|2',   // v6 #68: slower marchers (x0.88) shift the Meteor / Blast timing of the fixed-delay bot; the third marcher crosses
   ...SEEDS.map(s => 'gauntlet|common|' + s)]);
 const BANDS = {   // story fit: laning 6-10, mid game 12-18, late game 20-25
   cold_start: [6, 10], sleepy_target: [6, 10], spirit_pack: [6, 10], river_rune: [6, 10], two_birds: [6, 10], uphill_snipe: [6, 10], sun_flee: [6, 10],

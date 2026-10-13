@@ -63,6 +63,8 @@
       'set.beliefUI': 'Enemy belief markers',
       'sbx.reset': 'Reset targets', 'sbx.grant': 'Grant items', 'sbx.open': 'Open the sandbox panel', 'ros.row.diff': 'Difficulty: reaction and capabilities only', 'ros.home': 'Back to the placed spot', 'sc.cat.fun': 'FUN',
       'unit.ally': 'Ally', 'unit.roshan': 'Roshan',
+      'tag.midlane': 'mid lane',
+      'dc.head.w': 'White head (Vitinho)', 'dc.head.d': 'Dark head (Ianzinho)',
     },
     pt: {
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
@@ -125,5 +127,7 @@
       'set.beliefUI': 'Marcadores de percepção inimiga',
       'sbx.reset': 'Reiniciar alvos', 'sbx.grant': 'Liberar itens', 'sbx.open': 'Abrir o painel do sandbox', 'ros.row.diff': 'Dificuldade: só reação e capacidades', 'ros.home': 'Volta ao lugar colocado', 'sc.cat.fun': 'DIVERSÃO',
       'unit.ally': 'Aliado', 'unit.roshan': 'Roshan',
+      'tag.midlane': 'mid',
+      'dc.head.w': 'Cabeça branca (Vitinho)', 'dc.head.d': 'Cabeça escura (Ianzinho)',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

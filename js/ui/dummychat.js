@@ -15,6 +15,8 @@
   const PRAISE_P = 0.4;   // chance of a grudging compliment on comboDone
   const DODGE_P = 0.6;
   const HEAD = 40;        // px above the dummy's feet
+  const XGAP = 0.9;       // v6 #63: seconds between the bubbles of a two-head exchange
+  const HEAD_OFF = 9;     // v6 #63: view px the tail of a head-tagged bubble moves off the sprite centre (white head left, dark head right)
   const NEAR_DEATH = 0.2; // fraction of max HP
   const DISABLES = { stun: 1, frozen: 1, hex: 1, lift: 1 };
   const HERO_CASTS = { icewall: 1, alacrity: 1, forgespirit: 1, ghostwalk: 1 };   // hitBy:<id> fired when the hero casts it (nothing "hits" the foe)
@@ -23,7 +25,7 @@
     gotJuked: 0.8, invokerEscaped: 0.8, reacquired: 0.6, dustHit: 0.9, dustMiss: 1 };   // v6 #44/#61: belief + Dust situations
   const CLS = { praise: 'praise', heroLow: 'hurt', killedHero: 'hurt', comboFail: 'comboFail' };   // css colour classes in hud.css
 
-  const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, ambAt: 0, now: 0, st: { last: {} }, pend: null, nd: new Set(), invAt: -99, rng: null };
+  const D = { w: null, g: null, off: [], bub: null, root: null, el: null, txt: null, last: {}, lastSay: -99, lastDmg: 0, hurtArm: true, idleAt: 0, ambAt: 0, now: 0, st: { last: {} }, pend: null, nd: new Set(), invAt: -99, rng: null, bubs: [], seq: null };
 
   // ---- seeded rng (mulberry32); tests can pass their own to pickFlair
   function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -52,7 +54,8 @@
     if (sit.indexOf('hitBy:') === 0 && listOf(id, 'damaged').length) return true;
     return !!(s.fallback && T[s.fallback] && listOf(s.fallback, sit).length);
   }
-  // Pick a line for skin + situation. opts: { lang, rng, now, state }  -> { text, icon, skin, sit, idx, key } | null
+  // Pick a line for skin + situation. opts: { lang, rng, now, state }  -> { text, icon, skin, sit, idx, key, head, x } | null
+  //  - head: 'w' | 'd' | null (v6 #63 two-head skin); x: null, or the exchange [{ head, text }, ...] (2-3 beats, x[0] is the first bubble = text)
   //  - null for a silent skin (scarecrow), or when every candidate is on cooldown
   //  - unknown skin -> 'default'; hitBy:<id> with no (or exhausted) lines falls to 'damaged'; a skin with NO lines for the situation borrows its `fallback` skin's
   //  - weights (w) bias the pick; a line cannot repeat for its `cd` (else the skin's `lineCd`) sim-seconds counted from opts.now
@@ -78,19 +81,23 @@
       let r = rng() * tot, k = cands[cands.length - 1];
       for (let i = 0; i < cands.length; i++) { r -= cands[i].ln.w; if (r < 0) { k = cands[i]; break; } }
       st.last[k.key] = now;
-      return { text: k.ln.t[lang] || k.ln.t.en || '', icon: k.ln.icon || null, skin: owner, sit: name, idx: k.i, key: k.key };
+      const L = x => x.t[lang] || x.t.en || '';
+      return { text: L(k.ln), icon: k.ln.icon || null, skin: owner, sit: name, idx: k.i, key: k.key, head: k.ln.head || null, x: k.ln.x ? k.ln.x.map(function (b) { return { head: b.head, text: L(b) }; }) : null };
     }
     return null;
   }
 
   // ---- pixel icons (inline SVG built from these grids; no css / assets needed)
-  const PAL = { g: '#c9c4d6', k: '#2a2238', w: '#ffffff', y: '#ffd24a', r: '#e5484d', b: '#8a5a32', t: '#e0b684', G: '#4aa86a', p: '#ee6f86', o: '#f29a3a' };
+  const PAL = { g: '#c9c4d6', W: '#f3e6d6', D: '#5a3a2a', e: '#1a1220', k: '#2a2238', w: '#ffffff', y: '#ffd24a', r: '#e5484d', b: '#8a5a32', t: '#e0b684', G: '#4aa86a', p: '#ee6f86', o: '#f29a3a' };
   const ICONS = {
     muted: ['...ggg...', '..ggggg..', '..ggggg..', '..ggggg..', 'g.ggggg.g', 'g.ggggg.g', '.g.ggg.g.', '..ggggg..', '....g....', '...ggg...', '.........'],
     camera: ['..ggg.....', 'gggggggggg', 'ggg.kk.ggg', 'gg.kwwk.gg', 'gg.kwwk.gg', 'ggg.kk.ggg', 'gggggggggg'],
     monkey: ['..bbbbb..', '.bbbbbbb.', 'bbtttttbb', 'btktttktb', 'bbtttttbb', '.btttttb.', '.bttrrtb.', '..bbbbb..'],
     star: ['....y....', '....y....', '...yyy...', 'yyyyyyyyy', '.yyyyyyy.', '..yyyyy..', '..yyyyy..', '.yyy.yyy.', '.yy...yy.'],
     goiaba: ['....GG..', '...GG...', '..pppp..', '.pppppp.', '.ppwppp.', '.pppppp.', '.pppppp.', '..pppp..'],
+    // v6 #63: the tag of the speaking head of the Vitinian (white head = Vitinho, dark head = Ianzinho)
+    headw: ['..kkkkk..', '.kWWWWWk.', 'kWWWWWWWk', 'kWeWWWeWk', 'kWWWWWWWk', 'kWWWWWWWk', 'kWWeeeWWk', '.kWWWWWk.', '..kkkkk..'],
+    headd: ['..kkkkk..', '.kDDDDDk.', 'kDDDDDDDk', 'kDwDDDwDk', 'kDDDDDDDk', 'kDDDDDDDk', 'kDDwwwDDk', '.kDDDDDk.', '..kkkkk..'],
   };
   // slash over the mic
   (function () { const g = ICONS.muted.map(r => r.split('')); [[0, 0], [1, 1], [2, 2], [3, 2], [4, 3], [5, 4], [6, 5], [7, 6], [8, 6], [9, 7], [10, 8]].forEach(p => { g[p[0]][p[1]] = 'r'; }); ICONS.muted = g.map(r => r.join('')); })();
@@ -165,7 +172,23 @@
     }
     return D.root;
   }
-  function clearBubble() { if (D.bub) { D.bub.el.remove(); D.bub = null; } }
+  function clearBubble() { D.seq = null; D.bubs.forEach(b => b.el.remove()); D.bubs = []; D.bub = null; }
+  function dropBubble(b) { b.el.remove(); D.bubs = D.bubs.filter(x => x !== b); D.bub = D.bubs.length ? D.bubs[D.bubs.length - 1] : null; }
+  // one bubble (a single line, or one beat of an exchange): head = 'w' | 'd' | null
+  function mkBubble(who, skin, sit, text, icon, head, life) {
+    const root = ensureEl(); if (!root) return null;
+    const el = document.createElement('div');
+    el.className = 'dchat dc-' + (CLS[sit] || sit.replace(/[^\w-]/g, '_')) + (text ? '' : ' dc-icononly') + ' dc-skin-' + skin + (head ? ' dc-head-' + head : '');
+    const hd = head && iconEl('head' + head, document);
+    if (hd) { hd.setAttribute('class', hd.getAttribute('class') + ' dc-hd'); hd.setAttribute('aria-label', IT.t('dc.head.' + head)); el.appendChild(hd); }
+    const ic = icon && iconEl(icon, document);
+    if (ic) { ic.setAttribute('aria-label', IT.t('dc.icon.' + icon)); if (!text) ic.style.cssText += ';height:1.6em;width:' + (1.6 * (ICONS[icon][0].length / ICONS[icon].length)).toFixed(2) + 'em;margin:0'; el.appendChild(ic); }
+    if (text) el.appendChild(document.createTextNode(text));
+    root.appendChild(el);
+    const b = { el, who, age: 0, life: life || LIFE, head: head || null };
+    D.bubs.push(b); D.bub = b;
+    return b;
+  }
 
   // say(situation, o): o = { pref (speaker unit), dead (pref is a corpse), p (extra chance 0..1), amb (ambient: chat x0.35), alt (situation to use when the speaker's skin has none), fallback (unit) }
   // -> 'ok' spoke | 'dice' the chance roll failed (counts as handled) | false could not speak (blocked / cooldown / no line / no speaker)
@@ -186,14 +209,11 @@
     const prob = (o.p == null ? 1 : o.p) * (base == null ? 1 : base) * (o.amb ? T.chat * 0.35 : T.chat);
     if (prob < 1 && rnd() > prob) return 'dice';
     const f = pickFlair(skin, sit, { rng: rnd, now: w.t, state: D.st }); if (!f) return false;
-    const root = ensureEl(); if (!root) return false;
-    const el = document.createElement('div');
-    el.className = 'dchat dc-' + (CLS[sit] || sit.replace(/[^\w-]/g, '_')) + (f.text ? '' : ' dc-icononly') + ' dc-skin-' + skin;
-    const ic = f.icon && iconEl(f.icon, document);
-    if (ic) { ic.setAttribute('aria-label', IT.t('dc.icon.' + f.icon)); if (!f.text) ic.style.cssText += ';height:1.6em;width:' + (1.6 * (ICONS[f.icon][0].length / ICONS[f.icon].length)).toFixed(2) + 'em;margin:0'; el.appendChild(ic); }
-    if (f.text) el.appendChild(document.createTextNode(f.text));
-    root.appendChild(el);
-    D.bub = { el, who, age: 0 };
+    if (!ensureEl()) return false;
+    // v6 #63: a two-head exchange: beat 0 now, the rest queued ~XGAP apart (all of them leave together, LIFE after the last one)
+    const n = f.x ? f.x.length : 1;
+    if (!mkBubble(who, skin, sit, f.text, f.icon, f.head, LIFE + (n - 1) * XGAP)) return false;
+    if (n > 1) D.seq = { who, skin, sit, beats: f.x, i: 1, t: 0 };
     D.lastSay = w.t;
     place();
     return 'ok';
@@ -202,29 +222,44 @@
   // anchored right above the speaker's head: percent of the live internal view (VIEW_W/H change with the scroll zoom, so no --u units);
   // the bubble is kept inside the viewport and the tail slides sideways to keep pointing at the unit
   function place() {
-    const b = D.bub; if (!b) return;
-    const GM = IT.GAME, P = GM.UNIT_PX, cam = D.g.cam, e = b.who, el = b.el, root = D.root;
-    const ux = e.x / P - cam.px, uy = e.y / P - cam.py - HEAD - (e.z || 0) / P;   // unit head, view px
-    const rw = (root && root.clientWidth) || 1, rh = (root && root.clientHeight) || 1;
-    const bw = el.offsetWidth || 0, bh = el.offsetHeight || 0, M = 6;
-    let px = ux / GM.VIEW_W * rw, py = uy / GM.VIEW_H * rh;   // head in root px
-    const ax = Math.max(bw / 2 + M, Math.min(rw - bw / 2 - M, px)), ay = Math.max(bh + M + 8, Math.min(rh - M, py));
-    el.style.left = (ax / rw * 100).toFixed(2) + '%'; el.style.top = (ay / rh * 100).toFixed(2) + '%';
-    const tx = Math.max(12, Math.min(bw - 12, bw / 2 + (px - ax)));
-    el.style.setProperty('--tx', (bw ? tx : 0) + 'px');
-    el.classList.toggle('below', py < bh + M + 8);   // head too close to the top edge: the clamped bubble overlaps the unit, hide the tail
+    if (!D.bubs.length) return;
+    const GM = IT.GAME, P = GM.UNIT_PX, cam = D.g.cam, root = D.root;
+    const rw = (root && root.clientWidth) || 1, rh = (root && root.clientHeight) || 1, M = 6;
+    let lift = 0;   // an exchange stacks upward: the newest bubble sits on the unit, the older ones above it (read top to bottom)
+    for (let i = D.bubs.length - 1; i >= 0; i--) {
+      const b = D.bubs[i], e = b.who, el = b.el;
+      const ux = e.x / P - cam.px, uy = e.y / P - cam.py - HEAD - (e.z || 0) / P;   // unit head, view px
+      const bw = el.offsetWidth || 0, bh = el.offsetHeight || 0;
+      const side = b.head === 'w' ? -1 : b.head === 'd' ? 1 : 0;   // white head speaks from the left of the sprite, dark head from the right
+      const px = (ux + side * HEAD_OFF) / GM.VIEW_W * rw, py = uy / GM.VIEW_H * rh - lift;   // tail target in root px
+      const cx = px + side * Math.min(bw * 0.28, rw * 0.06);   // bubble centre, nudged off the sprite to its side
+      const ax = Math.max(bw / 2 + M, Math.min(rw - bw / 2 - M, cx)), ay = Math.max(bh + M + 8, Math.min(rh - M, py));
+      el.style.left = (ax / rw * 100).toFixed(2) + '%'; el.style.top = (ay / rh * 100).toFixed(2) + '%';
+      const tx = Math.max(12, Math.min(bw - 12, bw / 2 + (px - ax)));
+      el.style.setProperty('--tx', (bw ? tx : 0) + 'px');
+      el.classList.toggle('below', py < bh + M + 8);   // head too close to the top edge: the clamped bubble overlaps the unit, hide the tail
+      lift += bh + 6;
+    }
   }
 
   function update(dt) {
     const w = D.w; if (!w || !D.g) return;
     ensureEl();
     const bl = blocked();
-    if (D.bub) {
+    if (D.bubs.length) {
       if (bl || !enabled() || !(D.bub.who.visible || D.bub.who.dead)) clearBubble();
       else {
-        D.bub.age += dt || 0;
-        if (D.bub.age >= LIFE) clearBubble();
-        else { place(); D.bub.el.classList.toggle('out', D.bub.age > LIFE - FADE); }
+        const d = dt || 0;
+        if (D.seq) {   // next beat of the exchange
+          const q = D.seq; q.t += d;
+          while (D.seq && q.i < q.beats.length && q.t >= q.i * XGAP) {
+            const bt = q.beats[q.i++];
+            mkBubble(q.who, q.skin, q.sit, bt.text, null, bt.head, LIFE + (q.beats.length - q.i) * XGAP);
+            if (q.i >= q.beats.length) D.seq = null;
+          }
+        }
+        D.bubs.slice().forEach(b => { b.age += d; if (b.age >= b.life) dropBubble(b); else b.el.classList.toggle('out', b.age > b.life - FADE); });
+        place();
       }
     }
     if (bl || !enabled()) { D.idleAt = Math.max(D.idleAt, w.t); if (D.ambAt) D.ambAt = Math.max(D.ambAt, w.t + 8); return; }
@@ -349,5 +384,5 @@
     D.root = null; D.w = null; D.g = null; D.lastKilled = null; D.pend = null;
   }
 
-  IT.DummyChat = { attach, detach, update, CATS, lines, pick, needed, pickFlair, hasLines, iconEl, ICONS, seed: n => { D.rng = mulberry(n >>> 0); } };
+  IT.DummyChat = { attach, bubbles: () => D.bubs, detach, update, CATS, lines, pick, needed, pickFlair, hasLines, iconEl, ICONS, seed: n => { D.rng = mulberry(n >>> 0); } };
 })(typeof window !== 'undefined' ? window : globalThis);

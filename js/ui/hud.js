@@ -645,12 +645,26 @@
   };
   const sbIcon = k => { const s = IT.UI.h('span', { class: 'sbi' }); s.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + SBI[k] + '</svg>'; return s; };
   const SB_FILTERS = ['all', 'basic', 'intermediate', 'advanced', 'items'];
+  // v6 #65: portrait canvas of a sheet that keeps the portrait's OWN size (32x32, or the 48x32 Vitinian) and letterboxes it inside the square slot (object-fit: contain,
+  // no distortion; the rest of the slot shows the frame background). IT.UI.portrait (menus.js) always makes a 32x32 canvas, so a wide portrait is redrawn at its size.
+  function fitPor(sheet, cls) {
+    const cv = IT.UI.portrait(sheet, cls);
+    let src = null;
+    try { src = IT.Art && IT.Art.canvas(sheet, 'portrait'); } catch (e) { src = null; }
+    if (src && (src.width !== cv.width || src.height !== cv.height)) {
+      cv.width = src.width; cv.height = src.height;
+      cv.getContext('2d').drawImage(src, 0, 0);
+      cv.style.objectFit = 'contain';
+    }
+    return cv;
+  }
+  H.fitPor = fitPor;
+
   // 32px portrait of a skin; dummy skins without art of their own wear the scarecrow sheet
   function skinPor(skin, kind) {
-    const { portrait } = IT.UI;
     let ok = false;
     try { ok = !!(IT.Art && IT.Art.canvas(skin, 'portrait')); } catch (e) { ok = false; }
-    return portrait(ok ? skin : kind === 'dummy' ? 'scarecrow' : skin);
+    return fitPor(ok ? skin : kind === 'dummy' ? 'scarecrow' : skin);
   }
 
   // pure: the side pane exists only in Free Play (ctx.free = no scenario run); never in ranked / practice scenarios
@@ -1009,7 +1023,7 @@
       const bld = !!U.building, own = U.kind === 'spirit' && U.team === 0;
       const sheet = U.kind === 'hero' ? IT.Art.heroSheet() : U.kind === 'spirit' ? 'forge' : U.kind === 'roshan' ? 'roshan' : (IT.Art.sheets[U.skin] ? U.skin : U.kind === 'ally' ? 'default' : null);
       const bp = bld && IT.TowerDraw && IT.TowerDraw.portrait ? IT.TowerDraw.portrait(U, w) : null;
-      R.upor.textContent = ''; R.upor.appendChild(bp || (sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' })));
+      R.upor.textContent = ''; R.upor.appendChild(bp || (sheet ? fitPor(sheet) : h('div', { class: 'hgen', text: '?' })));
       const foeCard = U.team === 1 || U.kind === 'roshan';   // v6 item 28: Roshan is hostile (red HP)
       R.upor.classList.toggle('foe', foeCard); R.uhp.classList.toggle('foe', foeCard);
       R.uname.textContent = U.name || (U.kind === 'ally' ? IT.UnitDraw.allyName() : U.kind === 'roshan' ? IT.UnitDraw.roshName() : t('hud.unit'));

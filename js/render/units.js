@@ -287,6 +287,7 @@
     let img = sp.cv, ax = sp.ax, ay = sp.ay;
     if (sc !== 1) { img = scaledOf(img, sc); ax = Math.round(ax * sc); ay = Math.round(ay * sc); }
     const rr = Math.max(3, Math.round(e.radius / P));
+    const swr = Math.max(9, Math.round(img.width * 0.45));   // v6 #65: lift swirl radius follows the frame width (34-px Vitinian)
     const dx = sxp - ax, dy = sy - ay;
     const root = has(e, 'root') || has(e, 'atosRoot'), rk = root ? rootKind(e) : 0;
     const ghost = has(e, 'ghost'), frozen = has(e, 'frozen');
@@ -300,7 +301,7 @@
       if (has(e, 'revealed')) dustRing(R, e, sxp, syp, rr, Av);
       if (root) vines(R, sxp, syp, rr, true, rk);
       if (e.kind === 'hero') drawOrbs(R, e, sxp, sy, false);
-      if (L) { cx.globalAlpha = Av; if (eul) funnel(R, sxp, syp - 2, Math.max(26, syp - sy + img.height), false); swirl(R, sxp, sy + 2, img.height, 9, false, eul ? 5 : 4, eul); }
+      if (L) { cx.globalAlpha = Av; if (eul) funnel(R, sxp, syp - 2, Math.max(26, syp - sy + img.height), false); swirl(R, sxp, sy + 2, img.height, swr, false, eul ? 5 : 4, eul); }
       afterimages(R, e, S, Av);
     }
     cx.globalAlpha = Av;
@@ -357,7 +358,7 @@
     if (L) {      // front halves of the swirl (+ light from inside a cyclone)
       cx.globalAlpha = Av;
       if (eul) funnel(R, sxp, syp - 2, Math.max(26, syp - sy + img.height), true);
-      swirl(R, sxp, sy + 2, img.height, 9, true, eul ? 5 : 4, eul);
+      swirl(R, sxp, sy + 2, img.height, swr, true, eul ? 5 : 4, eul);
     }
     cx.globalAlpha = A0;
     if (top) return;
@@ -658,7 +659,8 @@
   function hud(R, e) {
     bind(R);
     const S = state.get(e.id); if (!S || S.sx == null) return;
-    const cx = R.cx, x = S.sx, top = S.sy - S.top;
+    const cx = R.cx, x = S.sx, top = S.sy - S.top;   // top = the sprite's head line (S.top = anchor y), so the name / bars / status row ride on it for any frame height
+    const hb = S.cvImg && S.cvImg.width > 24 ? (S.cvImg.width > 30 ? 13 : 11) : 10;   // v6 #65: half bar width (20 px default; wider for the 34-px Vitinian)
     if (fadey(e) && S.va < 0.5) return;
     if (has(e, 'stun')) {
       for (let k = 0; k < 3; k++) {
@@ -679,8 +681,8 @@
       if (e.name) PX.text(cx, e.name, x, top - 14, '#f0e8ff', 'c');
       if (e.noHpBar) return;
       y = top - 6;
-      bar(cx, x - 10, y, 20, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
-      if (e.maxMana) bar(cx, x - 10, y + 2, 20, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
+      bar(cx, x - hb, y, hb * 2, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
+      if (e.maxMana) bar(cx, x - hb, y + 2, hb * 2, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
     } else if (e.kind === 'roshan') {      // v6 item 28: wide bar + name, warm gold/red
       PX.text(cx, e.name || roshName(), x, top - 15, '#ffd890', 'c');
       y = top - 7;
@@ -689,8 +691,8 @@
     } else if (e.kind === 'ally') {        // friendly tag: blue-green name, teal bar
       PX.text(cx, e.name || allyName(), x, top - 14, '#8ae8c8', 'c');
       y = top - 6;
-      bar(cx, x - 10, y, 20, 2, e.hp / e.maxHp, '#3ad8a0', '#06241c');
-      if (e.maxMana) bar(cx, x - 10, y + 2, 20, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
+      bar(cx, x - hb, y, hb * 2, 2, e.hp / e.maxHp, '#3ad8a0', '#06241c');
+      if (e.maxMana) bar(cx, x - hb, y + 2, hb * 2, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
     } else if (e.kind === 'hero') {
       y = top - 5;
       bar(cx, x - 9, y, 18, 2, e.hp / e.maxHp, '#48d858', '#082a0c');

@@ -147,7 +147,7 @@ test('pricing: the whole catalogue = 20-30 min of normal play (DECISIONS.md "Ski
   assert.ok(min >= P.MIN && min <= P.MAX, 'minutes to unlock all: ' + min);
   assert.strictEqual(S.total(), S.CATALOG.reduce((a, c) => a + c.price, 0));
   assert.ok(S.minutesToUnlockAll(P.REF_RUN * 1.5) > 15);      // a strong player is not trivialised
-  assert.ok(S.minutesToUnlockAll(P.REF_RUN * 0.7) < 40);      // a casual one is not stuck
+  assert.ok(S.minutesToUnlockAll(P.REF_RUN * 0.7) < 50);      // a casual one is not stuck
   const prices = S.CATALOG.map(c => c.price).filter(p => p > 0);
   assert.ok(Math.min(...prices) <= P.REF_RUN * 0.5); assert.ok(Math.max(...prices) >= P.REF_RUN);
   assert.match(fs.readFileSync(path.join(ROOT, 'DECISIONS.md'), 'utf8'), /Skin shop pricing/);

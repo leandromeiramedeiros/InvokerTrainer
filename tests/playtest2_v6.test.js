@@ -90,7 +90,7 @@ test('3: ghost_escape data: jungle choke start, one booted chaser 450-550 u away
   for (let seed = 1; seed <= 6; seed++) for (const df of ['ian', 'common', 'bambam']) {
     const m = build('ghost_escape', df, seed), d = m.run.dummies[0], dist = Math.hypot(d.x - m.h.x, d.y - m.h.y);
     assert.ok(dist >= 380 && dist <= 650, 's' + seed + ' ' + df + ' chaser at ' + Math.round(dist));
-    assert.equal(d.ms, Math.round(Math.max(d.msBase, 380 * DF.get(df).chase) * sc.units[0].msMul), df + ' booted chaser speed');
+    assert.equal(d.ms, Math.round(Math.round(Math.max(d.msBase, 380 * DF.get(df).chase) * DF.get(df).msMul) * sc.units[0].msMul), df + ' booted chaser speed');
     assert.ok(m.w.map.walkable(m.h.x, m.h.y) && m.w.map.walkable(d.x, d.y));
   }
 });
