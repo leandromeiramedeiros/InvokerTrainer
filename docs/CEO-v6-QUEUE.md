@@ -94,6 +94,14 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 ## NEXT: #16 UI/UX review + animation pass (director-led; not started). Pending CEO: #67 (no Blast push-in scenario exists; proposal in queue), #71 Floe orientation.
 
+- [ ] #76 DYNAMIC LIGHTING (CEO approved; do BEFORE #16, after #30). Spells + glowing sand are light emitters; everything around them is lit like a 3D game (diffuse, rim light, soft glow) and casts perspective-correct shadows. Extend the existing WebGL compositor (js/render/gl.js, 2D path stays as fallback = today's look). Design doc first: docs/LIGHTING-v6.md (architecture, perf budget, art rules), then packages:
+  L1 light list: spells/orbs/Forge Spirits/Sun Strike/Meteor/EMP/TP/torches register point lights {pos, height, colour, radius, intensity}; glow sand clustered into a few lights per frame; up to ~32 lights as shader uniforms.
+  L2 normals/height G-buffer: auto-generate "pillow" normal maps for every IT.Art.sheet sprite at bake/load time (silhouette distance field -> normals, no hand painting) + terrain normals/height from the baked Dota heightmap (dotaworld.js); draw a parallel normal/height buffer.
+  L3 lighting shader: per-pixel Lambert + rim (edge facing light) + soft glow, kept pixel-art via the existing Bayer quantise; half-res light buffer if needed; day/night ambient preserved.
+  L4 shadows: units/structures/trees cast silhouette shadows away from the 1-2 strongest nearby lights (length/skew by light height + distance = perspective look); cliffs/trees via short heightmap ray-march in the shader.
+  L5 tuning + perf: 60 fps at 1920x1080 with 2306 trees, cap/LOD, settings toggle (Lighting: Off/Low/High), reduced-motion unaffected, readability check day+night, screenshots before/after.
+  Libraries considered: pixi-lights / Phaser Light2D (need renderer port, rejected), illuminated.js (2D polygon shadows, too slow), Laigter/SpriteIlluminator (replaced by our bake-time generator). Write our own (~300-500 lines).
+
 ## Open for CEO
 - #71 Ice Floe orientation: built perpendicular to the drag (spec); KV hints Dota may lay it ALONG the drag ("in its wake", glacier_formation_speed 600). Flip `FLOE_ALONG` in spells.js if the CEO confirms.
 - #30 top-10 in docs/GAMEPLAY-REVIEW-v6.md (level 9-10 pool too small/too hard at bambam, juke escapes trivial at ian/easy, pit_in_out unclearable, Roshan stats vs KV, Cataclysm hits non-heroes).
