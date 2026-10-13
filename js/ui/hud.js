@@ -704,6 +704,7 @@
       R.todOut = h('span', { class: 'v' });
       tod = h('div', { class: 'sbx-sec sbx-tod' }, h('div', { class: 'sbx-sh', text: t('tod.title') }), h('div', { class: 'sbx-tbs' }, R.todBtns),
         h('div', { class: 'sbx-sl' }, R.todSl, R.todOut));
+      tod.setAttribute('data-tip', t('lo.tod.d'));
     }
 
     // roster: enemies and dummies of the map
@@ -715,7 +716,7 @@
     };
     R.addE = addBtn('enemy'); R.addD = addBtn('dummy');
     R.rosList = h('div', { class: 'ros-list' });
-    const roster = h('div', { class: 'sbx-sec sbx-ros' }, h('div', { class: 'sbx-sh', text: t('ros.title') }), h('div', { class: 'ros-add' }, R.addE, R.addD), R.rosList);
+    const roster = h('div', { class: 'sbx-sec sbx-ros' }, h('div', { class: 'ros-add' }, R.addE, R.addD), R.rosList);
 
     // combo browser
     R.search = h('input', { type: 'text', class: 'sbx-q', placeholder: t('sbx.search'), 'aria-label': t('sbx.search'), spellcheck: 'false', autocomplete: 'off', maxlength: 24, value: sb.q,
@@ -725,15 +726,28 @@
     R.chips = SB_FILTERS.map(f => h('button', { type: 'button', class: 'sbx-fc' + (f === 'all' ? '' : ' t-' + f) + (sb.filter === f ? ' on' : ''), text: t(f === 'all' ? 'sbx.all' : 'tier.' + f),
       onclick: ev => { ev.currentTarget.blur(); sb.filter = f; R.chips.forEach((c, i) => c.classList.toggle('on', SB_FILTERS[i] === f)); H.filterList(); } }));
     R.list = h('div', { class: 'clist' });
+    // #77: header (map, DPS numbers, tools) always visible; three tabs share the rest: Roster / Match (time of day + damage graph) / Combos
+    const TABS = ['roster', 'match', 'combos'];
+    if (TABS.indexOf(sb.tab) < 0) { let v = null; try { v = G.localStorage && G.localStorage.getItem('it2.fp.tab'); } catch (e) { v = null; } sb.tab = TABS.indexOf(v) >= 0 ? v : 'roster'; }
+    const match = h('div', { class: 'sbx-sec sbx-mt' }, tod, h('div', { class: 'sbx-sec sbx-dmg' }, h('div', { class: 'sbx-sh', text: t('hud.dps') }), R.spark));
+    R.panes = { roster: h('div', { class: 'sbx-pane', role: 'tabpanel' }, roster), match: h('div', { class: 'sbx-pane', role: 'tabpanel' }, match),
+      combos: h('div', { class: 'sbx-pane sbx-cp', role: 'tabpanel' }, h('div', { class: 'sbx-lh' }, R.lcount, R.search), h('div', { class: 'sbx-fl' }, R.chips), R.list) };
+    const showTab = (k, focus) => {
+      sb.tab = k; try { if (G.localStorage) G.localStorage.setItem('it2.fp.tab', k); } catch (e) { /* ignore */ }
+      R.tabs.forEach((b, i) => { const on = TABS[i] === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+      for (const id of TABS) R.panes[id].hidden = id !== k;
+      if (k === 'match') H.drawSpark(ctx.w.t);
+    };
+    R.tabs = TABS.map((k, i) => h('button', { type: 'button', class: 'sbx-tab', role: 'tab', text: t('fp.tab.' + k), 'data-tip': t('fp.tab.' + k + '.d'),
+      onclick: ev => { ev.currentTarget.blur(); showTab(k); },
+      onkeydown: ev => { const d = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0; if (d) { ev.preventDefault(); showTab(TABS[(i + d + TABS.length) % TABS.length], true); } } }));
     R.side = h('div', { class: 'sbx-wrap' },
       R.mapLine,
-      h('div', { class: 'sbx-sec sbx-meter' },
-        h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, R.peakN, h('span', { class: 'sp', text: t('hud.total') }), R.totN), R.spark),
+      h('div', { class: 'sbx-sec sbx-meter' }, h('div', { class: 'dpsrow' }, h('span', { text: t('hud.dps') }), R.dpsN, R.peakN, h('span', { class: 'sp', text: t('hud.total') }), R.totN)),
       h('div', { class: 'sbx-sec' }, R.tools),
-      tod, roster,
-      h('div', { class: 'sbx-lh' }, h('span', { class: 'ch2', text: t('hud.combos') }), R.lcount, R.search),
-      h('div', { class: 'sbx-fl' }, R.chips),
-      R.list);
+      h('div', { class: 'sbx-tabs', role: 'tablist', 'aria-label': t('fp.tabs') }, R.tabs),
+      h('div', { class: 'sbx-body' }, TABS.map(k => R.panes[k])));
+    showTab(sb.tab);
     // the wheel belongs to the pane (list scroll), never to the game zoom
     R.side.addEventListener('wheel', ev => ev.stopPropagation(), { passive: true });
 
@@ -954,7 +968,7 @@
     if (dps > sb.peak) sb.peak = dps;
     setText(R.dpsN, String(dps), ca, 'dps'); setText(R.totN, String(Math.round(H.total)), ca, 'tot');
     setText(R.peakN, sb.peak ? t('sbx.peak', { n: sb.peak }) : '', ca, 'pk');
-    sb.sp += dt; if (sb.sp > 0.12) { sb.sp = 0; if (R.sideP.isOpen()) H.drawSpark(now); }
+    sb.sp += dt; if (sb.sp > 0.12) { sb.sp = 0; if (R.sideP.isOpen() && sb.tab === 'match') H.drawSpark(now); }
     if (sb.auto && hero) {
       for (const k in hero.cd) hero.cd[k] = 0;
       if (hero.inv) hero.inv.invokeCd = 0;

@@ -93,10 +93,10 @@
     },
     HERO: { radius: 24 },
     // v6 item 28 (FUN scenarios, js/sim/units.js). Trainer assumptions, no KV baked for these units:
-    //   ALLY = a stationary friendly hero the enemy attacks (hero-like hp / armor / vision); ROSHAN = a pit-bound neutral (hp scaled per scenario,
+    //   ALLY = a stationary friendly hero the enemy attacks (hero-like hp / armor / vision); ROSHAN = a pit-bound neutral (stats = KV, hp scaled per scenario,
     //   hull 80 = twice a hero's footprint, slow heavy hits); PICKUP = rune / aegis grab radius; TP = Town Portal channel (Dota: 3 s).
     ALLY: { hp: 900, armor: 3, magicRes: 0.25, radius: 24, vision: 1800, visionNight: 800 },
-    ROSHAN: { hp: 6000, armor: 20, magicRes: 0.25, radius: 80, min: 65, max: 65, bat: 2, point: 0.6, range: 100, vision: 800 },
+    ROSHAN: { hp: 6000, armor: 30, magicRes: 0.55, radius: 80, min: 75, max: 75, bat: 2, point: 0.6, range: 150, vision: 1400 },   // I10: npc_dota_roshan KV ArmorPhysical 30, MagicalResistance 55, AttackDamageMin/Max 75, AttackRate 2.0, AttackAnimationPoint 0.6, AttackRange 150, VisionDaytime/NighttimeRange 1400, StatusHealth 6000 (hp is scaled per scenario)
     PICKUP: { r: 100 },
     TP: { dur: 3 },
     // v6 item 15 (Skin SHOP): the other two skin families. Player: hero sheet + spell icon / VFX palette. Dummy: the training scarecrow.

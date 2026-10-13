@@ -189,7 +189,7 @@ test('pit scenarios: data (pit tag + a pit map, juke ones tagged juke / fun, tex
 test('pit scenarios: the bot clears each at easy seeds 1-4, and the pit rule is what breaks sight', () => {
   for (const id of PIT) for (const seed of [1, 2, 3, 4]) {
     const p = play(id, 'easy', seed);
-    if (id !== 'pit_in_out') assert.ok(p.r.ok, id + ' easy s' + seed + ': ' + p.r.reason);   // v6 #68: pit_in_out is bot-limited at the slower easy chasers (juke_v6 note)
+    assert.ok(p.r.ok, id + ' easy s' + seed + ': ' + p.r.reason);   // #77 I5: pit_in_out re-routed, clears again
     if (seed !== 1) continue;
     if (id === 'pit_in_out') assert.equal(p.lost[0] && p.lost[0].hero, 'in', 'first lost = the hero stepped into the crater ' + JSON.stringify(p.lost));
     if (id === 'pit_force_exit') assert.ok(p.lost.some(l => l.hero !== 'in' && l.foes.indexOf('in') >= 0), 'lost by chasers inside the crater ' + JSON.stringify(p.lost));

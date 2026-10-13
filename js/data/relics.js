@@ -11,6 +11,7 @@
 // special: true = the 4 big "rare" relics the client shows in its top row (Multi-Hero Ice Wall 0/25, Three Hero EMP 0/5, Three Hero Deafening Blast 0/5,
 //   Multi-Hero Chaos Meteor 0/20: verified vs the live client, screenshots 7-10). Layout (client RELICS 0/14): row 1 = the 4 specials, row 2 = 3 Invoker
 //   relics, rows 3 / 4 = 4 + 3 generic relics (`row` 2..4); trainer relics (dota: false) are listed after, outside the 14.
+// ptm = spendable-points multiplier (I7 concentration trim); sc = scoring step override (medal + points) for relics whose Dota step is out of reach of an 8-scenario run.
 // weight 0 = tracked and shown, but not part of the run score (keeps the medal calibration of tools/score_sample.mjs).
 // unit: 'n' count, 'dmg' damage / mana points, 's' seconds. Names live in js/data/i18n/relics.js ('relic.<id>', 'relic.<id>.d').
 (function (G) {
@@ -22,27 +23,32 @@
   const LIST = [
     // ---- Invoker hero relics (rare relics in Dota Plus)
     D('sunstrike_kills', 'KillEaterEventType_Invoker_SunstrikeKills', 'sunstrike', 'n', 23, 15, { weight: 3, row: 2 }),
-    D('tornado_kills', 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', 32, 3, { weight: 3, row: 2 }),
-    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2, weight: 3, special: true, pts: 5 }),
+    D('tornado_kills', 'KillEaterEventType_Invoker_TornadoKills', 'tornado', 'n', 32, 3, { weight: 3, sc: 6, ptm: 0.9, row: 2 }),
+    D('multi_icewall', 'KillEaterEvent_Invoker_MultiHeroIceWall', 'icewall', 'n', 578, 25, { min: 2, weight: 3, sc: 10, special: true, pts: 5 }),
     D('three_emp', 'KillEaterEvent_Invoker_ThreeHeroEMP', 'emp', 'n', 579, 5, { min: 3, weight: 3, special: true, pts: 5 }),
     D('three_deafening', 'KillEaterEvent_Invoker_ThreeHeroDeafeningBlast', 'deafeningblast', 'n', 580, 5, { min: 3, weight: 3, special: true, pts: 5 }),
     D('multi_meteor', 'KillEaterEvent_Invoker_MultiHeroChaosMeteor', 'chaosmeteor', 'n', 581, 20, { min: 2, weight: 3, special: true, pts: 5 }),
-    D('alacrity_dmg', 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', 582, 25000, { weight: 1, row: 2 }),
+    D('alacrity_dmg', 'KillEaterEvent_Invoker_BonusAlacrityDamage', 'alacrity', 'dmg', 582, 25000, { weight: 1, sc: 1500, ptm: 3, row: 2 }),
     // ---- generic relics every hero has (common relics)
     D('kills', 'KillEaterEventType_Kills', 'invoke', 'n', 0, 75, { weight: 1, row: 3 }),
     D('stun_kills', 'KillEaterEvent_StunsLeadingToKills', 'coldsnap', 'n', 5043, 50, { weight: 2, row: 3 }),
-    D('blink_kills', 'KillEaterEvent_KillsAfterBlink', 'blink', 'n', 5038, 100, { weight: 2, row: 3 }),
+    D('blink_kills', 'KillEaterEvent_KillsAfterBlink', 'blink', 'n', 5038, 100, { weight: 2, sc: 10, ptm: 4, row: 3 }),
     D('triple_kills', 'KillEaterEvent_TripleKills', 'meteorhammer', 'n', 223, 2, { weight: 0, row: 3 }),
     D('rampages', 'KillEaterEvent_Rampages', 'shiva', 'n', 224, 1, { weight: 0, row: 4 }),
     D('bkb_kills', 'KillEaterEvent_KillsDuringBKB', 'bkb', 'n', 5041, 15, { weight: 2, row: 4 }),
     D('killing_sprees', 'KillEaterEvent_Killing_Sprees', 'gleipnir', 'n', 8, 10, { weight: 0, row: 4 }),
     // ---- trainer relics (no Dota equivalent; same style, sim-measured; tiers trainer-scaled for 8-scenario runs)
-    R('meteor_dmg', false, null, 'chaosmeteor', 'dmg', [1500, 8000, 30000, 100000, 250000], { weight: 1 }),
+    R('meteor_dmg', false, null, 'chaosmeteor', 'dmg', [1500, 8000, 30000, 100000, 250000], { weight: 1, ptm: 0.65 }),
     R('emp_mana', false, null, 'emp', 'dmg', [800, 4000, 15000, 50000, 120000], { weight: 1 }),
-    R('tornado_lifts', false, null, 'tornado', 'n', [10, 40, 150, 400, 1000], { weight: 1 }),
+    R('tornado_lifts', false, null, 'tornado', 'n', [10, 40, 150, 400, 1000], { weight: 1, ptm: 0.75 }),
     R('disable_time', false, null, 'coldsnap', 's', [30, 150, 500, 1500, 4000], { weight: 1 }),
     R('spirit_kills', false, null, 'forgespirit', 'n', [2, 8, 25, 70, 180], { weight: 1 }),
-    R('cataclysm_hits', false, null, 'scepter', 'n', [5, 25, 80, 220, 500], { weight: 3 }),
+    R('cataclysm_hits', false, null, 'scepter', 'n', [5, 25, 80, 220, 500], { weight: 3, ptm: 0.6 }),
+    // I16 (#77): skill relics. escape = an escape / juke objective survived; alacrity_hits = attacks landed by an Alacrity-buffed unit of ours;
+    // orb_swap = an Invoke within 1 s of a spell cast (the cast-then-reinvoke rhythm). `sc` = scoring step (tiers I stay the displayed levels).
+    R('escape', false, null, 'ghostwalk', 'n', [1, 4, 12, 30, 70], { weight: 2, sc: 4 }),
+    R('alacrity_hits', false, null, 'alacrity', 'n', [20, 100, 400, 1000, 2500], { weight: 1, sc: 20, ptm: 2.5 }),
+    R('orb_swap', false, null, 'invoke', 'n', [5, 25, 80, 200, 500], { weight: 1, sc: 12, ptm: 0.6 }),
   ];
   const BY = {};
   for (const r of LIST) BY[r.id] = r;
@@ -78,15 +84,15 @@
   // points = (delta / (step x goalpost)) x base x diffMul x POINTS_K.  base: 5 for the 4 specials (`pts`), 1 for the others.
   // diffMul: ian 0.5 .. bambam 1.5 (0.5 + 0.25 x tierIdx). goalpost ("move the goalpost"): the level step grows on easy, shrinks on hard,
   // steps x (1.5 - 0.25 x tierIdx) clamped 0.5..1.5, so easy cannot farm. Only the points use it: displayed relic tiers keep the Dota steps.
-  const POINTS_K = 56, DIFF_COMMON = 2;
+  const POINTS_K = 59, DIFF_COMMON = 2;
   const clampIdx = i => (typeof i === 'number' && isFinite(i) ? Math.max(0, Math.min(4, Math.round(i))) : DIFF_COMMON);
   const diffMul = i => 0.5 + 0.25 * clampIdx(i);
   const goalpost = i => Math.max(0.5, Math.min(1.5, 1.5 - 0.25 * clampIdx(i)));
   const baseOf = id => (BY[id] && BY[id].pts) || 1;
   const points = (id, delta, diffIdx) => {
-    const r = BY[id], unit = r && (r.step || r.tiers[0]);
+    const r = BY[id], unit = r && (r.sc || r.step || r.tiers[0]);
     if (!r || !(delta > 0) || !(unit > 0)) return 0;
-    return (delta / (unit * goalpost(diffIdx))) * baseOf(id) * diffMul(diffIdx) * POINTS_K;
+    return (delta / (unit * goalpost(diffIdx))) * baseOf(id) * (r.ptm || 1) * diffMul(diffIdx) * POINTS_K;
   };
   const ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V'];
 

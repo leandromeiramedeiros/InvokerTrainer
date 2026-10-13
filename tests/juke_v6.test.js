@@ -115,9 +115,7 @@ test('juke bot (cover -> hide) clears every juke scenario at easy, seeds 1-4; th
   const bad = [];
   for (const sc of JUKE) for (const seed of [1, 2, 3, 4]) {
     const { r, ev } = play(sc.id, 'easy', seed, 'bot');
-    // v6 #68: tier msMul (easy x0.88) -> treeline_loop clears at every seed again. pit_in_out is bot-limited: slower chasers no longer overshoot into the crater, so the fixed cover -> hide walk
-    // passes them at the mouth (hero 318 vs chasers 316 u/s, they stay glued and see him). A player waits for them to commit; the spot bot does not.
-    if (sc.id === 'pit_in_out') continue;
+    // v6 #68: tier msMul (easy x0.88) -> treeline_loop clears at every seed again. #77 I5: pit_in_out re-routed (west lip -> around the west wall): clears again
     if (!(r && r.ok)) bad.push(sc.id + ':s' + seed + ':' + tag(r));
     if (seed === 1) {
       assert.ok(ev.includes('lost') && ev.includes('predicted'), sc.id + ' belief ' + ev.join(','));
@@ -134,7 +132,7 @@ test('juke bot also clears every one at common (seed 1); a naive runner is caugh
   const NAIVE_OK = new Set(['ghost_vs_gem:2', 'night_juke:1', 'night_juke:2']);
   for (const sc of JUKE) {
     const b = play(sc.id, 'common', 1, 'bot').r;
-    if (!(b && b.ok) && sc.id !== 'pit_in_out' && sc.id !== 'dust_bait') bad.push('bot ' + sc.id + ':' + tag(b));   // v6 #68: bot-limited at common x0.95 (pit_in_out: see the easy sweep; dust_bait: caught on the fixed walk)
+    if (!(b && b.ok) && sc.id !== 'dust_bait') bad.push('bot ' + sc.id + ':' + tag(b));   // v6 #68: dust_bait bot-limited at common x0.95 (caught on the fixed walk; #77: maxDf easy)
     for (const seed of [1, 2]) {
       const r = play(sc.id, 'common', seed, 'naive').r;
       if (r && r.ok && !NAIVE_OK.has(sc.id + ':' + seed)) bad.push('naive won ' + sc.id + ':s' + seed);
@@ -161,4 +159,14 @@ test('objectives: idle loses (reach needs the spot), Ghost Walk = method fail wh
   const d = play('dust_bait', 'easy', 1, 'bot');
   assert.ok(d.r.ok && d.m.run.st.burned >= 1 && d.ev.includes('item:dust'), 'dust_bait: the Dust was wasted ' + d.ev.join(','));
   assert.equal(R.DETECT.dust, true);
+});
+
+test('#77 I4: ian / easy chasers predict the straight line and match the hero speed: a naive walk-away no longer wins the open-field jukes', () => {
+  const won = [];
+  for (const d of ['ian', 'easy']) for (const id of ['treeline_loop', 'highground_bait', 'no_invis_juke']) for (const seed of [1, 2]) {
+    const r = play(id, d, seed, 'naive').r;
+    if (r && r.ok) won.push(d + ':' + id + ':' + seed);
+  }
+  assert.deepEqual(won, []);
+  for (const d of ['ian', 'easy']) assert.ok(IT.DIFFICULTY.get(d).belief.floor >= 1 && IT.DIFFICULTY.get(d).belief.predict > 0, d);
 });

@@ -109,6 +109,8 @@ function bot(id, diff, seed, trace) {
     for (let k = 0; k < 30 * 8 && live() && casts === c0; k++) {
       step();
       if (moving && k % 6 === 5 && casts === c0 && h.orders[0] && h.orders[0].type === 'cast' && !h.orders[0]._ph) { const q = aim(); if (q) IT.Orders.issue(w, h, { type: 'cast', ability: s.a, x: q.x, y: q.y, target: q.id }); }
+      // #77: a hard+ foe's stun bolt drops the order; a player re-issues it (the cast is still owed)
+      else if (k % 6 === 5 && casts === c0 && !(h.orders[0] && h.orders[0].type === 'cast') && !IT.Status.has(h, 'stun')) { prep(w, h, s.a); const q = aim(); if (q) IT.Orders.issue(w, h, { type: 'cast', ability: s.a, x: q.x, y: q.y, target: q.id }); }
     }
     step(4);
   }
@@ -171,12 +173,9 @@ test('diagnostic: bot sweep seeds 1-6 easy/common (LV_ALL=1, LV_ONLY=id)', { ski
 // pre-existing bot failures (identical at 6afc533, before the level change): id|diff|seed
 const KNOWN = new Set(['triple_kill|easy|3', 'triple_kill|easy|6', 'triple_kill|common|3', 'triple_kill|common|6',
   'shadow_strike|easy|3', 'shadow_strike|easy|4', 'shadow_strike|common|3', 'shadow_strike|common|4',
-  'cataclysm_finish|common|2', 'cataclysm_finish|common|4', 'cataclysm_finish|common|5',
-  'plateau_escape|common|1', 'plateau_escape|common|6',
-  'triple_kill|easy|5', 'triple_kill|common|5', 'plateau_escape|common|4',   // item 40: variation shifts which seeds hit these bot-limited scenarios
+  'plateau_escape|common|1', 'plateau_escape|common|6',   // #77: cataclysm_finish common 2/4/5, triple_kill s5, plateau_escape common s4 and gauntlet common clear now (dropped)
   'plateau_escape|easy|6',   // v6 #68: sun_flee + plateau_escape easy 1/4 now clear (tier msMul); s6 is walked into a Dire tower by the straight-away bot (speed independent)
-  'jungle_hold|easy|2',   // v6 #68: slower marchers (x0.88) shift the Meteor / Blast timing of the fixed-delay bot; the third marcher crosses
-  ...SEEDS.map(s => 'gauntlet|common|' + s)]);
+  'jungle_hold|easy|2']);   // v6 #68: slower marchers (x0.88) shift the Meteor / Blast timing of the fixed-delay bot; the third marcher crosses
 const BANDS = {   // story fit: laning 6-10, mid game 12-18, late game 20-25
   cold_start: [6, 10], sleepy_target: [6, 10], spirit_pack: [6, 10], river_rune: [6, 10], two_birds: [6, 10], uphill_snipe: [6, 10], sun_flee: [6, 10],
   river_guard: [12, 18], bridge_hold: [12, 18], ghost_slip: [12, 18], ghost_finish: [12, 18], fog_ambush: [12, 18], blast_push: [12, 18],

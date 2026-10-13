@@ -42,7 +42,7 @@
     S('burst_cold_forge', 2, L('Cold Snap burst', 'Burst de Cold Snap'),
       L('Freeze it, drop Forge Spirits and Alacrity on yourself, then pour in attacks while it cannot move.',
         'Congele, chame os Forge Spirits e use Alacrity em você, depois ataque enquanto ele não anda.'),
-      L('Cold Snap + Forge + Alacrity: kill it', 'Cold Snap + Forge + Alacrity: mate o alvo'), 14,
+      L('Cold Snap + Forge + Alacrity: kill it', 'Cold Snap + Forge + Alacrity: mate o alvo'), 21,
       { lvl: 25 }, [D(450, 0, { hp: 0.8 })], { type: 'kill' },
       [{ a: 'coldsnap', at: 'd0' }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'alacrity', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }]),
     S('sun_snipe', 2, L('Sun Strike snipe', 'Snipe de Sun Strike'),
@@ -54,7 +54,7 @@
     S('blink_fog', 3, L('Blink from the fog', 'Blink saindo da névoa'),
       L('It stands far away in the fog. Blink in, then Chaos Meteor and Deafening Blast before it reacts.',
         'Ele está longe, na névoa. Dê Blink, depois Chaos Meteor e Deafening Blast antes de ele reagir.'),
-      L('Blink, Meteor, Blast: kill it', 'Blink, Meteor, Blast: mate o alvo'), 12,
+      L('Blink, Meteor, Blast: kill it', 'Blink, Meteor, Blast: mate o alvo'), 25,
       { lvl: 25, items: ['blink'] }, [D(1000, 150, { hp: 0.40 })], { type: 'kill' },
       [{ a: 'blink', at: 'mid' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }]),
     S('atos_vyse_lock', 3, L('Atos / Hex lockdown', 'Lockdown com Atos / Hex'),
@@ -91,19 +91,19 @@
     S('cataclysm_finish', 3, L('Cataclysm finish', 'Final com Cataclysm'),
       L('With the Scepter on Exort, Sun Strike becomes Cataclysm: it strikes every visible enemy nearby. Finish the low-HP group.',
         'Com o Scepter em Exort, o Sun Strike vira Cataclysm: atinge todos os inimigos visíveis. Acabe com o grupo ferido.'),
-      L('Cataclysm: kill them all', 'Cataclysm: mate todos'), 8,
+      L('Cataclysm: kill them all', 'Cataclysm: mate todos'), 9,
       { lvl: 25, scepter: 'exort' }, [D(450, -100, { hp: 0.42 }), D(550, 120, { hp: 0.42 })], { type: 'kill' },
       [{ a: 'sunstrike', at: 'self' }]),
     S('orchid_burst', 2, L('Orchid burst', 'Burst com Orchid'),
       L('Orchid silences it and stores all damage for a burst. Cold Snap, Forge and Alacrity attacks all feed the pop.',
         'O Orchid silencia e guarda todo o dano para uma explosão. Cold Snap, Forge e ataques com Alacrity alimentam o estouro.'),
-      L('Orchid then burst: kill it', 'Orchid e burst: mate o alvo'), 16,
+      L('Orchid then burst: kill it', 'Orchid e burst: mate o alvo'), 28,
       { lvl: 25, items: ['orchid'] }, [D(450, 0, { hp: 0.65 })], { type: 'kill' },
       [{ a: 'orchid', at: 'd0' }, { a: 'coldsnap', at: 'd0', w: 0.2 }, { a: 'forgespirit', at: 'self', w: 0.3 }, { a: 'alacrity', at: 'self', w: 0.3 }, { a: 'attack', at: 'd0', w: 0.2 }]),
     S('gleipnir_burst', 3, L('Gleipnir burst', 'Burst com Gleipnir'),
       L('Eternal Chains roots it. While it stands still, line up Sun Strike, Chaos Meteor and Deafening Blast.',
         'As Eternal Chains prendem o alvo. Enquanto ele está parado, alinhe Sun Strike, Chaos Meteor e Deafening Blast.'),
-      L('Gleipnir, Sun Strike, Meteor, Blast', 'Gleipnir, Sun Strike, Meteor, Blast'), 15,
+      L('Gleipnir, Sun Strike, Meteor, Blast', 'Gleipnir, Sun Strike, Meteor, Blast'), 24,
       { lvl: 25, items: ['gleipnir'] }, [D(550, 0, { hp: 0.51 })], { type: 'kill' },
       [{ a: 'gleipnir', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 0.2 }, { a: 'chaosmeteor', at: 'd0', w: 0.3 }, { a: 'deafeningblast', at: 'd0', w: 1.2 }]),
     S('gleipnir_cluster', 1, L('Gleipnir on the group', 'Gleipnir no grupo'),
@@ -148,7 +148,7 @@
     V('sleepy_target', 1, 'lotus_rad', ['basics', 'burst'], 8, { lvl: 8 },
       [U(SEEN([650, 900]), { hp: 0.4, mot: 'still', aware: 0 })], KILL, ['time'],
       [{ a: 'sunstrike', at: 'd0' }], { rand: { pick: 3, jit: 140 } }),
-    V('cold_start', 1, 'roshan_pit_top',['basics', 'movement'], 14, { lvl: 7 },
+    V('cold_start', 1, 'roshan_pit_top',['basics', 'movement'], 15, { lvl: 7 },
       [U(SEEN([950, 1250]), { hp: 0.5, mot: 'still', aware: 0 })], KILL, ['time'],
       [{ a: 'coldsnap', at: 'd0' }, { a: 'forgespirit', at: 'self' }, { a: 'attack', at: 'd0' }], { rand: { pick: 3, jit: 160 } }),
     V('spirit_pack', 1, 'rad_off_t1', ['basics', 'burst'], 14, { lvl: 8 },
@@ -226,7 +226,7 @@
     V('fog_ambush', 7, 'outpost_rad', ['vision', 'awareness', 'fog'], 10, { lvl: 12 },
       [U(SEEN([1000, 1300]), { hp: 0.45, mot: 'still', aware: 0.15 })], KILL, ['seen', 'time'],
       [{ a: 'tornado', at: 'd0' }, { a: 'sunstrike', at: 'd0', w: 1 }], { rand: { pick: 3 } }),
-    V('bkb_bait', 7, 'outpost_dire', ['reaction', 'items'], 20, { lvl: 18 },
+    V('bkb_bait', 7, 'outpost_dire', ['reaction', 'items'], 30, { lvl: 18 },
       [U(SEEN([650, 900], { not: ['dtower'] }), { hp: 0.5, behavior: 'defend', items: ['bkb'], useBkb: true, aware: 1 })], KILL, ['died', 'time'],
       [{ a: 'coldsnap', at: 'd0' }, { a: 'tornado', at: 'd0', w: 6 }, { a: 'sunstrike', at: 'd0', w: 0.3 }, { a: 'chaosmeteor', at: 'd0', w: 0.3 }]),
     V('dust_hunt', 7, 'lotus_rad', ['invisible', 'escape', 'items'], 14, { lvl: 16, items: ['dust'] },
@@ -267,16 +267,16 @@
     V('plateau_escape', 9, 'dire_highground', ['highground', 'escape', 'invisible'], 14,
       { lvl: 30, at: W(['highground'], { d: [0, 3500], not: ['dtower'], has: { where: ['low'], d: [800, 1200] } }) },
       [U(W(['low'], { d: [800, 1200] }), { mot: 'chase', hp: 1, items: ['dust'] }), U({ of: 0, side: 250 }, { mot: 'chase', hp: 1 }), U({ of: 0, side: -250 }, { mot: 'chase', hp: 1 })],
-      { type: 'escape', time: 14 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3 }, vary: { boots: false } }),   // item 40: a booted chaser cannot be outrun
+      { type: 'escape', time: 14 }, ['caught', 'died'], [{ a: 'tornado', at: 'd0' }, { a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'self' }], { rand: { pick: 3 }, vary: { boots: false }, maxDf: 'common' }),   // item 40: a booted chaser cannot be outrun
     // ---------------------------------------------------------------- level 10
     V('gauntlet', 10, 'dire_mid_t1', ['towers', 'escape', 'invisible', 'items'], 16,
       { lvl: 30, items: ['blink', 'dust'], at: { tower: { team: 1 }, ahead: -1700 } },
       [U({ tower: { team: 1 }, ahead: -950 }, { hp: 0.45, behavior: 'escape', items: ['shadowblade', 'blink'], aware: 1 })], KILL, ['escaped', 'died', 'time'],
-      [{ a: 'dust', at: 'self' }, { a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }], { vary: { boots: false, posJit: 0 } }),
+      [{ a: 'dust', at: 'self' }, { a: 'coldsnap', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'sunstrike', at: 'lead', w: 0.6 }, { a: 'deafeningblast', at: 'd0' }], { vary: { boots: false, posJit: 0 }, maxDf: 'common' }),
     V('blink_denial', 10, 'rad_triangle', ['reaction', 'escape', 'items'], 14, { lvl: 30, items: ['atos', 'blink'] },
       [U(SEEN([750, 950]), { hp: 0.5, behavior: 'disable_escape', items: ['blink', 'forcestaff'], aware: 1 })], KILL, ['escaped', 'time'],
-      [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { vary: { posJit: 0 } }),   // item 40: the bot's Atos timing is position sensitive
-    V('shadow_strike', 10, 'dire_triangle', ['invisible', 'awareness', 'multi'], 16, { lvl: 30, items: ['blink'] },
+      [{ a: 'atos', at: 'd0' }, { a: 'sunstrike', at: 'd0' }, { a: 'chaosmeteor', at: 'd0', w: 0.2 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { vary: { posJit: 0 }, maxDf: 'common' }),   // item 40: the bot's Atos timing is position sensitive
+    V('shadow_strike', 10, 'dire_triangle', ['invisible', 'awareness', 'multi'], 32, { lvl: 30, items: ['blink'] },
       [U(SEEN([1000, 1250], { clear: 2, not: ['dtower'] }), { hp: 0.4, behavior: 'wander', aware: 0.3 }), U({ of: 0, side: 250 }, { hp: 0.4, behavior: 'wander', aware: 0.3 })],
       KILL, ['seen', 'time'],
       [{ a: 'ghostwalk', at: 'self' }, { a: 'move', at: 'd0' }, { a: 'tornado', at: 'mid' }, { a: 'chaosmeteor', at: 'mid' }, { a: 'deafeningblast', at: 'mid', w: 0.8 }]),
@@ -306,15 +306,15 @@
       { type: 'escape', time: 20, unseen: 7 }, ['caught', 'died'], [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['high'], 0, 0, { strict: true }))),
     // a Dust carrier: let it dust where it THINKS you are (a hit = caught), then stay unseen 5 s
     V('dust_bait', 9, 'dire_mid_t2', ['juke', 'fun', 'invisible', 'items'], 25, { lvl: 20, at: JH(['level'], 0) }, JC(2, null, [{ items: ['dust'] }]),
-      { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [JS[0], { a: 'ghostwalk', at: 'self' }, JS[1]], JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] }))),
+      { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [JS[0], { a: 'ghostwalk', at: 'self' }, JS[1]], Object.assign(JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] })), { maxDf: 'easy' })),
     V('no_invis_juke', 10, 'rad_off_t1', ['juke', 'fun'], 20, { lvl: 24, at: JH(['choke'], 0) }, JC(3, null, [{ recatch: true }, { recatch: true }]),
-      { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, JX(JSP(3, ['level'], 0, 0, { strict: true }))),
+      { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, Object.assign(JX(JSP(3, ['level'], 0, 0, { strict: true })), { maxDf: 'common' })),
     // ---------------------------------------------------------------- v6 item 55: PIT jukes (Roshan's pit vision rule, js/sim/vision.js)
     // Outside the crater nobody sees in; inside, nobody sees out; the mouth ring is seen from both sides (map.pitAt). Explicit arenas
     // (PAT / PJC / PSP, see above), same juke contract as above (fixed arenas, spot bot cover -> hide: tests/juke_v6.test.js + tests/pit_v6.test.js).
     // night: duck into the crater (they lose you), out past the mouth and around the wall while they walk in after you
     V('pit_in_out', 5, 'roshan_pit_top', ['juke', 'fun', 'pit', 'fog'], 20, { lvl: 10, at: PAT(-960, 576) }, PJC(2, 624, 96),
-      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, JS, JX(PSP([-528, -480], [-96, -1344]))),
+      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, JS, Object.assign(JX(PSP([-624, -480], [-732, -1508])), { maxDf: 'common' })),   // #77 I5: the west lip of the crater, out and around the west wall (bot: ian-common 18/18, hard caught)
     // walk in, wait for them to follow, then Force Staff out past the mouth: inside the crater they cannot see you leave
     V('pit_force_exit', 6, 'roshan_pit', ['juke', 'fun', 'pit', 'items'], 20, { lvl: 12, items: ['forcestaff'], at: PAT(1392, -240) }, PJC(2, 288, 240),
       { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, PFS, JX(PSP([144, 0], [-384, 480], [0, -48]))),
@@ -369,7 +369,7 @@
     V('am_coldsnap_deny', 7, 'mid_river', ['fun', 'midlane', 'blink', 'combo'], 12, { lvl: 7 },
       [U(SEEN([600, 800]), { hp: 0.42, blinker: true, aware: 0.6, intent: { kind: 'idle_guard', phases: [{ on: 'spellLanded', then: 'flee_to_tower' }] } })],
       KILL, ['escaped', 'time'], [{ a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 } }),
-    V('blinker_tornado', 8, 'rad_mid_t1', ['fun', 'midlane', 'blink', 'combo'], 14, { lvl: 8 },
+    V('blinker_tornado', 8, 'rad_mid_t1', ['fun', 'midlane', 'blink', 'combo'], 30, { lvl: 8 },
       [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.48, blinker: true, aware: 0.6 })],
       KILL, ['time'],
       [{ a: 'tornado', at: 'd0' }, { a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 } }),
@@ -388,7 +388,7 @@
     V('tornado_tp_cancel', 6, 'dire_off_t1', ['fun', 'reaction', 'combo'], 12, { lvl: 14 },
       [U(SEEN([700, 900], { not: ['dtower'] }), { hp: 0.45, intent: 'farm_then_tp', aware: 0.6, tpPlan: { after: 2 } })], KILL, ['escaped', 'time'],
       [{ a: 'tornado', at: 'd0', wait: 'tp' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 }, funBot: true }),
-    V('rune_contest', 3, 'river_top', ['fun', 'river', 'reaction'], 10,
+    V('rune_contest', 3, 'river_top', ['fun', 'river', 'reaction'], 12,
       { lvl: 8, at: W(['river'], { d: [0, 3000], i: 4, has: { where: ['river'], d: [1700, 1900] } }) },
       [U(W(['river'], { d: [1700, 1900] }), { hp: 0.6, aware: 0.3, grab: { kinds: ['rune'] } })],
       { type: 'pickup', kind: 'rune' }, ['taken', 'time'],
@@ -440,7 +440,7 @@
       [U({ pit: 'deep', dx: -330, dy: 110 }, { hp: 0.5, intent: { kind: 'attack_ally', target: 'roshan' }, attack: 'melee', aware: 0.5, grab: { kinds: ['aegis'] } })],
       { type: 'pickup', kind: 'aegis' }, ['taken', 'time'],
       [{ a: 'move', at: 'spot:rosh', r: 450 }, { a: 'tornado', at: 'd0', wait: 'pickup' }, { a: 'move', at: 'pickup', r: 30 }],
-      { roshan: { at: 'rosh', frac: 0.05, scriptHits: 2, ttl: 8 }, spots: { rosh: { pit: 'deep', dx: -90, dy: 110 } }, focus: ['pit'], vary: { posJit: 0 }, funBot: true }),
+      { roshan: { at: 'rosh', frac: 0.05, scriptHits: 2, ttl: 8 }, spots: { rosh: { pit: 'deep', dx: -90, dy: 110 } }, focus: ['pit'], vary: { posJit: 0 }, funBot: true, maxDf: 'common' }),
   ];
 
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as

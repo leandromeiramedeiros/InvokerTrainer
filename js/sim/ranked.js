@@ -38,6 +38,18 @@
   // difficulty index (0..4) for the n-th scenario of a ranked run: starts by rating, then +1 every 3 scenarios
   const baseDiff = rating => (rating < 800 ? 0 : rating < 2000 ? 1 : rating < 3500 ? 2 : 3);
   const rampDiff = (rating, n) => Math.min(4, baseDiff(rating) + Math.floor(n / 3));
+  // #77 (review I1): the ramp never sends a level >= TOP_LVL scenario above hard (bambam x L9-10 was the top band's curve break), and a
+  // scenario's own `maxDf` (tier id) caps it further (the ones a frame-perfect bot cannot clear above it yet). Ranked only: a chosen tier is kept.
+  const TOP_LVL = 9, TOP_CAP = 3, PICK_R0 = 1;   // PICK_R0: #77 I2 ranked pick window (+- levels)
+  const capDiff = (i, sc) => {
+    if (!sc) return i;
+    if ((sc.level || 0) >= TOP_LVL) i = Math.min(i, TOP_CAP);
+    if (sc.maxDf && IT.DIFFICULTY) i = Math.min(i, IT.DIFFICULTY.get(sc.maxDf).idx);
+    return i;
+  };
+  // #77 (review I6): time limit = par x tier timer + the tier's own slack (df.slack: ian 6 .. hard / bambam 1; SLACK when a tier has none);
+  // a fixed sc.limit wins. Tuned on the levels bot: median clear ~40% of the limit at hard, ~47% at bambam, every clear <= 80%.
+  const limitOf = (sc, df) => (sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + (df.slack != null ? df.slack : SLACK)));
   const rankKey = r => r.tier * 6 + r.stars;
 
   // ---------------------------------------------------------------- storage
@@ -92,7 +104,7 @@
     if (!(lap > 0)) return base;
     return Object.assign({}, base, {
       hpMul: base.hpMul * (1 + 0.12 * lap), dmgMul: base.dmgMul * (1 + 0.1 * lap), reaction: Math.max(0.1, base.reaction * Math.pow(0.9, lap)),
-      timer: Math.max(0.6, base.timer * Math.pow(0.95, lap)), mult: base.mult * (1 + 0.15 * lap),
+      timer: Math.max(0.45, base.timer * Math.pow(0.95, lap)), mult: base.mult * (1 + 0.15 * lap),
     });
   }
 
@@ -103,7 +115,7 @@
   function prepare(sc, df, skin, lvl, vrng) {
     const lo = loadoutAt(sc, df, lvl != null ? lvl : baseLevel(sc), skin);
     const esc = sc.obj.type === 'escape' || sc.obj.type === 'hold';
-    const limit = esc ? sc.obj.time : sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK);
+    const limit = esc ? sc.obj.time : limitOf(sc, df);
     const kill = !!KILL_TYPES[sc.obj.type];
     const pr = { sc, df, lo, fog: true, par: sc.par, limit, skin: lo.skin, twist: null, hp: kill ? foeHp(sc, df, lo) : null, need: kill || survive(sc) ? needOf(sc) : [], vary: null };
     if (vrng) pr.vary = variation(sc, df, pr, lo.heroLevel, vrng);   // v6 item 40: per-play variation (seeded by the run)
@@ -138,7 +150,7 @@
     const mana = steps.reduce((t, s) => t + cost(s.a), 0), maxMana = IT.Hero.maxMana(ctx);
     if (mana > maxMana) return { ok: false, why: 'mana', mana, maxMana };
     const esc = sc.obj.type === 'escape' || sc.obj.type === 'hold';
-    const limit = esc ? sc.obj.time : sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK);
+    const limit = esc ? sc.obj.time : limitOf(sc, df);
     let use = {}, cdNeed = 0;
     for (const s of steps) {
       if (s.a === 'refresher') { use = {}; continue; }
@@ -176,6 +188,8 @@
   const KILL_TYPES = { kill: 1, kill_with: 1, killN: 1 }, TOWER_HULL = 72;   // towers.js RADIUS
   const HP_SHARE = 0.9, HP_CAP = 0.9, ATTACK_WINDOW = 4, SNAP_PROCS = 3, IN_FLIGHT = 2;
   const NO_NEED = { move: 1, attack: 1 };
+  // units.js DISABLES minus Tornado: a lifted foe cannot act, so its BKB comes only after the drop, when the steps timed to the landing already hit
+  const BKB_DISABLES = { coldsnap: 1, atos: 1, vyse: 1, orchid: 1, gleipnir: 1, meteorhammer: 1 };
   // step abilities that cannot hit a foe: they count once the hero casts them (Ice Wall is a zone in front of the hero: a slow / block, not a hit)
   const SELF_OK = { ghostwalk: 1, alacrity: 1, blink: 1, refresher: 1, forcestaff: 1, bkb: 1, boots: 1, travels: 1, icewall: 1 };
   const needOf = sc => (sc.steps || []).map(s => s.a).filter((a, i, l) => !NO_NEED[a] && l.indexOf(a) === i);
@@ -203,12 +217,18 @@
     for (let i = 0; i < n; i++) all.push(i);
     const cata = g('sunstrike', 'cataclysm_count'), A = attackDps(ctx, E.armor + (df.armorAdd || 0), steps.some(s => s.a === 'alacrity'));
     const parts = [], foes = all.map(() => 0);
-    // a foe that pops its BKB (useBkb) takes KV spell_reduce % less magic damage from every step after the opener
-    const bkb = all.map(i => { const u = (sc.units || [])[i] || {}; return u.useBkb && (u.items || []).indexOf('bkb') >= 0 ? 1 - gi('bkb', 'spell_reduce') / 100 : 1; });
-    let si = -1;
+    // #77 (review I3): a foe that carries a BKB (its own useBkb + 'bkb', or the tier BKB: df.useBkb, no own items, not a marcher) pops it
+    // on the first DISABLE cast at it (units.js DISABLES -> defend), so it takes KV spell_reduce % less magic damage from every LATER step;
+    // the disable step itself and anything before it land in full (trace: the pop beats a Meteor cast right after the disable). No disable in the steps = it never pops (full credit).
+    const red = 1 - gi('bkb', 'spell_reduce') / 100, ulist = sc.units || [];
+    const carries = u => { if (!u || (u.minDf && TIER_ORDER.indexOf(df.id) >= 0 && TIER_ORDER.indexOf(df.id) < TIER_ORDER.indexOf(u.minDf))) return false;
+      const mot = IT.Intent && IT.Intent.engine ? IT.Intent.engine(IT.Intent.of(u).kind, u).mot : u.mot;
+      const items = u.items || ((df.useBkb && mot !== 'march') || u.useBkb ? ['bkb'] : []);
+      return items.indexOf('bkb') >= 0 && !u.bkbOn; };
+    const bkb = all.map(i => (carries(ulist[i]) ? red : 1)), popped = all.map(() => false);
     for (const s of steps) {
-      si++;
       const a = s.a, to = s.at === 'd1' ? [Math.min(1, n - 1)] : s.at === 'mid' || (a === 'sunstrike' && s.at === 'self' && cata > 0) ? all : s.at === 'tower' ? [] : [0];
+      const dis = BKB_DISABLES[a];
       let d = 0;
       if (a === 'sunstrike') d = s.at === 'self' ? (cata > 0 ? cata * g(a, 'damage') * g(a, 'cataclysm_damage_pct') / 100 : 0) : g(a, 'damage') / (s.at === 'mid' ? n : 1);
       else if (a === 'chaosmeteor') d = ((Math.floor((g(a, 'area_of_effect') + E.radius) / Math.max(1, g(a, 'travel_speed') * g(a, 'damage_interval'))) + 1) * g(a, 'main_damage') + g(a, 'burn_dps') * g(a, 'burn_duration')) * mres;
@@ -220,10 +240,13 @@
       else if (a === 'attack') d = A.hero * ATTACK_WINDOW;
       else if (a === 'gleipnir') d = gi(a, 'damage') * mres;
       else if (a === 'meteorhammer') d = (gi(a, 'impact_damage_units') + gi(a, 'burn_dps_units') * gi(a, 'burn_duration')) * mres;
-      if (!(d > 0) || !to.length) continue;
       const mag = a !== 'sunstrike' && a !== 'forgespirit' && a !== 'attack';
-      parts.push({ a, foes: to, dmg: d });
-      for (const i of to) foes[i] += mag && si > 0 ? d * bkb[i] : d;
+      if (d > 0 && to.length) {
+        const eff = to.map(i => (mag && popped[i] ? d * bkb[i] : d));   // per foe in `to`, after its BKB
+        parts.push({ a, foes: to, dmg: d, eff });
+        to.forEach((i, k) => { foes[i] += eff[k]; });
+      }
+      if (dis) for (const i of to) popped[i] = true;
     }
     return { foes, parts };
   }
@@ -263,7 +286,7 @@
       const c = comboDamage(sc, df, pr.lo), pos = c.foes.filter(x => x > 0), lo0 = Math.min.apply(null, pos);
       hp = pr.hp.map((b, i) => {
         const cred = c.foes[i] > 0 ? c.foes[i] : lo0;
-        let last = 0; for (const q of c.parts) if (q.foes.indexOf(i) >= 0) last = q.dmg;
+        let last = 0; for (const q of c.parts) { const k = q.foes.indexOf(i); if (k >= 0) last = q.eff ? q.eff[k] : q.dmg; }
         const cap = Math.max(b, Math.round(Math.max(100, cred * HP_CAP))), floor = Math.min(b, Math.max(100, Math.round((cred - last) * VARY.floor)));
         return clamp(Math.round(b * hpMul), floor, cap);
       });
@@ -304,7 +327,7 @@
     for (const s of steps) if (s.a !== 'move' && s.a !== 'attack') setup += castOf(s.a);
     const tCombo = walk + setup + fightTime(hp, combo.hero * 0.5 + spirits, ham);
     const tHammer = ham ? walk + castOf('meteorhammer') + fightTime(hp, plain.hero * 0.5, ham) : null;
-    return { hp, walk, setup, tAttack, tCombo, tHammer, hammer: ham ? ham.impact + ham.burn * ham.dur : 0, limit: sc.limit != null ? sc.limit : Math.ceil(sc.par * df.timer + SLACK) };
+    return { hp, walk, setup, tAttack, tCombo, tHammer, hammer: ham ? ham.impact + ham.burn * ham.dur : 0, limit: limitOf(sc, df) };
   }
 
   // world fog for main.js start(): a scenario run (ranked / infinite / sandbox scenario: `pr` = its first prepared scenario) always uses the
@@ -646,6 +669,10 @@
       IT.Intent.attach(e, d, df.reaction * (vy ? vy.reactionMul : 1));
       jukeUnit(w, e, d, df, jlist.indexOf(d), jlist);   // v6 item 27: belief (chasers), Gem, re-catch items
       if (mot === 'chase' && !e.belief && IT.Belief) e.belief = IT.Belief.create(e, e.beliefP, { idx: 0, n: 1 });
+      // #77 (review I4): in a juke scenario a chaser is never slower than the hero x the tier's belief.floor (ian / easy): walking straight
+      // away no longer wins at the low tiers (it out-paced the x0.82 / x0.88 chasers); only breaking sight does
+      const fl = e.beliefP && e.beliefP.floor;
+      if (fl && mot === 'chase' && (sc.tags || []).indexOf('juke') >= 0) { const hm = Math.round(((IT.DOTA.hero && IT.DOTA.hero.MovementSpeed) || 280) + IT.Units.itemMs(pr.lo.items || [])); if (e.ms < hm * fl) { e.ms = Math.round(hm * fl); e.base.ms = e.ms; } }
       extra.push([e, d, I0]);
       out.push(e);
     });
@@ -802,10 +829,12 @@
     const infPool = () => { const l = IT.SCENARIOS.filter(s => (s.level || s.tier * 3) >= INF_MIN_LEVEL); return l.length ? l : IT.SCENARIOS.slice(); };
     const infSize = infinite ? infPool().length : 1;
     run.lap = () => (infinite ? Math.floor(run.n / infSize) : 0);   // full passes over the pool so far
-    run.diffIndex = () => (ranked ? rampDiff(rating, run.n) : infinite ? DF().order.length - 1 : DF().get(run.diffId).idx);
-    run.difficulty = () => (infinite ? infDifficulty(DF().get(run.diffIndex()), run.lap()) : DF().get(run.diffIndex()));
+    // sc = the scenario being prepared (run.next); default = the one in play (stats.js, kill bookkeeping)
+    run.diffIndex = sc => (ranked ? capDiff(rampDiff(rating, run.n), sc || (run.pr && run.pr.sc)) : infinite ? DF().order.length - 1 : DF().get(run.diffId).idx);
+    run.difficulty = sc => (infinite ? infDifficulty(DF().get(run.diffIndex()), run.lap()) : DF().get(run.diffIndex(sc)));
 
     // ranked ramp: the n-th scenario aims at level 1 + n (+2 per rating band), picked among levels within +-r (widening until >= 3)
+    run.played = {};   // #77 I2: id -> plays this run (pick weighting)
     run.levelTarget = () => clamp(Math.round(1 + run.n + 2 * baseDiff(rating)), 1, 10);
     // twists: 1 in the first stage (turns 0-2), 1-2 in each later stage (3-5, 6-7); turns chosen up front from the seed
     run.twistTurns = [];
@@ -843,8 +872,16 @@
       let pool = all;
       if (ranked) {
         const tg = run.levelTarget(), fun = run.funTurns.indexOf(run.n) >= 0, base = fun ? all.filter(s => isFun(s) && !run.recent.includes(s.id)) : all;
-        for (let r = 0; r <= 9; r++) { pool = base.filter(s => Math.abs((s.level || s.tier * 3) - tg) <= r); if (pool.length >= (fun ? 2 : 3)) break; }
+        // #77 (review I2): the window is always >= +-1 level (the L9-10 band alone was 11 scenarios: the same ones every top run), widened
+        // until >= 3 (2 on fun turns); then weighted: on-target level x2, played earlier in this run (run.played) x0.35
+        for (let r = PICK_R0; r <= 9; r++) { pool = base.filter(s => Math.abs((s.level || s.tier * 3) - tg) <= r); if (pool.length >= (fun ? 2 : 3)) break; }
         if (!pool.length) pool = all;
+        const fresh = pool.filter(s => !run.recent.includes(s.id));
+        if (fresh.length) pool = fresh;
+        const wt = pool.map(s => ((s.level || s.tier * 3) === tg ? 2 : 1) * (run.played[s.id] ? 0.35 : 1));
+        let x = rng() * wt.reduce((a, v) => a + v, 0);
+        for (let i = 0; i < pool.length; i++) { x -= wt[i]; if (x < 0) return pool[i]; }
+        return pool[pool.length - 1];
       }
       const fresh = pool.filter(s => !run.recent.includes(s.id));
       if (fresh.length) pool = fresh;
@@ -863,11 +900,12 @@
     // choose + prepare the next scenario (does not touch the world). main.js uses .lo/.fog to create the world.
     run.next = () => {
       const sc = pick();
-      const df = run.difficulty(), lv = rollLevel(sc, df, run.lvRng);
+      const df = run.difficulty(sc), lv = rollLevel(sc, df, run.lvRng);
       run.pr = prepare(sc, df, run.skin, lv.lvl, run.varRng);
       run.pr.lvl = lv;
       run.pr.twist = twist(sc);
       run.recent.push(sc.id); if (run.recent.length > Math.max(6, run.turns || 0)) run.recent.shift();
+      run.played[sc.id] = (run.played[sc.id] || 0) + 1;
       return run.pr;
     };
 
@@ -1327,10 +1365,10 @@
 
   IT.Ranked = {
     TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, readHold, STEP_D, ROW_HOLD, PAN_MIN, READ_FLOOR, TITLE_FLOOR, STAGE_MIN, STAGE_MAX, FLY_S, TEXT_MIN, TEXT_MAX, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
-    streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
+    streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, capDiff, TOP_LVL, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,
     profile, record, reset, load, prepare, pitRegion, inPit, pitGap, MOUTH_TOL, pushEnd, loadoutAt, baseLevel, feasible, rollLevel, LVL_SPREAD, LVL_SEARCH, apply, create, hud, spot, arenas, TWISTS, variation, VARY,
-    comboDamage, foeHp, towerMath, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
+    comboDamage, foeHp, towerMath, limitOf, PICK_R0, fightTime, worldFog, needOf, heroSeen, FUN_TAGS, FUN_TURNS, isFun, CAUGHT, HP_SHARE, HP_CAP, ATTACK_WINDOW,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

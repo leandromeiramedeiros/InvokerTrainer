@@ -8,7 +8,7 @@ const load = require('./_load.js');
 const ROOT = path.join(__dirname, '..');
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const FILES = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/daynight.js', 'js/data/map.js', 'js/data/dotaworld.js', 'js/data/maps.js',
-  'js/data/i18n.js', 'js/data/i18n/v6.js', 'js/data/combos.js', 'js/data/difficulty.js',
+  'js/data/i18n.js', 'js/data/i18n/v6.js', 'js/data/i18n/fp.js', 'js/data/combos.js', 'js/data/difficulty.js',
   'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js',
   'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js',
   'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/sim/enemycard.js', 'js/ui/hudsteps.js', 'js/ui/diffbar.js', 'js/ui/roster.js'];
@@ -152,4 +152,33 @@ test('Free Play screen: no ENEMIES panel, no Combo Sandbox card; default difficu
   assert.match(lo, /DiffBar\.create/);
   assert.match(idx, /css\/diffbar\.css/); assert.match(idx, /js\/ui\/diffbar\.js/); assert.match(idx, /js\/ui\/roster\.js/);
   assert.doesNotMatch(css, /\.erow|\.eskin|\.combocard/);
+});
+
+// ------------------------------------------------------------------ #77 I9: Free Play rows honour the tier execution
+test('I9: a roster enemy carries its tier exec + msMul (ian lenient, bambam perfect), edit re-applies the new tier', () => {
+  const w = world(), D = IT.DIFFICULTY;
+  const a = R.spawn(w, 'enemy', 4400, 2000, { tier: 'ian' }), b = R.spawn(w, 'enemy', 4500, 2000, { tier: 'bambam' });
+  assert.deepStrictEqual(plain(a.exec), plain(D.get('ian').exec)); assert.deepStrictEqual(plain(b.exec), plain(D.get('bambam').exec));
+  assert.ok(a.exec.itemP < 1 && b.exec.itemP === 1, 'ian uses items by chance, bambam always');
+  assert.strictEqual(a.msMul, D.get('ian').msMul); assert.ok(a.ms < b.ms, 'ian is slower than bambam');
+  const n = R.edit(w, a, { tier: 'hard' });
+  assert.deepStrictEqual(plain(n.exec), plain(D.get('hard').exec));
+});
+
+test('I9: EnemyCard.spec / place / spawnAll pass exec + msMul', () => {
+  const card = { count: 2, items: [], list: [{ tier: 'ian' }, { tier: 'hard' }] };
+  const s0 = IT.EnemyCard.spec(card, 0, 100, 100, 'invoker_skin'), s1 = IT.EnemyCard.spec(card, 1, 100, 100, 'invoker_skin');
+  assert.ok(s0.exec && s0.exec.itemP < s1.exec.itemP); assert.ok(s0.msMul < s1.msMul + 1e-9);
+  const w = world(); w.map = { walkable: () => true };
+  const e0 = IT.EnemyCard.place(card, w, 0, 4400, 2000, IT.GAME.SKINS[0]), e1 = IT.EnemyCard.place(card, w, 1, 4500, 2000, IT.GAME.SKINS[0]);
+  assert.strictEqual(e0.exec.itemP, IT.DIFFICULTY.get('ian').exec.itemP); assert.strictEqual(e1.exec.itemP, IT.DIFFICULTY.get('hard').exec.itemP);
+});
+
+// ------------------------------------------------------------------ #77 panel tabs
+test('Free Play panel: tab strings exist in EN + PT, hud.js builds the three tabs', () => {
+  for (const k of ['fp.tabs', 'fp.tab.roster', 'fp.tab.match', 'fp.tab.combos', 'fp.tab.roster.d', 'fp.tab.match.d', 'fp.tab.combos.d']) assert.ok(IT.hasT(k), k);
+  const src = read('js/ui/hud.js');
+  assert.match(src, /TABS = \['roster', 'match', 'combos'\]/); assert.match(src, /role: 'tablist'/);
+  assert.match(read('css/sandbox.css'), /prefers-reduced-motion/);
+  assert.match(read('index.html'), /i18n\/fp\.js/);
 });

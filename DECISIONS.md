@@ -452,3 +452,16 @@ bonus_movement_speed 45; dota_english: AGI = 1 AS + armor, INT = 0.1% MR.
 - Enemy AI never spends BKB on a ground zone that pierces it (KV SpellImmunityType ENEMIES_YES: Sun Strike / Cataclysm); the tier BKB (bambam useBkb) skips marchers: bambam bridge_hold / offlane_survival / highground_hold bot 0/6 -> 6/6.
 - gauntlet: steps start with Dust (the foe carries Shadow Blade; the hero's Dust was never in the recipe): bot 6/6 ian-common (was 0/6 above easy).
 - Timed escapes (obj escape without `unseen`: ghost_escape, ghost_slip, pinned_escape, dust_escape, smoke_gank_escape, plateau_escape) now need their step spells cast (`Ranked` survive -> pr.need; a cast counts, a chaser may BKB the Tornado): chasers at ian-common (<= 307 u/s, 1100+ u away) never caught a hero walking straight away (280), so walking won 3-4 tiers of each; bot clears unchanged.
+
+## v6 #77 gameplay-review picks (2026-10-13)
+- I1: ranked caps L9-10 at hard; per-scenario `maxDf` (common: gauntlet, blink_denial, aegis_snatch, no_invis_juke, plateau_escape, pit_in_out; easy: dust_bait). L9-10 bot at the capped tier 59/66 (was 21/66 at hard/bambam).
+- I3: foe HP credits BKB (60% magic reduction) only for foes carrying one, and only for steps after the first non-Tornado disable (a lifted foe can't pop). Bambam bot total stays 346.
+- I5: pit_in_out exits by the crater's west lip around the west wall; bot 6/6 at ian/easy/common (was 0/6), hard still caught (KNOWN).
+- Timers: limit = par x tierTimer + slack per tier (6/5/4/1/1); hard timer 0.7, bambam 0.6; `par` raised on 11 scenarios so every clear stays green. Median bot clear vs limit hard 0.18 -> 0.36, bambam 0.22 -> 0.45. Infinite timer floor 0.6 -> 0.45.
+- I4: ian/easy chasers predict straight-line moves and match hero speed in jukes; naive walk-away wins ian 30 -> 12, easy 16 -> 12.
+- I2: pick window >= +-1 level, weighted toward on-target levels and scenarios not yet played this run. Still open: 3-4 new L9-10 scenarios.
+- Bot totals before -> after: ian 446 -> 455, easy 456 -> 461, common 449 -> 455, hard 385, bambam 346; six stale KNOWN entries dropped.
+- Relic points (I7): per-relic `sc` (scoring step) + `ptm` (points multiplier), POINTS_K 56 -> 59. score_sample 12 seeds: top medal share tornado_kills 32% -> 18%; min medal pts/run 0.1 -> 1.5; top spendable share 23% -> 16%; common mean 207 -> 205 pts/run (shop pricing unchanged). score_sample prints a spendable-points table.
+- I10: GAME.ROSHAN = KV npc_dota_roshan: ArmorPhysical 30, MagicalResistance 55, AttackDamageMin/Max 75, AttackRange 150, Vision 1400.
+- I16: new relics `escape` (won escape/reach scenario), `alacrity_hits` (attacks landed under Alacrity), `orb_swap` (invoke within 1 s of a cast); ranked-only accrual; EN/PT in i18n/relics.js.
+- I9: Free Play roster rows apply the tier: `EnemyCard.spec` returns exec + msMul, `EnemyCard.build` spawns then sets `e.exec = df.exec`, ms x msMul; item use by chance from exec.itemP. Free Play side panel: fixed header (map, DPS, tools) + tabs Roster / Match (time of day, damage graph) / Combos; only the active tab scrolls (docs/UX-REVIEW-v6.md addendum). i18n in js/data/i18n/fp.js.

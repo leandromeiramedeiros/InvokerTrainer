@@ -46,7 +46,7 @@
       const tier = defTier(o), EC = IT.EnemyCard, items = Array.isArray(o.items) ? o.items : [];
       const nth = list(w, 'enemy').filter(u => u.ros.skin === skin).length;
       const spec = EC.spec({ count: 1, items, list: [{ skin, behavior: 'stationary', tier, items: items.length > 0 }] }, 0, x, y, skin, nth);
-      e = IT.Units.spawnEnemy(w, spec);
+      e = EC.build(w, spec);   // I9: build = spawnEnemy + the tier's exec / msMul
       e.ros = { kind, skin, tier, ord, items: items.slice(), hx: o.hx != null ? o.hx : x, hy: o.hy != null ? o.hy : y };
     } else {
       e = IT.Units.spawnDummy(w, { x, y, preset: 'training', skin });

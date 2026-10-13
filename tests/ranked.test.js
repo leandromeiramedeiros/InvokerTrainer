@@ -185,7 +185,8 @@ test('practice: difficulty fixed, endless, no score; sandbox scenario: no countd
 test('ranked ramp: low rating starts easy, scenario difficulty never decreases within a run', () => {
   const run = R.create({ mode: 'ranked', rating: 0, seed: 9 });
   let prev = -1;
-  for (let i = 0; i < 12; i++) { run.n = i; const pr = run.next(); assert.ok(pr.df.idx >= prev); prev = pr.df.idx; }
+  // #77 I1: the RAMP never decreases; a played tier is the ramp capped by the scenario (L9-10 <= hard, its own maxDf)
+  for (let i = 0; i < 12; i++) { run.n = i; const pr = run.next(), rd = R.rampDiff(0, i); assert.ok(rd >= prev); prev = rd; assert.equal(pr.df.idx, R.capDiff(rd, pr.sc), pr.sc.id); }
   assert.ok(prev >= 3);
   const hi = R.create({ mode: 'ranked', rating: 4000, seed: 9 });
   assert.equal(hi.next().df.idx, 3);

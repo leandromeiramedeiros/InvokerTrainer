@@ -184,7 +184,7 @@ test('special relics: exactly the 4 rare ones, client layout rows 4-3-4-3 (14 Do
   for (const id of RL.SPECIAL) { assert.equal(RL.isSpecial(id), true); assert.equal(RL.BY[id].dota, true); }
   assert.equal(RL.isSpecial('kills'), false); assert.equal(RL.isSpecial('nope'), false);
   assert.deepEqual(RL.ROWS.map(r => r.length), [4, 3, 4, 3]);
-  assert.equal(RL.DOTA, 14); assert.equal(RL.TRAINER.length, 6);
+  assert.equal(RL.DOTA, 14); assert.equal(RL.TRAINER.length, 9);
   const placed = RL.ROWS.flat();
   assert.equal(new Set(placed).size, 14, 'every Dota relic is in exactly one row');
   for (const id of placed) assert.equal(RL.BY[id].dota, true, id);

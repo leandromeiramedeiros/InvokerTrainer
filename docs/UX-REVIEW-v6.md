@@ -27,3 +27,20 @@ Severity: S = broken/unreadable, M = clearly poor, L = polish.
 Counts: S 1, M 10, L 3 (fixed: all S/M; L #12, #13 fixed, #15/#16 left).
 
 Tests: `tests/ux_v6.test.js` (font floors >= 10px, dim colour, ribbon, buttons, Scenarios Tags row, hint position, i18n keys). `node --test tests/*.test.js` green.
+
+## Free Play panel redesign (#77 I9)
+
+**I9 fix.** Roster rows (and `EnemyCard.place/spawnAll`) now build through `EnemyCard.build`: `spawnEnemy` + the tier's `exec` (item chance, prediction, jitter, dodge...) + `msMul` on move speed, mirroring `ranked.js apply`. Changing a row's difficulty re-spawns it with the new tier's execution. Before, every Free Play foe ran perfect EXEC0 (itemP 1, predict 1) at full speed whatever the bar said.
+
+**Before** (one long scrolling column, ~8 stacked blocks): map line, DPS meter + sparkline, 4 tool icons, Time of day (Day / Night / Cycle + slider), "Enemies and dummies" (add buttons + rows), "Combos" header + search, tier chips, combo list. At the default 118x172 panel the combo list got ~14 em of what was left and the user scrolled past time of day and roster to reach it.
+
+**After** (fixed header + 3 tabs, active tab body is the only scrolling area):
+- Header, always visible: map line, DPS / peak / total numbers, tools strip (refresh, auto-refresh, reset targets, grant items).
+- Tab **Roster**: + Enemy / + Dummy (n/max) and the rows (skin picker, remove X, DiffBar on enemies). The old "Enemies and dummies" heading is dropped (the tab names it).
+- Tab **Match**: Time of day (Day / Night / Cycle + slider) and the damage graph (sparkline, redrawn only while shown).
+- Tab **Combos**: count + search, tier chips, the list taking all the height; click pins the compact guide strip (#33).
+- Tabs are a real `tablist` (arrow keys, `aria-selected`); the last tab is remembered (`it2.fp.tab`), default Roster.
+
+**Rationale.** One concern visible at a time: fewer simultaneous controls, no scrolling past unrelated blocks, a taller combo list. Frequent actions (tools, DPS) stay one click away; rarely changed ones (time of day) move to Match. Strings: `js/data/i18n/fp.js` (EN + PT). Sparkline moved out of the header so a narrow panel keeps height for the tab body.
+
+**What stayed.** Panel system (#10: drag, resize 104x96 .. 240x262, persisted, open button), `DiffBar` as the only difficulty control (same component, tooltip and labels), time-of-day controls and behaviour, the combo guide strip, pin/unpin logic, tool keys. Sizes: all text is em-based on `--u` and `max(.., 11px)`, so 1280x720 (u small) and 1920x1080 (u 1.5x) scale the same; `fit` scaling not used since the tab body scrolls. Reduced motion: transitions/animations in the panel, DiffBar and guide strip are off under `prefers-reduced-motion`.

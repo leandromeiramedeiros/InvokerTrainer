@@ -156,13 +156,13 @@ function ranked(seed, rating, fixedIdx, sloppy) {
     proj = { clear, relic, score: clear + relic };
   }
   sum.proj = proj;
-  sum.points = w._stats.data.points; sum.time = w._stats.data.time;   // item 15: spendable points of this run (+ play seconds)
+  sum.pointsBy = Object.assign({}, w._stats.data.pointsBy); sum.points = w._stats.data.points; sum.time = w._stats.data.time;   // item 15: spendable points of this run (+ play seconds)
   return sum;
 }
 
 const pct = (a, p) => { const s = a.slice().sort((x, y) => x - y); if (!s.length) return 0; const i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return Math.round(s[lo] + (s[hi] - s[lo]) * (i - lo)); };
 const medal = (score, solved) => { const r = IT.Ranks.fromRun({ score, solved, turns: 8 }); return r.name + (r.stars ? ' ' + r.stars : ''); };
-const groups = [], PARTS = {};
+const groups = [], PARTS = {}, PTS = {};
 let RUNS = 0;
 const t0 = Date.now();
 for (const set of SETS) {
@@ -174,6 +174,7 @@ for (const set of SETS) {
         const m = ranked(1000 + s * 37, table[df], set === 'fixed' ? IT.DIFFICULTY.get(df).idx : null, pl === 'sloppy');
         rows.push({ seed: s, score: m.score, clear: m.clearScore, relic: m.relicScore, solved: m.solved, medal: medal(m.score, m.solved), proj: m.proj, points: m.points, time: m.time });
         for (const q of m.relicParts || []) { const a = PARTS[q.id] || (PARTS[q.id] = { runs: 0, pts: 0, v: 0 }); a.runs++; a.pts += q.pts; a.v += q.v; }
+        for (const k in m.pointsBy || {}) PTS[k] = (PTS[k] || 0) + m.pointsBy[k];
         RUNS++;
       }
       const sc = rows.map(r => r.score), solved = rows.map(r => r.solved), perfect = rows.filter(r => r.solved >= 8);
@@ -196,5 +197,10 @@ if (JSON_OUT) console.log(JSON.stringify(groups, null, 1));
 else {
   console.log('relic parts (all runs): id  runs-with  mean-pts/run  mean-value-when-earned');
   for (const id of Object.keys(PARTS).sort((a, b) => PARTS[b].pts - PARTS[a].pts)) { const a = PARTS[id]; console.log('  ' + id.padEnd(16), String(a.runs).padStart(4), (a.pts / RUNS).toFixed(1).padStart(7), (a.v / a.runs).toFixed(1).padStart(9)); }
+}
+if (!JSON_OUT) {
+  const tot = Object.values(PTS).reduce((a, b) => a + b, 0) || 1;
+  console.log('spendable points (all runs): id  mean-pts/run  share   (total ' + (tot / RUNS).toFixed(1) + '/run)');
+  for (const id of Object.keys(PTS).sort((a, b) => PTS[b] - PTS[a])) console.log('  ' + id.padEnd(16), (PTS[id] / RUNS).toFixed(1).padStart(7), (100 * PTS[id] / tot).toFixed(1).padStart(6) + '%');
 }
 if (!JSON_OUT) console.log(`${groups.length} groups, ${((Date.now() - t0) / 1000).toFixed(1)} s`);

@@ -53,7 +53,18 @@
       behavior: r.behavior, items: r.items ? c.items.slice() : [],
       telegraph: df.telegraph, awareness: df.awareness, notice: df.notice, reaction: df.reaction, dmgMul: df.dmgMul, fights: !!df.fights,
       tier: r.tier,
+      exec: df.exec || null, msMul: df.msMul || 1,   // I9: the tier's EXECUTION (item chance, prediction, jitter...) and move-speed multiplier, as in ranked.js apply
     };
+  }
+
+  // spawn one spec into `w` and apply the tier execution (spawnEnemy ignores exec / msMul): e.exec gates items / blink by chance (units.js execOf), e.ms x msMul
+  function build(w, s) {
+    const e = IT.Units.spawnEnemy(w, s);
+    if (e) {
+      e.exec = s.exec || null;
+      if (s.msMul && s.msMul !== 1) { e.msMul = s.msMul; e.ms = Math.round(e.ms * s.msMul); if (e.base) e.base.ms = e.ms; }
+    }
+    return e;
   }
 
   // walkable spots for n enemies around `base` (the hero spawn): the map's derived arenas (map.spawns.arenas, outside Radiant tower range)
@@ -95,7 +106,7 @@
 
   // spawn the card's enemies into world `w` (Free Play). Returns the entities.
   function spawnAll(card, w, base, dummySkin) {
-    return specs(card, w, base, dummySkin).map(s => IT.Units.spawnEnemy(w, s));
+    return specs(card, w, base, dummySkin).map(s => build(w, s));
   }
 
   // place the k-th enemy of the session at (x, y): card row k % max(count,1); null when the point is not walkable or the world is full
@@ -104,7 +115,7 @@
     if (w.query(e => e.kind === 'enemy' && !e.refill).length >= WORLD_CAP) return null;
     const c = normalize(card), i = k % Math.max(1, c.count), s0 = spec(c, i, x, y, dummySkin, null, k);
     const nth = w.query(e => e.kind === 'enemy' && !e.refill && e.skin === s0.skin).length;
-    return IT.Units.spawnEnemy(w, nth ? spec(c, i, x, y, dummySkin, nth, k) : s0);
+    return build(w, nth ? spec(c, i, x, y, dummySkin, nth, k) : s0);
   }
 
   // scenario level 1..10 -> the tier that level is aimed at (2 levels per tier): the badge on the sandbox scenario chips
@@ -113,5 +124,5 @@
     return o[Math.max(0, Math.min(o.length - 1, Math.floor(((Number(level) || 1) - 1) / 2)))];
   }
 
-  IT.EnemyCard = { tierOfLevel, MAX, WORLD_CAP, BEHAVIORS, AUTO, normalize, spec, spots, specs, spawnAll, place };
+  IT.EnemyCard = { tierOfLevel, MAX, WORLD_CAP, BEHAVIORS, AUTO, normalize, spec, build, spots, specs, spawnAll, place };
 })(typeof window !== 'undefined' ? window : globalThis);

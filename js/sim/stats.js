@@ -110,8 +110,16 @@
 
     on('order', p => { if (p.unit === hid()) S.actions++; });
     on('orb', p => { if (p.unit === hid()) { S.actions++; if (wantInvoke == null) wantInvoke = w.t; } });
+    // I16: orb_swap = an Invoke within 1 s of the hero's last spell cast; escape = an escape / juke objective ('escape', 'reach') survived
+    let castAt = -99;
+    on('cast', p => { if (p.unit === hid() && IT.GAME.SPELL_ORBS[p.ability]) castAt = w.t; });
+    on('scnResult', p => {
+      const o = p && p.ok && w.ranked && w.ranked.pr && w.ranked.pr.sc && w.ranked.pr.sc.obj;
+      if (o && (o.type === 'escape' || o.type === 'reach')) relic('escape', 1);
+    });
     on('invoke', p => {
       if (p.unit !== hid()) return;
+      if (w.t - castAt <= 1) { relic('orb_swap', 1); castAt = -99; }
       S.actions++; S.invoke.count++; if (p.swapped) S.invoke.swaps++;
       if (wantInvoke != null) {
         const l = w.t - wantInvoke;
@@ -143,7 +151,7 @@
       if (ab === 'emp' && manaAt[p.target] != null) { const e = ent(p.target); relic('emp_mana', Math.max(0, manaAt[p.target] - (e ? e.mana || 0 : 0))); delete manaAt[p.target]; }
       if (ab === 'attack' || ab === 'forgespirit') {   // Alacrity: the bonus-damage share of an attack by an Alacrity-buffed unit of ours
         const s = IT.Status && IT.Status.find(ent(p.src) || { statuses: [] }, 'alacrity'), bonus = s && s.data && s.data.stats ? s.data.stats.dmg || 0 : 0;
-        if (bonus > 0 && p.raw > 0) relic('alacrity_dmg', Math.min(p.dealt, bonus * p.dealt / p.raw));
+        if (bonus > 0 && p.raw > 0) { relic('alacrity_dmg', Math.min(p.dealt, bonus * p.dealt / p.raw)); relic('alacrity_hits', 1); }
       }
     });
     on('bolt', p => {
@@ -288,7 +296,7 @@
     let score = 0;
     if (!Rd || !rel) return { score: 0, parts };
     for (const r of Rd.LIST) {
-      const v = rel[r.id] || 0, unit = r.step || r.tiers[0];
+      const v = rel[r.id] || 0, unit = r.sc || r.step || r.tiers[0];
       if (!(v > 0) || !(unit > 0) || r.weight === 0) continue;   // weight 0 = tracked only
       const lv = Math.min(RELIC_CAP, v / unit), pts = lv * (r.weight || 1) * RELIC_K;
       score += pts; parts.push({ id: r.id, v, lv: round(lv), pts: Math.round(pts) });

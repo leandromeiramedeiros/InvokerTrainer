@@ -63,7 +63,9 @@ test('belief: a vision flicker (< 0.5 s lost) is not a reacquire; never-seen sta
   assert.equal(w.ev[w.ev.length - 1].reacquired, undefined);
 });
 
-test('belief: ian predicts nothing (the last-seen spot); higher tiers look further ahead', () => {
+// #77 (review I4): ian / easy now extrapolate the straight line too (a walk-away no longer wins there); they stay the dumb tiers through
+// bias 0 (no path re-scoring), long confusion and small search rings. Look-ahead is monotone from common up and ian looks the least.
+test('belief: every tier predicts the straight line (ian least); look-ahead grows from common up', () => {
   const run = id => {
     const w = fakeW(mkMap()), b = B.create({ id: 1 }, B.params(DF.get(id)));
     at(w, b, { x: 300, y: 1000 }, true, 0); at(w, b, { x: 332, y: 1000 }, true, 0.1); at(w, b, { x: 364, y: 1000 }, true, 0.2);
@@ -71,15 +73,18 @@ test('belief: ian predicts nothing (the last-seen spot); higher tiers look furth
     return b.pred.x - 364;
   };
   const d = TIERS.map(run);
-  assert.ok(Math.abs(d[0]) < 1e-6, 'ian = last seen ' + d[0]);
-  for (let i = 1; i < d.length; i++) assert.ok(d[i] >= d[i - 1] - 1e-6, 'monotone ' + d.join(','));
-  assert.ok(d[4] > d[1] + 200, d.join(','));
+  assert.ok(d[0] > 100, 'ian walks past the last-seen spot ' + d[0]);
+  for (let i = 1; i < d.length; i++) assert.ok(d[i] >= d[0] - 1e-6, 'ian looks least ' + d.join(','));
+  for (let i = 3; i < d.length; i++) assert.ok(d[i] >= d[i - 1] - 1e-6, 'monotone from common ' + d.join(','));
+  assert.ok(d[4] > d[0] + 200, d.join(','));
 });
 
 test('belief: tier params scale (look-ahead / bias up, confusion down, split + detect + re-catch at hard+)', () => {
   const P = TIERS.map(id => B.params(DF.get(id)));
+  assert.ok(P[0].floor >= 1, 'ian juke chaser floor');
   for (let i = 1; i < P.length; i++) {
-    assert.ok(P[i].predict * P[i].horizon >= P[i - 1].predict * P[i - 1].horizon && P[i].bias >= P[i - 1].bias, TIERS[i]);   // look-ahead = predict x horizon
+    assert.ok((i === 2 || P[i].predict * P[i].horizon >= P[i - 1].predict * P[i - 1].horizon) && P[i].bias >= P[i - 1].bias, TIERS[i]);   // look-ahead = predict x horizon (#77: easy's straight 3 s > common's re-scored 2.5 s)
+    assert.ok(i > 1 || P[i].floor >= 1, TIERS[i] + ' juke chaser floor');
     assert.ok(P[i].confused <= P[i - 1].confused, TIERS[i] + ' confused');
   }
   for (const [i, on] of [[0, false], [1, false], [2, false], [3, true], [4, true]]) {

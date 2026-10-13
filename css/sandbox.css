@@ -1,8 +1,8 @@
 /* v6 WP7: Combo Sandbox / Free Play side pane + combo feedback bar. Owner: WP7. Loaded after hud.css.
    Pane = fixed box (top 4.6em .. above the recipe strip), so it never grows under the hero bar; the combo list is the one scrolling area. */
-/* Free Play side pane = IT.UI.Panel 'sbx' body (draggable / resizable / persisted, see js/ui/panels.js). The wrap scrolls as a whole; the combo list takes the spare height. */
+/* Free Play side pane = IT.UI.Panel 'sbx' body (draggable / resizable / persisted, see js/ui/panels.js). Header (map, DPS, tools) + tab bar are fixed; the active tab body is the one scrolling area (#77). */
 .pnl#pnl-sbx .pbd{padding:.2em .2em .2em .3em;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.sbx-wrap{display:flex;flex-direction:column;gap:.5em;min-height:100%;font-size:calc(var(--u)*3.3333)}
+.sbx-wrap{display:flex;flex-direction:column;gap:.45em;height:100%;min-height:9em;font-size:calc(var(--u)*3.3333)}
 .maplin{flex:none;font-size:max(1em,11px);color:var(--gold);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .maplin:empty{display:none}
 .sbi{display:inline-flex;width:1.6em;height:1.6em;pointer-events:none}
@@ -79,7 +79,7 @@
 .sbx-fc{flex:1 1 auto;min-width:0;padding:.2em .2em;background:#0b0618;border:.15em solid var(--line);font-size:max(.75em,11px);color:var(--dim);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sbx-fc:hover{color:var(--ink);border-color:var(--dim)}
 .sbx-fc.on{border-color:var(--gold);color:var(--gold);background:#1d1236}
-.clist{position:relative;flex:1 0 14em;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:.3em;padding:0 .3em 0 0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.clist{position:relative;flex:1 0 8em;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:.3em;padding:0 .3em 0 0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .clist::-webkit-scrollbar{width:.7em}
 .clist::-webkit-scrollbar-thumb{background:var(--line);border:.15em solid #150d27}
 .ctier{flex:none;color:var(--dim);font-size:max(.8em,11px);margin-top:.3em;text-transform:uppercase;letter-spacing:.06em;border-bottom:.15em solid var(--line)}
@@ -159,3 +159,16 @@
 .rescard .rcsmall:empty{display:none}
 .rescard .rccont{margin-top:.9em;color:var(--dim);font-size:max(.95em,11px);text-transform:uppercase;opacity:.55}
 .rescard.go .rccont{color:var(--gold);opacity:1}
+
+/* ---- #77 Free Play panel tabs: Roster / Match / Combos */
+.sbx-tabs{flex:none;display:flex;gap:.2em;border-bottom:.15em solid var(--line)}
+.sbx-tab{flex:1 1 0;min-width:0;padding:.3em .2em;background:#0b0618;border:.15em solid var(--line);border-bottom:0;color:var(--dim);font-size:max(.85em,11px);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbx-tab:hover{color:var(--ink);border-color:var(--dim)}
+.sbx-tab.on{background:#1d1236;border-color:var(--gold);color:var(--gold)}
+.sbx-tab:focus-visible{outline:.15em solid var(--mag);outline-offset:-.15em}
+.sbx-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.sbx-pane{flex:1;min-height:0;display:flex;flex-direction:column;gap:.5em;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.sbx-pane[hidden]{display:none}
+.sbx-pane.sbx-cp{overflow:hidden}
+.sbx-cp .sbx-lh .cnt{order:-1}
+@media (prefers-reduced-motion:reduce){.sbx-wrap *,.sbx-open,.dbar *,.gdp,.gdp *{transition:none!important;animation:none!important}}
