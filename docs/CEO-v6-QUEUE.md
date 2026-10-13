@@ -34,7 +34,7 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [x] #28 (12 fun scenarios + TP/pickup/ally/Roshan mechanics) Research-driven (research done; 12 picked: tp_snipe, tornado_tp_cancel, rune_contest, pit_fight_blast, bkb_tower_hitter, ghost_ambush, emp_tornado_trap, tornado_icewall_landing, smoke_gank_escape, icewall_ramp_defense, save_the_ally, aegis_snatch) + [x] #29 edge scenarios (5) FUN scenarios (sonnet research agent -> ~30 candidates with sources -> director picks 10-12; docs/SCENARIO-RESEARCH.md) + #29 map-EDGE scenarios (4-6 across the four edge strips of images/20.png, tag edge+fun).
 
 ### LAST
-- [ ] #30 Gameplay/balance/mechanics quality pass (director-led; fixes with tests + docs/GAMEPLAY-REVIEW-v6.md top-10 suggestions).
+- [ ] #30 (CEO: LEVERAGE THE GAME FILES — KV in js/data/dota.js + reference/, the local Dota install C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\ (VPKs, server.dll/client.dll strings) to verify every mechanic, number, targeting style and interaction; flag anything that diverges) Gameplay/balance/mechanics quality pass (director-led; fixes with tests + docs/GAMEPLAY-REVIEW-v6.md top-10 suggestions).
 - [ ] #16 UI/UX review (docs/UX-REVIEW-v6.md, every screen at 1280x720 + 1920x1080, EN/PT) + animation pass (120-250 ms, reduced-motion).
 
 ## Playtest 5 (CEO, queued at 98% usage — do BEFORE #30/#16)
@@ -82,6 +82,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - UI: add 'midlane' to SCN_CAT_TAGS.terrain + tag.midlane; then #30 gameplay pass, #16 UX pass (LAST)
 
 - [ ] #70 BUG item slots (loadout + in-game HUD): items can only be reordered within the filled count (5 items -> can't drag one into empty slot 6). Inventory must be 6 FIXED slots with holes allowed (array of 6, null = empty): drag to any empty slot moves, to a filled slot swaps; adding via click fills the first empty slot; hotkeys follow slot index; persist holes in the loadout save (migrate old packed arrays). Test it.
+
+- [ ] #71 Scepter Ice Wall = VECTOR TARGETING (confirmed in baked KV js/data/dota.js: invoker_ice_wall vector_cast_range 0 -> +600 with scepter, wall_width +45, root_delay/duration/damage). With scepter: press = start point (within vector_cast_range), drag/second click = direction; wall spawns at the start point along that vector (Dota vector cast: quick-cast uses hero->cursor direction). Show the vector preview (start marker + arrow + wall footprint). Without scepter keep the current no-target wall in front of the hero. Verify exact semantics (start point, wall centre vs end, length) against game files/DLL strings in the local Dota install if unsure. Tests.
 
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
