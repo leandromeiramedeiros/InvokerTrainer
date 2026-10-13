@@ -273,7 +273,9 @@
       const sx = s.x / R.P - R.camX, sy = s.y / R.P - R.camY;
       if (sx < -60 || sx > R.VW + 60 || sy < -20 || sy - spr.height > R.VH + 60) continue;
       const P = PAL[s.team < 0 ? 2 : s.team];
-      R.light(sx, sy + structFoot(s) - spr._ay + spr._orbY, s.kind === 'fort' ? 60 : 34, s.kind === 'fountain' ? [110, 220, 255] : P.orbC, s.kind === 'fort' ? 0.7 : 0.5);
+      const c = s.kind === 'fountain' ? [110, 220, 255] : P.orbC;
+      R.light(sx, sy + structFoot(s) - spr._ay + spr._orbY, s.kind === 'fort' ? 60 : 34, c, s.kind === 'fort' ? 0.7 : 0.5);
+      if (IT.Lights && IT.Lights.enabled) IT.Lights.addPx(R, sx, sy + structFoot(s), spr._ay - spr._orbY, c, s.kind === 'fort' ? 80 : 46, s.kind === 'fort' ? 0.7 : 0.5, 'struct');
     }
   }
 
@@ -381,6 +383,7 @@
       if (sx < -60 || sx > R.VW + 60 || sy < -20 || sy - SH > R.VH + 60) continue;
       const P = PAL[e.team], spr = sprite(e.team, e.tier);
       R.light(sx, sy + FOOT - AY + spr._orbY, 46, P.orbC, 0.7);
+      if (IT.Lights && IT.Lights.enabled) IT.Lights.addPx(R, sx, sy + FOOT, AY - spr._orbY, P.orbC, 60, 0.7, 'tower');   // #76: orb lamp as a point light
     }
   }
 

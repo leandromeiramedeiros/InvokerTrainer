@@ -39,18 +39,33 @@
   // ---- v6 #76 L3: dynamic lighting (docs/LIGHTING-v6.md). Off = FS_MAIN untouched (bit-identical); on = light pass(es) into view-sized
   // (Low: half-res) RGBA8 buffers, then FS_MAIN_LIT adds them to the light grid before the same Bayer quantise.
   // G-buffer texel (render.js, opaque canvas): R,G = normal xy (n*.5+.5, y down), B = height6 << 2 | material2, A = 255.
-  const MAXL = 32, HZ = 24, ZMIN = 10;   // HZ: px of height for G-buffer h = 1; ZMIN: lights sit >= 10 px above the ground (no grazing)
+  const MAXL = 48, HZ = 24, ZMIN = 10;   // HZ: px of height for G-buffer h = 1; ZMIN: lights sit >= 10 px above the ground (no grazing)
   const LEVELS = {
-    // shadows: lights per caster for silhouette shadows (0 = none); march: 6-step height-channel ray-march toward the 2 strongest lights
-    // casters / trees: per-frame shadow-draw budget (all casters / of which trees), read by render.js drawShadows
-    off:    { lights: 0,  half: false, rim: false, glow: false, shadows: 0, march: false, casters: 0,   trees: 0 },
-    low:    { lights: 8,  half: true,  rim: false, glow: false, shadows: 0, march: false, casters: 0,   trees: 0 },
-    medium: { lights: 16, half: false, rim: true,  glow: false, shadows: 1, march: false, casters: 60,  trees: 20 },
-    high:   { lights: 32, half: false, rim: true,  glow: true,  shadows: 2, march: true,  casters: 120, trees: 40 },
+    // lights: point-light cap (uniform array size of the level's shader); half: half-res light buffer; rim / glow: strength (0 = off);
+    // shadows: point lights per caster for silhouette shadows; march: height-channel ray-march steps (0 = off) over range px toward marchL lights + the key;
+    // casters / trees: per-frame shadow-draw budget (all casters / of which trees); structs: towers / buildings / trees cast (else units only);
+    // key: sun / moon key light (keyLight); keyLen: key shadow length per px of caster height (0 = no key shadows); soft: key shadow copies (penumbra)
+    off:    { lights: 0,  half: false, rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0,    soft: 0 },
+    low:    { lights: 8,  half: true,  rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 1, keyLen: 0,    soft: 0 },
+    medium: { lights: 16, half: false, rim: 1,    glow: 1,   shadows: 1, march: 0,  range: 0,  marchL: 0, casters: 60,  trees: 0,   structs: false, key: 1, keyLen: 0.55, soft: 1 },
+    high:   { lights: 32, half: false, rim: 1,    glow: 1,   shadows: 2, march: 6,  range: 40, marchL: 2, casters: 120, trees: 40,  structs: true,  key: 1, keyLen: 0.8,  soft: 2 },
+    ultra:  { lights: 48, half: false, rim: 1.35, glow: 1.4, shadows: 3, march: 12, range: 64, marchL: 4, casters: 400, trees: 400, structs: true,  key: 1, keyLen: 1.1,  soft: 3 },
   };
-  // L4 shadows: silhouette shadow buffer (alpha = shadowed) darkens the diffuse / glow on ground pixels only; the march walks <= MARCH_RANGE px toward a light
+  // L4 shadows: silhouette shadow buffer (alpha = shadowed) darkens the diffuse / glow on ground pixels only; the march walks <= range px toward a light
+  const NAMES = Object.keys(LEVELS);
   const SHK = 0.85, MARCH_STEPS = 6, MARCH_RANGE = 40, MARCH_LIGHTS = 2;
   const RIMK = 0.9, GLOWK = 0.35;
+  // key light: fixed upper-left direction (screen px, y down, z up; toward the light), warm high sun by day, cool dimmer moon at night.
+  // down / up: shading gain on the side facing away / toward it (sprites + terrain slopes; flat ground = 1); sh: ground darkening in its shadow; rim: key rim.
+  const KEY_DIR = (() => { const v = [-0.45, -0.5, 0.74], m = Math.hypot(v[0], v[1], v[2]); return v.map(x => x / m); })();
+  const SUN = { tint: [1.0, 0.82, 0.55], down: 0.55, up: 1.2, sh: 0.5, rim: 0.6 }, MOON = { tint: [0.55, 0.7, 1.0], down: 0.4, up: 1.0, sh: 0.36, rim: 0.5 };
+  const KEY_OFF = { dir: [0, 0, 1], tint: [0, 0, 0], down: 0, up: 0, sh: 0, rim: 0, len: 0, soft: 0 };
+  function keyLight(night, lv) {
+    const L = LEVELS[lv] || LEVELS.off, n = night > 0 ? Math.min(1, night) : 0, mx = (a, b) => a + (b - a) * n;
+    if (!L.key) return null;
+    return { dir: KEY_DIR.slice(), tint: SUN.tint.map((v, i) => mx(v, MOON.tint[i])), down: mx(SUN.down, MOON.down), up: mx(SUN.up, MOON.up),
+      sh: L.keyLen ? mx(SUN.sh, MOON.sh) : 0, rim: L.rim ? L.rim * mx(SUN.rim, MOON.rim) : 0, len: L.keyLen, soft: L.soft };
+  }
   // art rule: the dynamic term tops out at +15 % by day, +60 % at night (night = Light.night, already smoothstepped)
   const lightCap = night => { const n = night > 0 ? Math.min(1, night) : 0; return 0.15 + 0.45 * n; };
   // G-buffer B channel: height 0..1 (6 bits) + material 0..3
@@ -64,37 +79,45 @@
     return u;
   }
   // uMode 0: diffuse sum (multiplies albedo), 1: rim + glow (additive). Output = cap * (1 - e^-2x) * vision (fog stays unlit).
-  const MARCH = 'float march(vec3 P,vec3 Lp){vec2 dv=Lp.xy-P.xy;float dd=length(dv);if(dd<1.)return 0.;vec2 dir=dv/dd;float rng=min(dd,' + MARCH_RANGE + '.);float occ=0.;' +
-    'for(int k=0;k<' + MARCH_STEPS + ';k++){float s=rng*(float(k)+1.)/' + MARCH_STEPS + '.;' +
+  // litFS(n lights, march steps, march range px, march lights): one program per level (array size + loop bounds are constants in GLSL ES 1.00)
+  const litFS = (nl, ms, mr, mlt) => PREC + 'varying vec2 uv;uniform sampler2D uG,uLight,uShadow;uniform vec2 uRes;uniform float uShOn,uMarch;' +
+    'float march(vec3 P,vec3 Lp){vec2 dv=Lp.xy-P.xy;float dd=length(dv);if(dd<1.)return 0.;vec2 dir=dv/dd;float rng=min(dd,' + mr + '.);float occ=0.;' +
+    'for(int k=0;k<' + ms + ';k++){float s=rng*(float(k)+1.)/' + ms + '.;' +
     'vec4 gs=texture2D(uG,(P.xy+dir*s)/uRes);float bs=floor(gs.b*255.+.5);float ms=mod(bs,4.);' +
     'float hs=floor(bs/4.)/63.*' + HZ + '.;float zr=P.z+(Lp.z-P.z)*s/dd;' +       // sample height above the ray height = occluded
-    'occ=max(occ,(step(ms,.5)+step(1.5,ms)*step(ms,2.5))*clamp((hs-zr)/3.,0.,1.));}return occ;}';
-  const FS_LIT = PREC + 'varying vec2 uv;uniform sampler2D uG,uLight,uShadow;uniform vec2 uRes;uniform float uShOn,uMarch;' + MARCH +
-    'uniform vec3 uLP[' + MAXL + '],uLC[' + MAXL + '];uniform vec2 uLR[' + MAXL + '];uniform int uN;uniform float uMode,uRim,uGlow,uCap;' +
+    'occ=max(occ,(step(ms,.5)+step(1.5,ms)*step(ms,2.5))*clamp((hs-zr)/3.,0.,1.));}return occ;}' +
+    'uniform vec3 uLP[' + nl + '],uLC[' + nl + '];uniform vec2 uLR[' + nl + '];uniform int uN;uniform float uMode,uRim,uGlow,uCap;' +
+    'uniform vec3 uK,uKT;uniform vec4 uKP;' +                           // key light: dir (toward it), tint, (down, up, shadow, rim)
     'void main(){' +
     'vec2 px=floor(uv*uRes)+.5;vec4 g=texture2D(uG,uv);' +
     'float b=floor(g.b*255.+.5);float mat=mod(b,4.);float h=floor(b/4.)/63.;' +
     'vec2 nx=g.rg*2.-1.;vec3 N=vec3(nx,sqrt(max(0.,1.-dot(nx,nx))));vec3 P=vec3(px,h*' + HZ + '.);' +
     'float rk=uRim*pow(1.-N.z,3.)*step(.5,mat)*step(mat,2.5);' +       // rim only on units / trees (material 1-2)
     'vec3 dif=vec3(0.),add=vec3(0.);' +
-    'for(int i=0;i<' + MAXL + ';i++){if(i>=uN)break;' +
+    'for(int i=0;i<' + nl + ';i++){if(i>=uN)break;' +
     'vec3 D=uLP[i]-P;float d=length(D),r=uLR[i].x;float a=clamp(1.-d/r,0.,1.);a=a*a*uLR[i].y;' +
     'float nl=max(0.,dot(N,D/max(d,.001)));' +
-    'if(uMarch>.5&&i<' + MARCH_LIGHTS + '&&mat<.5)nl*=1.-' + f(SHK) + '*march(P,uLP[i]);' +   // ground only: casters are not self-shadowed
+    'if(uMarch>.5&&i<' + mlt + '&&mat<.5)nl*=1.-' + f(SHK) + '*march(P,uLP[i]);' +   // ground only: casters are not self-shadowed
     'dif+=uLC[i]*(a*nl);add+=uLC[i]*(a*nl*rk);' +
-    'if(uGlow>.5){float s=clamp(1.-length(D.xy)/(r*.6),0.,1.);add+=uLC[i]*(s*s*uLR[i].y*' + f(GLOWK) + ');}' +
+    'if(uGlow>0.){float s=clamp(1.-length(D.xy)/(r*.6),0.,1.);add+=uLC[i]*(s*s*uLR[i].y*uGlow*' + f(GLOWK) + ');}' +
     '}' +
     'if(mat>2.5)dif=vec3(0.);' +                                        // emissive FX: own colour, no diffuse
-    'float sh=uShOn*' + f(SHK) + '*clamp(texture2D(uShadow,uv).a,0.,1.)*step(mat,.5);dif*=1.-sh;add*=1.-sh;' +   // silhouette shadows: ground only (units / trees keep their light)
+    'float sa=clamp(texture2D(uShadow,uv).a,0.,1.)*step(mat,.5)*uShOn;float sh=' + f(SHK) + '*sa;dif*=1.-sh;add*=1.-sh;' +   // silhouette shadows: ground only (units / trees keep their light)
+    'float kn=dot(N,uK),kd=kn-uK.z;float kf=mat>2.5?1.:1.+kd*(kd>0.?uKP.y:uKP.x);' +   // key: flat ground = 1, faces toward it brighter, away darker
+    'if(uMarch>.5&&mat<.5)kf*=1.-uKP.z*march(P,P+uK*(' + mr + './max(length(uK.xy),.01)));' +
+    'kf*=1.-uKP.z*sa;add+=uKT*(max(0.,kn)*rk*uKP.w);' +
+    'float vis=texture2D(uLight,uv).a;' +
     'vec3 o=uMode<.5?dif:add;' +
-    'gl_FragColor=vec4(uCap*(1.-exp(-2.*o))*texture2D(uLight,uv).a,1.);}';
-  const FS_MAIN_LIT = PREC + 'varying vec2 uv;uniform sampler2D uScene,uLight,uBloom,uDyn,uAdd;uniform vec2 uRes,uCam;uniform float uBloomOn,uAddOn,uCap;' + BAYER +
+    'gl_FragColor=vec4(uCap*(1.-exp(-2.*o))*vis,clamp(mix(1.,kf,vis)*.5,0.,1.));}';   // alpha = key factor / 2 (fog stays unlit: 1)
+  const FS_LIT = litFS(MAXL, MARCH_STEPS, MARCH_RANGE, MARCH_LIGHTS);
+  const FS_MAIN_LIT = PREC + 'varying vec2 uv;uniform sampler2D uScene,uLight,uBloom,uDyn,uAdd;uniform vec2 uRes,uCam;uniform float uBloomOn,uAddOn,uCap;uniform vec3 uKT;' + BAYER +
     'void main(){' +
     'vec2 px=floor(uv*uRes);vec2 c=(px+.5)/uRes;' +
-    'vec3 s=texture2D(uScene,c).rgb;' +
-    'vec3 l=texture2D(uLight,c).rgb*1.25+texture2D(uDyn,c).rgb;' +     // ambient (day/night) + 2D cell lights + fog, plus the dynamic diffuse
+    'vec3 s=texture2D(uScene,c).rgb;vec4 dy=texture2D(uDyn,c);' +
+    'vec3 l=texture2D(uLight,c).rgb*1.25+dy.rgb;' +                    // ambient (day/night) + 2D cell lights + fog, plus the dynamic diffuse
+    'float kf=dy.a*2.;vec3 kc=kf>1.?1.+(kf-1.)*uKT:vec3(kf);' +        // key light: sun / moon tint on the lit side, neutral shade on the far side
     'float bay=bayer(mod(px+uCam,4.));' +
-    'l=clamp(floor(l*9.+bay)/9.,0.,1.);' +
+    'l=clamp(floor(min(l,1.)*kc*9.+bay)/9.,0.,1.5);' +
     'vec3 col=s*l;' +
     'if(uAddOn>.5)col=min(col+floor(texture2D(uAdd,c).rgb/uCap*4.+bay)/4.*uCap,1.);' +   // rim + glow: 4 shade steps
     'if(uBloomOn>.5){vec3 b=texture2D(uBloom,uv).rgb;col+=.85*b*(1.-col);}' +
@@ -110,7 +133,7 @@
     let light8 = new Uint8ClampedArray(LW * LH * 4);
     let progMain, progH, progV, vbo, texScene, texLight, texGlow, texA, texB, texN = [null, null], normSrc = [null, null], fboA, fboB, uM, uH, uV, curW = 0, curH = 0;
     // L3 lighting state: programs built lazily on the first non-off level; buffers follow the view size and the level's half-res flag
-    let level = 'off', progLit = null, progML = null, uL = null, uML = null, texSh = null, texG = null, texDyn = null, texAdd = null, fboDyn = null, fboAdd = null, dynW = 0, dynH = 0, gW = 0, gH = 0;
+    let level = 'off', lits = {}, progLit = null, progML = null, uL = null, uML = null, texSh = null, texG = null, texDyn = null, texAdd = null, fboDyn = null, fboAdd = null, dynW = 0, dynH = 0, gW = 0, gH = 0;
 
     function shader(type, src) {
       const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
@@ -148,7 +171,7 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE); gl.disable(gl.DITHER);
-      progLit = progML = texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;   // (re)built lazily by litReady()
+      lits = {}; progLit = progML = texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;   // (re)built lazily by litReady()
       textures();
       for (let k = 0; k < 2; k++) if (normSrc[k]) upNormals(k);   // context restored: re-upload the G-buffer inputs
       if (gl.getError() !== gl.NO_ERROR) throw new Error('gl error at init');
@@ -199,15 +222,20 @@
       texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;
     }
     function litReady() {
-      const L = LEVELS[level];
-      if (!progLit) {
-        progLit = program(FS_LIT); progML = program(FS_MAIN_LIT);
-        const loc = (p, n) => gl.getUniformLocation(p, n);
-        uL = { flip: loc(progLit, 'uFlip'), g: loc(progLit, 'uG'), light: loc(progLit, 'uLight'), res: loc(progLit, 'uRes'), lp: loc(progLit, 'uLP'), lc: loc(progLit, 'uLC'), lr: loc(progLit, 'uLR'),
-          n: loc(progLit, 'uN'), shadow: loc(progLit, 'uShadow'), shOn: loc(progLit, 'uShOn'), march: loc(progLit, 'uMarch'), mode: loc(progLit, 'uMode'), rim: loc(progLit, 'uRim'), glow: loc(progLit, 'uGlow'), cap: loc(progLit, 'uCap') };
+      const L = LEVELS[level], loc = (p, n) => gl.getUniformLocation(p, n);
+      if (!progML) {
+        progML = program(FS_MAIN_LIT);
         uML = { flip: loc(progML, 'uFlip'), scene: loc(progML, 'uScene'), light: loc(progML, 'uLight'), bloom: loc(progML, 'uBloom'), dyn: loc(progML, 'uDyn'), add: loc(progML, 'uAdd'),
-          res: loc(progML, 'uRes'), cam: loc(progML, 'uCam'), on: loc(progML, 'uBloomOn'), addOn: loc(progML, 'uAddOn'), cap: loc(progML, 'uCap') };
+          res: loc(progML, 'uRes'), cam: loc(progML, 'uCam'), on: loc(progML, 'uBloomOn'), addOn: loc(progML, 'uAddOn'), cap: loc(progML, 'uCap'), kt: loc(progML, 'uKT') };
       }
+      let pl = lits[level];
+      if (!pl) {     // one light program per level: uniform array size = its light cap, march steps / range / lights baked in
+        const p = program(litFS(Math.max(1, L.lights), Math.max(1, L.march), L.range || MARCH_RANGE, L.marchL));
+        pl = lits[level] = { p, u: { flip: loc(p, 'uFlip'), g: loc(p, 'uG'), light: loc(p, 'uLight'), res: loc(p, 'uRes'), lp: loc(p, 'uLP'), lc: loc(p, 'uLC'), lr: loc(p, 'uLR'),
+          n: loc(p, 'uN'), shadow: loc(p, 'uShadow'), shOn: loc(p, 'uShOn'), march: loc(p, 'uMarch'), mode: loc(p, 'uMode'), rim: loc(p, 'uRim'), glow: loc(p, 'uGlow'), cap: loc(p, 'uCap'),
+          k: loc(p, 'uK'), kt: loc(p, 'uKT'), kp: loc(p, 'uKP') } };
+      }
+      progLit = pl.p; uL = pl.u;
       const w = L.half ? Math.ceil(VW / 2) : VW, h = L.half ? Math.ceil(VH / 2) : VH;
       if (w !== dynW || h !== dynH || gW !== VW || gH !== VH) {
         freeLit();
@@ -219,13 +247,17 @@
         dynW = w; dynH = h;
       }
     }
-    // 'off' | 'low' | 'medium' | 'high' (LEVELS). Drives IT.Lights.enabled; a shader that fails to build drops back to 'off'. Returns the level in force.
+    // 'off' | 'low' | 'medium' | 'high' | 'ultra' (LEVELS). Drives IT.Lights.enabled; a shader that fails to build steps down a level (to 'off'). Returns the level in force.
     C.setLighting = function (lv) {
       lv = LEVELS[lv] ? lv : 'off';
       level = lv;
-      if (lv !== 'off' && C.ok) {
-        try { litReady(); } catch (e) { try { console.warn('[GL] lighting disabled:', (e && e.message) || e); } catch (x) { /* ignore */ } level = 'off'; progLit = progML = null; freeLit(); }
+      while (level !== 'off' && C.ok) {
+        try { litReady(); break; } catch (e) {
+          try { console.warn('[GL] lighting ' + level + ' failed:', (e && e.message) || e); } catch (x) { /* ignore */ }
+          delete lits[level]; level = NAMES[NAMES.indexOf(level) - 1]; freeLit();
+        }
       }
+      if (level === 'off') { progLit = null; uL = null; }
       if (level === 'off') freeLit();
       C.lighting = level;
       if (IT.Lights) IT.Lights.enabled = level !== 'off';
@@ -246,7 +278,7 @@
       try {
         [progMain, progH, progV].forEach(p => gl.deleteProgram(p)); [texScene, texLight, texGlow, texA, texB].forEach(t => gl.deleteTexture(t));
         [fboA, fboB].forEach(b => gl.deleteFramebuffer(b)); gl.deleteBuffer(vbo);
-        [progLit, progML].forEach(p => p && gl.deleteProgram(p)); freeLit();
+        Object.keys(lits).forEach(k => gl.deleteProgram(lits[k].p)); if (progML) gl.deleteProgram(progML); freeLit();
       } catch (e) { /* context already gone */ }
       if (cv._itComp === C) cv._itComp = null;
     };
@@ -280,10 +312,12 @@
       bindTex(3, texSh);
       if (shOn) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, lit.shadow);
       gl.uniform1i(uL.shadow, 3); gl.uniform1f(uL.shOn, shOn ? 1 : 0); gl.uniform1f(uL.march, L.march ? 1 : 0);
-      gl.uniform1f(uL.rim, L.rim ? RIMK : 0); gl.uniform1f(uL.glow, L.glow ? 1 : 0); gl.uniform1f(uL.cap, cap);
+      gl.uniform1f(uL.rim, L.rim * RIMK); gl.uniform1f(uL.glow, L.glow); gl.uniform1f(uL.cap, cap);
+      const K = keyLight(lit.night, level) || KEY_OFF;     // key light: present at every level above off, emitters or not
+      gl.uniform3fv(uL.k, K.dir); gl.uniform3fv(uL.kt, K.tint); gl.uniform4f(uL.kp, K.down, K.up, K.sh, K.rim);
       gl.uniform1f(uL.mode, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, fboDyn); gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (add) { gl.uniform1f(uL.mode, 1); gl.bindFramebuffer(gl.FRAMEBUFFER, fboAdd); gl.drawArrays(gl.TRIANGLES, 0, 3); }
-      return { cap, add };
+      return { cap, add, kt: K.tint };
     }
 
     // scene: 2D canvas (unlit, opaque); lightmap: Light instance (already folded); glowCv: additive glow canvas;
@@ -320,7 +354,7 @@
           bindTex(7, texDyn); bindTex(3, texAdd);
           gl.uniform1f(uML.flip, 1); gl.uniform1i(uML.scene, 0); gl.uniform1i(uML.light, 1); gl.uniform1i(uML.bloom, 2); gl.uniform1i(uML.dyn, 7); gl.uniform1i(uML.add, 3);
           gl.uniform2f(uML.res, VW, VH); gl.uniform2f(uML.cam, Math.floor(camX) & 3, Math.floor(camY) & 3); gl.uniform1f(uML.on, bloom ? 1 : 0);
-          gl.uniform1f(uML.addOn, lp.add ? 1 : 0); gl.uniform1f(uML.cap, lp.cap);
+          gl.uniform1f(uML.addOn, lp.add ? 1 : 0); gl.uniform1f(uML.cap, lp.cap); gl.uniform3fv(uML.kt, lp.kt);
         } else {
           gl.useProgram(progMain);
           gl.uniform1f(uM.flip, 1); gl.uniform1i(uM.scene, 0); gl.uniform1i(uM.light, 1); gl.uniform1i(uM.bloom, 2);
@@ -345,7 +379,7 @@
   }
   IT.GL = {
     create(cv, VW, VH, LW, LH) { const C = create(cv, VW, VH, LW, LH); if (C) C.setLighting(wantLevel); return C; },
-    setSize, GW, LEVELS, SHK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
+    setSize, GW, LEVELS, NAMES, KEY_DIR, SUN, MOON, keyLight, litFS, SHK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
     SHADERS: { FS_MAIN, FS_LIT, FS_MAIN_LIT, FS_BLUR_H, FS_BLUR_V, VS },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

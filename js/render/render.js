@@ -78,7 +78,12 @@
     const len = Math.min(SH_LMAX, d / lz), kr = dy / d * len;
     return { sx: 1, shear: dx / d * len, len, ky: (kr < 0 ? -1 : 1) * Math.max(0.5 * Math.abs(kr), SH_FLAT * len) };
   }
-  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 10, SH_REC = 400;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
+  // key light (sun / moon) shadow: directional, so one transform for every caster. dir = toward the light (screen px, y down, z up); len per px of height.
+  function keyXform(dir, len) {
+    const h = Math.hypot(dir[0], dir[1]);
+    return h > 1e-6 ? shadowXform({ x: dir[0] / h * 1e4, y: dir[1] / h * 1e4, z: 1e4 / len }, { x: 0, y: 0 }) : { sx: 1, shear: 0, len: 0, ky: 0 };
+  }
+  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 10, SH_REC = 600;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
 
   // L5: lighting cost = G-buffer taps + shadow pass + present, averaged over LC_WIN lit frames. Logs once if 'high' averages > LC_WARN ms; never downgrades.
   const LC = { avg: 0, n: 0, sum: 0, level: 'off', warned: false };
@@ -86,12 +91,12 @@
     if (level !== LC.level) { LC.level = level; LC.n = 0; LC.sum = 0; }
     LC.sum += ms; if (++LC.n < LC_WIN) return;
     LC.avg = LC.sum / LC.n; LC.n = 0; LC.sum = 0;
-    if (level === 'high' && LC.avg > LC_WARN && !LC.warned) {
+    if ((level === 'high' || level === 'ultra') && LC.avg > LC_WARN && !LC.warned) {
       LC.warned = true;
-      try { console.info('[Lighting] high averages ' + LC.avg.toFixed(1) + ' ms/frame over ' + LC_WIN + ' frames (budget ' + LC_WARN + ' ms); consider Medium'); } catch (e) { /* ignore */ }
+      try { console.info('[Lighting] ' + level + ' averages ' + LC.avg.toFixed(1) + ' ms/frame over ' + LC_WIN + ' frames (budget ' + LC_WARN + ' ms); consider a lower level'); } catch (e) { /* ignore */ }
     }
   }
-  const lightingCost = () => ({ avg: LC.avg, level: LC.level, over: LC.level === 'high' && LC.avg > LC_WARN, budget: LC_WARN, window: LC_WIN });
+  const lightingCost = () => ({ avg: LC.avg, level: LC.level, over: (LC.level === 'high' || LC.level === 'ultra') && LC.avg > LC_WARN, budget: LC_WARN, window: LC_WIN });
 
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX;
@@ -217,8 +222,8 @@
     // frames, skins and scaled copies get their own correct normals), same rect, same order. Faint overlays (alpha < .5) and additive draws are skipped.
     let gCv = null, gCx = null, gMat = -1, gBudget = 0, gVis = null, gT = 0;
     // L4: casters recorded by the same drawImage tap (units / trees / buildings, >= 6 px), drawn once the frame's lights are known
-    let shCv = null, shCx = null, sN = 0, sOn = false, sBudget = 0, gFootX = NaN, gFootY = 0, gTree = false, shDrawn = 0;
-    const sRec = [], sCache = new WeakMap();
+    let shCv = null, shCx = null, sN = 0, sOn = false, sBudget = 0, gFootX = NaN, gFootY = 0, gTree = false, gUnit = false, shDrawn = 0;
+    const sRec = [], sCache = new WeakMap(), bI = [], bS = [];
     function shCanvas() {
       if (!shCv) { shCv = document.createElement('canvas'); shCx = shCv.getContext('2d'); }
       if (shCv.width !== VW || shCv.height !== VH) { shCv.width = VW; shCv.height = VH; shCx = shCv.getContext('2d'); }
@@ -247,36 +252,56 @@
       if (!(dw >= SH_MINPX && dh >= SH_MINPX) || sN >= SH_REC) return;
       if (gFootX !== gFootX) gFootX = dx + dw / 2;
       let r = sRec[sN++]; if (!r) r = sRec[sN - 1] = {};
-      r.src = img; r.sx = sx; r.sy = sy; r.sw = sw; r.sh = sh; r.dx = dx; r.dy = dy; r.dw = dw; r.dh = dh; r.fx = gFootX; r.fy = gFootY; r.tree = gTree;
+      r.src = img; r.sx = sx; r.sy = sy; r.sw = sw; r.sh = sh; r.dx = dx; r.dy = dy; r.dw = dw; r.dh = dh; r.fx = gFootX; r.fy = gFootY; r.tree = gTree; r.unit = gUnit;
     }
-    // u: screen-px light uniforms (strongest first). Per caster: the `per` strongest lights whose radius reaches the foot, one sheared silhouette each.
-    function drawShadows(u, per, LV) {
+    // u: screen-px light uniforms (strongest first). Per caster: the `per` strongest lights whose radius reaches the foot, one sheared silhouette each,
+    // plus the key light (K = IT.GL.keyLight: sun / moon, fixed direction, K.len px per px of height, K.soft additive copies for a penumbra).
+    // LV.structs false: units only (towers / buildings / trees cast from High up).
+    function drawShadows(u, per, LV, K) {
       shDrawn = 0;
-      const cMax = (LV && LV.casters) || SH_MAX, tMax = (LV && LV.trees) || SH_TREES;
-      if (!sN || !per || !u.count) return null;
-      const g = shCanvas(), nL = Math.min(u.count, SH_CAND), P3 = u.pos, R2 = u.rad;
+      const cMax = LV ? LV.casters : SH_MAX, tMax = LV ? LV.trees : SH_TREES, all = !LV || LV.structs !== false;
+      const kX = K && K.len > 0 ? keyXform(K.dir, K.len) : null;
+      if (!sN || !per || (!u.count && !kX)) return null;
+      const g = shCanvas(), nL = Math.min(u.count, SH_CAND), P3 = u.pos, R2 = u.rad, ks = kX ? Math.max(1, K.soft | 0) : 0;
       let trees = 0;
       for (let i = 0; i < sN && shDrawn < cMax; i++) {
         const r = sRec[i];
+        if (!all && !r.unit) continue;
         if (r.tree && trees >= tMax) continue;
-        let b1 = -1, s1 = SH_MINSC, b2 = -1, s2 = SH_MINSC;
+        if (kX) {
+          const sil = silhouette(r.src);
+          if (sil) {
+            g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1 / ks;   // black: alpha adds, so the copies' overlap is the umbra
+            for (let k = 0; k < ks; k++) {
+              const j = ks > 1 ? (k / (ks - 1) - 0.5) * 0.16 : 0;
+              g.setTransform(1, 0, -(kX.shear + j), -(kX.ky - j * 0.5), r.fx, r.fy);
+              g.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
+            }
+            g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+            shDrawn++;
+          }
+        }
+        if (r.tree) trees++;
+        let nb = 0;     // the `per` strongest lights reaching the foot (insertion into bI / bS, strongest first)
         for (let l = 0; l < nL; l++) {
           const d = Math.hypot(r.fx - P3[l * 3], r.fy - P3[l * 3 + 1]), rad = R2[l * 2];
           if (d >= rad) continue;
           const a = 1 - d / rad, sc = a * a * R2[l * 2 + 1];
-          if (sc > s1) { b2 = b1; s2 = s1; b1 = l; s1 = sc; } else if (per > 1 && sc > s2) { b2 = l; s2 = sc; }
+          if (sc <= SH_MINSC || (nb >= per && sc <= bS[nb - 1])) continue;
+          let j = Math.min(nb, per - 1);
+          while (j > 0 && bS[j - 1] < sc) { bI[j] = bI[j - 1]; bS[j] = bS[j - 1]; j--; }
+          bI[j] = l; bS[j] = sc; if (nb < per) nb++;
         }
-        if (b1 < 0) continue;
+        if (!nb) continue;
         const sil = silhouette(r.src); if (!sil) continue;
-        for (let k = 0; k < 2; k++) {
-          const l = k ? b2 : b1; if (l < 0) continue;
+        for (let k = 0; k < nb; k++) {
+          const l = bI[k];
           const X = shadowXform({ x: P3[l * 3], y: P3[l * 3 + 1], z: P3[l * 3 + 2] }, { x: r.fx, y: r.fy });
           if (X.len < 0.08) continue;
           g.setTransform(X.sx, 0, -X.shear, -X.ky, r.fx, r.fy);
           g.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
           shDrawn++;
         }
-        if (r.tree) trees++;
       }
       g.setTransform(1, 0, 0, 1, 0, 0);
       return shDrawn ? shCv : null;
@@ -408,7 +433,7 @@
         sx = Math.round((Math.random() - 0.5) * 2 * a); sy = Math.round((Math.random() - 0.5) * 2 * a);
       }
       R.camX = cam.px + sx; R.camY = cam.py + sy;   // may run past the map (overscroll): terrain.draw paints the void
-      const shade = !(IT.Settings && IT.Settings.get) || IT.Settings.get().fogShade !== false;   // setting: dark outside vision
+      const shade = true;   // fog shading is always on (CEO: no setting; Free Play's loadout fog checkbox is the only fog switch)
       fog.shade = shade;
       const fogOn = w.fog !== false && shade, S = R.stats;
       // GL needs a live context; a lost/failed one drops back to the 2D multiply path + CSS glow
@@ -418,7 +443,7 @@
       const LT = IT.Lights;
       if (LT) LT.begin(R);
       const lit = !!(useGL && drawImg && comp.lighting && comp.lighting !== 'off' && LT && LT.enabled && IT.Normals);
-      gBudget = 6;
+      gBudget = lit && comp.lighting === 'ultra' ? 12 : 6;
       fog.update(w, R.fogSnap ? 1 : dtReal, R.camX, R.camY, VW, VH);
       IT.Particles.update(dtReal);
       const tf0 = performance.now();
@@ -466,8 +491,8 @@
       items.sort((a, b) => a.y - b.y);
       if (lit) {     // same order / rects into the G-buffer: tap the scene context's drawImage for the pass
         sceneCx.drawImage = gDraw;
-        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = 6; gT = 0;
-        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
+        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = comp.lighting === 'ultra' ? 12 : 6; gT = 0;
+        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gUnit = it.k === 'unit'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
         finally { gMat = -1; delete sceneCx.drawImage; }
       } else { sN = 0; for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); } }
       R.stats.items = items.length;
@@ -511,7 +536,7 @@
           const lb = light.buf, n = lb.w * lb.h;
           if (!gVis || gVis.length !== n) gVis = new Uint8Array(n);
           const u = IT.GL.toScreen(LT.uniforms({ x: R.camX * P, y: R.camY * P, w: VW * P, h: VH * P }, comp.levelInfo().lights), P);
-          litArg = { gbuf: gCv, shadow: sOn ? drawShadows(u, comp.levelInfo().shadows, comp.levelInfo()) : null, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
+          litArg = { gbuf: gCv, shadow: sOn ? drawShadows(u, comp.levelInfo().shadows, comp.levelInfo(), IT.GL.keyLight(light.night, comp.lighting)) : null, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
           S.dyn = u.count; S.shd = shDrawn; 
         }
         const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'), litArg);
@@ -551,6 +576,6 @@
     return R;
   }
 
-  IT.Render = { create, shadowXform, lightingCost, lcSample, LC_WARN, LC_WIN, SH_LMAX, SH_MAX, SH_TREES, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
+  IT.Render = { create, shadowXform, keyXform, lightingCost, lcSample, LC_WARN, LC_WIN, SH_LMAX, SH_MAX, SH_TREES, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
   IT.Minimap = { pin, showsUnit, stealthy, detected, unitAlpha, TIP, COL: MM_COL, SIZE: MM_SIZE };
 })(typeof window !== 'undefined' ? window : globalThis);

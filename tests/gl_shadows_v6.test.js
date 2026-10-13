@@ -6,9 +6,9 @@ const GL = IT.GL, S = GL.SHADERS, R = IT.Render;
 
 test('level table: shadows per caster + march flag', () => {
   const L = GL.LEVELS;
-  assert.deepEqual([L.off.shadows, L.low.shadows, L.medium.shadows, L.high.shadows], [0, 0, 1, 2]);
-  assert.deepEqual([L.off.march, L.low.march, L.medium.march, L.high.march], [false, false, false, true]);
-  assert.ok(L.high.shadows <= 2 && L.medium.shadows === 1);
+  assert.deepEqual([L.off.shadows, L.low.shadows, L.medium.shadows, L.high.shadows, L.ultra.shadows], [0, 0, 1, 2, 3]);
+  assert.deepEqual([L.off.march, L.low.march, L.medium.march, L.high.march, L.ultra.march], [0, 0, 0, 6, 12]);
+  assert.deepEqual([L.high.range, L.high.marchL, L.ultra.range, L.ultra.marchL], [40, 2, 64, 4]);
 });
 
 test('shadowXform: light above, side, distance, height, clamp', () => {

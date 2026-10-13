@@ -10,17 +10,17 @@ test('disabled by default: add is a no-op', () => {
   L.begin(); L.add(mk()); assert.equal(L.count, 0); assert.equal(L.list(CAM).length, 0);
 });
 
-test('cap 32, sorted by contribution, culled off-screen', () => {
+test('cap 48 (Ultra), sorted by contribution, culled off-screen', () => {
   L.enabled = true;
   L.begin();
   for (let i = 0; i < 60; i++) L.add(mk({ x: 100 + i * 40, intensity: 0.1 + i * 0.01 }));
   L.add(mk({ x: 99999, intensity: 9 }));   // far off-screen
   const l = L.list(CAM);
-  assert.equal(l.length, 32);
+  assert.equal(L.MAX, 48); assert.equal(l.length, 48);
   assert.ok(!l.some(p => p.x === 99999));
   for (let i = 1; i < l.length; i++) assert.ok(l[i - 1].score >= l[i].score);
   assert.equal(L.list(CAM, 8).length, 8);
-  assert.equal(L.list(CAM, 99).length, 32);
+  assert.equal(L.list(CAM, 99).length, 48);
   L.begin(); L.add(mk({ radius: 0 })); L.add(mk({ intensity: 0 })); assert.equal(L.count, 0);
   L.add(mk({ x: 1440, y: 810, intensity: 1 })); L.add(mk({ x: 300, y: 200, intensity: 1 }));
   assert.equal(L.list(CAM)[0].x, 1440);   // nearer the view centre wins at equal intensity/radius
@@ -98,7 +98,7 @@ test('uniform packing sizes and content', () => {
   L.enabled = true; L.begin();
   for (let i = 0; i < 5; i++) L.add(mk({ x: 500 + i * 100, y: 400, r: 0.2, g: 0.4, b: 0.6, radius: 100 + i, intensity: 1 - i * 0.1 }));
   const u = L.uniforms({ x: 100, y: 50, w: 2880, h: 1620 });
-  assert.equal(u.pos.length, 96); assert.equal(u.col.length, 96); assert.equal(u.rad.length, 64); assert.equal(u.count, 5);
+  assert.equal(u.pos.length, 144); assert.equal(u.col.length, 144); assert.equal(u.rad.length, 96); assert.equal(u.count, 5);
   assert.ok(u.pos instanceof Float32Array && u.col instanceof Float32Array && u.rad instanceof Float32Array);
   assert.equal(u.pos[1], 350);   // y - cam.y
   assert.ok(Math.abs(u.col[1] - 0.4) < 1e-6);

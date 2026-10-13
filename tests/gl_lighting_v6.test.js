@@ -25,8 +25,8 @@ test('shaders are GLSL ES 1.00 shaped', () => {
 test('Off path is the untouched pre-L3 main shader; lit main keeps the 9-level Bayer quantise', () => {
   assert.ok(!/uDyn|uAdd/.test(S.FS_MAIN));
   assert.ok(S.FS_MAIN.includes('l=clamp(floor(l*9.+bay)/9.,0.,1.);vec3 col=s*l;'));
-  assert.ok(S.FS_MAIN_LIT.includes('l=clamp(floor(l*9.+bay)/9.,0.,1.);'));
-  assert.ok(S.FS_MAIN_LIT.includes('texture2D(uLight,c).rgb*1.25+texture2D(uDyn,c).rgb'));   // ambient grid stays the base
+  assert.ok(S.FS_MAIN_LIT.includes('l=clamp(floor(min(l,1.)*kc*9.+bay)/9.,0.,1.5);'));   // key light scales the quantised grid
+  assert.ok(S.FS_MAIN_LIT.includes('texture2D(uLight,c).rgb*1.25+dy.rgb'));   // ambient grid stays the base
   assert.ok(/\/4\.\*uCap/.test(S.FS_MAIN_LIT));                                              // rim/glow: 4 shade steps
   // rim only on material 1..2, emissive (3) gets no diffuse, fog (light alpha) masks the dynamic light
   assert.ok(S.FS_LIT.includes('step(.5,mat)*step(mat,2.5)'));
@@ -36,11 +36,14 @@ test('Off path is the untouched pre-L3 main shader; lit main keeps the 9-level B
 
 test('level table: lights cap, half-res, rim / glow flags', () => {
   const L = GL.LEVELS;
-  assert.deepEqual(Object.keys(L), ['off', 'low', 'medium', 'high']);
-  assert.deepEqual([L.off.lights, L.low.lights, L.medium.lights, L.high.lights], [0, 8, 16, 32]);
-  assert.deepEqual([L.low.half, L.medium.half, L.high.half], [true, false, false]);
-  assert.deepEqual([L.low.rim, L.medium.rim, L.high.rim], [false, true, true]);
-  assert.deepEqual([L.low.glow, L.medium.glow, L.high.glow], [false, false, true]);
+  assert.deepEqual(Object.keys(L), ['off', 'low', 'medium', 'high', 'ultra']);
+  assert.deepEqual(GL.NAMES, Object.keys(L));
+  assert.deepEqual(GL.NAMES.map(k => L[k].lights), [0, 8, 16, 32, 48]);
+  assert.deepEqual([L.low.half, L.medium.half, L.high.half, L.ultra.half], [true, false, false, false]);
+  assert.deepEqual([L.low.rim, L.medium.rim, L.high.rim], [0, 1, 1]);
+  assert.deepEqual([L.low.glow, L.medium.glow, L.high.glow], [0, 1, 1]);
+  assert.ok(L.ultra.rim > L.high.rim && L.ultra.glow > L.high.glow);
+  assert.equal(L.ultra.lights, GL.MAXL);
   for (const k in L) assert.ok(L[k].lights <= GL.MAXL);
 });
 

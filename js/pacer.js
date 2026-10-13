@@ -16,5 +16,10 @@
         },
       };
     },
+    // rendered frames/s: tick(now ms) once per game render; returns the rate every ~500 ms, else null
+    counter() {
+      let t0 = -1, n = 0;
+      return { tick(now) { if (t0 < 0) { t0 = now; return null; } n++; if (now - t0 < 500) return null; const r = n * 1000 / (now - t0); t0 = now; n = 0; return r; }, reset() { t0 = -1; n = 0; } };
+    },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

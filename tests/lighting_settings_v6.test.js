@@ -22,9 +22,9 @@ test('default lighting is low; old save without the key migrates to low', () => 
 });
 
 test('every level is accepted, unknown reads as off', () => {
-  for (const lv of ['off', 'low', 'medium', 'high']) assert.equal(rig(JSON.stringify({ lighting: lv })).IT.Settings.get().lighting, lv);
-  assert.equal(rig(JSON.stringify({ lighting: 'ultra' })).IT.Settings.get().lighting, 'off');
-  assert.deepEqual(Array.from(rig(null).IT.Settings.LIGHTING), ['off', 'low', 'medium', 'high']);
+  for (const lv of ['off', 'low', 'medium', 'high', 'ultra']) assert.equal(rig(JSON.stringify({ lighting: lv })).IT.Settings.get().lighting, lv);
+  assert.equal(rig(JSON.stringify({ lighting: 'mega' })).IT.Settings.get().lighting, 'off');
+  assert.deepEqual(Array.from(rig(null).IT.Settings.LIGHTING), ['off', 'low', 'medium', 'high', 'ultra']);
 });
 
 test('changing the setting calls IT.GL.setLighting (stubbed); applied on load via apply; no GL is safe', () => {
@@ -46,11 +46,12 @@ test('settings.js does not read reduced-motion for lighting', () => {
   assert.doesNotMatch(require('fs').readFileSync(require('path').join(__dirname, '..', 'js/render/gl.js'), 'utf8'), /reducedMotion|prefers-reduced/);
 });
 
-test('LEVELS caster budgets: none below medium, medium 60/20, high 120/40', () => {
+test('LEVELS caster budgets: none below medium, medium 60 units only, high 120/40, ultra every tree', () => {
   const IT = load(['js/render/lights.js', 'js/render/gl.js']), L = IT.GL.LEVELS;
   assert.deepEqual([L.off.casters, L.off.trees, L.low.casters, L.low.trees], [0, 0, 0, 0]);
-  assert.deepEqual([L.medium.casters, L.medium.trees], [60, 20]);
-  assert.deepEqual([L.high.casters, L.high.trees], [120, 40]);
+  assert.deepEqual([L.medium.casters, L.medium.trees, L.medium.structs], [60, 0, false]);
+  assert.deepEqual([L.high.casters, L.high.trees, L.high.structs], [120, 40, true]);
+  assert.ok(L.ultra.casters > L.high.casters && L.ultra.trees >= 400 && L.ultra.structs);
   assert.ok(L.medium.casters > 0 === L.medium.shadows > 0 && L.low.shadows === 0);
 });
 
@@ -74,7 +75,7 @@ test('render.js: shadow pass reads the level budget; lightingCost shape', () => 
 
 test('i18n: lighting keys in en and pt', () => {
   const IT = load(FILES.slice(0, 6));
-  for (const lang of ['en', 'pt']) for (const k of ['set.lighting', 'set.lighting.off', 'set.lighting.low', 'set.lighting.medium', 'set.lighting.high']) {
+  for (const lang of ['en', 'pt']) for (const k of ['set.lighting', 'set.lighting.off', 'set.lighting.low', 'set.lighting.medium', 'set.lighting.high', 'set.lighting.ultra']) {
     assert.ok(IT.I18N[lang][k] && typeof IT.I18N[lang][k] === 'string', lang + ' ' + k);
   }
   assert.notEqual(IT.I18N.pt['set.lighting'], IT.I18N.en['set.lighting']);

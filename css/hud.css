@@ -180,3 +180,4 @@
 .opips.exort .op.on{background:var(--e);border-color:var(--e);box-shadow:0 0 .3em var(--e)}
 .op.sc{border-color:var(--gold)!important;margin-left:.2em;flex:none;width:.5em;transform:rotate(45deg)}
 .op.sc.on{background:var(--gold)!important;box-shadow:0 0 .35em var(--gold)!important}
+#fps{position:absolute;left:6px;top:calc(6px + 5em);display:none;color:#ff0;font-size:calc(var(--u)*3.3333);line-height:1;pointer-events:none;text-shadow:0 1px #000,1px 0 #000,-1px 0 #000,0 -1px #000;z-index:5;image-rendering:pixelated;-webkit-font-smoothing:none}

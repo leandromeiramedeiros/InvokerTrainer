@@ -3,7 +3,7 @@
 (function (G) { 'use strict'; const IT = G.IT; IT.i18nAdd({
     en: {
       'pause.hint': 'Esc: resume',
-      'set.lighting': 'Lighting', 'set.lighting.off': 'Off', 'set.lighting.low': 'Low', 'set.lighting.medium': 'Medium', 'set.lighting.high': 'High',
+      'set.lighting': 'Lighting', 'set.lighting.off': 'Off', 'set.lighting.low': 'Low', 'set.lighting.medium': 'Medium', 'set.lighting.high': 'High', 'set.lighting.ultra': 'Ultra',
       'title.free': 'FREE PLAY', 'title.free.d': 'Pick a map, add enemies, build your Invoker',
       'title.scn': 'SCENARIOS', 'title.scn.d': 'Practice any scenario, no rating',
       'title.ranked': 'RANKED', 'title.ranked.d': '8 scenarios in a row, earn a medal', 'title.nomedal': 'No medal yet',
@@ -82,7 +82,7 @@
     },
     pt: {
       'pause.hint': 'Esc: continuar',
-      'set.lighting': 'Iluminação', 'set.lighting.off': 'Desligada', 'set.lighting.low': 'Baixa', 'set.lighting.medium': 'Média', 'set.lighting.high': 'Alta',
+      'set.lighting': 'Iluminação', 'set.lighting.off': 'Desligada', 'set.lighting.low': 'Baixa', 'set.lighting.medium': 'Média', 'set.lighting.high': 'Alta', 'set.lighting.ultra': 'Ultra',
       'title.free': 'TREINO LIVRE', 'title.free.d': 'Escolha o mapa, adicione inimigos, monte seu Invoker',
       'title.scn': 'CENÁRIOS', 'title.scn.d': 'Pratique qualquer cenário, sem ranking',
       'title.ranked': 'RANQUEADA', 'title.ranked.d': '8 cenários seguidos, ganhe uma medalha', 'title.nomedal': 'Nenhuma medalha ainda',

@@ -1,11 +1,11 @@
 // v6 #76 L1: world-space point-light list for the dynamic lighting pass (L3). Emitters register {x,y,z,r,g,b,radius,intensity,kind} per
-// frame; list() culls + sorts by screen contribution, uniforms() packs <= 32 lights into flat Float32Arrays. All of it is a no-op while
+// frame; list() culls + sorts by screen contribution, uniforms() packs <= 48 lights into flat Float32Arrays. All of it is a no-op while
 // IT.Lights.enabled is false (default; the 2D cell lights in light.js stay the look until L5). World units; z = height above ground.
 // Art direction (#76b): EXORT strongest (warm orange-gold, big, flickers), WEX strong (violet + white strobes, irregular), QUAS faint steady cool blue.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
-  const MAXL = 32, POOL = 256;
+  const MAXL = 48, POOL = 256;   // MAXL = IT.GL.MAXL (Ultra)
   const cl = (v, a, b) => v < a ? a : v > b ? b : v;
   // colours 0..1; base = intensity at full strength; rad = radius multiplier (world radius is given by the emitter)
   const ELEM = {

@@ -316,6 +316,8 @@
     for (let a = 0; a < n; a++) { const v = PACE.ring[a]; let b = a - 1; while (b >= 0 && t[b] > v) { t[b + 1] = t[b]; b--; } t[b + 1] = v; }
     PACE.ms = t[n >> 2];
   }
+  const fpsEl = document.createElement('div'); fpsEl.id = 'fps'; stage.appendChild(fpsEl);
+  const FPS = IT.Pacer.counter();
   function frame(now) {
     requestAnimationFrame(frame);
     const raw = now - last; last = now;
@@ -342,6 +344,8 @@
       }
       if (g && !g.ended && IT.Music) { try { IT.Music.sync(w); } catch (e) { /* audio is optional */ } }   // situation track: countdown / play / escape / lowtime / result
       g.R.render(w.paused ? 1 : acc / w.dt, dt);
+      if (S.get().showFps && !g.menu && !g.ended && !settingsOver) { const r = FPS.tick(now); if (r != null) fpsEl.textContent = Math.round(r) + ' FPS'; fpsEl.style.display = 'block'; }
+      else { fpsEl.style.display = 'none'; FPS.reset(); }
       IT.Input.drawAim(aimG);
       if (g) IT.HUD.update(dt);
       if (g && IT.Briefing) IT.Briefing.update(g.w, dt, !!(g.menu || g.ended));

@@ -7,7 +7,7 @@
   const LEG = ['Y', 'V', 'G', 'C', 'X', 'Z', 'T', 'F', 'D', 'B'];
   const COMMON = ['orbQ', 'orbW', 'orbE', 'invoke', 'attack', 'stop', 'hold', 'center', 'camLock', 'cheat', 'stats', 'refresh'];
   const RESERVED = ['Escape', 'Tab'];
-  const LIGHTING = ['off', 'low', 'medium', 'high'];   // v6 #76 L5: IT.GL.LEVELS keys
+  const LIGHTING = ['off', 'low', 'medium', 'high', 'ultra'];   // v6 #76 L5: IT.GL.LEVELS keys
   // keybind migration: stored bindings still equal to the pre-v6 default move to the new default (custom ones stay)
   const KEYS_VERSION = 2;
   const KEY_MIG = { center: ['Space', 'F1'], cheat: ['F1', 'I'], stats: ['K', 'O'] };
@@ -19,7 +19,7 @@
     for (let i = 1; i <= 6; i++) legacy['item' + i] = String(i);
     return {
       castMode: 'quick', scheme: 'slots', autoAttack: true, camLock: false, edgeScroll: true,
-      bloom: true, lighting: 'low', fogShade: true, sound: true, hints: true, lang: 'en',
+      bloom: true, lighting: 'low', showFps: false, sound: true, hints: true, lang: 'en',
       camSpeed: 1,                 // 0.5..2 multiplier on camera scroll speed
       zoom: 1,                     // scroll-wheel zoom step (GAME.ZOOMS)
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
@@ -288,7 +288,7 @@
           sh(t('set.h.display')),
           list(chk(draft, 'bloom', t('set.bloom'), () => G.document.body.classList.toggle('nobloom', !draft.bloom)),
             row(t('set.lighting'), rg('lighting', draft.lighting, LIGHTING.map(k => [k, t('set.lighting.' + k)]), v => { draft.lighting = v; })),
-            chk(draft, 'fogShade', t('set.fogShade')),
+            chk(draft, 'showFps', t('set.showFps')),
             row(t('set.fullscreen'), fs),
             chk(draft, 'pointerLock', t('set.pointerLock')),
             row(t('set.fpsCap'), rg('fpsCap', draft.fpsCap, [[30, '30'], [60, '60'], [120, '120'], [0, t('set.fpsDisplay')]], v => { draft.fpsCap = v; }))),
