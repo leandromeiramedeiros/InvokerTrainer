@@ -69,6 +69,11 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #64 REVERT the hex honeycomb (CEO: undo #60 honeycomb part, landed in 6f9ee3e). Restore the previous relic layout (4-3-4-3 shield grid on the relics screen, rows on the end splash) and drop hexSvg/honeycomb/hexgrid + hex CSS + their tests. KEEP from 6f9ee3e: the row min-height/clipping fix and everything non-relic. Special relics instead get: gold ornamented frame, shimmering glow-sand sweep, bigger icon, gold progress bar, listed first, on end splash + relics screen + tooltips (reduced-motion respected).
 
+- [ ] #65 VITINHO art redo APPROVED: replace the monkey vitinho sheet with session scratchpad vitinho_v2/vitinho_data.js (same frame names/dims 20x24, anchor [10,22], 32x32 portrait). Update any shop/skin card art + thumbnails. Vitinian: portrait APPROVED (scratchpad vitinian_v3 portrait, 48x32); body sprites being redone (v4 pending CEO), integrate the portrait now, body later.
+- [ ] #66 Scenario intro still not enough (CEO playtest): jarring, the eye doesn't know where to focus. Must be BIG with IMPACT: dim/blur the world, one element on screen at a time centre-stage (huge title slam-in with shake/flash + sting SFX, then VICTORY big, then DEFEAT big, then combo steps as big icons punching in one by one), each then flies/shrinks to its final HUD slot so the eye follows it; nothing else animating meanwhile. Only after that, camera pan. Keep skip-on-action.
+- [ ] #67 Roshan pit Deafening Blast push-in scenario: good design but the enemy never ends up inside. Make it a bit easier: start the enemy closer to/aligned with the pit entrance, slightly longer knockback or a larger "inside" area / entrance threshold; verify with the bot that a reasonable Blast angle lands him inside on every tier (tighter on hard/bambam).
+- [ ] #68 Enemy move speed too high on easy tiers: scale by difficulty on top of the per-skin base (suggest ian x0.82, easy x0.88, normal x0.95, hard x1.0, bambam x1.0 + items). Re-run scenario feasibility for chase/escape scenarios after.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
