@@ -256,8 +256,8 @@
       { gate: { struct: { kind: 'barracks', team: 0 }, r: 300 }, vary: { boots: false } }),   // item 40: booted marchers beat the line
     // ---------------------------------------------------------------- level 9
     V('triple_kill', 9, 'outpost_dire', ['multi', 'burst'], 8, { lvl: 30, scepter: 'exort' },
-      [U(SEEN([500, 700], { clear: 3, not: ['dtower'] }), { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, side: 180 }, { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, ahead: 200 }, { hp: 0.4, mot: 'still', aware: 0.3 })],
-      { type: 'killN', n: 3, one: true, span: 1.2 }, ['method', 'time'], [{ a: 'sunstrike', at: 'self' }], { rand: { pick: 3 }, vary: { posJit: 0 } }),   // item 40: one Sun Strike must catch all three (still foes), no extra start jitter
+      [U(SEEN([500, 700], { clear: 3, not: ['dtower'] }), { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, side: 40 }, { hp: 0.4, mot: 'still', aware: 0.3 }), U({ of: 0, ahead: 140 }, { hp: 0.4, mot: 'still', aware: 0.3 })],
+      { type: 'killN', n: 3, one: true, span: 1.5 }, ['method', 'time'], [{ a: 'sunstrike', at: 'self' }], { rand: { pick: 3 }, vary: { posJit: 0 } }),   // item 40: one Sun Strike must catch all three (still foes), no extra start jitter; #30 I13: Cataclysm splits each strike over the foes in it, so the trio stands tight (side 40, ahead 140) and span is 1.5 s (bot: 6/6 every tier)
     V('blast_push_3', 9, 'dire_off_t1', ['multi', 'positioning'], 10, { lvl: 30 },
       [U(SEEN([500, 650], { clear: 3, not: ['dtower'] }), { hp: 1, mot: 'still' }), U({ of: 0, ahead: 170, side: 40 }, { hp: 1, mot: 'still' }), U({ of: 0, ahead: 340, side: -30 }, { hp: 1, mot: 'still' })],
       { type: 'push', n: 3 }, ['time'], [{ a: 'deafeningblast', at: 'd0' }], { rand: { pick: 3 } }),
@@ -373,6 +373,22 @@
       [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.48, blinker: true, aware: 0.6 })],
       KILL, ['time'],
       [{ a: 'tornado', at: 'd0' }, { a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 } }),
+    // ---------------------------------------------------------------- v6 #77 I2: level 9-10 skill-ceiling set (existing mechanics only)
+    // blinker + Tornado -> Cold Snap -> Sun Strike under fog, one tier of pressure above blinker_tornado.
+    V('blink_chain_fog', 9, 'rad_mid_t1', ['blink', 'combo', 'fog', 'burst'], 24, { lvl: 22, scepter: 'exort' },
+      [U(SEEN([650, 850], { not: ['dtower'] }), { hp: 0.5, blinker: true, aware: 0.5 })],
+      KILL, ['escaped', 'time'],
+      [{ a: 'tornado', at: 'd0' }, { a: 'coldsnap', at: 'd0' }, { a: 'sunstrike', at: 'd0' }], { rand: { pick: 3 }, maxDf: 'hard' }),
+    // a fogged Town Portal snipe: farther, quicker TP, the Sun Strike must land on the channel spot.
+    V('tp_snipe_far', 9, 'rad_safe_t1', ['prediction', 'reaction', 'fog'], 8, { lvl: 22 },
+      [U(SEEN([700, 900]), { hp: 0.38, mot: 'flee', tpPlan: { after: 0.9 } })],
+      { type: 'kill_with', how: { ability: ['sunstrike'], channel: 'tp' } }, ['method', 'escaped', 'time'],
+      [{ a: 'sunstrike', at: 'd0', wait: 'tp' }], { rand: { pick: 3 }, funBot: true }),
+    // two BKB carriers: bait both Black King Bars out, then burst the pair.
+    V('bkb_bait_duo', 10, 'outpost_dire', ['reaction', 'items', 'multi'], 30, { lvl: 26, scepter: 'exort' },
+      [U(SEEN([650, 900], { not: ['dtower'] }), { hp: 0.3, behavior: 'defend', items: ['bkb'], useBkb: true, aware: 1 }), U({ of: 0, side: 120 }, { hp: 0.3, behavior: 'defend', items: ['bkb'], useBkb: true, aware: 1 })],
+      { type: 'killN', n: 2, one: false, span: 30 }, ['died', 'time'],
+      [{ a: 'coldsnap', at: 'd0' }, { a: 'tornado', at: 'd0', w: 6 }, { a: 'sunstrike', at: 'd0', w: 0.3 }, { a: 'deafeningblast', at: 'd0', w: 0.6 }], { maxDf: 'easy' }),
     // ---------------------------------------------------------------- v6 item 28: FUN set (docs/SCENARIO-RESEARCH.md; texts + scn.<id>.tip, the real
     // Dota situation: js/data/i18n/scn.js). Mechanics (js/sim/units.js, ranked.js funExtras): unit tpPlan = a planned Town Portal (GAME.TP.dur s
     // channel; stun / hex / lift / knockback cancel it, silence does not; finished = 'escaped'); sc.pickups + unit grab = a rune / Aegis race
@@ -440,7 +456,7 @@
       [U({ pit: 'deep', dx: -330, dy: 110 }, { hp: 0.5, intent: { kind: 'attack_ally', target: 'roshan' }, attack: 'melee', aware: 0.5, grab: { kinds: ['aegis'] } })],
       { type: 'pickup', kind: 'aegis' }, ['taken', 'time'],
       [{ a: 'move', at: 'spot:rosh', r: 450 }, { a: 'tornado', at: 'd0', wait: 'pickup' }, { a: 'move', at: 'pickup', r: 30 }],
-      { roshan: { at: 'rosh', frac: 0.05, scriptHits: 2, ttl: 8 }, spots: { rosh: { pit: 'deep', dx: -90, dy: 110 } }, focus: ['pit'], vary: { posJit: 0 }, funBot: true, maxDf: 'common' }),
+      { roshan: { at: 'rosh', frac: 0.05, scriptHits: 3, ttl: 8 }, spots: { rosh: { pit: 'deep', dx: -90, dy: 110 } }, focus: ['pit'], vary: { posJit: 0 }, funBot: true }),
   ];
 
   // ---- legacy set -> v5 fields: level, map, tags, arena-relative foes (unit 0 by arena, the rest by offset from it; the dx/dy stay as
@@ -517,7 +533,7 @@
     'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke',
     'edge_gank', 'long_lane_snipe', 'river_mouth_ambush', 'offlane_survival', 'pinned_escape',
     'pit_in_out', 'pit_force_exit', 'pit_ghost', 'pit_mouth_snipe',
-    'tp_snipe', 'pit_fight_blast', 'pit_blast_in', 'ghost_ambush', 'smoke_gank_escape', 'aegis_snatch'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set, v6 item 28 fun set
+    'tp_snipe', 'tp_snipe_far', 'blink_chain_fog', 'pit_fight_blast', 'pit_blast_in', 'ghost_ambush', 'smoke_gank_escape', 'aegis_snatch'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set, v6 item 28 fun set
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)

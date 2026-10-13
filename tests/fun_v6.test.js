@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { IT, build, bot } = require('./_funbot.js');
 const R = IT.Ranked, U = IT.Units;
-const FUN = IT.SCENARIOS.filter(s => s.funBot);
+const FUN = IT.SCENARIOS.filter(s => s.funBot && s.id !== 'tp_snipe_far');   // tp_snipe_far (v6 #77 I2, level 9-10) only borrows the fun bot; tests/l910_v6.test.js covers it
 const IDS = ['tp_snipe', 'tornado_tp_cancel', 'rune_contest', 'pit_fight_blast', 'pit_blast_in', 'bkb_tower_hitter', 'ghost_ambush', 'tornado_emp_drop',
   'tornado_icewall_landing', 'smoke_gank_escape', 'icewall_ramp_defense', 'save_the_ally', 'aegis_snatch'];
 

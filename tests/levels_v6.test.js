@@ -171,8 +171,9 @@ test('diagnostic: bot sweep seeds 1-6 easy/common (LV_ALL=1, LV_ONLY=id)', { ski
 
 // ---------------------------------------------------------------- item 11: hero level per scenario
 // pre-existing bot failures (identical at 6afc533, before the level change): id|diff|seed
-const KNOWN = new Set(['triple_kill|easy|3', 'triple_kill|easy|6', 'triple_kill|common|3', 'triple_kill|common|6',
+const KNOWN = new Set([
   'shadow_strike|easy|3', 'shadow_strike|easy|4', 'shadow_strike|common|3', 'shadow_strike|common|4',
+  'bkb_bait_duo|common|1', 'bkb_bait_duo|common|2', 'bkb_bait_duo|common|3', 'bkb_bait_duo|common|4', 'bkb_bait_duo|common|5', 'bkb_bait_duo|common|6',   // v6 #77 I2: two BKBs, maxDf easy
   'plateau_escape|common|1', 'plateau_escape|common|6',   // #77: cataclysm_finish common 2/4/5, triple_kill s5, plateau_escape common s4 and gauntlet common clear now (dropped)
   'plateau_escape|easy|6',   // v6 #68: sun_flee + plateau_escape easy 1/4 now clear (tier msMul); s6 is walked into a Dire tower by the straight-away bot (speed independent)
   'jungle_hold|easy|2']);   // v6 #68: slower marchers (x0.88) shift the Meteor / Blast timing of the fixed-delay bot; the third marcher crosses
