@@ -41,11 +41,14 @@
   // G-buffer texel (render.js, opaque canvas): R,G = normal xy (n*.5+.5, y down), B = height6 << 2 | material2, A = 255.
   const MAXL = 32, HZ = 24, ZMIN = 10;   // HZ: px of height for G-buffer h = 1; ZMIN: lights sit >= 10 px above the ground (no grazing)
   const LEVELS = {
-    off:    { lights: 0,  half: false, rim: false, glow: false },
-    low:    { lights: 8,  half: true,  rim: false, glow: false },
-    medium: { lights: 16, half: false, rim: true,  glow: false },
-    high:   { lights: 32, half: false, rim: true,  glow: true },
+    // shadows: lights per caster for silhouette shadows (0 = none); march: 6-step height-channel ray-march toward the 2 strongest lights
+    off:    { lights: 0,  half: false, rim: false, glow: false, shadows: 0, march: false },
+    low:    { lights: 8,  half: true,  rim: false, glow: false, shadows: 0, march: false },
+    medium: { lights: 16, half: false, rim: true,  glow: false, shadows: 1, march: false },
+    high:   { lights: 32, half: false, rim: true,  glow: true,  shadows: 2, march: true },
   };
+  // L4 shadows: silhouette shadow buffer (alpha = shadowed) darkens the diffuse / glow on ground pixels only; the march walks <= MARCH_RANGE px toward a light
+  const SHK = 0.85, MARCH_STEPS = 6, MARCH_RANGE = 40, MARCH_LIGHTS = 2;
   const RIMK = 0.9, GLOWK = 0.35;
   // art rule: the dynamic term tops out at +15 % by day, +60 % at night (night = Light.night, already smoothstepped)
   const lightCap = night => { const n = night > 0 ? Math.min(1, night) : 0; return 0.15 + 0.45 * n; };
@@ -60,7 +63,12 @@
     return u;
   }
   // uMode 0: diffuse sum (multiplies albedo), 1: rim + glow (additive). Output = cap * (1 - e^-2x) * vision (fog stays unlit).
-  const FS_LIT = PREC + 'varying vec2 uv;uniform sampler2D uG,uLight;uniform vec2 uRes;' +
+  const MARCH = 'float march(vec3 P,vec3 Lp){vec2 dv=Lp.xy-P.xy;float dd=length(dv);if(dd<1.)return 0.;vec2 dir=dv/dd;float rng=min(dd,' + MARCH_RANGE + '.);float occ=0.;' +
+    'for(int k=0;k<' + MARCH_STEPS + ';k++){float s=rng*(float(k)+1.)/' + MARCH_STEPS + '.;' +
+    'vec4 gs=texture2D(uG,(P.xy+dir*s)/uRes);float bs=floor(gs.b*255.+.5);float ms=mod(bs,4.);' +
+    'float hs=floor(bs/4.)/63.*' + HZ + '.;float zr=P.z+(Lp.z-P.z)*s/dd;' +       // sample height above the ray height = occluded
+    'occ=max(occ,(step(ms,.5)+step(1.5,ms)*step(ms,2.5))*clamp((hs-zr)/3.,0.,1.));}return occ;}';
+  const FS_LIT = PREC + 'varying vec2 uv;uniform sampler2D uG,uLight,uShadow;uniform vec2 uRes;uniform float uShOn,uMarch;' + MARCH +
     'uniform vec3 uLP[' + MAXL + '],uLC[' + MAXL + '];uniform vec2 uLR[' + MAXL + '];uniform int uN;uniform float uMode,uRim,uGlow,uCap;' +
     'void main(){' +
     'vec2 px=floor(uv*uRes)+.5;vec4 g=texture2D(uG,uv);' +
@@ -71,10 +79,12 @@
     'for(int i=0;i<' + MAXL + ';i++){if(i>=uN)break;' +
     'vec3 D=uLP[i]-P;float d=length(D),r=uLR[i].x;float a=clamp(1.-d/r,0.,1.);a=a*a*uLR[i].y;' +
     'float nl=max(0.,dot(N,D/max(d,.001)));' +
+    'if(uMarch>.5&&i<' + MARCH_LIGHTS + '&&mat<.5)nl*=1.-' + f(SHK) + '*march(P,uLP[i]);' +   // ground only: casters are not self-shadowed
     'dif+=uLC[i]*(a*nl);add+=uLC[i]*(a*nl*rk);' +
     'if(uGlow>.5){float s=clamp(1.-length(D.xy)/(r*.6),0.,1.);add+=uLC[i]*(s*s*uLR[i].y*' + f(GLOWK) + ');}' +
     '}' +
     'if(mat>2.5)dif=vec3(0.);' +                                        // emissive FX: own colour, no diffuse
+    'float sh=uShOn*' + f(SHK) + '*clamp(texture2D(uShadow,uv).a,0.,1.)*step(mat,.5);dif*=1.-sh;add*=1.-sh;' +   // silhouette shadows: ground only (units / trees keep their light)
     'vec3 o=uMode<.5?dif:add;' +
     'gl_FragColor=vec4(uCap*(1.-exp(-2.*o))*texture2D(uLight,uv).a,1.);}';
   const FS_MAIN_LIT = PREC + 'varying vec2 uv;uniform sampler2D uScene,uLight,uBloom,uDyn,uAdd;uniform vec2 uRes,uCam;uniform float uBloomOn,uAddOn,uCap;' + BAYER +
@@ -99,7 +109,7 @@
     let light8 = new Uint8ClampedArray(LW * LH * 4);
     let progMain, progH, progV, vbo, texScene, texLight, texGlow, texA, texB, texN = [null, null], normSrc = [null, null], fboA, fboB, uM, uH, uV, curW = 0, curH = 0;
     // L3 lighting state: programs built lazily on the first non-off level; buffers follow the view size and the level's half-res flag
-    let level = 'off', progLit = null, progML = null, uL = null, uML = null, texG = null, texDyn = null, texAdd = null, fboDyn = null, fboAdd = null, dynW = 0, dynH = 0, gW = 0, gH = 0;
+    let level = 'off', progLit = null, progML = null, uL = null, uML = null, texSh = null, texG = null, texDyn = null, texAdd = null, fboDyn = null, fboAdd = null, dynW = 0, dynH = 0, gW = 0, gH = 0;
 
     function shader(type, src) {
       const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
@@ -137,7 +147,7 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE); gl.disable(gl.DITHER);
-      progLit = progML = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;   // (re)built lazily by litReady()
+      progLit = progML = texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;   // (re)built lazily by litReady()
       textures();
       for (let k = 0; k < 2; k++) if (normSrc[k]) upNormals(k);   // context restored: re-upload the G-buffer inputs
       if (gl.getError() !== gl.NO_ERROR) throw new Error('gl error at init');
@@ -184,8 +194,8 @@
 
     // ---- L3 lighting: units 6 (G-buffer), 7 (diffuse buffer); the rim/glow buffer is bound on unit 3 (blur scratch) for the final pass only
     function freeLit() {
-      try { [texG, texDyn, texAdd].forEach(t => t && gl.deleteTexture(t)); [fboDyn, fboAdd].forEach(b => b && gl.deleteFramebuffer(b)); } catch (e) { /* lost */ }
-      texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;
+      try { [texSh, texG, texDyn, texAdd].forEach(t => t && gl.deleteTexture(t)); [fboDyn, fboAdd].forEach(b => b && gl.deleteFramebuffer(b)); } catch (e) { /* lost */ }
+      texSh = texG = texDyn = texAdd = fboDyn = fboAdd = null; dynW = dynH = gW = gH = 0;
     }
     function litReady() {
       const L = LEVELS[level];
@@ -193,7 +203,7 @@
         progLit = program(FS_LIT); progML = program(FS_MAIN_LIT);
         const loc = (p, n) => gl.getUniformLocation(p, n);
         uL = { flip: loc(progLit, 'uFlip'), g: loc(progLit, 'uG'), light: loc(progLit, 'uLight'), res: loc(progLit, 'uRes'), lp: loc(progLit, 'uLP'), lc: loc(progLit, 'uLC'), lr: loc(progLit, 'uLR'),
-          n: loc(progLit, 'uN'), mode: loc(progLit, 'uMode'), rim: loc(progLit, 'uRim'), glow: loc(progLit, 'uGlow'), cap: loc(progLit, 'uCap') };
+          n: loc(progLit, 'uN'), shadow: loc(progLit, 'uShadow'), shOn: loc(progLit, 'uShOn'), march: loc(progLit, 'uMarch'), mode: loc(progLit, 'uMode'), rim: loc(progLit, 'uRim'), glow: loc(progLit, 'uGlow'), cap: loc(progLit, 'uCap') };
         uML = { flip: loc(progML, 'uFlip'), scene: loc(progML, 'uScene'), light: loc(progML, 'uLight'), bloom: loc(progML, 'uBloom'), dyn: loc(progML, 'uDyn'), add: loc(progML, 'uAdd'),
           res: loc(progML, 'uRes'), cam: loc(progML, 'uCam'), on: loc(progML, 'uBloomOn'), addOn: loc(progML, 'uAddOn'), cap: loc(progML, 'uCap') };
       }
@@ -201,6 +211,7 @@
       if (w !== dynW || h !== dynH || gW !== VW || gH !== VH) {
         freeLit();
         bindTex(6, texG = tex(VW, VH, gl.NEAREST)); gW = VW; gH = VH;
+        texSh = tex(VW, VH, gl.NEAREST);
         bindTex(7, texDyn = tex(w, h, gl.LINEAR)); fboDyn = fbo(texDyn);
         texAdd = tex(w, h, gl.LINEAR); fboAdd = fbo(texAdd);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -263,6 +274,11 @@
       gl.useProgram(progLit);
       gl.uniform1f(uL.flip, 0); gl.uniform1i(uL.g, 6); gl.uniform1i(uL.light, 1); gl.uniform2f(uL.res, VW, VH);
       gl.uniform3fv(uL.lp, u.pos); gl.uniform3fv(uL.lc, u.col); gl.uniform2fv(uL.lr, u.rad); gl.uniform1i(uL.n, Math.min(u.count, L.lights));
+      // L4: shadow canvas (alpha) on unit 3 (blur scratch, rebound before use). Always bound: a stale texAdd there would feed back into fboAdd.
+      const shOn = !!(lit.shadow && L.shadows);
+      bindTex(3, texSh);
+      if (shOn) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, lit.shadow);
+      gl.uniform1i(uL.shadow, 3); gl.uniform1f(uL.shOn, shOn ? 1 : 0); gl.uniform1f(uL.march, L.march ? 1 : 0);
       gl.uniform1f(uL.rim, L.rim ? RIMK : 0); gl.uniform1f(uL.glow, L.glow ? 1 : 0); gl.uniform1f(uL.cap, cap);
       gl.uniform1f(uL.mode, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, fboDyn); gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (add) { gl.uniform1f(uL.mode, 1); gl.bindFramebuffer(gl.FRAMEBUFFER, fboAdd); gl.drawArrays(gl.TRIANGLES, 0, 3); }
@@ -270,7 +286,7 @@
     }
 
     // scene: 2D canvas (unlit, opaque); lightmap: Light instance (already folded); glowCv: additive glow canvas;
-    // lit (L3, optional): { gbuf, u, night, vis } -> dynamic lighting when the level is not 'off'
+    // lit (L3, optional): { gbuf, u, night, vis, shadow (L4: canvas, alpha = shadowed, or null) } -> dynamic lighting when the level is not 'off'
     C.present = function (scene, lightmap, glowCv, camX, camY, bloom, lit) {
       if (!C.ok) return false;
       try {
@@ -328,7 +344,7 @@
   }
   IT.GL = {
     create(cv, VW, VH, LW, LH) { const C = create(cv, VW, VH, LW, LH); if (C) C.setLighting(wantLevel); return C; },
-    setSize, GW, LEVELS, MAXL, HZ, ZMIN, RIMK, GLOWK, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
+    setSize, GW, LEVELS, SHK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
     SHADERS: { FS_MAIN, FS_LIT, FS_MAIN_LIT, FS_BLUR_H, FS_BLUR_V, VS },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

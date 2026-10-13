@@ -67,6 +67,19 @@
     return out;
   }
 
+  // ---- v6 #76 L4: silhouette shadow transform, pure. light {x, y, z}: screen px, z = height px; caster {x, y}: foot in screen px.
+  // The sprite (local x = u, y = -height above the foot) is sheared away from the light: x' = sx*u + shear*height, y' = foot + ky*height.
+  // len = shadow length per px of sprite height = distance / lightZ, clamped; shear = its x part; ky = its y part, floored so a light level with the
+  // caster still gives the shadow some depth. Canvas matrix: setTransform(sx, 0, -shear, -ky, footX, footY).
+  const SH_LMAX = 1.2, SH_FLAT = 0.18, SH_ZMIN = 10;
+  function shadowXform(light, caster) {
+    const dx = caster.x - light.x, dy = caster.y - light.y, d = Math.hypot(dx, dy), lz = Math.max(SH_ZMIN, light.z || 0);
+    if (!(d > 1e-6)) return { sx: 1, shear: 0, len: 0, ky: 0 };
+    const len = Math.min(SH_LMAX, d / lz), kr = dy / d * len;
+    return { sx: 1, shear: dx / d * len, len, ky: (kr < 0 ? -1 : 1) * Math.max(0.5 * Math.abs(kr), SH_FLAT * len) };
+  }
+  const SH_MAX = 120, SH_TREES = 40, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 10, SH_REC = 400;   // per-frame caps; light candidates per caster; record cap
+
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX;
     let VW = GM.VIEW_W, VH = GM.VIEW_H;   // live: R.resize() follows scroll-wheel zoom
@@ -190,6 +203,70 @@
     // drawImage of the y-sorted pass is mirrored with that image's pillow normals (IT.Normals.fromCanvas, cached per source canvas: mirrored west
     // frames, skins and scaled copies get their own correct normals), same rect, same order. Faint overlays (alpha < .5) and additive draws are skipped.
     let gCv = null, gCx = null, gMat = -1, gBudget = 0, gVis = null;
+    // L4: casters recorded by the same drawImage tap (units / trees / buildings, >= 6 px), drawn once the frame's lights are known
+    let shCv = null, shCx = null, sN = 0, sOn = false, sBudget = 0, gFootX = NaN, gFootY = 0, gTree = false, shDrawn = 0;
+    const sRec = [], sCache = new WeakMap();
+    function shCanvas() {
+      if (!shCv) { shCv = document.createElement('canvas'); shCx = shCv.getContext('2d'); }
+      if (shCv.width !== VW || shCv.height !== VH) { shCv.width = VW; shCv.height = VH; shCx = shCv.getContext('2d'); }
+      shCx.imageSmoothingEnabled = false; shCx.setTransform(1, 0, 0, 1, 0, 0); shCx.globalAlpha = 1; shCx.globalCompositeOperation = 'source-over';
+      shCx.clearRect(0, 0, VW, VH);
+      return shCx;
+    }
+    function silhouette(src) {      // black copy of the source (cached per source canvas / atlas); null while the bake budget is spent
+      let c = sCache.get(src);
+      if (c !== undefined) return c;
+      if (sBudget <= 0) return null;
+      sBudget--; c = null;
+      try {
+        if (src.width && src.height) {
+          c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+          const x = c.getContext('2d'); x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height);
+        }
+      } catch (e) { c = null; }
+      sCache.set(src, c);
+      return c;
+    }
+    function record(img, a) {
+      const n = a.length;
+      let sx = 0, sy = 0, sw = img.width, sh = img.height, dx = a[1], dy = a[2], dw = sw, dh = sh;
+      if (n === 5) { dw = a[3]; dh = a[4]; } else if (n === 9) { sx = a[1]; sy = a[2]; sw = a[3]; sh = a[4]; dx = a[5]; dy = a[6]; dw = a[7]; dh = a[8]; }
+      if (!(dw >= SH_MINPX && dh >= SH_MINPX) || sN >= SH_REC) return;
+      if (gFootX !== gFootX) gFootX = dx + dw / 2;
+      let r = sRec[sN++]; if (!r) r = sRec[sN - 1] = {};
+      r.src = img; r.sx = sx; r.sy = sy; r.sw = sw; r.sh = sh; r.dx = dx; r.dy = dy; r.dw = dw; r.dh = dh; r.fx = gFootX; r.fy = gFootY; r.tree = gTree;
+    }
+    // u: screen-px light uniforms (strongest first). Per caster: the `per` strongest lights whose radius reaches the foot, one sheared silhouette each.
+    function drawShadows(u, per) {
+      shDrawn = 0;
+      if (!sN || !per || !u.count) return null;
+      const g = shCanvas(), nL = Math.min(u.count, SH_CAND), P3 = u.pos, R2 = u.rad;
+      let trees = 0;
+      for (let i = 0; i < sN && shDrawn < SH_MAX; i++) {
+        const r = sRec[i];
+        if (r.tree && trees >= SH_TREES) continue;
+        let b1 = -1, s1 = SH_MINSC, b2 = -1, s2 = SH_MINSC;
+        for (let l = 0; l < nL; l++) {
+          const d = Math.hypot(r.fx - P3[l * 3], r.fy - P3[l * 3 + 1]), rad = R2[l * 2];
+          if (d >= rad) continue;
+          const a = 1 - d / rad, sc = a * a * R2[l * 2 + 1];
+          if (sc > s1) { b2 = b1; s2 = s1; b1 = l; s1 = sc; } else if (per > 1 && sc > s2) { b2 = l; s2 = sc; }
+        }
+        if (b1 < 0) continue;
+        const sil = silhouette(r.src); if (!sil) continue;
+        for (let k = 0; k < 2; k++) {
+          const l = k ? b2 : b1; if (l < 0) continue;
+          const X = shadowXform({ x: P3[l * 3], y: P3[l * 3 + 1], z: P3[l * 3 + 2] }, { x: r.fx, y: r.fy });
+          if (X.len < 0.08) continue;
+          g.setTransform(X.sx, 0, -X.shear, -X.ky, r.fx, r.fy);
+          g.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
+          shDrawn++;
+        }
+        if (r.tree) trees++;
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      return shDrawn ? shCv : null;
+    }
     const gCache = new WeakMap(), drawImg = typeof CanvasRenderingContext2D !== 'undefined' ? CanvasRenderingContext2D.prototype.drawImage : null;
     function gCanvas() {
       if (!gCv) { gCv = document.createElement('canvas'); gCv.width = VW; gCv.height = VH; gCx = gCv.getContext('2d', { alpha: false }); }
@@ -217,6 +294,7 @@
       const a = arguments;
       drawImg.apply(this, a);
       if (gMat < 0 || this.globalAlpha < 0.5 || this.globalCompositeOperation !== 'source-over') return;
+      if (sOn && (gMat === 1 || gMat === 2)) record(img, a);
       const n = gNormal(img, gMat); if (!n) return;
       if (a.length === 3) gCx.drawImage(n, a[1], a[2]);
       else if (a.length === 5) gCx.drawImage(n, a[1], a[2], a[3], a[4]);
@@ -372,9 +450,10 @@
       items.sort((a, b) => a.y - b.y);
       if (lit) {     // same order / rects into the G-buffer: tap the scene context's drawImage for the pass
         sceneCx.drawImage = gDraw;
-        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); it.fn(it.a, R); } }
+        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = 6;
+        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
         finally { gMat = -1; delete sceneCx.drawImage; }
-      } else for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); }
+      } else { sN = 0; for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); } }
       R.stats.items = items.length;
 
       // keep the hero readable behind canopies
@@ -416,8 +495,8 @@
           const lb = light.buf, n = lb.w * lb.h;
           if (!gVis || gVis.length !== n) gVis = new Uint8Array(n);
           const u = IT.GL.toScreen(LT.uniforms({ x: R.camX * P, y: R.camY * P, w: VW * P, h: VH * P }, comp.levelInfo().lights), P);
-          litArg = { gbuf: gCv, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
-          S.dyn = u.count;
+          litArg = { gbuf: gCv, shadow: sOn ? drawShadows(u, comp.levelInfo().shadows) : null, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
+          S.dyn = u.count; S.shd = shDrawn;
         }
         const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'), litArg);
         tComp = performance.now() - tc;
@@ -455,6 +534,6 @@
     return R;
   }
 
-  IT.Render = { create, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
+  IT.Render = { create, shadowXform, SH_LMAX, SH_MAX, SH_TREES, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
   IT.Minimap = { pin, showsUnit, stealthy, detected, unitAlpha, TIP, COL: MM_COL, SIZE: MM_SIZE };
 })(typeof window !== 'undefined' ? window : globalThis);

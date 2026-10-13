@@ -1,0 +1,47 @@
+'use strict';
+// v6 #76 L4: silhouette shadows + height ray-march. No GL in node: level table, the pure shear helper (render.js), shader source checks.
+const test = require('node:test'), assert = require('node:assert/strict');
+const IT = require('./_load')(['js/render/lights.js', 'js/render/gl.js', 'js/render/render.js']);
+const GL = IT.GL, S = GL.SHADERS, R = IT.Render;
+
+test('level table: shadows per caster + march flag', () => {
+  const L = GL.LEVELS;
+  assert.deepEqual([L.off.shadows, L.low.shadows, L.medium.shadows, L.high.shadows], [0, 0, 1, 2]);
+  assert.deepEqual([L.off.march, L.low.march, L.medium.march, L.high.march], [false, false, false, true]);
+  assert.ok(L.high.shadows <= 2 && L.medium.shadows === 1);
+});
+
+test('shadowXform: light above, side, distance, height, clamp', () => {
+  const c = { x: 100, y: 100 };
+  const above = R.shadowXform({ x: 100, y: 100, z: 40 }, c);
+  assert.equal(above.shear, 0); assert.equal(above.len, 0);
+  const left = R.shadowXform({ x: 60, y: 100, z: 40 }, c);       // light to the left -> shadow leans right
+  assert.ok(left.shear > 0 && left.len > 0 && left.sx === 1);
+  assert.ok(R.shadowXform({ x: 140, y: 100, z: 40 }, c).shear < 0);
+  const near = R.shadowXform({ x: 90, y: 100, z: 40 }, c), far = R.shadowXform({ x: 70, y: 100, z: 40 }, c);
+  assert.ok(far.len > near.len);                                  // farther light -> longer
+  const low = R.shadowXform({ x: 70, y: 100, z: 20 }, c), high = R.shadowXform({ x: 70, y: 100, z: 60 }, c);
+  assert.ok(high.len < low.len);                                  // higher light -> shorter
+  assert.ok(Math.abs(near.len - 10 / 40) < 1e-9);                 // len = distance / lightZ
+  const huge = R.shadowXform({ x: -500, y: 100, z: 10 }, c);
+  assert.equal(huge.len, R.SH_LMAX);                              // clamp
+  assert.ok(Math.hypot(huge.shear, huge.ky) <= R.SH_LMAX * 1.0001 + 0.2);
+  const north = R.shadowXform({ x: 100, y: 60, z: 40 }, c);       // light above on screen -> shadow runs down the screen
+  assert.ok(north.ky > 0 && Math.abs(north.shear) < 1e-9);
+  assert.ok(R.shadowXform({ x: 100, y: 140, z: 40 }, c).ky < 0);
+  assert.ok(left.ky !== 0);                                       // never degenerate for a level light
+});
+
+test('FS_LIT: shadow sampling and a constant-bound 6-step march; GLSL ES 1.00', () => {
+  const s = S.FS_LIT;
+  assert.ok(!/#version/.test(s));
+  assert.ok(/uniform sampler2D uG,uLight,uShadow;/.test(s));
+  assert.ok(s.includes('texture2D(uShadow,uv).a') && s.includes('step(mat,.5)'));     // ground only, casters keep their light
+  assert.ok(/for\(int k=0;k<6;k\+\+\)/.test(s));
+  assert.equal(GL.MARCH_STEPS, 6);
+  assert.ok(s.includes('uMarch>.5&&i<2&&mat<.5'));
+  assert.ok(s.includes('floor(bs/4.)/63.'));                                          // height channel B >> 2
+  // the light loop is still the only i-loop with a break on uN
+  assert.deepEqual(s.match(/for\(int i=0;i<[^;]+;/g), ['for(int i=0;i<' + GL.MAXL + ';']);
+  for (const k of Object.keys(S)) if (k !== 'FS_LIT') assert.ok(!/uShadow|march/.test(S[k]), k);   // Off path untouched
+});
