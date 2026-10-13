@@ -81,6 +81,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - #68 easy-tier enemies too fast, #67 Roshan pit Blast push-in too hard, #66 intro big impact one element at a time
 - UI: add 'midlane' to SCN_CAT_TAGS.terrain + tag.midlane; then #30 gameplay pass, #16 UX pass (LAST)
 
+- [ ] #70 BUG item slots (loadout + in-game HUD): items can only be reordered within the filled count (5 items -> can't drag one into empty slot 6). Inventory must be 6 FIXED slots with holes allowed (array of 6, null = empty): drag to any empty slot moves, to a filled slot swaps; adding via click fills the first empty slot; hotkeys follow slot index; persist holes in the loadout save (migrate old packed arrays). Test it.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
