@@ -57,6 +57,8 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [ ] #56 No relic toast and no relic message in Free Play and Scenario modes (Ranked only). Default unless CEO says otherwise: relic progress/points also accrue ONLY in Ranked (avoids farming points in Free Play).
 - [ ] #57 BUG: multi-kill relics (Multi-Hero Ice Wall/Chaos Meteor, Three Hero EMP/Deafening Blast, etc.) count enemies across different rounds. Scope the hit/kill set per cast AND per round; reset on round transition. Add a test.
 
+- [ ] #58 Ghost Walk slow awareness (belief model): Ghost Walk's slow aura leaks Invoker's position. On higher tiers, an enemy that gets the Ghost Walk slow debuff recognises it -> infers Invoker is within the aura radius (Dota GW aura 400) -> narrows its prediction to that ring/sector (factor in its own facing + last-seen) and uses Dust if it has one (hard: often, bambam: almost always, reaction scaled by tier; ian/easy: ignore or rarely). Show it via #49 indicators ("!" on dust hit, "?" if dust misses). Balance so Ghost Walk escapes stay possible on bambam: player counterplay = keep >400 from enemies, juke after dust expires, break line with trees/high ground.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - Ogre two-headed enemy portrait: v2 preview in session scratchpad (ogre/v2, 48x32 wide recommended). CEO: "don't replace yet" — awaiting approve/v3; name TBD (Ian?).
