@@ -89,6 +89,9 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 - [ ] #73 Intro (CEO: "much better") — each centre-stage text must stay long enough for a human to READ it before flying to the HUD: hold = max(1.2 s, 0.35 s + words / 3.5 words-per-s) (~210 wpm; PT same rate), title shorter floor ok; combo steps: ~0.45 s each (icons) + 1 s for the whole row; tune by reading aloud. Any key/click advances to the next piece (not skip all) on first press, skip-all via Esc / the existing cancel-on-action. Panning phase starts only after the last piece has landed.
 
+- [ ] #74 Enemy ability bar: when an enemy with abilities/items is selected (or hovered), the HUD shows its ability + item bar like Invoker's: icons, mana cost, live cooldown sweep + seconds, charges, mana bar, and hover tooltips (name, description, cast point, range, cooldown, mana) EN/PT. Enemy mana is real (regen, costs) so the player can read "he has no mana for blink/ability". Includes innate blink (#52), Blink Dagger (incl. 3 s damage lock shown as disabled), Force, Euls, BKB, Dust etc.
+- [ ] #75 Blink telegraph: before an enemy blinks (dagger or innate), show intent: turns to face the target + a readable wind-up cue (glint/charge on the blink icon above head + faint target line/ghost at destination). Warning time scales down with difficulty: ian ~0.9 s, easy 0.7, normal 0.5, hard 0.3, bambam 0.15 (on top of the 0.15-0.35 cast point). Counterplay must stay possible on every tier (Cold Snap/stun interrupts, Sun Strike on landing). Bot-verify blinker scenarios after.
+
 ## Open for CEO
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
