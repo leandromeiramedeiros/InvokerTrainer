@@ -636,10 +636,11 @@
     const f = ScnFilter.load();
     const tagLabel = g => (IT.hasT('tag.' + g) ? t('tag.' + g) : g);
     const ctx = { name: scnName, cleared: s => !!prog(s.id), label: tagLabel };
-    const tabsEl = h('div', { class: 'sc-tabs' }), chipsEl = h('div', { class: 'sc-chips' }), countEl = h('span', { class: 'sc-count' });
+    const tabsEl = h('div', { class: 'sc-tabs' }), chipsEl = h('div', { class: 'sc-chips', hidden: true }), countEl = h('span', { class: 'sc-count' });
     const gridEl = h('div', { class: 'sc-grid' });
     const modeBtn = h('button', { type: 'button', class: 'btn sm dim sc-mode', 'data-tip': t('sc.mode.d') });
     const clearBtn = h('button', { type: 'button', class: 'btn sm dim', text: t('sc.clear'), 'data-tip': t('sc.clear.d') });
+    const tagsBtn = h('button', { type: 'button', class: 'btn sm dim sc-tagsbtn', 'aria-expanded': 'false', 'data-tip': t('sc.tags.d') });
     const search = h('input', { type: 'search', class: 'sc-search', placeholder: t('sc.search'), maxlength: '40', autocomplete: 'off', spellcheck: 'false' });
     const sortEl = h('select', { class: 'mapsel sc-sort', 'aria-label': t('sc.sort') }, SCN_SORTS.map(k => h('option', { value: k, text: t(`sc.sort.${k}`) })));
     search.value = f.q; sortEl.value = f.sort;
@@ -684,9 +685,11 @@
             onclick: () => { const i = f.tags.indexOf(tag); if (i >= 0) f.tags.splice(i, 1); else f.tags.push(tag); dirty(); draw(true); },
           }, tagLabel(tag), h('small', { text: String(n) })));
         }
+        tagsBtn.textContent = t('sc.tags') + (f.tags.length ? ' (' + f.tags.length + ')' : '') + (chipsEl.hidden ? ' ▾' : ' ▴');
+        tagsBtn.classList.toggle('on', f.tags.length > 0 || !chipsEl.hidden);
         modeBtn.textContent = t(f.mode === 'and' ? 'sc.modeAnd' : 'sc.modeOr');
         modeBtn.classList.toggle('on', f.mode === 'and');
-        modeBtn.disabled = f.tags.length < 2;
+        modeBtn.disabled = f.tags.length < 2; modeBtn.hidden = f.tags.length < 2;
         idle();
       }
       const rows = ScnFilter.apply(list, f, ctx);
@@ -698,6 +701,7 @@
     };
     search.addEventListener('input', () => { f.q = search.value; dirty(); idle(); draw(false); });
     sortEl.addEventListener('change', () => { f.sort = sortEl.value; dirty(); draw(false); });
+    tagsBtn.addEventListener('click', () => { chipsEl.hidden = !chipsEl.hidden; tagsBtn.setAttribute('aria-expanded', String(!chipsEl.hidden)); draw(true); });
     modeBtn.addEventListener('click', () => { f.mode = f.mode === 'and' ? 'or' : 'and'; dirty(); draw(true); });
     clearBtn.addEventListener('click', () => { Object.assign(f, ScnFilter.defaults(), { sort: f.sort }); search.value = ''; dirty(); draw(true); });
     draw(true);
@@ -709,7 +713,7 @@
       h('div', { class: 'sc-prac' },
         h('h3', { text: t('sc.practice') }), h('p', { class: 'fine', text: t('sc.practice.d') })),
       tabsEl,
-      h('div', { class: 'sc-bar' }, search, sortEl, modeBtn, clearBtn, countEl),
+      h('div', { class: 'sc-bar' }, search, sortEl, tagsBtn, modeBtn, clearBtn, countEl),
       chipsEl,
       gridEl);
   }

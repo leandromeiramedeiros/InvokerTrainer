@@ -35,7 +35,7 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 
 ### LAST
 - [ ] #30 (CEO: LEVERAGE THE GAME FILES — KV in js/data/dota.js + reference/, the local Dota install C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\ (VPKs, server.dll/client.dll strings) to verify every mechanic, number, targeting style and interaction; flag anything that diverges) Gameplay/balance/mechanics quality pass (director-led; fixes with tests + docs/GAMEPLAY-REVIEW-v6.md top-10 suggestions).
-- [ ] #16 UI/UX review (docs/UX-REVIEW-v6.md, every screen at 1280x720 + 1920x1080, EN/PT) + animation pass (120-250 ms, reduced-motion).
+- [x] (first pass; follow-up walk pending for between-round card, splash tiers 1/4/7, Infinite Run, I/O panels, toasts; 2 L open: briefing overlaps countdown panel, no Esc-resume hint on pause) #16 UI/UX review (docs/UX-REVIEW-v6.md, every screen at 1280x720 + 1920x1080, EN/PT) + animation pass (120-250 ms, reduced-motion).
 
 ## Playtest 5 (CEO, queued at 98% usage — do BEFORE #30/#16)
 - [x] #44 Enemy flair lines for new situations, per skin: got juked; Invoker escaped invisible; reactions to skills in general (EN+PT, flair.js table).
@@ -92,7 +92,7 @@ Done so far: WP1-WP10 (docs/CEO-v6-PLAN.md), DLL/VPK audit, tower windup, day/ni
 - [x] #74 Enemy ability bar: when an enemy with abilities/items is selected (or hovered), the HUD shows its ability + item bar like Invoker's: icons, mana cost, live cooldown sweep + seconds, charges, mana bar, and hover tooltips (name, description, cast point, range, cooldown, mana) EN/PT. Enemy mana is real (regen, costs) so the player can read "he has no mana for blink/ability". Includes innate blink (#52), Blink Dagger (incl. 3 s damage lock shown as disabled), Force, Euls, BKB, Dust etc.
 - [x] #75 Blink telegraph: before an enemy blinks (dagger or innate), show intent: turns to face the target + a readable wind-up cue (glint/charge on the blink icon above head + faint target line/ghost at destination). Warning time scales down with difficulty: ian ~0.9 s, easy 0.7, normal 0.5, hard 0.3, bambam 0.15 (on top of the 0.15-0.35 cast point). Counterplay must stay possible on every tier (Cold Snap/stun interrupts, Sun Strike on landing). Bot-verify blinker scenarios after.
 
-## NEXT: #16 UI/UX review + animation pass (director-led; not started). Pending CEO: #67 (no Blast push-in scenario exists; proposal in queue), #71 Floe orientation.
+## NEXT: #76 DYNAMIC LIGHTING (docs/LIGHTING-v6.md first, then L1-L5), then the #16 follow-up walk. Pending CEO: #67 (no Blast push-in scenario exists; proposal in queue), #71 Floe orientation.
 
 - [ ] #76 DYNAMIC LIGHTING (CEO approved; do BEFORE #16, after #30). Spells + glowing sand are light emitters; everything around them is lit like a 3D game (diffuse, rim light, soft glow) and casts perspective-correct shadows. Extend the existing WebGL compositor (js/render/gl.js, 2D path stays as fallback = today's look). Design doc first: docs/LIGHTING-v6.md (architecture, perf budget, art rules), then packages:
   L1 light list: spells/orbs/Forge Spirits/Sun Strike/Meteor/EMP/TP/torches register point lights {pos, height, colour, radius, intensity}; glow sand clustered into a few lights per frame; up to ~32 lights as shader uniforms.

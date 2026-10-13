@@ -1,0 +1,43 @@
+/* v6 #16b UI animation layer (js/ui/anim.js adds the a-* classes). 120-250 ms, eased, no blur, input is never blocked. The game canvases / aim overlay are untouched. */
+@keyframes a-scr{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes a-scr-out{from{opacity:1}to{opacity:0;transform:translateY(-4px)}}
+@keyframes a-pnl{from{opacity:0;transform:scale(.96) translateY(4px)}to{opacity:1;transform:none}}
+@keyframes a-pnl-out{from{opacity:1}to{opacity:0;transform:scale(.96) translateY(4px)}}
+@keyframes a-toast{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes a-card{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes a-tab{from{filter:brightness(1.6);transform:translateY(2px)}to{filter:none;transform:none}}
+@keyframes a-fade{from{opacity:0}to{opacity:1}}
+@keyframes a-strip{from{opacity:.55}to{opacity:1}}
+
+.screen.a-scr{animation:a-scr .18s cubic-bezier(.2,.8,.3,1) backwards}
+.pnl.a-pnl{animation:a-pnl .17s cubic-bezier(.2,.8,.3,1) backwards}
+.toast.a-toast{animation:a-toast .16s cubic-bezier(.2,.8,.3,1) backwards}
+.a-card{animation:a-card .17s cubic-bezier(.2,.8,.3,1) var(--ad,0ms) backwards}
+.a-tab{animation:a-tab .14s ease-out}
+.a-fade{animation:a-fade .15s ease-out backwards}
+.rkp.a-strip{animation:a-strip .2s ease-out}
+
+/* exits: pointer-events:none clones, removed by JS ~200 ms later */
+.a-ghost,.a-ghost *{pointer-events:none!important}
+.a-ghost.a-scr-out{animation:a-scr-out .15s ease-in forwards}
+.a-ghost.a-pnl-out{animation:a-pnl-out .13s ease-in forwards}
+
+/* toast exit (class .out is added by IT.UI.toast; removal timing unchanged) */
+#toasts .toast.out{transform:translateY(-4px);transition:opacity .25s ease-in,transform .25s ease-in}
+
+/* buttons / tabs: hover + press, 120 ms */
+.btn,.seg-b,.tabb,.sc-tab,.shop-tab,.sptab,.chipb,.pbt{transition:transform .12s ease-out,filter .12s ease-out,color .12s,border-color .12s,background-color .12s}
+.btn:not(:disabled):not(.red):hover,.pbt:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.btn:not(:disabled):not(.red):active,.pbt:active{filter:brightness(.9);transform:translateY(2px)}
+.seg-b:not(:disabled):hover,.tabb:hover,.sc-tab:hover,.shop-tab:hover,.sptab:hover,.chipb:hover{filter:brightness(1.15)}
+.seg-b:not(:disabled):active,.tabb:active,.sc-tab:active,.shop-tab:active,.sptab:active,.chipb:active{filter:brightness(.9);transform:translateY(1px)}
+
+/* bars: eased fill */
+.bar>i{transition:width .18s cubic-bezier(.22,.8,.3,1)}
+
+@media (prefers-reduced-motion:reduce){
+  .screen.a-scr,.pnl.a-pnl,.toast.a-toast,.a-card,.a-tab,.a-fade,.rkp.a-strip,.a-ghost{animation:none!important}
+  .a-ghost{display:none!important}
+  .btn,.seg-b,.tabb,.sc-tab,.shop-tab,.sptab,.chipb,.pbt,.bar>i,#toasts .toast.out{transition:none!important}
+  .btn:hover,.btn:active,.pbt:hover,.pbt:active,.seg-b:hover,.seg-b:active,.tabb:hover,.tabb:active,.sc-tab:hover,.sc-tab:active,.shop-tab:hover,.shop-tab:active,.sptab:hover,.sptab:active,.chipb:hover,.chipb:active{transform:none!important}
+}

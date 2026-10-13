@@ -18,7 +18,7 @@
 .shopscr .panel.shop{width:min(98%,76em);max-width:76em;display:flex;flex-direction:column;gap:.7em;max-height:calc(100vh - 3em);overflow:hidden}
 .shop-top{display:flex;align-items:center;justify-content:space-between;gap:1em;flex-wrap:wrap}
 .shop-bal{display:flex;align-items:center;gap:.5em;padding:.3em .9em;background:#0b0618;border:calc(5*var(--fs)) solid transparent;border-image:var(--orn-mini-gold) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
-.shop-bal-l{color:#9a8fc0;font-size:.85em;letter-spacing:.1em;text-transform:uppercase}
+.shop-bal-l{color:#b4aadb;font-size:.85em;letter-spacing:.1em;text-transform:uppercase}
 .shop-bal-n{color:#ffe27a;font-size:1.5em;text-shadow:0 0 .6em #f2c44488}
 .shop-bal-n.pulse{animation:shopPulse .5s ease-out}
 @keyframes shopPulse{0%{transform:scale(1.5);color:#fff}100%{transform:none}}
@@ -39,22 +39,22 @@
 .shop-stage{background:radial-gradient(ellipse at 50% 85%,#3a2a63 0%,#1a1030 60%,#0b0618 100%);border:1px solid #2e2250;line-height:0}
 .shop-prev{display:block;width:calc(48*var(--shop-s));height:calc(44*var(--shop-s));image-rendering:pixelated}
 .shop-name{color:#efe9ff;font-weight:bold;letter-spacing:.06em;text-align:center}
-.shop-desc{color:#9a8fc0;font-size:.78em;text-align:center;min-height:2.4em}
+.shop-desc{color:#b4aadb;font-size:.78em;text-align:center;min-height:2.4em}
 .shop-icons{display:flex;flex-wrap:nowrap;gap:2px;justify-content:center;max-width:100%}
 .shop-ico{width:calc((48*var(--shop-s) - 14px)/8);height:calc((48*var(--shop-s) - 14px)/8);image-rendering:pixelated;border:1px solid #000;box-shadow:0 0 0 1px #3a2a63}
-.shop-note{font-size:.72em;color:#9a8fc0;text-align:center;letter-spacing:.03em}
+.shop-note{font-size:.72em;color:#b4aadb;text-align:center;letter-spacing:.03em}
 .shop-note.on{color:#7ae0a0}
 .shop-price{display:flex;align-items:center;gap:.4em;color:#ffe27a;font-size:1.05em}
-.shop-price.free{color:#9a8fc0;font-size:.9em}
+.shop-price.free{color:#b4aadb;font-size:.9em}
 .shop-act{width:100%;padding:.45em .6em;letter-spacing:.14em}
 .shop-act.dis{opacity:.65;cursor:not-allowed}
 .shop-state{width:100%;text-align:center;padding:.45em .6em;letter-spacing:.14em;font-weight:bold}
 .shop-state.eq{color:#ffe27a;text-shadow:0 0 .6em #f2c44488}
 .shop-state.own{color:#7ae0a0}
-.shop-msg{min-height:1.4em;text-align:center;color:#9a8fc0;opacity:0;transition:opacity .25s}
+.shop-msg{min-height:1.4em;text-align:center;color:#b4aadb;opacity:0;transition:opacity .25s}
 .shop-msg.on{opacity:1;color:#ffe27a}
 .shop-msg.bad{color:#ff8a8a}
-.shop-hint{text-align:center;color:#9a8fc0;font-size:.78em}
+.shop-hint{text-align:center;color:#b4aadb;font-size:.78em}
 @media (prefers-reduced-motion:reduce){.shop-bal-n.pulse,.shop-card.flash::after{animation:none}.shopside{transition:none}}
 
 /* ---- v6 #69 purchase moment: press squash, shake (not enough), gems, flip, god rays, glow-sand rain, UNLOCKED banner */
