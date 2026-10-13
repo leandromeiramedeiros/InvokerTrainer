@@ -70,14 +70,21 @@
     if (e.kind === 'hero') return IT.Art.heroSheet ? IT.Art.heroSheet() : 'invoker';
     if (e.kind === 'spirit') return IT.Art.forgeSheet ? IT.Art.forgeSheet() : 'forge';
     if (e.kind === 'dummy' && e.scarecrow && IT.Art.sheets.scarecrow) return IT.Art.dummySheet ? IT.Art.dummySheet() : 'scarecrow';
+    if (e.kind === 'roshan') return IT.Art.sheets.roshan ? 'roshan' : 'pedro';
+    if (e.kind === 'ally') return IT.Art.sheets[e.skin] ? e.skin : IT.Art.sheets.default ? 'default' : 'pedro';   // v6 item 28: the default enemy grunt, friendly name tag
     return IT.Art.sheets[e.skin] ? e.skin : 'pedro';
   }
-  function isUnit(e) { return e.kind === 'hero' || e.kind === 'dummy' || e.kind === 'enemy' || e.kind === 'spirit'; }
+  function isUnit(e) { return e.kind === 'hero' || e.kind === 'dummy' || e.kind === 'enemy' || e.kind === 'spirit' || e.kind === 'ally' || e.kind === 'roshan'; }
+  // v6 item 28: Roshan (team 2) is fog-gated + faded like a foe; the ally (team 0) is always drawn
+  const fadey = e => e.team === 1 || e.kind === 'roshan';
+  const allyName = () => { const k = 'unit.ally', s = IT.t ? IT.t(k) : k; return s && s !== k ? s : (IT.lang === 'pt' ? 'Aliado' : 'Ally'); };
+  const roshName = () => { const k = 'unit.roshan', s = IT.t ? IT.t(k) : k; return s && s !== k ? s : 'Roshan'; };
+  const litAt = (R, x, y) => { const f = R.fog; return !f || R.w.fog === false || f.levelAt(x, y) > 1.5; };
 
   function st(R, e) {
     bind(R);
     let s = state.get(e.id);
-    if (!s) { s = { name: '', t0: R.time, lx: e.x, ly: e.y, moveT: -9, phase: Math.random() * 3, va: e.team === 1 ? 0 : 1, lA: 0 }; state.set(e.id, s); }
+    if (!s) { s = { name: '', t0: R.time, lx: e.x, ly: e.y, moveT: -9, phase: Math.random() * 3, va: fadey(e) ? 0 : 1, lA: 0 }; state.set(e.id, s); }
     return s;
   }
 
@@ -85,12 +92,12 @@
   const HOLD = 0.4, FADE_IN = 0.14, FADE_OUT = 0.3, INVIS_A = 0.2;
   function visible(R, e) {
     if (e.dead) return false;
-    if (e.team !== 1) return true;
+    if (!fadey(e)) return true;
     const S = st(R, e);
     if (S.vT === R.time) return S.va > 0.02;
     const dt = S.vT == null ? 1 : clamp(R.time - S.vT, 0, 0.25); S.vT = R.time;
     const inv = hiddenKind(e), rev = inv && (revealedOf(e) || e.revealed === true);
-    let seen = R.w.fog === false ? true : !!e.visible;
+    let seen = R.w.fog === false ? true : e.kind === 'roshan' ? litAt(R, e.x, e.y) : !!e.visible;
     if (inv && !rev && !has(e, 'invisFade')) seen = false;   // Shadow Blade/Ghost Walk: gone unless dusted/revealed (fade phase: still shimmering)
     let tg;
     if (seen) { S.hold = R.time + HOLD; tg = inv ? (has(e, 'invisFade') ? 0.5 : INVIS_A) : 1; }
@@ -271,7 +278,7 @@
     }
     const sp = sprite(R, e, S, lifted);
     if (!sp.cv) return;
-    const Av = A0 * (e.team === 1 ? clamp(S.va, 0, 1) : 1);
+    const Av = A0 * (fadey(e) ? clamp(S.va, 0, 1) : 1);
     if (Av < 0.02) return;
     const bk = isFoe(e) && !!e.bkb || (isFoe(e) && has(e, 'magicImmune'));
     const sc = bk && !sp.sheep ? 1.2 : 1;
@@ -286,7 +293,7 @@
     const hgtUnit = Math.max(8, syp - sy + img.height * 0.5);
 
     if (!top) {
-      if (selected(R, e)) { cx.globalAlpha = Av; selRing(R, sxp, syp, rr, isFoe(e)); cx.globalAlpha = A0; }
+      if (selected(R, e)) { cx.globalAlpha = Av; selRing(R, sxp, syp, rr, isFoe(e) || e.kind === 'roshan'); cx.globalAlpha = A0; }
       if (L) { liftMarker(R, sxp, syp, rr, eul); tether(R, sxp, syp, sy, eul); }
       if (has(e, 'revealed')) dustRing(R, e, sxp, syp, rr, Av);
       if (root) vines(R, sxp, syp, rr, true, rk);
@@ -617,7 +624,7 @@
     const hero = e.kind === 'hero', scare = e.kind === 'dummy' && e.scarecrow;
     let base = S.top || 0;
     if (hero && e.inv && e.inv.orbs && e.inv.orbs.length) base = Math.max(base, ORB_TOP);
-    const named = isFoe(e) && e.name && !e.noHpBar && e.maxHp && !has(e, 'hex');
+    const named = (isFoe(e) && e.name && !e.noHpBar && e.maxHp || e.kind === 'ally' || e.kind === 'roshan') && !has(e, 'hex');
     let D = base + (scare ? 4 : named ? 16 : e.kind === 'spirit' ? 7 : 8) + (e.kind === 'enemy' && e.tele ? 20 : 0);
     if (has(e, 'alacrity')) D = Math.max(D, (hero ? (S.top || 0) + 14 : scare ? 42 : (S.top || 0) + 10) + 7);   // alacSigil ring + runes reach 5 px above their centre
     return D;
@@ -645,7 +652,7 @@
     bind(R);
     const S = state.get(e.id); if (!S || S.sx == null) return;
     const cx = R.cx, x = S.sx, top = S.sy - S.top;
-    if (e.team === 1 && S.va < 0.5) return;
+    if (fadey(e) && S.va < 0.5) return;
     if (has(e, 'stun')) {
       for (let k = 0; k < 3; k++) {
         const a = R.time * 5 + k * 2.0944, sx = x + Math.cos(a) * 7, sy = top - 3 + Math.sin(a) * 2;
@@ -666,6 +673,16 @@
       if (e.noHpBar) return;
       y = top - 6;
       bar(cx, x - 10, y, 20, 2, e.hp / e.maxHp, '#e84040', '#2a0808');
+      if (e.maxMana) bar(cx, x - 10, y + 2, 20, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
+    } else if (e.kind === 'roshan') {      // v6 item 28: wide bar + name, warm gold/red
+      PX.text(cx, e.name || roshName(), x, top - 15, '#ffd890', 'c');
+      y = top - 7;
+      bar(cx, x - 17, y, 34, 3, e.hp / e.maxHp, '#d8402a', '#2a0a06');
+      cx.fillStyle = '#d8a040'; cx.fillRect(x - 18, y - 1, 1, 5); cx.fillRect(x + 17, y - 1, 1, 5);
+    } else if (e.kind === 'ally') {        // friendly tag: blue-green name, teal bar
+      PX.text(cx, e.name || allyName(), x, top - 14, '#8ae8c8', 'c');
+      y = top - 6;
+      bar(cx, x - 10, y, 20, 2, e.hp / e.maxHp, '#3ad8a0', '#06241c');
       if (e.maxMana) bar(cx, x - 10, y + 2, 20, 1, e.mana / e.maxMana, '#4a8cff', '#0a1430');
     } else if (e.kind === 'hero') {
       y = top - 5;
@@ -704,6 +721,11 @@
     } else if (e.kind === 'spirit') {
       R.light(sx, sy - 6, 46, [255, 140, 50], 0.7);
       R.glow(sx, sy - 8, 12, '#ff8a2a', 0.3);
+    } else if (e.kind === 'roshan') {
+      if (e.anim && e.anim.name === 'attack') R.light(sx, sy - 12, 48, [255, 120, 60], 0.35);
+      R.light(sx, sy - 18, 22, [255, 150, 40], 0.18);      // faint eye-glow
+    } else if (e.kind === 'ally') {
+      R.light(sx, sy - 8, 30, [120, 255, 200], 0.18);
     } else if (isFoe(e)) {
       if (e.anim && e.anim.name === 'cast') R.light(sx, sy - 8, 40, [180, 100, 255], 0.5);
       if (e.bkb || has(e, 'magicImmune')) R.light(sx, sy - 8, 54, [255, 205, 70], 0.55);
@@ -724,5 +746,5 @@
     const S = st(R, e); S.castStart = R.time; S.castUntil = R.time + 0.22; S.name = '';
   }
 
-  IT.UnitDraw = { liftOf, isEuls, visZ, LIFT_VIS, statusIcons, statusList, statusIsBuff, statusRowD, STATUS_ICON, STATUS_NONE, STATUS_KIND, MAX_STATUS_HUD, draw, hud, lights, isUnit, isFoe, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
+  IT.UnitDraw = { liftOf, isEuls, visZ, LIFT_VIS, statusIcons, statusList, statusIsBuff, statusRowD, STATUS_ICON, STATUS_NONE, STATUS_KIND, MAX_STATUS_HUD, draw, hud, lights, isUnit, isFoe, allyName, roshName, visible, has, state, cleanup, bar, castFlash, launched, overlay, event, bind };
 })(typeof window !== 'undefined' ? window : globalThis);

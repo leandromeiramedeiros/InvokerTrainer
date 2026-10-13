@@ -1007,11 +1007,12 @@
     if (ca.uid !== U.id) {
       ca.uid = U.id;
       const bld = !!U.building, own = U.kind === 'spirit' && U.team === 0;
-      const sheet = U.kind === 'hero' ? IT.Art.heroSheet() : U.kind === 'spirit' ? 'forge' : (IT.Art.sheets[U.skin] ? U.skin : null);
+      const sheet = U.kind === 'hero' ? IT.Art.heroSheet() : U.kind === 'spirit' ? 'forge' : U.kind === 'roshan' ? 'roshan' : (IT.Art.sheets[U.skin] ? U.skin : U.kind === 'ally' ? 'default' : null);
       const bp = bld && IT.TowerDraw && IT.TowerDraw.portrait ? IT.TowerDraw.portrait(U, w) : null;
       R.upor.textContent = ''; R.upor.appendChild(bp || (sheet ? IT.UI.portrait(sheet) : h('div', { class: 'hgen', text: '?' })));
-      R.upor.classList.toggle('foe', U.team === 1); R.uhp.classList.toggle('foe', U.team === 1);
-      R.uname.textContent = U.name || t('hud.unit');
+      const foeCard = U.team === 1 || U.kind === 'roshan';   // v6 item 28: Roshan is hostile (red HP)
+      R.upor.classList.toggle('foe', foeCard); R.uhp.classList.toggle('foe', foeCard);
+      R.uname.textContent = U.name || (U.kind === 'ally' ? IT.UnitDraw.allyName() : U.kind === 'roshan' ? IT.UnitDraw.roshName() : t('hud.unit'));
       R.ucore.style.display = bld ? 'none' : '';
       const note = bld ? [U.team === 0 ? 'Radiant' : U.team === 1 ? 'Dire' : ul('Neutral', 'Neutro'), U.invulnerable ? ul('Invulnerable', 'Invulnerável') : U.destroyed ? ul('Destroyed', 'Destruída') : ''].filter(Boolean).join('  |  ') : '';
       R.unote.textContent = note; R.unote.style.display = note ? '' : 'none';

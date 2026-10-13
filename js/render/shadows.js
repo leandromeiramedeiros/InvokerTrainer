@@ -145,17 +145,25 @@
         } else if (key === 'deafeningblast') { blast(R, e, x, y); cx.globalAlpha = 1; }
         continue;
       }
+      if (kind === 'pickup') {      // v6 item 28: rune / aegis float above the ground: small soft blob that breathes against the bob
+        R.interp(e);
+        const x = Math.round(R.ix / P - R.camX), y = Math.round(R.iy / P - R.camY);
+        if (x < -30 || x > VW + 30 || y < -20 || y > VH + 20) continue;
+        const aeg = (e.pickKind || (e.pick && e.pick.kind)) === 'aegis', ph = Math.sin(R.time * 2.4 + (e.id || 0)) * 0.5 + 0.5;
+        blob(R, x, y + 1, (aeg ? 6 : 5) - ph * 1.2, (aeg ? 2.2 : 1.8) - ph * 0.4, 0.3 - ph * 0.08);
+        continue;
+      }
       if (!UD.isUnit(e) || !UD.visible(R, e)) continue;
       R.interp(e);
       const x = Math.round(R.ix / P - R.camX), y = Math.round(R.iy / P - R.camY);
       if (x < -30 || x > VW + 30 || y < -20 || y > VH + 20) continue;
-      const S = UD.state.get(e.id), Av = e.team === 1 && S ? clamp(S.va, 0, 1) : 1;
+      const S = UD.state.get(e.id), Av = (e.team === 1 || e.kind === 'roshan') && S ? clamp(S.va, 0, 1) : 1;
       if (Av < 0.02) continue;
       const L = e.statuses.length ? UD.liftOf(e) : null, eul = !!L && UD.isEuls(L);
       const zv = UD.visZ(L, eul, R.iz / P, S || NOS);                 // same visual lift as the sprite (px)
       const k = hk(zv * P / UD.LIFT_VIS);                              // tornado: k = z / LIFT_HEIGHT
       const rr = Math.max(3, Math.round(e.radius / P)), big = UD.isFoe(e) && (e.bkb || UD.has(e, 'magicImmune')), s = scaleK(k) * (big ? 1.1 : 1);
-      blob(R, x, y + 1, rr * (e.kind === 'spirit' ? 1.0 : 1.25) * s, rr * 0.5 * s, alphaK(k) * Av);
+      blob(R, x, y + 1, rr * (e.kind === 'spirit' ? 1.0 : 1.25) * s * (e.kind === 'roshan' ? 1.1 : 1), rr * 0.5 * s * (e.kind === 'roshan' ? 1.1 : 1), alphaK(k) * Av);
       if (L && !eul && zv > 6) pillar(R, x, y, zv, rr, Av);
     }
     if (IT.TowerDraw && IT.TowerDraw.shadows) IT.TowerDraw.shadows(R, blob);

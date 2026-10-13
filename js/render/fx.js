@@ -222,6 +222,7 @@
         burst(x, y, 'gold', 16, { spread: 14, speed: 35, up: 70, life: 0.9, rest: 2 });
         break;
       }
+      case 'roshanDown': onRoshanDown(p); break;
       case 'cataclysm': addFx({ k: 'wave', x, y, r0: 20, r1: 300, dur: 0.6, color: '#ffd070' }); break;
       case 'blinkStart': case 'blinkEnd': break;
       case 'iceWallEnd': iceWallEnd(x, y); break;
@@ -301,6 +302,7 @@
   function init(R) {
     R_ = R;
     const w = R.w;
+    w.on('channelStart', onChannelStart); w.on('channelEnd', onChannelEnd); w.on('pickup', onPickup); w.on('roshanDown', onRoshanDown);   // v6 item 28
     w.on('fx', onFx); w.on('damage', onDamage); w.on('order', onOrder); w.on('blink', onBlink); w.on('invoke', onInvoke);
     w.on('bolt', p => { if (p.phase === 'cancel' || p.phase === 'hit' || p.phase === 'blocked') tele.delete(p.unit); });
     // v6 item 13: the intro camera tour focuses a foe group / the gate / a focus area -> pulse its markers while the camera is on it
@@ -312,12 +314,12 @@
   const revT = new Map();          // start-reveal thinker id -> render time first drawn (the world is frozen in the countdown, so it animates on render time)
 
   // drop every one-shot / channel / telegraph / damage number / order path (scenario swap, restart)
-  function clear() { iwReg.clear(); iwLay.clear(); iwRoots.length = 0; tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); if (IT.BeliefFX) IT.BeliefFX.clear(); }
+  function clear() { iwReg.clear(); iwLay.clear(); iwRoots.length = 0; tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); tpPos.clear(); pkPos.clear(); roshPos.clear(); if (IT.BeliefFX) IT.BeliefFX.clear(); }
 
   // ---------- per-frame update ----------
   function update(R, dt) {
     const w = R.w, t = R.time;
-    applySkin(); ravenFeathers(R, dt);
+    applySkin(); ravenFeathers(R, dt); updateV28(R, dt);
     fxs = fxs.filter(f => t - f.t0 < f.dur);
     for (let i = chans.length - 1; i >= 0; i--) { const c = chans[i]; if (t > c.until || (c.end != null && t - c.end > 0.35)) chans.splice(i, 1); }
     for (let i = texts.length - 1; i >= 0; i--) if (t - texts[i].t0 > 1.0) texts.splice(i, 1);
@@ -383,6 +385,7 @@
       else if (f.k === 'chainring') R.light(sx, sy - 8, 30, f.dark ? [120, 90, 220] : [255, 200, 70], 0.7 * (1 - age));
     }
     iceFloeRootLights(R);
+    tpLights(R); pickLights(R); roshLights(R);
     for (const c of chans) {
       const age = R.time - c.t0, fade = c.end != null ? 1 - clamp((R.time - c.end) / 0.3, 0, 1) : 1;
       R.light(pxs(R, c.x), pys(R, c.y), Math.min(120, c.r / R.P * 1.25), [40, 190, 255], (0.5 + 0.15 * Math.sin(R.time * 5) + (c.fall != null ? 0.25 : 0)) * fade * clamp(age / 0.25, 0, 1));
@@ -530,6 +533,7 @@
       }
     }
     iceFloeRootsGround(R);
+    tpGround(R); pickGround(R); roshGround(R);
     // one-shot ground fx
     for (const f of fxs) {
       const age = (t - f.t0) / f.dur, x = pxs(R, f.x), y = pys(R, f.y);
@@ -570,6 +574,325 @@
       if (tg) { R.interp(tg); PX.dotted(cx, x, y, pxs(R, R.ix), pys(R, R.iy), '#b070ff', 5, -t * 14); }
     }
   }
+
+  // ---------- v6 item 28: enemy TP channel, pickups (rune / aegis), Roshan death ----------
+  // Everything reads the sim defensively: e.channel = { kind:'tp', t0, dur, x, y } (sim time), pickups are e.kind === 'pickup' (e.pickKind | e.pick.kind),
+  // Roshan is e.kind === 'roshan'. Events (channelStart / channelEnd / pickup / roshanDown) only add the one-shot puffs; the looping visuals are derived
+  // from the entities each frame, so a missed event can never leave a stuck column.
+  const tpPos = new Map();     // unit id -> { x, y, dx, dy, seen } last position + destination while channelling
+  const pkPos = new Map();     // pickup id -> { x, y, kind, hex, seen } (the pickup event fires after the entity is gone)
+  const roshPos = new Map();   // roshan id -> { x, y, facing, seen }
+  const RUNE_HEX = ['#ffd24a', '#ff5a4a', '#4a7aff', '#4aff7a', '#4af0ff', '#ff6ae0', '#a07aff'];
+  const RUNE_RAMP = ['gold', 'red', 'ice', 'green', 'cyan', 'purple', 'purple'];
+  const NRUNE = RUNE_HEX.length, PICK_R = 100;
+  const tpOf = e => { const c = e.channel; return c && c.kind === 'tp' ? c : null; };
+  const pkKind = e => e.pickKind || (e.pick && e.pick.kind) || 'rune';
+  const mixHex = (a, b, k) => { const A = PX.rgb(a), B = PX.rgb(b); return PX.hex(A[0] + (B[0] - A[0]) * k, A[1] + (B[1] - A[1]) * k, A[2] + (B[2] - A[2]) * k); };
+  // rune colour cycling: hue index pair + smoothstep blend (per-pickup phase so two runes are never in step)
+  function runeHue(R, id) {
+    const f = R.time * 1.1 + (id || 0) * 0.37, i = Math.floor(f), u = f - i, s = u * u * (3 - 2 * u);
+    const i0 = ((i % NRUNE) + NRUNE) % NRUNE, i1 = (i0 + 1) % NRUNE;
+    return { i0, i1, u: s, hex: mixHex(RUNE_HEX[i0], RUNE_HEX[i1], s), ramp: RUNE_RAMP[s < 0.5 ? i0 : i1] };
+  }
+  // alpha a unit is drawn with (0 hidden): the same fog hysteresis as the sprite
+  function unitA(R, e) {
+    const U = UD();
+    if (e.dead || !U.visible(R, e)) return 0;
+    const S = U.state.get(e.id);
+    return e.team === 1 && S ? clamp(S.va, 0, 1) : 1;
+  }
+  const recent = (k, x, y, win) => { for (let i = fxs.length - 1; i >= 0; i--) { const f = fxs[i]; if (f.k === k && R_.time - f.t0 < win && Math.hypot(f.x - x, f.y - y) < 40) return true; } return false; };
+
+  function onChannelStart(p) {
+    const e = R_.w.byId.get(p.unit); if (!e || (p.kind && p.kind !== 'tp') || !lit(R_, e.x, e.y)) return;
+    addFx({ k: 'wave', x: e.x, y: e.y, r0: 70, r1: 14, dur: 0.45, color: '#bfeaff' });
+    addFx({ k: 'flash', x: e.x, y: e.y, r: 70, dur: 0.3, color: '#8fe6ff' });
+    burst(e.x, e.y, 'ice', 10, { spread: 12, speed: 25, up: 60 });
+  }
+  function onChannelEnd(p) {
+    if (p.kind && p.kind !== 'tp') return;
+    const c = tpPos.get(p.unit), e = R_.w.byId.get(p.unit);
+    tpPos.delete(p.unit);
+    const x = c ? c.x : e ? e.x : null, y = c ? c.y : e ? e.y : null;
+    if (x == null || !lit(R_, x, y)) return;
+    if (p.interrupted) {      // cancelled: the column pops into a cold puff of mist + a few shards
+      addFx({ k: 'wave', x, y, r0: 12, r1: 85, dur: 0.4, color: '#e8f4ff' });
+      addFx({ k: 'wave', x, y, r0: 6, r1: 50, dur: 0.3, color: '#8fe6ff' });
+      addFx({ k: 'flash', x, y, r: 80, dur: 0.3, color: '#d4f6ff' });
+      addFx({ k: 'shards', x, y, dur: 0.6 });
+      burst(x, y, 'white', 24, { spread: 22, speed: 55, up: 70, rest: 2.5 });
+      burst(x, y, 'ice', 10, { spread: 14, speed: 40, up: 50 });
+    } else {                  // completed: departs in a flash, lands at the destination (if we can see it)
+      addFx({ k: 'flash', x, y, r: 150, dur: 0.5, color: '#d4f6ff' });
+      addFx({ k: 'wave', x, y, r0: 10, r1: 120, dur: 0.5, color: '#bfeaff' });
+      burst(x, y, 'ice', 30, { spread: 16, speed: 30, up: 130, life: 1.0 });
+      const dx = c ? c.dx : null, dy = c ? c.dy : null;
+      if (dx != null && lit(R_, dx, dy)) {
+        addFx({ k: 'wave', x: dx, y: dy, r0: 90, r1: 12, dur: 0.5, color: '#bfeaff' });
+        addFx({ k: 'flash', x: dx, y: dy, r: 110, dur: 0.4, color: '#d4f6ff' });
+        burst(dx, dy, 'ice', 20, { spread: 14, speed: 30, up: 90 });
+      }
+    }
+  }
+  function onPickup(p) {
+    const w = R_.w, c = pkPos.get(p.id), u = p.unit != null ? w.byId.get(p.unit) : null;
+    const x = c ? c.x : u ? u.x : p.x, y = c ? c.y : u ? u.y : p.y;
+    if (x == null || recent('pkring', x, y, 0.3)) return;
+    pkPos.delete(p.id);
+    const kind = p.kind || (c && c.kind) || 'rune';
+    const hex = kind === 'aegis' ? '#ffd24a' : (c && c.hex) || runeHue(R_, p.id).hex;
+    addFx({ k: 'pkring', x, y, dur: 0.6, color: hex });
+    addFx({ k: 'wave', x, y, r0: 14, r1: kind === 'aegis' ? 190 : 140, dur: 0.5, color: hex });
+    addFx({ k: 'flash', x, y, r: kind === 'aegis' ? 150 : 110, dur: 0.45, color: hex });
+    addFx({ k: 'pkrise', x, y, dur: 0.9, pick: kind, hex, hue: c && c.hue });
+    burst(x, y, kind === 'aegis' ? 'gold' : RUNE_RAMP[c && c.hue != null ? c.hue : 0], kind === 'aegis' ? 34 : 22, { spread: 14, speed: 40, up: 100, life: 0.9, rest: 2 });
+  }
+  function onRoshanDown(p) {
+    const w = R_.w, u = p.unit != null ? w.byId.get(p.unit) : null;
+    let c = p.unit != null ? roshPos.get(p.unit) : null;
+    if (!c) for (const v of roshPos.values()) c = v;      // any cached roshan
+    const x = p.x != null ? p.x : u ? u.x : c ? c.x : null, y = p.y != null ? p.y : u ? u.y : c ? c.y : null;
+    if (x == null || recent('roshdeath', x, y, 1)) return;
+    addFx({ k: 'roshdeath', x, y, facing: c ? c.facing : (u && u.facing) || 0, dur: 3.2 });
+    addFx({ k: 'wave', x, y, r0: 20, r1: 260, dur: 0.7, color: '#c8a070' });
+    burst(x, y, 'dirt', 50, { spread: 70, speed: 60, up: 55, life: 1.3, rest: 3 });
+    burst(x, y, 'dirt', 24, { spread: 30, speed: 25, up: 90, life: 1.6, rest: 2 });
+  }
+
+  // per-frame cache + looping particles (called from update)
+  function updateV28(R, dt) {
+    const w = R.w, t = R.time;
+    for (const e of w.ents) {
+      if (e.dead) continue;
+      if (e.kind === 'pickup') {
+        const k = pkKind(e), hue = k === 'rune' ? runeHue(R, e.id) : null;
+        pkPos.set(e.id, { x: e.x, y: e.y, kind: k, hex: hue ? hue.hex : '#ffd24a', hue: hue ? hue.i0 : null, seen: t });
+        if (Math.random() < dt * (k === 'aegis' ? 7 : 5)) {      // little motes drifting up off the pedestal
+          const a = Math.random() * TAU, d = Math.random() * 60;
+          IT.Particles.emit({ x: e.x + Math.cos(a) * d, y: e.y + Math.sin(a) * d * 0.7, z: 6, n: 1, ramp: k === 'aegis' ? 'gold' : hue.ramp, speed: 4, up: 26, spread: 4, life: 0.9, rest: 1 });
+        }
+      } else if (e.kind === 'roshan') roshPos.set(e.id, { x: e.x, y: e.y, facing: e.facing || 0, seen: t });
+      const ch = tpOf(e);
+      if (ch) {
+        tpPos.set(e.id, { x: e.x, y: e.y, dx: ch.x, dy: ch.y, seen: t });
+        if (unitA(R, e) > 0.5 && Math.random() < dt * 22) {      // cold motes spiralling up the column
+          const a = Math.random() * TAU, d = 14 + Math.random() * 26;
+          IT.Particles.emit({ x: e.x + Math.cos(a) * d, y: e.y + Math.sin(a) * d * 0.8, z: 2, n: 1, ramp: Math.random() < 0.5 ? 'ice' : 'white', speed: 3, up: 55, spread: 3, life: 0.8, rest: 1 });
+        }
+      }
+    }
+    for (const m of [tpPos, pkPos, roshPos]) for (const [id, c] of m) if (t - c.seen > 4) m.delete(id);
+  }
+
+  // ---- TP channel: ring + progress ring under the unit (ground), column (air), destination marker (ground) ----
+  function tpGround(R) {
+    const w = R.w, cx = R.cx, t = R.time, A0 = cx.globalAlpha;
+    for (const e of w.ents) {
+      const ch = tpOf(e); if (!ch) continue;
+      const Av = unitA(R, e);
+      R.interp(e);
+      const x = pxs(R, R.ix), y = pys(R, R.iy), dur = ch.dur > 0 ? ch.dur : 3, p = clamp((w.t - ch.t0) / dur, 0, 1);
+      if (Av > 0.02 && x > -40 && x < R.VW + 40 && y > -40 && y < R.VH + 40) {
+        const rr = Math.max(9, Math.round(e.radius / R.P * 1.5)), grow = clamp((w.t - ch.t0) / 0.25, 0, 1), hot = p > 0.82 ? 0.5 + 0.5 * Math.sin(t * 28) : 0;
+        cx.globalAlpha = Av;
+        ddisc(R, x, y, rr * grow, '#4cb6ec', (0.12 + 0.05 * Math.sin(t * 6) + p * 0.1) * Av);
+        dring(R, x, y, rr * grow, '#8fe6ff', 0.9 * Av);
+        dring(R, x, y, rr * grow * 0.62, '#d4f6ff', (0.45 + 0.3 * hot) * Av);
+        for (let i = 0; i < 6; i++) {      // rotating runes
+          const a = t * 1.8 + i * TAU / 6, px = Math.round(x + Math.cos(a) * (rr + 3)), py = Math.round(y + Math.sin(a) * (rr + 3));
+          cx.globalAlpha = Av * 0.85; cx.fillStyle = i & 1 ? '#ffffff' : '#8fe6ff'; cx.fillRect(px, py, 2, 1); cx.fillRect(px, py - 1, 1, 3);
+        }
+        // progress ring (clockwise from 12 o'clock), dim track behind it
+        const pr = rr + 7, n = Math.max(24, Math.round(TAU * pr * 1.3));
+        for (let i = 0; i < n; i++) {
+          const a = -Math.PI / 2 + i / n * TAU, px = Math.round(x + Math.cos(a) * pr), py = Math.round(y + Math.sin(a) * pr * 0.8), done = i / n <= p;
+          cx.globalAlpha = (done ? 0.95 : 0.28) * Av; cx.fillStyle = done ? (p > 0.82 && hot > 0.5 ? '#ffffff' : '#bfeaff') : '#4a78a0';
+          cx.fillRect(px, py, 1, 1);
+        }
+      }
+      // destination marker: faint ring + ticks where the unit will land (only if that spot is seen)
+      if (ch.x != null && lit(R, ch.x, ch.y)) {
+        const dx = pxs(R, ch.x), dy = pys(R, ch.y);
+        if (dx > -20 && dx < R.VW + 20 && dy > -20 && dy < R.VH + 20) {
+          const pul = 0.5 + 0.5 * Math.sin(t * 4), a = (0.28 + 0.12 * pul) * Math.max(Av, 0.4);
+          dring(R, dx, dy, 9 + pul, '#8fe6ff', a);
+          cx.globalAlpha = a + 0.1; cx.fillStyle = '#d4f6ff';
+          for (let k = 0; k < 4; k++) { const ax = Math.cos(k * TAU / 4 + t * 0.6) * 14, ay = Math.sin(k * TAU / 4 + t * 0.6) * 14; cx.fillRect(Math.round(dx + ax), Math.round(dy + ay * 0.8), 1, 1); }
+          cx.fillRect(Math.round(dx), Math.round(dy), 1, 1);
+        }
+      }
+    }
+    cx.globalAlpha = A0;
+  }
+  // blue-white light column + helical strands, drawn over the unit (air pass)
+  function tpAir(R) {
+    const w = R.w, cx = R.cx, t = R.time, B = PX.BAYER4, A0 = cx.globalAlpha;
+    for (const e of w.ents) {
+      const ch = tpOf(e); if (!ch) continue;
+      const Av = unitA(R, e); if (Av < 0.05) continue;
+      R.interp(e);
+      const x = Math.round(pxs(R, R.ix)), y = Math.round(pys(R, R.iy));
+      if (x < -30 || x > R.VW + 30 || y < -20 || y > R.VH + 90) continue;
+      const dur = ch.dur > 0 ? ch.dur : 3, age = w.t - ch.t0, p = clamp(age / dur, 0, 1), grow = clamp(age / 0.3, 0, 1), H = Math.round(62 * grow);
+      const hw0 = 6 + Math.max(1, Math.round(e.radius / R.P * 0.5)) + (p > 0.82 ? Math.sin(t * 30) : 0);
+      for (let layer = 0; layer < 3; layer++) {          // three nested translucent shafts: blue skirt, pale core, white spine
+        cx.fillStyle = layer === 0 ? '#4cb6ec' : layer === 1 ? '#bfeaff' : '#ffffff';
+        const hw = Math.max(1, hw0 - layer * 2.5);
+        for (let j = 0; j < H; j += 2) {
+          const u = j / H, a = (layer === 0 ? 0.13 : layer === 1 ? 0.16 : 0.22) * Av * (1 - u * u) * (0.8 + 0.2 * Math.sin(t * 9 + j * 0.3)), r = hw * (1 + 0.15 * u);
+          if (a < 0.02) continue;
+          cx.globalAlpha = a;
+          cx.fillRect(Math.round(x - r), y - j - 2, Math.round(r * 2) + 1, 2);
+        }
+      }
+      for (let k = 0; k < 3; k++) {                       // helical strands, front half brighter
+        for (let j = 0; j < H; j++) {
+          const u = j / H, a = t * 6 - u * 9 + k * TAU / 3, cs = Math.cos(a), r = hw0 * (0.95 + 0.2 * u), px = Math.round(x + Math.sin(a) * r), py = y - j;
+          const env = Math.min(1, u * 6 + 0.15, (1 - u) * 3 + 0.1);
+          if (B[((py + R.camY) & 3) << 2 | ((px + R.camX) & 3)] > env * (cs > 0 ? 0.95 : 0.5)) continue;
+          cx.globalAlpha = (cs > 0 ? 0.75 : 0.35) * Av; cx.fillStyle = k === 0 ? '#ffffff' : '#8fe6ff';
+          cx.fillRect(px, py, cs > 0 ? 2 : 1, 1);
+        }
+      }
+      R.glow(x, y - 6, 16 + 4 * Math.sin(t * 8), '#8fe6ff', 0.25 * Av * grow);
+    }
+    cx.globalAlpha = A0;
+  }
+  function tpLights(R) {
+    for (const e of R.w.ents) {
+      const ch = tpOf(e); if (!ch) continue;
+      const Av = unitA(R, e); if (Av < 0.05) continue;
+      R.interp(e);
+      const sx = R.ix / R.P - R.camX, sy = R.iy / R.P - R.camY, p = clamp((R.w.t - ch.t0) / (ch.dur > 0 ? ch.dur : 3), 0, 1);
+      R.light(sx, sy - 14, 62 + 18 * p, [120, 200, 255], (0.55 + 0.35 * p + 0.1 * Math.sin(R.time * 9)) * Av);
+      R.glow(sx, sy - 14, 20, '#bfeaff', 0.3 * Av);
+    }
+  }
+
+  // ---- pickups: ground ring + dither disc (ground), bobbing sprite (sorted), light ----
+  const bobOf = (R, e) => 11 + Math.sin(R.time * 2.4 + (e.id || 0) * 1.7) * 2.5;
+  function pickGround(R) {
+    const cx = R.cx, t = R.time, A0 = cx.globalAlpha;
+    for (const e of R.w.ents) {
+      if (e.dead || e.kind !== 'pickup') continue;
+      R.interp(e);
+      const x = pxs(R, R.ix), y = pys(R, R.iy);
+      if (x < -40 || x > R.VW + 40 || y < -40 || y > R.VH + 40) continue;
+      const k = pkKind(e), hex = k === 'aegis' ? '#ffd24a' : runeHue(R, e.id).hex, pul = 0.5 + 0.5 * Math.sin(t * 3 + (e.id || 0)), rp = PICK_R / R.P;
+      ddisc(R, x, y, rp * (0.5 + 0.08 * pul), hex, 0.1 + 0.06 * pul);
+      dring(R, x, y, rp, hex, 0.35 + 0.15 * pul);
+      dring(R, x, y, rp * 0.55, hex, 0.3);
+      cx.fillStyle = hex;
+      for (let i = 0; i < 4; i++) { const a = t * 0.9 + i * TAU / 4; cx.globalAlpha = 0.8; cx.fillRect(Math.round(x + Math.cos(a) * rp), Math.round(y + Math.sin(a) * rp), 2, 1); }
+    }
+    cx.globalAlpha = A0;
+  }
+  function drawPickup(e, R) {
+    R.interp(e);
+    const cx = R.cx, A0 = cx.globalAlpha, x = Math.round(pxs(R, R.ix)), y = Math.round(pys(R, R.iy)), bob = bobOf(R, e), k = pkKind(e), t = R.time;
+    if (k === 'aegis') {
+      const cv = IT.Art.canvas('aegis', ((t * 2.2 + (e.id || 0)) % 4) < 0.5 ? 'shield_1' : 'shield_0'), def = IT.Art.sheets.aegis;
+      if (cv) {
+        R.glow(x, y - bob - 8, 15 + 2 * Math.sin(t * 4), '#ffd24a', 0.45);
+        cx.drawImage(cv, x - def.anchor[0], Math.round(y - bob - def.anchor[1]));
+      }
+    } else {
+      const h = runeHue(R, e.id), def = IT.Art.sheets['rune' + h.i0], fr = 'orb_' + (((t * 5) | 0) & 1);
+      if (def) {
+        const a = IT.Art.canvas('rune' + h.i0, fr), b = IT.Art.canvas('rune' + h.i1, fr), ox = x - def.anchor[0], oy = Math.round(y - bob - def.anchor[1]);
+        R.glow(x, y - bob - 7, 11 + 1.5 * Math.sin(t * 5), h.hex, 0.5);
+        if (a) cx.drawImage(a, ox, oy);
+        if (b && h.u > 0.02) { cx.globalAlpha = A0 * h.u; cx.drawImage(b, ox, oy); cx.globalAlpha = A0; }
+      }
+    }
+    cx.globalAlpha = A0;
+  }
+  function pickLights(R) {
+    for (const e of R.w.ents) {
+      if (e.dead || e.kind !== 'pickup') continue;
+      R.interp(e);
+      const sx = R.ix / R.P - R.camX, sy = R.iy / R.P - R.camY - bobOf(R, e) - 6, k = pkKind(e);
+      const c = k === 'aegis' ? [255, 210, 90] : PX.rgb(runeHue(R, e.id).hex);
+      R.light(sx, sy, k === 'aegis' ? 56 : 44, c, 0.55 + 0.15 * Math.sin(R.time * 4 + (e.id || 0)));
+    }
+  }
+
+  // ---- Roshan death: collapses through the 4 death frames, lies there, the Aegis glow rises from the body, then it all fades ----
+  function drawRoshDeath(f, R) {
+    const age = R.time - f.t0, cx = R.cx, A0 = cx.globalAlpha, def = IT.Art.sheets.roshan; if (!def) return;
+    const fi = Math.min(3, Math.floor(age / 0.28)), cs = Math.cos(f.facing || 0), sn = Math.sin(f.facing || 0);
+    const dir = Math.abs(sn) > Math.abs(cs) ? (sn > 0 ? 's' : 'n') : 'e', mirror = cs < 0 && dir === 'e';
+    const cv = IT.Art.canvas('roshan', 'death_' + dir + '_' + fi, mirror); if (!cv) return;
+    const x = Math.round(pxs(R, f.x)), y = Math.round(pys(R, f.y)), ax = mirror ? cv.width - 1 - def.anchor[0] : def.anchor[0];
+    const fade = age < 2.1 ? 1 : clamp(1 - (age - 2.1) / 1.0, 0, 1);
+    if (fade <= 0.02) return;
+    cx.globalAlpha = A0 * fade;
+    cx.drawImage(cv, x - ax, y - def.anchor[1]);
+    cx.globalAlpha = A0;
+  }
+  function roshGround(R) {
+    const cx = R.cx, t = R.time, A0 = cx.globalAlpha;
+    for (const f of fxs) {
+      if (f.k !== 'roshdeath') continue;
+      const age = t - f.t0, x = pxs(R, f.x), y = pys(R, f.y);
+      const g = clamp((age - 0.8) / 0.6, 0, 1) * (age > 2.3 ? clamp(1 - (age - 2.3) / 0.9, 0, 1) : 1);   // aegis glow: rises after the thud, fades with the corpse
+      if (g > 0.02) {
+        const pul = 0.5 + 0.5 * Math.sin(t * 5);
+        ddisc(R, x, y, 20 * g, '#ffd24a', 0.16 * g + 0.05 * pul * g);
+        dring(R, x, y, 20 * g, '#ffe890', 0.7 * g);
+        dring(R, x, y, 11 * g, '#fff2b0', 0.5 * g);
+        if (Math.random() < 0.5 * g) IT.Particles.emit({ x: f.x + (Math.random() - 0.5) * 220, y: f.y + (Math.random() - 0.5) * 140, z: 4, n: 1, ramp: 'gold', speed: 5, up: 45, spread: 4, life: 1.1, rest: 1 });
+      }
+      if (age > 0.55 && age < 0.62 && !f.dusted) { f.dusted = true; burst(f.x, f.y, 'dirt', 40, { spread: 80, speed: 70, up: 40, life: 1.2, rest: 3 }); addFx({ k: 'wave', x: f.x, y: f.y, r0: 30, r1: 170, dur: 0.5, color: '#a88a58' }); }
+    }
+    cx.globalAlpha = A0;
+  }
+  function roshAir(R) {
+    const cx = R.cx, t = R.time, A0 = cx.globalAlpha, B = PX.BAYER4;
+    for (const f of fxs) {
+      const age = t - f.t0, x = Math.round(pxs(R, f.x)), y = Math.round(pys(R, f.y));
+      if (f.k === 'roshdeath') {      // golden pillar of the Aegis dropping: thin beam over the body, fading with it
+        const g = clamp((age - 0.8) / 0.5, 0, 1) * (age > 2.3 ? clamp(1 - (age - 2.3) / 0.9, 0, 1) : 1);
+        if (g > 0.02) {
+          const H = Math.round(70 * g), hw = 4 + 1.5 * Math.sin(t * 6);
+          for (let j = 0; j < H; j += 2) {
+            const u = j / H;
+            cx.fillStyle = '#ffd24a'; cx.globalAlpha = 0.16 * g * (1 - u);
+            cx.fillRect(Math.round(x - hw), y - 6 - j, Math.round(hw * 2) + 1, 2);
+            cx.fillStyle = '#fff6c0'; cx.globalAlpha = 0.24 * g * (1 - u);
+            cx.fillRect(x - 1, y - 6 - j, 3, 2);
+          }
+          cx.globalAlpha = A0;
+          R.glow(x, y - 10, 24 * g, '#ffd24a', 0.4 * g);
+        }
+      } else if (f.k === 'pkrise') {  // the picked-up sprite lifts off and fades
+        const u = age / f.dur, cv = f.pick === 'aegis' ? IT.Art.canvas('aegis', 'shield_1') : IT.Art.canvas('rune' + (f.hue != null ? f.hue : 0), 'orb_1'), def = f.pick === 'aegis' ? IT.Art.sheets.aegis : IT.Art.sheets['rune' + (f.hue != null ? f.hue : 0)];
+        if (cv && def) {
+          const rise = 14 + 34 * (1 - (1 - u) * (1 - u)), py = Math.round(y - rise - def.anchor[1]), px = x - def.anchor[0];
+          cx.globalAlpha = A0 * (1 - u);
+          for (let yy = 0; yy < cv.height; yy += 1) {
+            if (u > 0.4 && B[((yy + py + R.camY) & 3) << 2] > 1 - (u - 0.4) / 0.6) continue;
+            cx.drawImage(cv, 0, yy, cv.width, 1, px, py + yy, cv.width, 1);
+          }
+          cx.globalAlpha = A0;
+          R.glow(x, y - rise - 6, 14 * (1 - u * 0.5), f.hex, 0.5 * (1 - u));
+        }
+      } else if (f.k === 'pkring') {  // ground-hugging expanding ring (squashed) under the pickup
+        const r = 8 + age / f.dur * 34;
+        dring(R, x, y, r, f.color, 1 - age / f.dur);
+        dring(R, x, y, r * 0.6, '#ffffff', 0.7 * (1 - age / f.dur));
+      }
+    }
+    cx.globalAlpha = A0;
+  }
+  function roshLights(R) {
+    for (const f of fxs) {
+      if (f.k !== 'roshdeath') continue;
+      const age = R.time - f.t0, g = clamp((age - 0.8) / 0.6, 0, 1) * (age > 2.3 ? clamp(1 - (age - 2.3) / 0.9, 0, 1) : 1);
+      if (g > 0.02) R.light(pxs(R, f.x), pys(R, f.y) - 8, 78, [255, 210, 90], 0.95 * g);
+    }
+  }
+
   const UD = () => IT.UnitDraw;
 
   // ---------- sorted pass (tall things) ----------
@@ -586,6 +909,12 @@
       push(R.iy / R.P - R.camY, (a2, R2) => drawTornado(R2, a2), e);
     }
     pushIceFloeRoots(R, push);
+    for (const e of w.ents) {      // v6 item 28: pickups bob in the y-sorted pass
+      if (e.dead || e.kind !== 'pickup') continue;
+      R.interp(e);
+      push(R.iy / R.P - R.camY, drawPickup, e);
+    }
+    for (const f of fxs) if (f.k === 'roshdeath') push(pys(R, f.y) + 0.5, drawRoshDeath, f);
   }
   function drawTornado(R, e) {
     R.interp(e);
@@ -956,6 +1285,7 @@
   // ---------- air layer ----------
   function air(R) {
     const w = R.w, cx = R.cx, t = R.time;
+    tpAir(R); roshAir(R);
     for (const e of w.ents) {
       if (e.dead || (e.kind !== 'thinker' && e.kind !== 'proj')) continue;
       if (e.team === 1 && !lit(R, e.x, e.y)) continue;
@@ -1234,5 +1564,5 @@
     if (IT.BeliefFX) IT.BeliefFX.hud(R);   // v6 item 27: last-seen ghost, prediction arrow, '?' / '!', Gem ring, item chips
   }
 
-  IT.FX = { init, clear, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, orbPal, iceWallLayout, iceWallPhase, iceWallSprite, IW };
+  IT.FX = { init, clear, update, lights, ground, sorted, air, hud, dring, ddisc, tele, addFx, onChannelStart, onChannelEnd, onPickup, onRoshanDown, runeHue, tpOf, pkKind, orbPal, iceWallLayout, iceWallPhase, iceWallSprite, IW };
 })(typeof window !== 'undefined' ? window : globalThis);

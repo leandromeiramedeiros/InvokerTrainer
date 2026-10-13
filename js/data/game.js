@@ -73,6 +73,13 @@
       blink: { range: 1000, minRange: 500, tell: 0.35 },
     },
     HERO: { radius: 24 },
+    // v6 item 28 (FUN scenarios, js/sim/units.js). Trainer assumptions, no KV baked for these units:
+    //   ALLY = a stationary friendly hero the enemy attacks (hero-like hp / armor / vision); ROSHAN = a pit-bound neutral (hp scaled per scenario,
+    //   hull 80 = twice a hero's footprint, slow heavy hits); PICKUP = rune / aegis grab radius; TP = Town Portal channel (Dota: 3 s).
+    ALLY: { hp: 900, armor: 3, magicRes: 0.25, radius: 24, vision: 1800, visionNight: 800 },
+    ROSHAN: { hp: 6000, armor: 20, magicRes: 0.25, radius: 80, min: 65, max: 65, bat: 2, point: 0.6, range: 100, vision: 800 },
+    PICKUP: { r: 100 },
+    TP: { dur: 3 },
     // v6 item 15 (Skin SHOP): the other two skin families. Player: hero sheet + spell icon / VFX palette. Dummy: the training scarecrow.
     PLAYER_SKINS: ['default', 'kid', 'dark', 'exalted'],
     PLAYER_SKIN_NAMES: { default: 'Invoker', kid: 'Invoker Kid', dark: 'Dark Artistry Invoker', exalted: 'Exalted Invoker' },

@@ -4706,3 +4706,210 @@
   S.frames.portrait = out.map(r => r.join(''));
   A.sheet('forge', S);   // re-validate
 })(typeof window !== 'undefined' ? window : globalThis);
+
+// v6 item 28: ROSHAN (hulking dark-red/brown beast, ~2x a hero) + pickups (Aegis shield, power-rune orbs).
+// Roshan: sheet 'roshan', 44x46 frames, anchor = feet [22,43]; dirs s|n|e; anims idle(4) walk(4) attack(3) stunned(2) death(4, used by the roshanDown fx); portrait 32x32.
+// Generated from a small procedural rig (shaded discs/capsules + 1px outline), frozen at load. Pickups: sheet 'aegis' (golden shield 16x20, 2 shine frames), 'rune0'..'rune6' (glass orb 14x14 per rune colour).
+(function (G) {
+  'use strict';
+  const IT = G.IT;
+  const W = 44, H = 46;
+  const pal = {
+    k: '#14080a', H: '#d2703e', L: '#ae4a2c', M: '#7e2c1e', D: '#4a1a16',                    // fur
+    B: '#d0a070', b: '#b08050', c: '#8a6038', C: '#5a3a22',                                  // belly / palms
+    Q: '#f6eed2', w: '#e2d6b2', x: '#b2a27e', X: '#7a6c50',                                 // horn, tusk, claw
+    e: '#ffd040', E: '#fff6b8', r: '#2a0608', t: '#6a1218',
+  };
+  const FUR = 'HLMD', BELLY = 'BbcC', BONE = 'QwxX';
+  const grid = (w, h) => Array.from({ length: h || H }, () => Array(w || W).fill('.'));
+  const put = (g, x, y, c) => { x = Math.round(x); y = Math.round(y); if (y >= 0 && y < g.length && x >= 0 && x < g[0].length) g[y][x] = c; };
+  const LX = -0.45, LY = -0.75, LN = Math.hypot(LX, LY);
+  function tone(tn, s, x, y) {      // s = lambert-ish -1..1 -> tone char; sparse fur flecks one tone darker
+    let i = s > 0.62 ? 0 : s > 0.2 ? 1 : s > -0.35 ? 2 : 3;
+    if (tn === FUR && ((x * 7 + y * 13) % 11 === 0) && i < 3) i++;
+    return tn[i];
+  }
+  // capsule of discs from (x0,y0,r0) to (x1,y1,r1), shaded by the nearest disc's normal
+  function cap(g, x0, y0, r0, x1, y1, r1, tn) {
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5)), discs = [];
+    for (let i = 0; i <= n; i++) { const u = i / n; discs.push([x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, r0 + (r1 - r0) * u]); }
+    const rr = Math.max(r0, r1), ax = Math.min(x0, x1) - rr - 1, bx = Math.max(x0, x1) + rr + 1, ay = Math.min(y0, y1) - rr - 1, by = Math.max(y0, y1) + rr + 1;
+    for (let y = Math.floor(ay); y <= by; y++) for (let x = Math.floor(ax); x <= bx; x++) {
+      let best = 9, nx = 0, ny = 0;
+      for (const d of discs) { const dx = (x - d[0]) / d[2], dy = (y - d[1]) / d[2], q = dx * dx + dy * dy; if (q < best) { best = q; nx = dx; ny = dy; } }
+      if (best > 1) continue;
+      const nz = Math.sqrt(Math.max(0, 1 - best)), s = (nx * LX + ny * LY) / LN * 0.75 + nz * 0.25 - 0.1;
+      put(g, x, y, tone(tn, s, x, y));
+    }
+  }
+  const disc = (g, x, y, r, tn) => cap(g, x, y, r, x, y, r, tn);
+  function ell(g, cx, cy, rx, ry, tn) {
+    for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+      const dx = (x - cx) / rx, dy = (y - cy) / ry, q = dx * dx + dy * dy;
+      if (q > 1) continue;
+      const nz = Math.sqrt(1 - q), s = (dx * LX + dy * LY) / LN * 0.75 + nz * 0.25 - 0.1;
+      put(g, x, y, tone(tn, s, x, y));
+    }
+  }
+  function line(g, x0, y0, x1, y1, c) { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0)) || 1; for (let i = 0; i <= n; i++) put(g, x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, c); }
+  function outline(g) {
+    const o = g.map(r => r.slice());
+    for (let y = 0; y < g.length; y++) for (let x = 0; x < g[0].length; x++) {
+      if (g[y][x] !== '.') continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const c = (g[y + dy] || [])[x + dx]; if (c && c !== '.') { o[y][x] = 'k'; break; } }
+    }
+    return o;
+  }
+  const rows = g => g.map(r => r.join(''));
+  function horn(g, x, y, dx, dy, len, th) {         // curved bone horn from the skull outwards then up
+    for (let i = 0; i < len; i++) {
+      const u = i / len, hx = x + dx * i * 0.9, hy = y + dy * i * 0.9 - u * u * len * 0.8, r = th * (1 - u * 0.85);
+      disc(g, hx, hy, Math.max(0.6, r), BONE);
+    }
+  }
+  function claws(g, x, y, n, sp, c) { for (let i = 0; i < n; i++) { put(g, x + i * sp, y, c || 'w'); put(g, x + i * sp, y + 1, 'x'); } }
+
+  // p: { bob, la, ra ([dx,dy] hand offsets), l0, l1 (foot lifts), mouth, squash, drop, dead, tilt, hdy, fa, tail }
+  function bodyFront(g, v, p) {      // views s / n
+    const back = v === 'n', cx = 22, bob = p.bob || 0, drop = p.drop || 0, sq = p.squash || 1;
+    const hipY = 30 + bob + drop, topY = 22 + bob + drop * 0.9, l0 = p.l0 || 0, l1 = p.l1 || 0;
+    if (drop < 9) {      // legs (short, thick)
+      cap(g, 14, hipY + 2, 5, 14, 40 - l0 * 0.5, 5, FUR); cap(g, 30, hipY + 2, 5, 30, 40 - l1 * 0.5, 5, FUR);
+      ell(g, 14, 41 - l0, 6, 3, 'DDDD'); ell(g, 30, 41 - l1, 6, 3, 'DDDD');
+      claws(g, 10, 42 - l0, 3, 3); claws(g, 26, 42 - l1, 3, 3);
+    } else { ell(g, 13, 41, 7, 3, FUR); ell(g, 31, 41, 7, 3, FUR); }
+    if (back) cap(g, 22, hipY + 3, 3, 22 + (p.tail || 0), 41, 1.5, FUR);
+    ell(g, cx, hipY - 4 * sq, 14, 9.5 * sq + 1, FUR);                  // torso
+    if (!back) ell(g, cx, hipY - 2 * sq, 8, 7.5 * sq, BELLY);
+    if (back) for (let i = 0; i < 4; i++) { const sy = hipY - 10 + i * 4; put(g, cx, sy, 'Q'); put(g, cx - 1, sy + 1, 'w'); put(g, cx + 1, sy + 1, 'w'); put(g, cx, sy - 1, 'Q'); put(g, cx, sy - 2, 'w'); }
+    const shy = topY + 2, la = p.la || [0, 0], ra = p.ra || [0, 0];      // shoulders + arms
+    cap(g, cx - 14, shy, 5.5, cx - 15 + la[0], shy + 11 + la[1], 4.2, FUR); cap(g, cx + 14, shy, 5.5, cx + 15 + ra[0], shy + 11 + ra[1], 4.2, FUR);
+    disc(g, cx - 15 + la[0], shy + 14 + la[1], 4.8, FUR); disc(g, cx + 15 + ra[0], shy + 14 + ra[1], 4.8, FUR);
+    claws(g, cx - 18 + la[0], shy + 18 + la[1], 3, 2.5); claws(g, cx + 12 + ra[0], shy + 18 + ra[1], 3, 2.5);
+    for (const sx of [-1, 1]) { put(g, cx + sx * 15, shy - 6, 'w'); put(g, cx + sx * 15, shy - 7, 'Q'); put(g, cx + sx * 14, shy - 5, 'x'); put(g, cx + sx * 16, shy - 5, 'x'); }   // shoulder spikes
+    const hy = 14 + bob + drop * 1.15 + (p.hdy || 0), hx = cx + (p.tilt || 0), my = hy + 7 + (p.mouth ? 1 : 0);   // head
+    disc(g, hx, hy, 8, FUR);
+    if (!back) {
+      ell(g, hx, hy + 5.5, 6, 3.6, BELLY);                            // snout / jaw
+      line(g, hx - 5, my, hx + 5, my, 'r');
+      if (p.mouth) for (let x = hx - 4; x <= hx + 4; x++) { put(g, x, hy + 8, 'r'); put(g, x, hy + 9, 't'); }
+      put(g, hx - 4, hy + 6, 'Q'); put(g, hx - 4, hy + 5, 'w'); put(g, hx + 4, hy + 6, 'Q'); put(g, hx + 4, hy + 5, 'w');   // tusks
+      put(g, hx - 1, hy + 4, 'D'); put(g, hx + 1, hy + 4, 'D');                                                           // nostrils
+      if (p.dead) { line(g, hx - 6, hy - 1, hx - 3, hy - 1, 'k'); line(g, hx + 3, hy - 1, hx + 6, hy - 1, 'k'); }
+      else {
+        line(g, hx - 7, hy - 3, hx - 2, hy - 1, 'D'); line(g, hx + 7, hy - 3, hx + 2, hy - 1, 'D');                         // heavy brow
+        put(g, hx - 5, hy, 'e'); put(g, hx - 4, hy, 'e'); put(g, hx - 5, hy + 1, 'E'); put(g, hx + 5, hy, 'e'); put(g, hx + 4, hy, 'e'); put(g, hx + 5, hy + 1, 'E');
+      }
+    }
+    horn(g, hx - 6, hy - 5, -1, -0.1, 10, 2.2); horn(g, hx + 6, hy - 5, 1, -0.1, 10, 2.2);
+  }
+
+  function bodySide(g, p) {          // view e (faces right)
+    const bob = p.bob || 0, drop = p.drop || 0, sq = p.squash || 1, hipY = 30 + bob + drop, l0 = p.l0 || 0, l1 = p.l1 || 0, fa = p.fa || [0, 0];
+    cap(g, 8, hipY - 1, 3.5, 3, 38, 1.5, FUR);                           // tail
+    cap(g, 22, hipY + 2, 4.5, 21 + l1 * 0.3, 40 - l1 * 0.4, 4.5, FUR); ell(g, 22 + l1 * 0.3, 41 - l1 * 0.4, 5, 2.6, 'DDDD');   // far leg
+    cap(g, 27, hipY - 8 * sq, 4.5, 30 + fa[0], hipY + 2 + fa[1], 4, 'MMMD');                                                    // far arm
+    ell(g, 21, hipY - 4 * sq, 15, 9.5 * sq + 1, FUR);                    // torso
+    ell(g, 24, hipY - 1 * sq, 9, 7 * sq, BELLY);
+    for (let i = 0; i < 4; i++) { const sx = 10 + i * 4, sy = hipY - 13 * sq + (i === 0 ? 3 : i === 1 ? 1 : 2); put(g, sx, sy, 'Q'); put(g, sx, sy - 1, 'w'); put(g, sx - 1, sy + 1, 'x'); put(g, sx + 1, sy + 1, 'x'); }   // back spikes
+    cap(g, 17, hipY + 2, 5, 17 + l0 * 0.3, 40 - l0 * 0.4, 5, FUR); ell(g, 17 + l0 * 0.3, 41 - l0 * 0.4, 6, 3, 'DDDD'); claws(g, 19 + l0 * 0.3, 42 - l0 * 0.4, 3, 2.5);   // near leg
+    const sx = 26, sy = 24 + bob + drop * 0.9, ax = p.ra ? p.ra[0] : 0, ay = p.ra ? p.ra[1] : 0;        // near arm
+    cap(g, sx, sy, 5.5, sx + 3 + ax, sy + 10 + ay, 4.4, FUR); disc(g, sx + 3 + ax, sy + 13 + ay, 4.8, FUR); claws(g, sx + 3 + ax, sy + 17 + ay, 3, 2.2);
+    const hx = 31 + (p.tilt || 0), hy = 15 + bob + drop * 1.15 + (p.hdy || 0), my = hy + 6 + (p.mouth ? 1 : 0);   // head
+    disc(g, hx - 2, hy, 8, FUR);
+    ell(g, hx + 5, hy + 3.5, 6.5, 4.2, BELLY);                           // snout
+    line(g, hx + 3, my, hx + 10, my, 'r');
+    if (p.mouth) for (let x = hx + 3; x <= hx + 9; x++) { put(g, x, hy + 7, 'r'); put(g, x, hy + 8, 't'); }
+    put(g, hx + 8, hy + 5, 'Q'); put(g, hx + 8, hy + 4, 'w'); put(g, hx + 9, hy + 3, 'x');                  // tusk
+    put(g, hx + 10, hy + 2, 'D'); put(g, hx + 10, hy + 1, 'D');
+    if (p.dead) line(g, hx + 2, hy - 1, hx + 5, hy - 1, 'k');
+    else { line(g, hx + 1, hy - 3, hx + 7, hy - 1, 'D'); put(g, hx + 3, hy, 'e'); put(g, hx + 4, hy, 'e'); put(g, hx + 4, hy + 1, 'E'); }
+    horn(g, hx - 3, hy - 6, 0.7, -0.1, 10, 2.2); horn(g, hx - 6, hy - 5, -0.4, -0.1, 7, 1.8);
+  }
+
+  const ANIM = {
+    idle: [{ bob: 0 }, { bob: 0, ra: [0, -1] }, { bob: 1 }, { bob: 1, ra: [0, 0] }],
+    walk: [{ bob: 0, l0: 3, l1: 0, fa: [3, 0], tail: -2 }, { bob: 1, l0: 0, l1: 0, tail: 0 }, { bob: 0, l0: 0, l1: 3, fa: [-3, 0], tail: 2 }, { bob: 1, l0: 0, l1: 0, tail: 0 }],
+    attack: [{ bob: -1, ra: [1, -22], la: [0, 2], mouth: true, hdy: -1 }, { bob: 2, ra: [-1, 8], mouth: true, hdy: 2 }, { bob: 1, ra: [0, 2] }],
+    stunned: [{ bob: 1, hdy: 2, ra: [0, 3], la: [0, 3], tilt: -1 }, { bob: 2, hdy: 3, ra: [0, 4], la: [0, 4], tilt: 1 }],
+    death: [{ bob: 1, hdy: 2, dead: true, ra: [0, 4], la: [0, 4] }, { bob: 3, hdy: 3, drop: 5, dead: true, squash: 0.95, ra: [0, 6], la: [0, 6] }, { bob: 5, hdy: 4, drop: 10, dead: true, squash: 0.8, ra: [0, 7], la: [0, 7] }, { bob: 6, hdy: 3, drop: 14, dead: true, squash: 0.62, ra: [0, 8], la: [0, 8] }],
+  };
+  const frames = {};
+  for (const an in ANIM) for (const v of ['s', 'n', 'e']) {
+    ANIM[an].forEach((p, i) => {
+      const g = grid();
+      if (v === 'e') bodySide(g, p); else bodyFront(g, v, p);
+      frames[`${an}_${v}_${i}`] = rows(outline(g));
+    });
+  }
+  (function () {   // portrait 32x32: bust with a big face
+    const PW = 32, PH = 32, g = grid(PW, PH);
+    const lay = f => { const t = grid(PW, PH); f(t); for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) if (t[y][x] !== '.') g[y][x] = t[y][x]; };
+    lay(t => ell(t, 16, 31, 15, 8, FUR));                                  // shoulders
+    for (const s of [-1, 1]) { put(g, 16 + s * 12, 20, 'Q'); put(g, 16 + s * 12, 19, 'w'); put(g, 16 + s * 12, 18, 'w'); put(g, 16 + s * 11, 21, 'x'); }
+    lay(t => disc(t, 16, 15, 10.5, FUR));                                  // head
+    for (const s of [-1, 1]) lay(t => {                                    // horns
+      for (let i = 0; i < 12; i++) { const u = i / 12, hx = 16 + s * (8 + i * 0.95), hy = 8 - i * 0.2 - u * u * 8, r = 2.6 * (1 - u * 0.8); disc(t, hx, hy, Math.max(0.7, r), BONE); }
+    });
+    lay(t => ell(t, 16, 21, 7.5, 4.6, BELLY));                             // snout
+    for (let x = 10; x <= 22; x++) put(g, x, 24, 'r');
+    for (let x = 12; x <= 20; x++) put(g, x, 25, 'r');
+    for (const s of [-1, 1]) { put(g, 16 + s * 6, 23, 'Q'); put(g, 16 + s * 6, 22, 'w'); put(g, 16 + s * 6, 21, 'x'); put(g, 16 + s * 5, 23, 'Q'); }   // tusks
+    for (const x of [14, 18]) { put(g, x, 19, 'D'); put(g, x, 20, 'D'); }
+    for (const s of [-1, 1]) {                                             // brow + glowing eyes
+      for (let i = 0; i < 7; i++) put(g, 16 + s * (4 + i), 11 + i * 0.4, 'D');
+      for (let i = 0; i < 4; i++) { put(g, 16 + s * (5 + i), 14, 'e'); put(g, 16 + s * (5 + i), 15, 'e'); }
+      put(g, 16 + s * 5, 14, 'E'); put(g, 16 + s * 6, 14, 'E'); put(g, 16 + s * 5, 15, 'E');
+    }
+    frames.portrait = rows(outline(g));
+  })();
+  IT.Art.sheet('roshan', { pal, anchor: [22, 43], frames });
+
+  // ---- Aegis of the Immortal: golden shield 16x20 (2 shine frames), anchor = bottom centre ----
+  (function () {
+    const AW = 16, AH = 20, apal = { k: '#2a1604', D: '#8a5410', M: '#c88a1c', L: '#f0c040', H: '#fff0a0', W: '#ffffff', q: '#2a7ae8', Q: '#8ac8ff', r: '#a02a1c' };
+    function shield(shine) {
+      const g = grid(AW, AH);
+      const hw = y => y < 3 ? 7 : Math.round(7 * Math.sqrt(Math.max(0, 1 - Math.pow((y - 3) / 16, 2))));
+      for (let y = 0; y < 19; y++) {
+        const w = hw(y);
+        for (let x = 8 - w; x < 8 + w; x++) {
+          const edge = x === 8 - w || x === 7 + w || y === 0, inner = x <= 8 - w + 1 || x >= 6 + w || y <= 1;
+          let c = edge ? 'D' : inner ? 'M' : 'L';
+          if (!edge && !inner && Math.hypot(x - 5.5, y - 5) < 3.2) c = 'H';
+          g[y][x] = c;
+        }
+      }
+      for (let y = 5; y <= 11; y++) g[y][7] = g[y][8] = 'M';                        // emblem: blue gem on a cross
+      for (let x = 4; x <= 11; x++) { g[7][x] = 'M'; g[8][x] = 'M'; }
+      g[7][8] = g[8][7] = g[8][8] = 'q'; g[7][7] = 'Q';
+      g[12][7] = g[12][8] = 'r'; g[13][7] = g[13][8] = 'r';
+      if (shine) for (let i = 0; i < 6; i++) { const x = 4 + i, y = 2 + i * 2; if (g[y][x] !== '.' && g[y][x] !== 'D') g[y][x] = 'W'; if (i < 5 && g[y][x + 1] !== '.' && g[y][x + 1] !== 'D') g[y][x + 1] = 'H'; }
+      return rows(outline(g));
+    }
+    IT.Art.sheet('aegis', { pal: apal, anchor: [8, 19], frames: { shield_0: shield(false), shield_1: shield(true), portrait: shield(true) } });
+  })();
+
+  // ---- power runes: 14x14 glass orb per hue (gold, red, blue, green, cyan, pink, violet); fx cycles through the hues ----
+  (function () {
+    const HUES = [['#ffd24a', '#a86a08'], ['#ff5a4a', '#8a1a1a'], ['#4a7aff', '#1a2c8a'], ['#4aff7a', '#128a2c'], ['#4af0ff', '#127a8a'], ['#ff6ae0', '#8a1a7a'], ['#a07aff', '#3a1a8a']];
+    const mix = (a, b, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const A = p(a), B = p(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+    HUES.forEach((hu, n) => {
+      const pal2 = { k: '#10081a', a: mix(hu[0], '#ffffff', 0.85), b: mix(hu[0], '#ffffff', 0.45), c: hu[0], d: mix(hu[0], hu[1], 0.55), e: hu[1], W: '#ffffff' };
+      const fr = {};
+      for (let f = 0; f < 2; f++) {
+        const g = grid(14, 14);
+        for (let y = 0; y < 14; y++) for (let x = 0; x < 14; x++) {
+          const dx = x - 6.5, dy = y - 6.5, d = Math.hypot(dx, dy);
+          if (d > 6.2) continue;
+          const s = (dx * -0.5 + dy * -0.8) / 6.2;
+          g[y][x] = d > 5.2 ? 'e' : s > 0.55 ? 'b' : s > 0.1 ? 'c' : s > -0.35 ? 'd' : 'e';
+        }
+        for (let i = 0; i < 6; i++) { const a = f * 1.5 + i * 1.047, x = Math.round(6.5 + Math.cos(a) * 3), y = Math.round(6.5 + Math.sin(a) * 3); g[y][x] = (i & 1) ? 'a' : 'b'; }   // inner spark ring
+        g[3][4] = 'W'; g[3][5] = 'W'; g[4][4] = 'a';
+        fr['orb_' + f] = rows(outline(g));
+      }
+      IT.Art.sheet('rune' + n, { pal: pal2, anchor: [7, 13], frames: fr });
+    });
+  })();
+})(typeof window !== 'undefined' ? window : globalThis);
