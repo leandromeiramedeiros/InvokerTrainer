@@ -50,7 +50,7 @@
 
   const Lights = {
     enabled: false, MAX: MAXL, ELEM, flicker, strobe, strobeRgb, blend, hash,
-    begin() { n = 0; },
+    begin(R) { n = 0; if (R) stamp = R.time; },   // R: also stamps the frame, so emitters' frame(R) calls this frame do not reset again
     // idempotent per render frame (several modules call it; render.js may call begin() once instead)
     frame(R) { const s = R && R.time; if (s !== stamp) { stamp = s; n = 0; } },
     get count() { return n; },

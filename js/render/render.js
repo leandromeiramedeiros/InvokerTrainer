@@ -42,6 +42,31 @@
   const MM_SIZE = { hero: 2.5, foe: 2.1, ally: 1.8, roshan: 2.7, spirit: 1.4 };
   const mmClass = e => e.kind === 'hero' ? 'hero' : e.kind === 'ally' ? 'ally' : e.kind === 'roshan' ? 'roshan' : e.kind === 'spirit' ? 'spirit' : 'foe';
 
+  // ---- v6 #76 L3 G-buffer helpers, pure ----
+  // y-sorted item kind -> material (docs/LIGHTING-v6.md): units 1, trees / towers / buildings 2, anything else in the pass (FX, pickups) 3 = emissive
+  const G_MAT = { unit: 1, tree: 2, tower: 2, struct: 2 };
+  const gMatOf = k => G_MAT[k] || 3;
+  // IT.Normals RGBA (RG normal, B height, A = material x 85) -> the G-buffer texel (RG, B = height6 << 2 | material, A 255). Sprites (opaque false)
+  // keep A 0 where the silhouette is empty so drawImage leaves what is below; terrain (opaque true) writes every texel (A 0 = ground).
+  function gEncode(src, n, opaque) {
+    const out = new Uint8ClampedArray(n * 4);
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      const a = src[p + 3];
+      if (!a && !opaque) continue;
+      const mat = Math.min(3, Math.round(a / 85)), h = Math.min(63, Math.round(src[p + 2] * 63 / 255));
+      out[p] = src[p]; out[p + 1] = src[p + 1]; out[p + 2] = (h << 2) | mat; out[p + 3] = 255;
+    }
+    return out;
+  }
+  // fog field -> per light-cell vision 0..255 (255 in vision, 0 at f <= 1): the dynamic light is scaled by it, so fog stays unlit
+  function visMask(out, lw, lh, cell, camX, camY, sample) {
+    for (let cy = 0, i = 0; cy < lh; cy++) for (let c = 0; c < lw; c++, i++) {
+      const f = sample ? sample(camX + c * cell + cell / 2, camY + cy * cell + cell / 2) : 2;
+      out[i] = f >= 2 ? 255 : f <= 1 ? 0 : Math.round((f - 1) * 255);
+    }
+    return out;
+  }
+
   function create(w, cv, glowCv, cam) {
     const GM = IT.GAME, P = GM.UNIT_PX;
     let VW = GM.VIEW_W, VH = GM.VIEW_H;   // live: R.resize() follows scroll-wheel zoom
@@ -161,8 +186,54 @@
     w.on('cast', p => { if (p.kind !== 'item') IT.UnitDraw.castFlash(R, p); });   // spells only; items have no pose
     w.on('attack', p => IT.UnitDraw.launched(R, p));                                // wind-up release pop
 
+    // ---- v6 #76 L3: G-buffer canvas (view size, opaque), filled only while lighting is on: terrain normals blitted at the camera offset, then every
+    // drawImage of the y-sorted pass is mirrored with that image's pillow normals (IT.Normals.fromCanvas, cached per source canvas: mirrored west
+    // frames, skins and scaled copies get their own correct normals), same rect, same order. Faint overlays (alpha < .5) and additive draws are skipped.
+    let gCv = null, gCx = null, gMat = -1, gBudget = 0, gVis = null;
+    const gCache = new WeakMap(), drawImg = typeof CanvasRenderingContext2D !== 'undefined' ? CanvasRenderingContext2D.prototype.drawImage : null;
+    function gCanvas() {
+      if (!gCv) { gCv = document.createElement('canvas'); gCv.width = VW; gCv.height = VH; gCx = gCv.getContext('2d', { alpha: false }); }
+      if (gCv.width !== VW || gCv.height !== VH) { gCv.width = VW; gCv.height = VH; gCx = gCv.getContext('2d', { alpha: false }); }
+      gCx.imageSmoothingEnabled = false; gCx.globalAlpha = 1; gCx.globalCompositeOperation = 'source-over';
+      return gCx;
+    }
+    function encCanvas(data, w, h, opaque) {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const x = c.getContext('2d'), id = x.createImageData(w, h);
+      id.data.set(gEncode(data, w * h, opaque)); x.putImageData(id, 0, 0);
+      return c;
+    }
+    function gNormal(src, mat) {
+      let m = gCache.get(src);
+      if (m && m[mat] !== undefined) return m[mat];
+      if (gBudget <= 0) return null;             // bake budget spent: this sprite reads as ground for a frame or two
+      gBudget--;
+      if (!m) { m = {}; gCache.set(src, m); }
+      let c = null;
+      try { if (src.width && src.height) { const n = IT.Normals.fromCanvas(src, { material: mat }); c = encCanvas(n.data, n.w, n.h, false); } } catch (e) { c = null; }   // not a canvas
+      return (m[mat] = c);
+    }
+    function gDraw(img) {
+      const a = arguments;
+      drawImg.apply(this, a);
+      if (gMat < 0 || this.globalAlpha < 0.5 || this.globalCompositeOperation !== 'source-over') return;
+      const n = gNormal(img, gMat); if (!n) return;
+      if (a.length === 3) gCx.drawImage(n, a[1], a[2]);
+      else if (a.length === 5) gCx.drawImage(n, a[1], a[2], a[3], a[4]);
+      else if (a.length === 9) gCx.drawImage(n, a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]);
+    }
+    // terrain part, same rect as IT.Terrain.draw; the void off the map is flat ground
+    function gTerrain() {
+      const g = gCanvas(), camX = R.camX, camY = R.camY;
+      g.fillStyle = 'rgb(128,128,0)'; g.fillRect(0, 0, VW, VH);
+      if (ter._gCv === undefined) { const n = ter.normals ? ter.normals() : null; ter._gCv = n ? encCanvas(n.data, n.w, n.h, true) : null; }
+      if (!ter._gCv) return;
+      const mx0 = Math.max(0, -camX), my0 = Math.max(0, -camY), mx1 = Math.min(VW, ter.W - camX), my1 = Math.min(VH, ter.H - camY);
+      if (mx1 > mx0 && my1 > my0) g.drawImage(ter._gCv, mx0 + camX, my0 + camY, mx1 - mx0, my1 - my0, mx0, my0, mx1 - mx0, my1 - my0);
+    }
+
     const items = [];
-    function push(y, fn, a) { items.push({ y, fn, a }); }
+    function push(y, fn, a, k) { items.push({ y, fn, a, k }); }
     const drawUnit = (e) => IT.UnitDraw.draw(R, e);
 
     function drawTreesInto(camX, camY) {
@@ -176,7 +247,7 @@
           if (t.x < tx0 || t.x > tx1) continue;
           const sy = t.y - camY;
           if (sy < -4 || sy - t.hh > VH) continue;
-          push(sy, drawTree, t);
+          push(sy, drawTree, t, 'tree');
         }
       }
     }
@@ -249,6 +320,11 @@
       // GL needs a live context; a lost/failed one drops back to the 2D multiply path + CSS glow
       setGL(!!(comp && comp.ok));
       R.cx = cx = useGL ? sceneCx : gameCx;
+      // v6 #76 L3: dynamic lighting only on the GL path with a level above 'off' (IT.GL.setLighting / comp.setLighting)
+      const LT = IT.Lights;
+      if (LT) LT.begin(R);
+      const lit = !!(useGL && drawImg && comp.lighting && comp.lighting !== 'off' && LT && LT.enabled && IT.Normals);
+      gBudget = 6;
       fog.update(w, R.fogSnap ? 1 : dtReal, R.camX, R.camY, VW, VH);
       IT.Particles.update(dtReal);
       const tf0 = performance.now();
@@ -260,6 +336,7 @@
       light.begin(IT.DayNight ? IT.DayNight.factor(w) : 0);   // v6: night tint + falloff
 
       IT.Terrain.draw(R, ter);
+      if (lit) gTerrain();
       let tm = performance.now();
       IT.Sand.drawGround(R);
       tSand += performance.now() - tm; tm = performance.now();
@@ -274,26 +351,30 @@
       for (const e of w.ents) {
         if (e.dead || !IT.UnitDraw.isUnit(e) || !IT.UnitDraw.visible(R, e)) continue;
         R.interp(e);
-        push(R.iy / P - R.camY, drawUnit, e);
+        push(R.iy / P - R.camY, drawUnit, e, 'unit');
       }
       for (const e of w.ents) {      // towers: buildings, always visible once on the map
         if (e.dead || e.kind !== 'tower') continue;
         R.interp(e);
         const sx = R.ix / P - R.camX, sy = R.iy / P - R.camY;
-        push(sy, drawTower, { e, sx, sy });
+        push(sy, drawTower, { e, sx, sy }, 'tower');
       }
       const sts = w.map.structures;      // static buildings (barracks, fort, fillers, fountain, shops, outposts)
       for (let i = 0; i < sts.length; i++) {
         const s = sts[i], sx = s.x / P - R.camX, sy = s.y / P - R.camY;
         if (sx < -50 || sx > VW + 50 || sy < -40 || sy > VH + 90) continue;
-        push(sy, drawStruct, { s, sx, sy });
+        push(sy, drawStruct, { s, sx, sy }, 'struct');
       }
       drawTreesInto(R.camX, R.camY);
       tm = performance.now();
       IT.FX.sorted(R, push);
       tFx += performance.now() - tm;
       items.sort((a, b) => a.y - b.y);
-      for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); }
+      if (lit) {     // same order / rects into the G-buffer: tap the scene context's drawImage for the pass
+        sceneCx.drawImage = gDraw;
+        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); it.fn(it.a, R); } }
+        finally { gMat = -1; delete sceneCx.drawImage; }
+      } else for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); }
       R.stats.items = items.length;
 
       // keep the hero readable behind canopies
@@ -330,7 +411,15 @@
         light.fold(R.camX, R.camY, fog, fogOn);
         tLight = performance.now() - tl0 - (tl2 - tl1) - (tl1 - tm);
         const tc = performance.now();
-        const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'));
+        let litArg = null;
+        if (lit) {
+          const lb = light.buf, n = lb.w * lb.h;
+          if (!gVis || gVis.length !== n) gVis = new Uint8Array(n);
+          const u = IT.GL.toScreen(LT.uniforms({ x: R.camX * P, y: R.camY * P, w: VW * P, h: VH * P }, comp.levelInfo().lights), P);
+          litArg = { gbuf: gCv, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
+          S.dyn = u.count;
+        }
+        const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'), litArg);
         tComp = performance.now() - tc;
         gameCx.clearRect(0, 0, VW, VH);        // overlay: unlit HUD only
         if (!ok) {                              // present() failed mid-frame: redo this frame's lighting on the 2D path next frame
@@ -366,6 +455,6 @@
     return R;
   }
 
-  IT.Render = { create, MM_W, MM_H };
+  IT.Render = { create, MM_W, MM_H, G_MAT, gMatOf, gEncode, visMask };
   IT.Minimap = { pin, showsUnit, stealthy, detected, unitAlpha, TIP, COL: MM_COL, SIZE: MM_SIZE };
 })(typeof window !== 'undefined' ? window : globalThis);
