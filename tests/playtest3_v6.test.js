@@ -114,7 +114,7 @@ function lockedRig() {
   const SRC = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/i18n.js',
     'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js',
     'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js',
-    'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/render/camera.js', 'js/ui/settings.js', 'js/input.js'];
+    'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/render/camera.js', 'js/ui/settings.js', 'js/sim/pick.js', 'js/input.js'];
   const cv = { addEventListener(t, f) { L[t] = f; }, removeEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 600, right: 1000, bottom: 600 }) };
   const body = { parentElement: null };
   // .clist: x 800..992, 200 px tall, content 180 px wide + scrollbar gutter, 1000 px of rows

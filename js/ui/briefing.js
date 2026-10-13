@@ -1,7 +1,9 @@
 // v6 item 13: scenario briefing overlay for the 12 s intro (ranked + practice scenarios with a camera tour; Free Play has none).
 // A DOM card on the left of the stage (clear of the hero HUD and of the toured spots, which main.js puts right of centre): title,
 // difficulty + hero LV, objective, WIN (green icon) and LOSE (red icon) lines with pulsing key words, step chips (icon + hotkeys),
-// countdown number + hint. Staged CSS reveal; when the round starts it drops away fast into the in-play strip (hud.js).
+// countdown number + hint. v6 item 45: TEXT FIRST -- each block (title, VICTORY, DEFEAT, then every step chip) animates in on its own (big -> settled,
+// a short emphasis) on the timeline Ranked built in run.intro.text (reading-length based), the others dim while one animates; the camera pan comes
+// after. When the round starts it drops away fast into the in-play strip (hud.js).
 // body.briefing hides hud.js's countdown panel while the card shows. Reads IT.Ranked.hud(w) + w.ranked.intro; writes no game state.
 (function (G) {
   'use strict';
@@ -10,6 +12,7 @@
   const OUT_MS = 320;
   const ORBN = { Q: 'quas', W: 'wex', E: 'exort' };
   let el = null, key = null, num = null, lastN = null, outT = 0, on = false;
+  let blocks = null, plan = null, hintEl = null;   // item 45: block id -> its nodes, and each plan block's last state
 
   const t = (k, o) => (IT.t ? IT.t(k, o) : k);
   const has = k => !!(IT.hasT && IT.hasT(k));
@@ -51,7 +54,8 @@
     const KI = { attack: 'ui_atk', move: 'ui_move', stop: 'ui_stop', hold: 'ui_hold', pos: 'ui_pos' };
     const box = h('div', { class: 'bf-steps' });
     acts.forEach((a, i) => {
-      if (i) box.appendChild(h('i', { class: 'bf-ar' }));
+      const ar = i ? h('i', { class: 'bf-ar bf-b p' }) : null;
+      if (ar) { box.appendChild(ar); (blocks.step[i] = blocks.step[i] || []).push(ar); }
       let k = null, lab = a.k === 'spell' || a.k === 'item' ? nm(a.id) : has('f1.' + a.k) ? t('f1.' + a.k) : a.k;
       if (a.k === 'spell') {
         const rec = (IT.GAME.SPELL_ORBS || {})[a.id] || '';
@@ -62,7 +66,8 @@
         if (j >= 0) k = h('span', { class: 'bf-k' }, keyLab('item' + (j + 1)));
       } else if (a.k === 'attack' || a.k === 'stop' || a.k === 'hold') k = h('span', { class: 'bf-k' }, keyLab(a.k));
       const ic = a.k === 'spell' || a.k === 'item' ? icon(a.id) : icon(KI[a.k] || 'ui_pos');
-      box.appendChild(h('div', { class: 'bf-chip ' + a.k, style: { '--i': i } }, ic, k, h('span', { class: 'bf-cn', text: lab })));
+      const chip = h('div', { class: 'bf-chip bf-b p ' + a.k }, ic, k, h('span', { class: 'bf-cn', text: lab }));
+      box.appendChild(chip); (blocks.step[i] = blocks.step[i] || []).push(chip);
     });
     return acts.length ? box : null;
   }
@@ -76,19 +81,40 @@
     const lose = (sc && sc.lose ? [loc(sc.lose)] : []).concat(gen).filter(Boolean).join(', ');
     const meta = [rk.level ? t('hud.rkLevel', { n: rk.level }) : '', loc(rk.mapName), rk.twistName ? t('hud.rkTwist') + ' ' + loc(rk.twistName) : ''].filter(Boolean).join('  |  ');
     num = h('div', { class: 'bf-num' });
-    lastN = null;
+    lastN = null; blocks = { title: [], win: [], lose: [], step: [] }; plan = null;
     const card = h('div', { class: 'bf-card' },
       h('div', { class: 'bf-top' }, num,
         h('div', { class: 'bf-head' },
-          h('div', { class: 'bf-title', text: loc(rk.scenario) }),
-          h('div', { class: 'bf-meta' }, h('span', { class: 'bf-diff d-' + rk.diff, text: has('dtier.' + rk.diff) ? t('dtier.' + rk.diff) : rk.diff }), lv ? h('span', { class: 'bf-lv', text: lv }) : null, meta ? h('span', { text: meta }) : null))),
-      rk.objective && loc(rk.objective) !== win ? h('div', { class: 'bf-obj', text: loc(rk.objective) }) : null,
-      win ? h('div', { class: 'bf-row bf-win' }, pix('win'), h('span', null, h('em', { text: t('f1.win') + ' ' }), emph(win))) : null,
-      lose ? h('div', { class: 'bf-row bf-lose' }, pix('lose'), h('span', null, h('em', { text: t('f1.lose') + ' ' }), emph(lose, gen))) : null,
+          blocks.title[0] = h('div', { class: 'bf-title bf-b p', text: loc(rk.scenario) }),
+          blocks.title[1] = h('div', { class: 'bf-meta bf-b p' }, h('span', { class: 'bf-diff d-' + rk.diff, text: has('dtier.' + rk.diff) ? t('dtier.' + rk.diff) : rk.diff }), lv ? h('span', { class: 'bf-lv', text: lv }) : null, meta ? h('span', { text: meta }) : null))),
+      rk.objective && loc(rk.objective) !== win ? (blocks.title[2] = h('div', { class: 'bf-obj bf-b p', text: loc(rk.objective) })) : null,
+      win ? (blocks.win[0] = h('div', { class: 'bf-row bf-win bf-b p' }, pix('win'), h('span', null, h('em', { text: t('f1.win') + ' ' }), emph(win)))) : null,
+      lose ? (blocks.lose[0] = h('div', { class: 'bf-row bf-lose bf-b p' }, pix('lose'), h('span', null, h('em', { text: t('f1.lose') + ' ' }), emph(lose, gen)))) : null,
       chips(sc, w.hero, hints),
-      h('div', { class: 'bf-hint', text: has('rk.countdown.hint') ? t('rk.countdown.hint') : t('rk.countdown.hint.fb') }));
+      hintEl = h('div', { class: 'bf-hint bf-b p', text: has('rk.countdown.hint') ? t('rk.countdown.hint') : t('rk.countdown.hint.fb') }));
     el.textContent = '';
     el.appendChild(card);
+  }
+
+  // item 45: drive the text phase from the intro clock (run.intro.t, the countdown seconds): a block is hidden before its `at`, 'cur' (animating, the
+  // card dims the others) for its slot, 'done' after; the hint shows when the text phase is over
+  const MIN_CUR = 0.5;
+  function setState(nodes, st) {
+    for (const n of nodes || []) { n.classList.remove('p', 'cur', 'done'); n.classList.add(st); if (st === 'cur') { n.style.animation = 'none'; void n.offsetWidth; n.style.animation = ''; } }
+  }
+  function textStep(I) {
+    if (!I || !I.text || !blocks) return;
+    const tp = I.text, t = I.t || 0;
+    if (!plan) plan = tp.blocks.map(() => '');
+    let any = false;
+    tp.blocks.forEach((b, j) => {
+      const st = t < b.at - 1e-9 ? 'p' : t < b.at + Math.max(b.d, MIN_CUR) ? 'cur' : 'done';
+      if (st === 'cur') any = true;
+      if (plan[j] !== st) { plan[j] = st; setState(b.id === 'step' ? blocks.step[b.i] : blocks[b.id], st); }
+    });
+    el.classList.toggle('foc', any);
+    const hs = t < tp.hold - 0.5 ? 'p' : 'done';
+    if (plan.hint !== hs) { plan.hint = hs; setState([hintEl], hs); }
   }
 
   function mount() {
@@ -115,6 +141,7 @@
       const k = run.intro;
       if (key !== k) { key = k; build(w, rk); el.className = 'brief'; void el.offsetWidth; el.className = 'brief on'; outT = 0; }
       else if (el.classList.contains('out')) el.className = 'brief on';
+      textStep(k);
       const n = String(Math.max(1, Math.ceil(rk.countdown || 0)));
       if (n !== lastN) { lastN = n; num.textContent = n; num.classList.remove('tick'); void num.offsetWidth; num.classList.add('tick'); }
       show(true);
@@ -129,5 +156,5 @@
 
   function hide() { if (el) { el.className = 'brief'; el.textContent = ''; } key = null; outT = 0; show(false); }
 
-  IT.Briefing = { update, hide, emph };
+  IT.Briefing = { update, hide, emph, textStep };
 })(typeof window !== 'undefined' ? window : globalThis);

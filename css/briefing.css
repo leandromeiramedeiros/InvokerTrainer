@@ -39,22 +39,24 @@ b.pulse{color:#fff;animation:bf-pulse 1.1s ease-in-out infinite}
 .bf-cn{color:var(--dim);font-size:calc(var(--u)*3);line-height:1.05;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .bf-hint{color:var(--gold);font-size:calc(var(--u)*4.2);letter-spacing:.02em;animation:bf-pulse 1.6s ease-in-out infinite}
 
-/* staged reveal: card, title, win, lose, chips one after the other */
-.brief.on .bf-card{animation:bf-in .35s cubic-bezier(.2,1.3,.4,1) both}
-.brief.on .bf-title{animation:bf-title .5s .12s cubic-bezier(.2,1.4,.4,1) both}
-.brief.on .bf-meta,.brief.on .bf-obj{animation:bf-fade .35s .35s ease-out both}
-.brief.on .bf-win{animation:bf-slide .35s .7s ease-out both}
-.brief.on .bf-lose{animation:bf-slide .35s 1.05s ease-out both}
-.brief.on .bf-chip,.brief.on .bf-ar{animation:bf-pop .3s calc(1.4s + var(--i,0)*.12s) cubic-bezier(.2,1.5,.4,1) both}
-.brief.on .bf-hint{animation:bf-fade .4s 1.9s ease-out both,bf-pulse 1.6s 2.3s ease-in-out infinite}
+/* v6 item 45, text first: each block (.bf-b) is hidden (.p) until its turn, animates in big -> settled with a short emphasis (.cur), then rests (.done);
+   while one animates the card is .foc and the finished ones dim. Timing is set by js/ui/briefing.js from the intro clock. */
+.brief.on .bf-card{animation:bf-in .25s ease-out both}
+.bf-b{transition:opacity .2s ease-out,filter .2s ease-out}
+.bf-b.p{opacity:0;visibility:hidden}
+.bf-b.cur{animation:bf-big .55s cubic-bezier(.2,1.25,.35,1) both;transform-origin:0 50%}
+.bf-title.cur{animation-name:bf-big-t}
+.bf-chip.cur,.bf-ar.cur{transform-origin:50% 50%;animation-name:bf-big-c}
+.brief.foc .bf-b.done{opacity:.32}
+.brief.on .bf-hint.done{animation:bf-pulse 1.6s ease-in-out infinite}
 /* round start: the card drops away fast up into the in-play strip */
 .brief.on.out .bf-card{animation:bf-out .3s ease-in both}
 
 @keyframes bf-in{from{opacity:0;transform:translateX(-12%) scale(.92)}to{opacity:1;transform:none}}
-@keyframes bf-title{from{opacity:0;transform:translateX(-30%) scale(1.35)}to{opacity:1;transform:none}}
-@keyframes bf-fade{from{opacity:0}to{opacity:1}}
-@keyframes bf-slide{from{opacity:0;transform:translateX(-10%)}to{opacity:1;transform:none}}
-@keyframes bf-pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
+@keyframes bf-big{0%{opacity:0;transform:scale(2.1)}45%{opacity:1;transform:scale(.95);filter:brightness(1.9)}70%{transform:scale(1.04);filter:brightness(1.4)}100%{opacity:1;transform:none;filter:none}}
+@keyframes bf-big-t{0%{opacity:0;transform:scale(2.8)}45%{opacity:1;transform:scale(.94);filter:brightness(2)}70%{transform:scale(1.05);filter:brightness(1.4)}100%{opacity:1;transform:none;filter:none}}
+@keyframes bf-big-c{0%{opacity:0;transform:scale(2.4)}50%{opacity:1;transform:scale(.9);filter:brightness(1.9)}100%{opacity:1;transform:none;filter:none}}
 @keyframes bf-pulse{0%,100%{opacity:1;filter:none}50%{opacity:.78;filter:brightness(1.5)}}
 @keyframes bf-tick{from{transform:scale(1.35);color:#fff}to{transform:none}}
 @keyframes bf-out{to{opacity:0;transform:translate(45%,-70%) scale(.35)}}
+@media (prefers-reduced-motion:reduce){.bf-b.cur,.bf-title.cur,.bf-chip.cur,.bf-ar.cur{animation:bf-fade .2s ease-out both}@keyframes bf-fade{from{opacity:0}to{opacity:1}}}

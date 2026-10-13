@@ -279,7 +279,9 @@ test('item 17: hurt -> the foe jukes into the pit (useItem path, telegraph with 
 
 test('item 17: hero within ~500 u -> the foe jukes', () => {
   const { m, e } = jukeRun(2, 'easy');
-  const p = IT.Nav.nearestWalkable(m.w.map, e.x + 380, e.y) || { x: e.x + 380, y: e.y };
+  // v6 item 55: a hero inside the pit is out of the bank foe's sight -> stand 380 u away on the bank side (outside the crater)
+  const p = [0, 1, 2, 3, 4, 5, 6, 7].map(k => IT.Nav.nearestWalkable(m.w.map, e.x + 380 * Math.cos(k * Math.PI / 4), e.y + 380 * Math.sin(k * Math.PI / 4)))
+    .find(q => q && !m.w.map.pitAt(q.x, q.y) && IT.Vision.los(m.w.map, e.x, e.y, q.x, q.y));
   m.h.x = p.x; m.h.y = p.y;
   for (let i = 0; i < 30 * 6 && !e.juke.done; i++) m.w.step();
   assert.ok(e.juke.done, 'proximity juke');

@@ -8,6 +8,8 @@
 //     idle -> seen -> lost (sight broke) -> predicted (walking to the live prediction) -> juked (reached it, nothing there: confused for
 //     P.confused s) -> searching (a widening ring around the prediction; split bearings per chaser at hard+) -> seen ('reacquired').
 // Tier params: IT.DIFFICULTY[tier].belief (js/data/difficulty.js), defaults below.
+// v6 item 55: the sight predicate is IT.Vision.teamSees (units.js seesHero calls it; sees() below is the same call), so Roshan's pit rule
+// applies to the belief too: a chaser outside the pit loses a hero who steps inside, a chaser inside loses one who steps out past the mouth.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -16,6 +18,8 @@
   const params = df => Object.assign({}, DEF, (df && df.belief) || {});
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return Math.abs(d); };
+
+  const sees = (w, team, h) => !!h && !h.dead && (IT.Vision && IT.Vision.teamSees && w.map ? IT.Vision.teamSees(w, team, h) : true);
 
   function create(e, P, o) {
     o = o || {};
@@ -166,5 +170,5 @@
     return !S || S.beliefUI !== false;
   }
 
-  IT.Belief = { DEF, LOST_HOLD, ARRIVE, params, create, observe, predict, refresh, juke, probe, where, features, home, uiOn, reachAlong };
+  IT.Belief = { DEF, LOST_HOLD, ARRIVE, params, create, sees, observe, predict, refresh, juke, probe, where, features, home, uiOn, reachAlong };
 })(typeof window !== 'undefined' ? window : globalThis);

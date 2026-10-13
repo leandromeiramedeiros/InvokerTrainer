@@ -215,6 +215,23 @@
       elevAt: (x, y) => { const tx = Math.floor(x / tile), ty = Math.floor(y / tile); return (tx < 0 || ty < 0 || tx >= w || ty >= h) ? 1 : elev[ty * w + tx]; },
     };
     map.walkable = (x, y) => map.walkableTile(Math.floor(x / tile), Math.floor(y / tile));
+    // v6 item 55: Roshan's pit vision area (js/data/maps.js computes it; IT.Vision applies it). pitMask per tile: 2 'in' (the walled
+    // crater), 1 'mouth' (the walkable ring around it: seen from both sides), 0 outside. null = no pit on this map.
+    map.pitMask = null;
+    map.pitTile = (tx, ty) => (!map.pitMask || tx < 0 || ty < 0 || tx >= w || ty >= h) ? 0 : map.pitMask[ty * w + tx];
+    map.pitAt = (x, y) => { const k = map.pitTile(Math.floor(x / tile), Math.floor(y / tile)); return k === 2 ? 'in' : k === 1 ? 'mouth' : null; };
+    // set the pit from its 'in' tile indices (ty * w + tx); mouth = walkable non-'in' tiles within `mouth` tiles (Chebyshev, default 1)
+    map.setPit = (tiles, mouth) => {
+      const m = new Uint8Array(w * h), r = mouth == null ? 1 : mouth;
+      for (const i of tiles) m[i] = 2;
+      for (const i of tiles) {
+        const x0 = i % w, y0 = (i / w) | 0;
+        for (let y = y0 - r; y <= y0 + r; y++) for (let x = x0 - r; x <= x0 + r; x++)
+          if (x >= 0 && y >= 0 && x < w && y < h && m[y * w + x] === 0 && map.walkableTile(x, y)) m[y * w + x] = 1;
+      }
+      map.pitMask = m.some(v => v === 2) ? m : null;
+      return map.pitMask;
+    };
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (!map.walkableTile(x, y)) continue;
       if (map.at(x + 1, y) === 1 || map.at(x - 1, y) === 1 || map.at(x, y + 1) === 1 || map.at(x, y - 1) === 1 ||

@@ -602,14 +602,38 @@
   // chaser search ring around the last seen spot: radius 150 + 110/s, max 900
   const DETECT = { dust: 1, gem: 1, sentry: 1 };   // v6 item 27: foe item uses that count as burnt detection (obj.burn)
 
-  // ---------------------------------------------------------------- v6 items 13 + 39: the pre-round intro (pure data + world reads)
-  // Countdowns >= INTRO_MIN s get a camera tour (stops on a timeline scaled to the countdown, 12 s nominal): hero (hold) -> each foe group
-  // the player may see (centroid, nearest first) -> the gate -> sc.focus areas -> back to the hero, arriving before the round starts.
-  // Item 39: every foe UNSEEN at enter() gets a Sun-Strike-shaped vision reveal (a team-0 thinker, fx 'startReveal') when the tour reaches
-  // it; it lingers REVEAL_LINGER s of play. Mandatory at ian / easy / common; at hard / bambam only when sc.reveal is true. An unseen foe
-  // without a reveal is never toured (the camera would give its spot away).
-  const INTRO_MIN = 5, GROUP_R = 900, TOUR_MAX = 4, REVEAL_LINGER = 1.0, REVEAL_R = 175, REVEAL_VIS = 400;
-  const revealOn = (sc, df) => (df && df.idx != null ? df.idx : 2) <= 2 || sc.reveal === true;
+  // ---------------------------------------------------------------- v6 items 13 + 39 + 45: the pre-round intro (pure data + world reads)
+  // Item 45, the 12 s countdown in two phases. (1) TEXT FIRST, the camera stays on the hero: the briefing animates each block in on its own
+  // (title, VICTORY, DEFEAT, then every combo step), the phase length is the reading time (words x 0.25 s + 0.4 s per block, clamped 3-6 s,
+  // I.text = { hold, blocks:[{ id, i, at, d }] } read by js/ui/briefing.js). (2) THEN the pan: each foe group the player may see (centroid,
+  // nearest first, <= STAY_MAX s on it) -> the gate -> sc.focus areas -> back to the hero, arriving before the round starts (the pan phase
+  // shrinks when the text phase is long).
+  // Start reveal (items 39 + 45, ALL tiers): every foe UNSEEN at enter() gets a tiny ring of vision (a team-0 thinker, fx 'startReveal': a plain faint
+  // ring, no VFX) once the camera has ARRIVED on it; the clock (df.revealLinger s: ian 2.5, easy 2, common 1.5, hard 1.1, bambam 0.8) starts there
+  // and runs on the countdown clock. The foe already faces the way it will move next (faceFoes). Reveals the pan never reached (a cancelled intro,
+  // F1) appear at round start and linger in play.
+  const INTRO_MIN = 5, GROUP_R = 900, TOUR_MAX = 4, REVEAL_LINGER = 1.5, REVEAL_R = 250, REVEAL_VIS = 260;
+  const WORD_S = 0.25, BLOCK_S = 0.4, TEXT_MIN = 3, TEXT_MAX = 6, TEXT_TAIL = 0.6, STAY_MAX = 4, STAY_OTHER = 1.0;
+  const revealOn = () => true;   // item 45: every tier gets the tiny start reveal
+  const revealLinger = df => (df && df.revealLinger > 0 ? df.revealLinger : REVEAL_LINGER);
+  const wordsOf = t => (String(t == null ? '' : t).trim().match(/\S+/g) || []).length;
+  // the briefing's chips: HudSteps.derive minus consecutive repeats, at most 7 (the same rule as js/ui/briefing.js)
+  function introSteps(sc) {
+    const l = IT.HudSteps && IT.HudSteps.derive ? IT.HudSteps.derive(sc) : (sc.steps || sc.sol || []).map(s => ({ k: 'spell', id: s && (s.a || s.ability) }));
+    return l.filter((a, i, q) => !(i && q[i - 1].k === a.k && q[i - 1].id === a.id)).slice(0, 7);
+  }
+  // reading plan of the text phase for a prepared scenario (pr) in a T s countdown
+  function textPlan(pr, T) {
+    const sc = pr.sc, blocks = [{ id: 'title', i: 0, n: wordsOf(loc(sc.name)) }, { id: 'win', i: 0, n: wordsOf(loc(sc.win || sc.goal)) },
+      { id: 'lose', i: 0, n: wordsOf(loc(sc.lose)) + 4 }];
+    introSteps(sc).forEach((a, i) => blocks.push({ id: 'step', i, n: 2 }));
+    const raw = blocks.reduce((q, b) => q + (b.rd = b.n * WORD_S + BLOCK_S), 0);
+    const hold = Math.min(Math.max(raw, TEXT_MIN), TEXT_MAX, 0.5 * T);
+    const sc2 = Math.min(1, Math.max(0.1, hold - TEXT_TAIL) / raw);
+    let at = 0;
+    for (const b of blocks) { b.at = at; b.d = b.rd * sc2; at += b.d; delete b.n; delete b.rd; }
+    return { hold, raw, blocks };
+  }
   function focusSpot(w, f, base) {
     if (f === 'pit') { const p = pitRegion(w.map); return p ? { x: p.x, y: p.y, r: 380 } : null; }
     if (f === 'gate') return w.gate ? { x: w.gate.x, y: w.gate.y, r: w.gate.r } : null;
@@ -618,11 +642,11 @@
     if (typeof f === 'string' && f.indexOf('spot:') === 0) { const p = spotOf(w, f.slice(5)); return p ? { x: p.x, y: p.y, r: 300 } : null; }
     return null;
   }
-  // -> { T, t, stops:[{ kind:'hero'|'foes'|'gate'|'focus', x, y, r, ids, t (start), glide (s) }], reveals:[{ id, x, y, at, done }], unseen:[ids], cur, tour }
+  // -> { T, t, text, linger, stops:[{ kind:'hero'|'foes'|'gate'|'focus', x, y, r, ids, t (start), glide (s) }], reveals:[{ id, x, y, at (camera arrival; null = never toured), linger, done }], unseen:[ids], cur, tour }
   function buildIntro(w, pr, foes, T) {
-    const h = w.hero, sc = pr.sc, k = T / 12, live = foes.filter(e => !e.dead);
+    const h = w.hero, sc = pr.sc, k = T / 12, live = foes.filter(e => !e.dead), linger = revealLinger(pr.df);
     const unseen = live.filter(e => !e.visible), rev = revealOn(sc, pr.df);
-    const reveals = rev ? unseen.map(e => ({ id: e.id, x: e.x, y: e.y, at: 0, done: false })) : [];
+    const reveals = rev ? unseen.map(e => ({ id: e.id, x: e.x, y: e.y, at: null, linger, done: false, start: null, thk: null, gone: false })) : [];
     const shown = live.filter(e => e.visible || reveals.some(r => r.id === e.id));
     const groups = [];
     for (const e of byDist(h, shown)) {
@@ -634,20 +658,41 @@
     if (w.gate) mid.push({ kind: 'gate', x: w.gate.x, y: w.gate.y, r: w.gate.r, ids: [] });
     for (const f of sc.focus || []) { const p = focusSpot(w, f, h); if (p) mid.push({ kind: 'focus', focus: f, x: p.x, y: p.y, r: p.r, ids: [] }); }
     mid = mid.filter((s, i) => !mid.slice(0, i).some(q => Math.hypot(q.x - s.x, q.y - s.y) < 150)).slice(0, TOUR_MAX);
-    const H0 = 1.5 * k, back = T - 2.5 * k, slot = mid.length ? (back - H0) / mid.length : 0, gl = Math.min(1.1 * k, 0.45 * slot);
+    const text = textPlan(pr, T), back = T - 2.5 * k, avail = Math.max(0, back - text.hold);
+    // pan phase: glide + stay per stop (a foe stop stays the linger + 0.3 s, <= STAY_MAX; the others STAY_OTHER); too long -> glides + other stays shrink first, then all
+    let gl = 1.1 * k;
+    const stay = mid.map(s => (s.kind === 'foes' ? Math.min(STAY_MAX, linger + 0.3) : STAY_OTHER * k)), sum = () => mid.length * gl + stay.reduce((q, v) => q + v, 0);
+    if (mid.length && sum() > avail) {
+      gl *= Math.max(0.6, avail / sum());
+      mid.forEach((s, i) => { if (s.kind !== 'foes') stay[i] = 0.5 * k; });
+      if (sum() > avail) { const f = avail / sum(); gl *= f; for (let i = 0; i < stay.length; i++) stay[i] *= f; }
+    }
     const stops = [{ kind: 'hero', x: h.x, y: h.y, r: 0, ids: [], t: 0, glide: 0 }];
-    mid.forEach((s, i) => stops.push(Object.assign(s, { t: H0 + i * slot, glide: gl })));
-    stops.push({ kind: 'hero', x: h.x, y: h.y, r: 0, ids: [], t: back, glide: 1.2 * k });
-    for (const r of reveals) { const s = stops.find(q => q.ids.indexOf(r.id) >= 0); r.at = s ? s.t + s.glide : H0; }
-    return { T, t: 0, stops, reveals, unseen: unseen.map(e => e.id), cur: -1, tour: true };
+    let cur = mid.length ? text.hold : back;
+    mid.forEach((s, i) => { stops.push(Object.assign(s, { t: cur, glide: gl })); cur += gl + stay[i]; });
+    stops.push({ kind: 'hero', x: h.x, y: h.y, r: 0, ids: [], t: Math.min(cur, back), glide: 1.2 * k });
+    for (const r of reveals) { const s = stops.find(q => q.ids.indexOf(r.id) >= 0); r.at = s ? s.t + s.glide : null; }
+    return { T, t: 0, text, linger, stops, reveals, unseen: unseen.map(e => e.id), cur: -1, tour: true };
   }
-  // the Sun-Strike-shaped start reveal: team-0 vision at the foe's spot; it ages only in play (the world is frozen in the countdown)
-  function spawnReveal(w, r) {
-    r.done = true;
+  // the start reveal: a tiny team-0 ring of vision at the foe's spot. Its clock (r.linger s) is the countdown clock from `start` (the camera's
+  // arrival); introStep ages it there (the world is frozen), play ages it on from where it was. Nothing but a faint ring is drawn (fx.js).
+  function spawnReveal(w, r, start) {
+    r.done = true; r.start = start == null ? null : start;
     const e = w.get(r.id), x = e && !e.dead ? e.x : r.x, y = e && !e.dead ? e.y : r.y;
-    w.thinker({ x, y, r: REVEAL_R, team: 0, fx: 'startReveal', color: '#ffd24a', vision: REVEAL_VIS, foe: r.id, upd: (w2, t) => t.age >= REVEAL_LINGER - 1e-9 });
-    w.emit('fx', { name: 'startReveal', x, y, r: REVEAL_R });
+    r.thk = w.thinker({ x, y, r: REVEAL_R, team: 0, fx: 'startReveal', color: '#e9eef8', vision: REVEAL_VIS, foe: r.id, linger: r.linger, upd: (w2, t) => t.age >= t.linger - 1e-9 });
     if (IT.Vision && IT.Vision.update && w.map) { IT.Vision.update(w); w._visT = w.t; }
+  }
+  // v6 item 45: each foe starts out FACING the way it moves next (what the player can read off the reveal): a runner away from the hero, a marcher
+  // toward its gate, a chaser toward the hero (its belief starts on him). The others keep their stance.
+  function faceFoes(w, foes) {
+    const h = w.hero; if (!h) return;
+    for (const e of foes) {
+      const m = e.scn && e.scn.mot; let a = null;
+      if (m === 'flee') a = Math.atan2(e.y - h.y, e.x - h.x);
+      else if (m === 'march' && w.gate) a = Math.atan2(w.gate.y - e.y, w.gate.x - e.x);
+      else if (m === 'chase') a = Math.atan2(h.y - e.y, h.x - e.x);
+      if (a != null && isFinite(a)) e.facing = a;
+    }
   }
 
   // ---------------------------------------------------------------- run
@@ -747,6 +792,7 @@
     const freshSt = () => ({ last: {}, abil: {}, kills: [], casts: {}, blasts: [], towers: [], hit: null, used: new Set(), castAt: {}, hurt: false, burned: 0, burnAt: null, unseenFrom: null });
     function enter(w) {
       run.dummies = apply(w, run.pr);
+      faceFoes(w, run.dummies);
       // v6 (fog always on): the world is frozen through the countdown, so refresh the fog now -- the start picture is the real one and
       // a foe in plain sight is targetable on the first frame of play
       if (IT.Vision && IT.Vision.update && w.map) { IT.Vision.update(w); w._visT = w.t; }
@@ -763,7 +809,8 @@
       introStep(w);
     }
     // advance the intro to the countdown clock: 'tourFocus' for each stop reached (main.js glides the camera, fx.js pulses the focused
-    // foes / gate ring), then the start reveals the tour has reached (all of them once the tour is over / skipped)
+    // foes / gate ring); a start reveal spawns when the camera has ARRIVED on its foe (the tour is on), ages on the countdown clock from there and
+    // ends after its linger. A skipped / cancelled tour spawns the reveals it never reached at round start (go).
     function introStep(w) {
       const I = run.intro; if (!I) return;
       I.t = Math.max(0, run.countdown - run.cd);
@@ -771,7 +818,14 @@
         const i = ++I.cur, s = I.stops[i], nx = I.stops[i + 1];
         w.emit('tourFocus', { i, kind: s.kind, focus: s.focus || null, x: s.x, y: s.y, r: s.r, ids: s.ids.slice(), glide: s.glide, hold: (nx ? nx.t : I.T) - s.t - s.glide, last: !nx });
       }
-      for (const r of I.reveals) if (!r.done && (!I.tour || r.at <= I.t + 1e-9)) spawnReveal(w, r);
+      for (const r of I.reveals) {
+        if (!r.done && I.tour && r.at != null && r.at <= I.t + 1e-9) spawnReveal(w, r, r.at);
+        if (r.done && !r.gone && r.start != null && r.thk && !r.thk.dead) {
+          const el = Math.max(0, I.t - r.start);
+          if (el >= r.linger - 1e-9) { r.gone = true; w.remove(r.thk); if (IT.Vision && IT.Vision.update && w.map) { IT.Vision.update(w); w._visT = w.t; } }
+          else r.thk.age = el;
+        }
+      }
     }
 
     run.frozen = () => run.phase !== 'play';
@@ -1063,11 +1117,12 @@
 
     run.redo = () => { if (run.w && !run.ended) { enter(run.w); if (run.onSwap) run.onSwap(run); } };   // replay the current scenario
 
-    // round start: the tour ends, pending start reveals appear now (they linger REVEAL_LINGER s of play); main.js snaps the camera onto the hero on 'scnGo'
+    // round start: the tour ends, reveals the camera never reached appear now (full linger, aged by play). 'scnGo' { early }: early = an action
+    // cancelled the intro (main.js releases the camera where it is, item 45: no re-centre)
     function go() {
-      const w = run.w, I = run.intro;
-      if (I) { I.tour = false; introStep(w); }
-      run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', {});
+      const w = run.w, I = run.intro, early = run.cd > 1e-6;
+      if (I) { I.tour = false; introStep(w); for (const r of I.reveals) if (!r.done) spawnReveal(w, r, null); }
+      run.cd = 0; run.phase = 'play'; run.t0 = w.t; w.paused = false; w.emit('scnGo', { early });
     }
     // skip the pre-scenario countdown (any action key / Start button); false if not counting down
     run.skip = () => { if (run.ended || !run.w || run.phase !== 'countdown') return false; go(); return true; };
@@ -1075,7 +1130,7 @@
     run.skipTour = () => {
       const I = run.intro;
       if (run.ended || !run.w || run.phase !== 'countdown' || !I || !I.tour) return false;
-      I.tour = false; introStep(run.w); run.w.emit('tourEnd', { skipped: true });
+      I.tour = false; run.w.emit('tourEnd', { skipped: true });
       return true;
     };
     run.touring = () => !!(run.intro && run.intro.tour && run.phase === 'countdown' && !run.ended);
@@ -1129,7 +1184,7 @@
   }
 
   IT.Ranked = {
-    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, buildIntro, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
+    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,

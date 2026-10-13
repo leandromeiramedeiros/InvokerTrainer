@@ -1,6 +1,9 @@
 // Fog of war for team 0 via recursive shadowcasting + LOS helpers for team-1 AI. Pure.
 // Elevation (map.elev 0 low, 1 ground, 2 high): tiles higher than the viewer are opaque and never revealed; trees/rocks block only
 // at the viewer's own level (a high-ground viewer sees over lower trees and cliff lips).
+// Roshan's pit (v6 item 55, map.pitMask from js/data/maps.js): a source outside the crater never sees its 'in' tiles; a source inside sees
+// only the 'in' + 'mouth' tiles (the mouth ring is seen from both sides). Applied to every source: the fog shadowcast, los() (so canSee /
+// teamSees / the AI / towers / ranked spot tags), the 150 u true-sight ring and true-sight auras (Gem, Dust, towers).
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -8,6 +11,14 @@
   const MULT = [[1, 0, 0, 1], [0, 1, 1, 0], [0, -1, 1, 0], [-1, 0, 0, 1], [-1, 0, 0, -1], [0, -1, -1, 0], [0, 1, -1, 0], [1, 0, 0, -1]];
 
   let VE = 1;   // viewer elevation of the shadow() call in progress
+  let PV = -1;  // viewer pit code of the shadow() call in progress (-1 = the map has no pit)
+  // pit rule: viewer pit code vk (2 in, 1 mouth, 0 outside) may see a tile of code tk
+  const pitSees = (vk, tk) => vk === 2 ? tk !== 0 : tk !== 2;
+  function pitOk(map, ax, ay, bx, by) {
+    if (!map || !map.pitMask) return true;
+    const t = map.tile;
+    return pitSees(map.pitTile(Math.floor(ax / t), Math.floor(ay / t)), map.pitTile(Math.floor(bx / t), Math.floor(by / t)));
+  }
   function cast(map, vis, cx, cy, row, start, end, r, r2, xx, xy, yx, yy) {
     if (start < end) return;
     const w = map.w, elev = map.elev;
@@ -20,7 +31,7 @@
         if (start < rS) continue;
         if (end > lS) break;
         const inb = X >= 0 && Y >= 0 && X < w && Y < map.h, te = inb && elev ? elev[Y * w + X] : VE, hi = te > VE;
-        if (!hi && inb && dx * dx + dy * dy <= r2) vis[Y * w + X] = 1;
+        if (!hi && inb && dx * dx + dy * dy <= r2 && (PV < 0 || pitSees(PV, map.pitMask[Y * w + X]))) vis[Y * w + X] = 1;
         const b = hi || (te === VE && map.blocksSight(X, Y));
         if (blocked) {
           if (b) { newStart = rS; continue; }
@@ -38,12 +49,14 @@
   function shadow(map, vis, x, y, radius) {
     const cx = map.toTile(x), cy = map.toTile(y), rt = radius / map.tile, r = Math.ceil(rt), r2 = (rt + 0.5) * (rt + 0.5);
     VE = map.elevAt ? map.elevAt(x, y) : 1;
+    PV = map.pitMask ? map.pitTile(cx, cy) : -1;
     if (cx >= 0 && cy >= 0 && cx < map.w && cy < map.h) vis[cy * map.w + cx] = 1;
     for (const m of MULT) cast(map, vis, cx, cy, 1, 1.0, 0.0, r, r2, m[0], m[1], m[2], m[3]);
   }
 
   // true if no sight-blocking tile lies strictly between the endpoint tiles (grid traversal)
   function los(map, ax, ay, bx, by) {
+    if (map.pitMask && !pitOk(map, ax, ay, bx, by)) return false;   // v6 item 55: the pit wall of vision
     const t = map.tile, elev = map.elev, ve = map.elevAt ? map.elevAt(ax, ay) : 1;
     let tx = Math.floor(ax / t), ty = Math.floor(ay / t);
     const ex = Math.floor(bx / t), ey = Math.floor(by / t);
@@ -77,7 +90,7 @@
     for (const e of w.ents) {
       if (e.dead || e.team !== team || !(e.trueSight > 0)) continue;
       if (e.hp != null && e.hp <= 0 && e.kind !== 'thinker') continue;
-      if (Math.hypot(target.x - e.x, target.y - e.y) <= e.trueSight) return true;
+      if (Math.hypot(target.x - e.x, target.y - e.y) <= e.trueSight && pitOk(w.map, e.x, e.y, target.x, target.y)) return true;
     }
     return false;
   }
@@ -131,7 +144,7 @@
       else if (!v) {
         const tx = m.toTile(e.x), ty = m.toTile(e.y);
         v = tx >= 0 && ty >= 0 && tx < m.w && ty < m.h && vis[ty * m.w + tx] === 1;
-        if (!v) for (const s of src) if (Math.hypot(e.x - s.x, e.y - s.y) <= SIGHT && (!m.elevAt || m.elevAt(e.x, e.y) <= m.elevAt(s.x, s.y))) { v = true; break; }
+        if (!v) for (const s of src) if (Math.hypot(e.x - s.x, e.y - s.y) <= SIGHT && (!m.elevAt || m.elevAt(e.x, e.y) <= m.elevAt(s.x, s.y)) && pitOk(m, s.x, s.y, e.x, e.y)) { v = true; break; }
       }
       if (v && !e.building && isHidden(e) && !revealed(e) && !trueSighted(w, 0, e)) v = false;   // invisible: needs detection
       const prev = !!e.visible;
@@ -146,5 +159,5 @@
     if (w._visT === undefined || w.t - w._visT >= per - 1e-9) { w._visT = w.t; update(w); }
   });
 
-  IT.Vision = { los, canSee, trueSighted, teamSees, visibleAt, update, shadow, isHidden, SIGHT };
+  IT.Vision = { los, canSee, trueSighted, teamSees, visibleAt, update, shadow, isHidden, pitOk, pitSees, SIGHT };
 })(typeof window !== 'undefined' ? window : globalThis);

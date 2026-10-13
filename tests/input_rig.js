@@ -5,7 +5,7 @@ const ROOT = path.join(__dirname, '..');
 const FILES = ['js/data/dota.js', 'js/data/rules.js', 'js/data/game.js', 'js/data/map.js', 'js/data/i18n.js',
   'js/sim/util.js', 'js/sim/values.js', 'js/sim/world.js', 'js/sim/status.js', 'js/sim/abilities.js', 'js/sim/combat.js',
   'js/sim/nav.js', 'js/sim/vision.js', 'js/sim/loadout.js', 'js/sim/hero.js', 'js/sim/invoke.js', 'js/sim/orders.js',
-  'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/render/camera.js', 'js/ui/settings.js', 'js/input.js'];
+  'js/sim/units.js', 'js/sim/spells.js', 'js/sim/items.js', 'js/render/camera.js', 'js/ui/settings.js', 'js/sim/pick.js', 'js/input.js'];
 const SRC = FILES.map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
 const CODES = { q: 'KeyQ', w: 'KeyW', e: 'KeyE', r: 'KeyR', d: 'KeyD', f: 'KeyF', a: 'KeyA', s: 'KeyS', h: 'KeyH', v: 'KeyV', z: 'KeyZ', ' ': 'Space', Escape: 'Escape' };
 

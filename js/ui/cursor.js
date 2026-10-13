@@ -6,6 +6,8 @@
   const IT = G.IT = G.IT || {};
   const doc = G.document;
   const Cur = IT.Cursor = { kind: 'default', set() {}, virtual() {}, url: () => '', hot: () => [0, 0] };
+  // v6 item 54: hover state = the SAME click boxes as selection / right-click / spells (IT.Pick.unitAt): 'attack' over an enemy-team unit, else 'default'
+  Cur.hoverKind = (w, x, y, P) => (IT.Pick && w && IT.Pick.unitAt(w, x, y, { team: 1, P }) ? 'attack' : 'default');
   if (!doc || !doc.createElement) return;
 
   const SCALE = 2;

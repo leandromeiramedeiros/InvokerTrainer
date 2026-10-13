@@ -2,7 +2,7 @@
 // optional lock-to-hero, `follow` (center key held), speed scaled by the camSpeed setting.
 // Centering never snaps except centerOn(): glideTo / follow / lock ease with a frame-rate independent exponential (tau ~0.16 s).
 // v6 item 13 (intro tour): glideTo(x, y, dur) = a timed ease-in-out glide over dur s; while cam.script is set (main.js: the tour is
-// running) lock / follow do not pull the view back to the hero.
+// running) lock / follow do not pull the view back to the hero. release() = a cancelled intro: stay exactly where the camera is.
 (function (G) {
   'use strict';
   const IT = G.IT = G.IT || {};
@@ -45,6 +45,8 @@
       centerOn(x, y) { const m = margins(); cam.glide = null; cam.x = x - m.fx; cam.y = y - m.fy; cam.clamp(); },   // instant (minimap, start): onto the visible-area centre
       // round start / scenario swap: hard snap onto the hero; the next update() keeps it there (no lerp, no edge / arrow pan on that frame), lock / follow untouched
       snap(x, y) { cam.centerOn(x, y); cam.hold = true; },
+      // v6 item 45: the intro was cancelled by an action -> the tour stops where it is (a tour glide is dropped, nothing re-centres; lock / follow resume as set)
+      release() { if (cam.script) cam.glide = null; cam.script = false; },
       glideTo(x, y, dur) {                                                                                              // eased (dur: timed ease-in-out)
         const m = margins();
         cam.glide = { x: cx(x - m.fx), y: cy(y - m.fy) };

@@ -112,8 +112,56 @@
     const hc = worldToTile(spec.hero[0], spec.hero[1]);
     const ht = nearestWalk(raw, Math.max(2, Math.min(w - 3, Math.floor(hc[0]) - gx0)), Math.max(2, Math.min(h - 3, Math.floor(hc[1]) - gy0)));
     raw.spawns = { hero: raw.center(ht[0], ht[1]), dummies: [] };
+    buildPit(raw);
     const zones = (spec.zones || []).map(z => { const q = worldToTile(z.at[0], z.at[1]), cx = Math.floor(q[0]) - gx0, cy = Math.floor(q[1]) - gy0; return { tag: z.tag, x0: cx - z.r, x1: cx + z.r, y0: cy - z.r, y1: cy + z.r }; });
     return finish(raw, ht, zones, false);
+  }
+
+  // ------------------------------------------------------------------ v6 item 55: Roshan's pit (vision area)
+  // Same crater as Ranked.pitRegion (v6 item 17: in the extracted map Roshan's spot is a solid rock; the crater is the walkable pocket
+  // where >= PIT_ENC of 8 rays hit an unwalkable tile within PIT_RAY tiles, flood-filled (4-way) from the most enclosed tile of a
+  // 19 x 19 box around the spot), plus the walkable holes that pocket closes in (not reachable from the box edge without crossing it).
+  // Every Roshan spot inside the window counts ('dota' holds both pits). map.setPit -> 'in' = the crater, 'mouth' = the 1-tile walkable
+  // ring around it (the entrances: the pocket opens onto the river there). Vision rule: js/sim/vision.js.
+  const PIT_BOX = 9, PIT_RAY = 8, PIT_ENC = 6, PIT_MOUTH = 1, D8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  function pitPocket(map, cx, cy) {
+    const W = map.w, wk = (x, y) => x >= 0 && y >= 0 && x < W && y < map.h && map.walkableTile(x, y);
+    const enc = (x, y) => D8.filter(([dx, dy]) => { for (let k = 1; k <= PIT_RAY; k++) if (!wk(x + dx * k, y + dy * k)) return true; return false; }).length;
+    const E = {}, inBox = (x, y) => Math.abs(x - cx) <= PIT_BOX && Math.abs(y - cy) <= PIT_BOX;
+    let seed = null, best = -1;
+    for (let y = cy - PIT_BOX; y <= cy + PIT_BOX; y++) for (let x = cx - PIT_BOX; x <= cx + PIT_BOX; x++) {
+      if (!wk(x, y)) continue;
+      const e = E[y * W + x] = enc(x, y);
+      if (e > best || (e === best && Math.hypot(x - cx, y - cy) < Math.hypot(seed[0] - cx, seed[1] - cy))) { best = e; seed = [x, y]; }
+    }
+    if (!seed || best < PIT_ENC) return null;
+    const tiles = new Set([seed[1] * W + seed[0]]), qu = [seed];
+    for (let k = 0; k < qu.length; k++) for (const [dx, dy] of D8.slice(0, 4)) {
+      const x = qu[k][0] + dx, y = qu[k][1] + dy, i = y * W + x;
+      if (!inBox(x, y) || tiles.has(i) || !wk(x, y) || !(E[i] >= PIT_ENC)) continue;
+      tiles.add(i); qu.push([x, y]);
+    }
+    // holes: walkable box tiles the pocket encloses (flood the rest of the box from its edge)
+    const out = new Set(), q2 = [];
+    for (let y = cy - PIT_BOX; y <= cy + PIT_BOX; y++) for (let x = cx - PIT_BOX; x <= cx + PIT_BOX; x++)
+      if ((Math.abs(x - cx) === PIT_BOX || Math.abs(y - cy) === PIT_BOX) && wk(x, y) && !tiles.has(y * W + x)) { out.add(y * W + x); q2.push([x, y]); }
+    for (let k = 0; k < q2.length; k++) for (const [dx, dy] of D8.slice(0, 4)) {
+      const x = q2[k][0] + dx, y = q2[k][1] + dy, i = y * W + x;
+      if (!inBox(x, y) || out.has(i) || tiles.has(i) || !wk(x, y)) continue;
+      out.add(i); q2.push([x, y]);
+    }
+    for (let y = cy - PIT_BOX; y <= cy + PIT_BOX; y++) for (let x = cx - PIT_BOX; x <= cx + PIT_BOX; x++)
+      if (wk(x, y) && !out.has(y * W + x)) tiles.add(y * W + x);
+    return tiles;
+  }
+  function buildPit(map) {
+    const ros = (IT.DOTAWORLD && IT.DOTAWORLD.ents && IT.DOTAWORLD.ents.roshan) || [], g = map.world, all = [];
+    for (const r of ros) {
+      const q = worldToTile(r.x, r.y), cx = Math.floor(q[0]) - g.gx0, cy = Math.floor(q[1]) - g.gy0;
+      if (cx < 0 || cy < 0 || cx >= map.w || cy >= map.h) continue;
+      const t = pitPocket(map, cx, cy); if (t) for (const i of t) all.push(i);
+    }
+    if (all.length && map.setPit) map.setPit(all, PIT_MOUTH);
   }
 
   // ------------------------------------------------------------------ derived spawns

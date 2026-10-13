@@ -28,6 +28,7 @@
     blink_fog: { nightAt: 6 },      // foe 890-1130 away, Blink range 1200
     night_juke: 'night',            // v6 item 27: the pack starts 620-760 u away (night sight 800); the other juke scenarios play by day (sight 1800)
     river_mouth_ambush: { nightAt: 4 }, // v6 item 29: the sentry stands 1000-1300 u away in the mist: strike before the dark closes in
+    pit_in_out: 'night',            // v6 item 55: the pack starts ~630 u away (night sight 800): duck into Roshan's pit, out past the mouth, around the wall
   };
 
   const VALID = { day: 1, night: 1, cycle: 1 };

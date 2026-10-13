@@ -87,13 +87,7 @@
       }
       case 'meteorCancel': endChan(x, y); break;
       case 'sunstrikeBeam': break;
-      case 'startReveal': {   // v6 item 39: Sun-Strike-shaped start reveal (gold beam drop, no damage / shake)
-        const r = p.r || 175;
-        addFx({ k: 'pillar', x, y, r: r * 0.8, dur: 0.5, ramp: 'gold' });
-        addFx({ k: 'wave', x, y, r0: 0.2 * r, r1: 1.2 * r, dur: 0.45, color: '#ffe27a' });
-        burst(x, y, 'gold', 50, { spread: r * 0.7, speed: 50, up: 110, life: 0.8, rest: 3 });
-        break;
-      }
+      case 'startReveal': break;   // v6 item 45: a plain faint ring only (ground pass), no event VFX
       case 'sunstrikeHit': {
         const r = p.r || 175;
         addFx({ k: 'pillar', x, y, r, dur: 0.55, ramp: 'fire' });
@@ -362,7 +356,7 @@
       if (key === 'icewall') { iceWallLights(R, e); continue; }
       let r = Math.min(80, Math.max(26, (e.r || e.radius || 60) / R.P * 1.1)), inten = 0.55;
       if (key === 'sunstrike') { const rem = e.danger ? e.danger.at - R.simT : 1; inten = 0.25 + 0.5 * clamp(1 - rem, 0, 1); }
-      else if (key === 'startReveal') { r = 80; inten = 0.85 * (1 - clamp((e.age - 0.6) / 0.4, 0, 1)); c[0] = 255; c[1] = 210; c[2] = 90; }
+      else if (key === 'startReveal') continue;   // v6 item 45: no light
       else if (key === 'bolt') { r = 30; inten = 0.8; }
       else if (key === 'attack') { const g = orbPal(w.byId.get(e.src)).rgb; r = 30; inten = 0.75; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
       else if (key === 'tower') { r = 30; inten = 0.75; const g = e.team === 1 ? [255, 120, 50] : [140, 255, 110]; c[0] = g[0]; c[1] = g[1]; c[2] = g[2]; R.light(sx, sy - 9, r, c, inten); continue; }
@@ -509,20 +503,9 @@
           if (!e.landed) PX.ring(cx, x, y, Math.max(rr, 8), '#ff8a1c', t * 0.2, 3);
           break;
         }
-        case 'startReveal': {   // Sun Strike-shaped gold ring + dithered fill + tick marks; fades over the last 40 % of its linger
-          if (!revT.has(e.id)) revT.set(e.id, t);
-          const rt = t - revT.get(e.id), grow = clamp(rt / 0.35, 0, 1), fa = 1 - clamp((e.age - 0.6) / 0.4, 0, 1), pul = 0.5 + 0.5 * Math.sin(t * 6);
-          if (fa <= 0) break;
-          const rg = rr * (1 - (1 - grow) * (1 - grow));
-          cx.globalAlpha = fa; PX.ring(cx, x, y, rg, '#ffe27a', t * 0.15, 3); cx.globalAlpha = 1;
-          dring(R, x, y, rg * 0.98, '#ffb040', 0.55 * fa);
-          dring(R, x, y, rg * (0.55 + 0.1 * pul), '#ffd24a', 0.7 * fa);
-          ddisc(R, x, y, rg, '#ffd24a', (0.1 + 0.06 * pul) * fa);
-          const tk = 3 + pul * 3;
-          cx.fillStyle = '#fff0a0'; cx.globalAlpha = fa;
-          cx.fillRect(Math.round(x) - 1, Math.round(y - rg - tk), 1, tk); cx.fillRect(Math.round(x) - 1, Math.round(y + rg + 1), 1, tk);
-          cx.fillRect(Math.round(x - rg - tk), Math.round(y) - 1, tk, 1); cx.fillRect(Math.round(x + rg + 1), Math.round(y) - 1, tk, 1);
-          cx.globalAlpha = 1;
+        case 'startReveal': {   // v6 item 45: a tiny plain faint ring of vision, no VFX; it fades out over its linger (e.age counts the intro seconds since the camera arrived)
+          const fa = 1 - clamp(e.age / Math.max(0.1, e.linger || 1), 0, 1);
+          if (fa > 0) dring(R, x, y, rr, '#e9eef8', 0.5 * fa);
           break;
         }
         case 'icewall': iceWallGround(R, e); break;
@@ -1300,15 +1283,6 @@
             cx.fillStyle = f > 0.8 ? '#fff6c0' : '#ffb040';
             for (let yy = y - 1; yy > -4; yy -= 2) if (PX.bayer(x + R.camX, yy + R.camY) < f) cx.fillRect(x - (wd >> 1), yy, wd, 1);
           }
-          break;
-        }
-        case 'startReveal': {   // the sky beam: a bright column that thins to a steady shimmer, fading with the ring
-          const rt = revT.has(e.id) ? t - revT.get(e.id) : 0, fa = 1 - clamp((e.age - 0.6) / 0.4, 0, 1);
-          if (fa <= 0) break;
-          const f = rt < 0.4 ? 1 : 0.35 + 0.1 * Math.sin(t * 5), wd = rt < 0.4 ? 3 : 1;
-          cx.fillStyle = rt < 0.25 ? '#fff6c0' : '#ffd24a';
-          for (let yy = y - 1; yy > -4; yy -= rt < 0.4 ? 1 : 2) if (PX.bayer(x + R.camX, yy + R.camY) < f * fa) cx.fillRect(x - (wd >> 1), yy, wd, 1);
-          R.glow(x, y - 4, 16, '#ffd24a', 0.5 * fa);
           break;
         }
         case 'bolt': {

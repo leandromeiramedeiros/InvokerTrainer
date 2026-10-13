@@ -134,6 +134,14 @@
   };
   const JS = [{ a: 'move', at: 'spot:cover' }, { a: 'move', at: 'spot:hide' }], JF = ['caught', 'died', 'method'];
   const JX = sp => ({ spots: sp, focus: ['spot:cover', 'spot:hide'], rand: { pick: 1 }, vary: { boots: 'boots', posJit: 0 } });   // fixed arenas: the route is the puzzle
+  // v6 item 55 (pit jukes): the crater is small and open on one side, so the arenas are explicit: PAT = hero start (offset from the map's
+  // hero spawn), PJC = JC with the lead chaser at an offset from the hero start, PSP = 'cover' (inside the crater) + 'hide' (+ 'aim' for
+  // the Force Staff route) as offsets from the hero start. PFS = cover -> 'aim' (face the exit) -> Force Staff -> hide
+  const PAT = (dx, dy) => ({ dx, dy });
+  const PJC = (n, dx, dy, ex) => [U({ dx, dy }, Object.assign({ mot: 'chase', hp: 1 }, (ex || [])[0])),
+    U({ of: 0, side: 220 }, Object.assign({ mot: 'chase', hp: 1 }, (ex || [])[1])), U({ of: 0, side: -220 }, Object.assign({ mot: 'chase', hp: 1, minDf: 'common' }, (ex || [])[2]))].slice(0, n);
+  const PSP = (cv, hd, aim) => Object.assign({ cover: { dx: cv[0], dy: cv[1] }, hide: { dx: hd[0], dy: hd[1] } }, aim ? { aim: { dx: aim[0], dy: aim[1] } } : {});
+  const PFS = [{ a: 'move', at: 'spot:cover' }, { a: 'move', at: 'spot:aim', r: 40 }, { a: 'forcestaff', at: 'self' }, { a: 'move', at: 'spot:hide' }];
 
   const V5 = [
     // ---------------------------------------------------------------- level 1: one target, one idea
@@ -301,6 +309,24 @@
       { type: 'escape', time: 25, unseen: 5, burn: 1 }, JF, [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(JSP(2, ['level'], 0, 2, { strict: true, hid: [900, 1400] }))),
     V('no_invis_juke', 10, 'rad_off_t1', ['juke', 'fun'], 20, { lvl: 24, at: JH(['choke'], 0) }, JC(3, null, [{ recatch: true }, { recatch: true }]),
       { type: 'escape', time: 20, unseen: 6, noInvis: true }, JF, JS, JX(JSP(3, ['level'], 0, 0, { strict: true }))),
+    // ---------------------------------------------------------------- v6 item 55: PIT jukes (Roshan's pit vision rule, js/sim/vision.js)
+    // Outside the crater nobody sees in; inside, nobody sees out; the mouth ring is seen from both sides (map.pitAt). Explicit arenas
+    // (PAT / PJC / PSP, see above), same juke contract as above (fixed arenas, spot bot cover -> hide: tests/juke_v6.test.js + tests/pit_v6.test.js).
+    // night: duck into the crater (they lose you), out past the mouth and around the wall while they walk in after you
+    V('pit_in_out', 5, 'roshan_pit_top', ['juke', 'fun', 'pit', 'fog'], 20, { lvl: 10, at: PAT(-960, 576) }, PJC(2, 624, 96),
+      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, JS, JX(PSP([-528, -480], [-96, -1344]))),
+    // walk in, wait for them to follow, then Force Staff out past the mouth: inside the crater they cannot see you leave
+    V('pit_force_exit', 6, 'roshan_pit', ['juke', 'fun', 'pit', 'items'], 20, { lvl: 12, items: ['forcestaff'], at: PAT(1392, -240) }, PJC(2, 288, 240),
+      { type: 'escape', time: 20, unseen: 5, noInvis: true }, JF, PFS, JX(PSP([144, 0], [-384, 480], [0, -48]))),
+    // a Dust carrier outside: Ghost Walk inside the crater; even a dusted hero stays unseen from outside
+    V('pit_ghost', 7, 'roshan_pit_top', ['juke', 'fun', 'pit', 'invisible', 'items'], 20, { lvl: 14, at: PAT(-288, 624) }, PJC(2, -1296, 480, [{ items: ['dust'] }]),
+      { type: 'escape', time: 20, unseen: 6 }, JF, [{ a: 'ghostwalk', at: 'self' }].concat(JS), JX(PSP([-912, -480], [-1152, -624]))),
+    // not a juke (a kill): the foe waits in the crater and must leave by the mouth to reach its gate. Unseen in the pit, it shows on the
+    // mouth: read the exit and Sun Strike it on the way out
+    V('pit_mouth_snipe', 6, 'roshan_pit_top', ['pit', 'fun', 'prediction', 'fog'], 12, { lvl: 12, at: PAT(-432, 528) },
+      [U({ dx: -864, dy: -480 }, { hp: 0.38, mot: 'march' })],
+      { type: 'kill_with', how: { ability: ['sunstrike'] } }, ['method', 'cross', 'time'], [{ a: 'sunstrike', at: 'lead', near: 800 }],
+      { gate: { dx: -720, dy: 768, r: 260 }, focus: ['pit'], rand: { pick: 1 }, vary: { posJit: 0 } }),
     // ---------------------------------------------------------------- v6 item 29: EDGE (the minimap's four border strips; texts: js/data/i18n/scn.js)
     // Arena tags (js/data/maps.js): edge = within 1900 u of the world border, edgeN / edgeS / edgeW / edgeE = which one, rim = within 900 u of
     // this map window's own border. The border cuts off one direction: a foe pinned against it, a fleeing foe running out of lane, a hold
@@ -385,7 +411,8 @@
   //      ian / easy / common always reveal; at hard / bambam only these snipe / prediction scenarios do (Ranked.revealOn).
   const REVEAL = ['sun_flee', 'uphill_snipe', 'sun_snipe', 'fog_ambush', 'blink_fog',
     'treeline_loop', 'river_fog_crossing', 'highground_bait', 'ramp_shuffle', 'night_juke', 'ghost_vs_gem', 'dust_bait', 'no_invis_juke',
-    'edge_gank', 'long_lane_snipe', 'river_mouth_ambush', 'offlane_survival', 'pinned_escape'];   // + v6 item 27 juke set, v6 item 29 edge set
+    'edge_gank', 'long_lane_snipe', 'river_mouth_ambush', 'offlane_survival', 'pinned_escape',
+    'pit_in_out', 'pit_force_exit', 'pit_ghost', 'pit_mouth_snipe'];   // + v6 item 27 juke set, v6 item 29 edge set, v6 item 55 pit set
   for (const s of all) s.reveal = REVEAL.indexOf(s.id) >= 0;
 
   IT.SCENARIOS = all.map((s, i) => [s, i]).sort((a, b) => a[0].level - b[0].level || a[1] - b[1]).map(p => p[0]);   // easy -> advanced (stable)

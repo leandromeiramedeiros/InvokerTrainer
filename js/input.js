@@ -5,7 +5,6 @@
   const IT = G.IT = G.IT || {};
   const GM = IT.GAME, P = GM.UNIT_PX;   // view size: GM.VIEW_W/VIEW_H (live, scroll-wheel zoom)
   const sfx = n => { if (typeof G.SFX !== 'undefined' && G.SFX.enabled && G.SFX.play) { try { G.SFX.play(n); } catch (e) { /* ignore */ } } };
-  const HOVER = 70;          // extra pick radius (world units) around a unit's hull: quick-cast must forgive sloppy aim
   const EDGE_PX = 3;         // window-edge scroll band (CSS px)
   const PEND_MAX = 1.5;      // s: a pending cast older than this is replaced, not queued behind
   const DEFER_MAX = 2000;    // ms: deferred invoke runs anyway after this
@@ -30,21 +29,9 @@
 
   // ---------------------------------------------------------------- helpers
   function worldMouse() { return In.ctx.cam.toWorld(In.mouse.x, In.mouse.y); }
-  // nearest unit to point p within (hull + HOVER); ok(e) filters
-  function hover(p, ok) {
-    const w = In.ctx.w;
-    let best = null, bd = Infinity;
-    for (const e of w.ents) {
-      if (e.dead || e.kind === 'thinker' || e.kind === 'proj' || !ok(e)) continue;
-      const d = IT.U.dist2(e.x, e.y, p.x, p.y), lim = (e.radius || 0) + HOVER;
-      if (d <= lim * lim && d < bd) { bd = d; best = e; }
-    }
-    return best;
-  }
-  function unitAt(p, team) {
-    const w = In.ctx.w;
-    return hover(p, e => e.team === team && !(w.fog && team === 1 && !e.visible));
-  }
+  // v6 item 54: every 'unit under the cursor' question goes through IT.Pick (js/sim/pick.js): tall click boxes that follow the lift, enemy heroes first
+  function hover(p, ok) { return IT.Pick.unitAt(In.ctx.w, p.x, p.y, { ok, P }); }
+  function unitAt(p, team) { return IT.Pick.unitAt(In.ctx.w, p.x, p.y, { team, P }); }
   function pickTarget(d, p) {
     const { w, hero } = In.ctx;
     return hover(p, e => d.filter(w, hero, e));
@@ -717,7 +704,7 @@
     let kind = 'default';
     if (In._drag && In._drag.moved) kind = 'select';
     else if (In.armed) kind = In.armed.attack ? 'amove' : 'aim';
-    else if (In.mouse.in && unitAt(worldMouse(), 1)) kind = 'attack';
+    else if (In.mouse.in) { const m = worldMouse(); kind = IT.Cursor && IT.Cursor.hoverKind ? IT.Cursor.hoverKind(c.w, m.x, m.y, P) : unitAt(m, 1) ? 'attack' : 'default'; }
     cur(kind);
   }
 

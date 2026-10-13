@@ -49,7 +49,8 @@
 
   // v6 item 13: the intro camera tour. Ranked emits 'tourFocus' per stop: a timed glide there (foe / gate / focus stops sit right of
   // centre, clear of the briefing card on the left; the last stop is the hero, exactly centred). 'tourEnd' (F1 skipped it) glides back
-  // to the hero; 'scnGo' (round start: timer, move / cast / attack skip) snaps onto him.
+  // to the hero; 'scnGo' (round start: the timer, or v6 item 45: a move / cast / attack that cancelled the intro) only releases the tour:
+  // the camera stays exactly where it is (a normal end is already on the hero).
   const TOUR_SHIFT = 0.14;   // x view width: a toured spot shows at ~64 % of the screen width
   function tourWire(w) {
     w.on('tourFocus', p => {
@@ -58,7 +59,7 @@
       g.cam.glideTo(p.x - off, p.y, Math.max(0.05, p.glide));
     });
     w.on('tourEnd', () => { if (g && g.w === w) { g.cam.script = false; g.cam.glideTo(g.hero.x, g.hero.y, 0.5); } });
-    w.on('scnGo', () => { if (g && g.w === w) { g.cam.script = false; g.cam.snap(g.hero.x, g.hero.y); } });
+    w.on('scnGo', () => { if (g && g.w === w) g.cam.release(); });
   }
   // per frame while frozen / playing: the tour owns the camera (lock / follow ignored); F1 (center: cam.follow) ends only the tour
   function tourSync() {
