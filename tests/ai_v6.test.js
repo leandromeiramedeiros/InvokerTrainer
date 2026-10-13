@@ -83,6 +83,7 @@ test('#50: same intent at ian and bambam = same plan (kind, mover, behavior); on
   for (let i = 1; i < X.length; i++) {
     assert.ok(X[i].jitter <= X[i - 1].jitter && X[i].itemP >= X[i - 1].itemP && X[i].gwDust >= X[i - 1].gwDust && X[i].predict >= X[i - 1].predict, DF.order[i]);
     assert.ok(X[i].blinkCast <= X[i - 1].blinkCast && X[i].gwReact <= X[i - 1].gwReact, DF.order[i]);
+    assert.ok(X[i].blinkWarn < X[i - 1].blinkWarn, DF.order[i] + ' blinkWarn ladder');   // v6 #75
   }
   for (const x of X) assert.ok(x.blinkCast >= 0.15 && x.blinkCast <= 0.35);
   assert.equal(DF.ian.exec.gwDust, 0);
@@ -219,7 +220,7 @@ test('#52: hurt -> turn + tier cast point -> blink (an ability, works while dama
   const ch = IT.Status.find(e, 'channel');
   assert.ok(ch && ch.data.ability === 'blinkWindup', 'channel status');
   const dur = W.at - W.t0, X = DF.common.exec;
-  assert.ok(dur >= X.blinkCast - 1e-6 && dur <= X.blinkCast + Math.PI / IT.GAME.ENEMY.blink.turn + 1e-6, 'wind-up ' + dur);
+  assert.ok(dur >= X.blinkCast + X.blinkWarn - 1e-6 && dur <= X.blinkCast + X.blinkWarn + Math.PI / IT.GAME.ENEMY.blink.turn + 1e-6, 'wind-up ' + dur);   // v6 #75: warning ON TOP of the cast point
   steps(m, 30);
   for (const k of ['fx:blinkWindup', 'itemUse', 'innateBlink:start', 'blink', 'innateBlink:done']) assert.ok(ev.includes(k), k + ' in ' + ev.join(' '));
   assert.ok(Math.hypot(e.x - x0, e.y - y0) > 300, 'blinked away');
@@ -307,7 +308,8 @@ test('#52: naive play fails: Sun Strike straight after the blast (the knockback 
     const r = naive(id, 'common', seed);
     out.push(id + ':' + seed + ':' + (r ? (r.ok ? 'ok' : r.reason) : 'none'));
   }
-  assert.ok(out.every(s => !/:ok$/.test(s)), out.join(' '));
+  // v6 #75: the warning (easy 0.7 / common 0.5 s) delays the blink on top of the cast point, so a lucky naive Sun Strike can now land (1 seed of 4 at most)
+  assert.ok(out.filter(s => /:ok$/.test(s)).length <= 1 && !out.some(s => /^am_.*:ok$/.test(s)), out.join(' '));
 });
 
 // ---------------------------------------------------------------- #58 balance: walk away (> 450 = no slow), break line of sight

@@ -110,7 +110,8 @@
       case 'blinkTell': tele.set(p.unit, { t0: R_.time, dur: p.dur || 0.35, kind: 'blink' }); break;
       // v6 #52: an innate blink wind-up (turn + cast point, units.js startBlink) -> contracting ring + dotted line to the landing spot;
       // denied (Cold Snap / a disable mid wind-up) -> the ring shatters
-      case 'blinkWindup': tele.set(p.unit, { t0: R_.time, dur: p.dur || 0.3, kind: 'blinkWindup', tx: p.tx, ty: p.ty }); break;
+      // v6 #75: + turn (s facing, no cue yet), warn (s of cue ON TOP of the cast point), innate (head glint; a dagger already shows the item telegraph)
+      case 'blinkWindup': tele.set(p.unit, { t0: R_.time, dur: p.dur || 0.3, kind: 'blinkWindup', tx: p.tx, ty: p.ty, turn: p.turn || 0, warn: p.warn || 0, innate: p.innate !== false }); break;
       case 'blinkDenied':
         tele.delete(p.unit);
         addFx({ k: 'wave', x, y, r0: 30, r1: 6, dur: 0.25, color: '#bff4ff' });
@@ -317,6 +318,39 @@
 
   // drop every one-shot / channel / telegraph / damage number / order path (scenario swap, restart)
   function clear() { iwReg.clear(); iwLay.clear(); iwRoots.length = 0; tour = null; revT.clear(); fxs = []; chans.length = 0; texts.length = 0; tele.clear(); trail.clear(); pathRec.clear(); tpPos.clear(); pkPos.clear(); roshPos.clear(); if (IT.BeliefFX) IT.BeliefFX.clear(); }
+
+  // v6 #75 blink warning cue: after the turn, a purple Blink icon glints above the head and a faint ghost + landing ring pulse at the destination.
+  let blinkTint = null;
+  function tintedBlink() {
+    if (blinkTint) return blinkTint;
+    const ic = IT.Art && IT.Art.canvas && (IT.Art.canvas('icons', 'blink') || IT.Art.canvas('icons', 'blink_item'));
+    if (!ic || typeof document === 'undefined') return null;
+    const c = document.createElement('canvas'); c.width = 12; c.height = 12;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.drawImage(ic, 0, 0, 12, 12);
+    g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(150,70,255,0.55)'; g.fillRect(0, 0, 12, 12);
+    return (blinkTint = c);
+  }
+  function blinkCue(R, tl, x, y, t) {
+    const cx = R.cx, el = t - tl.t0, c0 = tl.turn || 0;
+    if (el < c0) return;
+    const g = clamp((el - c0) / Math.max(0.05, tl.dur - c0), 0, 1), pulse = 0.5 + 0.5 * Math.sin(el * 22);
+    if (tl.innate) {   // glint above the head (blinks faster as the cast nears)
+      const ic = tintedBlink(), hy = Math.round(y) - 46 + Math.round(Math.sin(el * 8)), hx = Math.round(x);
+      cx.fillStyle = '#000'; cx.fillRect(hx - 8, hy - 1, 16, 14);
+      cx.fillStyle = '#b070ff'; cx.fillRect(hx - 7, hy, 14, 12);
+      if (ic) cx.drawImage(ic, hx - 6, hy, 12, 12); else { cx.fillStyle = '#e0c0ff'; cx.fillRect(hx - 3, hy + 3, 6, 6); }
+      if (Math.sin(el * TAU * (3 + 6 * g)) > 0) { cx.fillStyle = '#fff'; cx.fillRect(hx + 5, hy - 3, 2, 2); cx.fillRect(hx - 8, hy + 6, 2, 2); }
+    }
+    if (tl.tx != null) {   // ghost at the destination
+      const qx = pxs(R, tl.tx), qy = pys(R, tl.ty), A0 = cx.globalAlpha;
+      dring(R, qx, qy, 26 - 12 * g, '#b070ff', 0.35 + 0.35 * pulse);
+      ddisc(R, qx, qy, 9, '#7a3cd0', 0.18 + 0.14 * pulse);
+      const ic = tintedBlink();
+      cx.globalAlpha = 0.28 + 0.2 * pulse;
+      if (ic) cx.drawImage(ic, Math.round(qx) - 6, Math.round(qy) - 22, 12, 12); else { cx.fillStyle = '#b070ff'; cx.fillRect(Math.round(qx) - 4, Math.round(qy) - 20, 8, 8); }
+      cx.globalAlpha = A0;
+    }
+  }
 
   // ---------- per-frame update ----------
   function update(R, dt) {
@@ -562,6 +596,7 @@
         dring(R, x, y, 34 * (1 - f) + 6, f > 0.6 ? '#e0a0ff' : '#b070ff', 0.95);
         dring(R, x, y, 10, '#6cb8ff', 0.4 + 0.5 * f);
         if (tl.tx != null) { const qx = pxs(R, tl.tx), qy = pys(R, tl.ty); PX.dotted(cx, x, y, x + (qx - x) * f, y + (qy - y) * f, '#b070ff', 4, -t * 16); }
+        blinkCue(R, tl, x, y, t);
         continue;
       }
       const r = 26 - f * 14;

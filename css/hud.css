@@ -160,6 +160,17 @@
 .hstrip .hc{flex:none;gap:.2em}
 .hunit .hmid{min-height:16.65em}
 .hunit .hstrip{width:auto;align-self:flex-start;margin-top:.5em}
+/* v6 #74 enemy ability bar: cells reuse .hbtn (cooldown sweep .cd, mana cost .lv, charges .ch); innate = purple-tinted blink icon, lock = red sweep */
+.hunit .hbtn.item{cursor:help}
+.hunit .hbtn .lv{color:#8fc4ff;left:0;right:auto}
+.hunit .hbtn.innate{border-color:#b070ff}
+.hunit .hbtn.innate .ic{filter:hue-rotate(35deg) saturate(1.4) brightness(.95)}
+.hunit .hbtn.innate .ic::after{content:"";position:absolute;inset:0;background:rgba(150,70,255,.28)}
+.hunit .hbtn.innate .hk{left:auto;right:0;top:auto;bottom:0;color:#d8b8ff;font-size:max(.7em,8px)}
+.hunit .hbtn.locked{border-color:#e03a3a}
+.hunit .hbtn.locked .cd{background:conic-gradient(rgba(215,30,30,.72) var(--p,0deg),rgba(120,0,0,.35) 0)}
+.hunit .hbtn.locked .ic{filter:grayscale(.6)}
+.hunit .hbtn.lowmana .ic{filter:saturate(.7)}
 
 /* orb level pips (Dota style) along the bottom edge of the Q/W/E icons: lit = orb colour, unlit dim, Scepter = extra gold-ringed pip */
 .hbtn .opips{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;gap:.15em;padding:.2em .25em;background:#000b;z-index:2;pointer-events:none}

@@ -586,8 +586,14 @@
   function useItem(w, e, id, o) {
     const A = IT.Abilities, def = A && A.get(id);
     if (e.tele || !def || !e.items || !e.items.some(s => s && s.id === id) || A.check(w, e, id)) return false;
-    const lead = e.telegraph || 0;
+    const warn = id === 'blink' ? execOf(e).blinkWarn || 0 : 0;   // v6 #75: Blink Dagger warns for max(item telegraph, exec.blinkWarn)
+    const lead = Math.max(e.telegraph || 0, warn);
     w.emit('telegraph', { unit: e.id, item: id, lead, say: (o && o.say) || null });
+    if (id === 'blink' && lead > 1e-9) {   // turn to face the target, stand still, show the glint + ghost at the destination
+      const d = blinkDest(e, o || {});
+      issueStop(w, e); e.ai.moving = false; e.facing = Math.atan2(d.y - e.y, d.x - e.x);
+      w.emit('fx', { name: 'blinkWindup', x: e.x, y: e.y, unit: e.id, dur: lead, tx: d.x, ty: d.y, warn: lead, turn: 0, cast: 0, innate: false });
+    }
     if (lead > 1e-9) { e.tele = { item: id, at: w.t, until: w.t + lead, o: o || {} }; return true; }
     return fireItem(w, e, id, o || {});
   }
@@ -622,11 +628,23 @@
   }
   function tickTele(w, e) {
     const t = e.tele;
-    if (!t || w.t < t.until - 1e-9) return;
+    if (!t) return;
+    if (t.item === 'blink' && (!IT.Status.canAct(e) || hasS(e, 'hex') || hasS(e, 'root') || hasS(e, 'atosRoot'))) {   // v6 #75: a disable during the warning cancels the blink
+      e.tele = null; w.emit('fx', { name: 'blinkDenied', x: e.x, y: e.y, unit: e.id }); return;
+    }
+    if (w.t < t.until - 1e-9) return;
     e.tele = null;
     fireItem(w, e, t.item, t.o);
   }
 
+  // where a Blink Dagger cast at o {x, y} lands (items.js clamp: past blink_range -> blink_range_clamp)
+  const blinkDest = (e, o) => {
+    const I = IT.Values.item, D = GM().ITEM_DOTA.blink, R = I(D, 'blink_range'), C = I(D, 'blink_range_clamp') || R;
+    let dx = o.x - e.x, dy = o.y - e.y; const d = Math.hypot(dx, dy);
+    if (d < 1e-6) return { x: e.x, y: e.y };
+    const k = (d > R ? C : d) / d;
+    return { x: e.x + dx * k, y: e.y + dy * k };
+  };
   const blinkTo = (e, ang) => {   // a point ~blink_range away along `ang`
     const R = IT.Values.item(GM().ITEM_DOTA.blink, 'blink_range') * 0.95;
     return { x: e.x + Math.cos(ang) * R, y: e.y + Math.sin(ang) * R };
@@ -659,7 +677,7 @@
     for (const id of ['blink', 'forcestaff']) {
       if (!useItem(w, e, id, id === 'blink' ? { x: j.x, y: j.y, say: 'juke' } : { face: ang, say: 'juke' })) continue;
       j.item = id;
-      w.emit('fx', { name: 'blinkTell', x: e.x, y: e.y, unit: e.id, dur: Math.max(0.35, lead) });
+      if (!(id === 'blink' && e.tele)) w.emit('fx', { name: 'blinkTell', x: e.x, y: e.y, unit: e.id, dur: Math.max(0.35, lead) });   // a dagger warning already shows 'blinkWindup'
       if (!e.tele) tickJuke(w, e);   // no telegraph lead: it already fired
       return true;
     }
@@ -708,7 +726,7 @@
   // ---------- v6 #50 / #52 / #58: tier EXECUTION, scenario intents, innate blink, enemy TP, Ghost Walk awareness ----------
   // e.exec = the tier's execution row (IT.DIFFICULTY[tier].exec, set by ranked apply); without one (Free Play, tests) the AI executes
   // perfectly (itemP 1, no jitter / sway). Random draws come from a per-unit hash RNG (never w.rng: seeded runs stay identical elsewhere).
-  const EXEC0 = { jitter: 0, itemP: 1, predict: 1, sway: 0, dodge: false, gwDust: 0, gwReact: 1, blinkCast: 0.25 };
+  const EXEC0 = { jitter: 0, itemP: 1, predict: 1, sway: 0, dodge: false, gwDust: 0, gwReact: 1, blinkCast: 0.25, blinkWarn: 0 };
   const execOf = e => (e && e.exec) || EXEC0;
   function rngOf(e) {
     if (!e._rng) {
@@ -872,14 +890,17 @@
     const ang = Math.atan2(ty - e.y, tx - e.x), k = Math.min(B.range, Math.max(0, Math.hypot(tx - e.x, ty - e.y) - B.land));
     return k > 50 ? fixPoint(w, e.x + Math.cos(ang) * k, e.y + Math.sin(ang) * k) : null;
   }
+  // v6 #74: the innate blink spends real mana (ENEMY.blink.mana, default 50); a unit without a mana pool is not gated
+  const innateMana = e => { const m = GM().ENEMY.blink.mana; return m != null ? m : 50; };
   function startBlink(w, e, sp, why) {
     const n = e.innate, B = GM().ENEMY.blink, X = execOf(e);
+    if (e.maxMana > 0) e.mana = Math.max(0, e.mana - innateMana(e));
     issueStop(w, e); e.ai.moving = false;
-    const ang = Math.atan2(sp.y - e.y, sp.x - e.x), turn = Math.abs(U.angDiff(e.facing || 0, ang)), dur = turn / B.turn + X.blinkCast;
+    const ang = Math.atan2(sp.y - e.y, sp.x - e.x), turnT = Math.abs(U.angDiff(e.facing || 0, ang)) / B.turn, warn = X.blinkWarn || 0, dur = turnT + X.blinkCast + warn;   // v6 #75: warn ON TOP of turn + cast point
     n.wind = { at: w.t + dur, x: sp.x, y: sp.y, ang, why, t0: w.t, lt: w.t };
     IT.Status.add(w, e, 'channel', dur + 0.5, { src: e.id, ability: 'blinkWindup', data: { ability: 'blinkWindup' } });
     setAnim(e, 'blink');
-    w.emit('fx', { name: 'blinkWindup', x: e.x, y: e.y, unit: e.id, dur, tx: sp.x, ty: sp.y });
+    w.emit('fx', { name: 'blinkWindup', x: e.x, y: e.y, unit: e.id, dur, tx: sp.x, ty: sp.y, turn: turnT, cast: X.blinkCast, warn, innate: true });
     w.emit('itemUse', { unit: e.id, ability: 'blink', innate: true });
     w.emit('cast', { unit: e.id, kind: 'item', ability: 'blink', x: sp.x, y: sp.y, innate: true });
     w.emit('innateBlink', { unit: e.id, phase: 'start', why, x: sp.x, y: sp.y, dur });
@@ -926,6 +947,7 @@
     const want = n.want;
     n.want = null;
     if (!itemOk(w, e)) { w.emit('innateBlink', { unit: e.id, phase: 'hesitate', why: want.why }); return false; }
+    if (e.maxMana > 0 && e.mana < innateMana(e) - 1e-9) { n.want = { at: w.t + 1, why: want.why }; w.emit('innateBlink', { unit: e.id, phase: 'hesitate', why: 'mana' }); return false; }
     const sp = want.why === 'engage' ? (h ? engageSpot(w, e, h) : null) : escapeSpot(w, e);
     if (!sp) return false;
     cancelBolt(w, e, 'blink');
@@ -1269,7 +1291,7 @@
 
   IT.Intent = { KINDS, TRIGGERS, of: intentOf, engine, attach, set: setIntent, tick: tickIntent, held, fleeAng, jit, itemOk, newInnate, execOf, denyBlink, gwRadius, startTP, tpDest };
   IT.Units = {
-    spawnDummy, spawnEnemy, bootBonus, eulsBonus, itemMs, rollMs, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, useItem, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
+    spawnDummy, spawnEnemy, bootBonus, eulsBonus, itemMs, rollMs, spawnSpirit, respawn, resetCombo, isFoe, reactionOf, useDust, useItem, innateMana, dummies, trainers, enemies, foes, dodgeTarget, blinkSpot, spiritAction,
     spawnPickup, spawnAlly, spawnRoshan, killRoshan,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -87,9 +87,11 @@
     const st = load(); st.equip[kind] = skin; save(st);
     return true;
   }
+  // v6 #72: true when the balance covers at least one catalogue item the player does not own yet (drives the title tab's "!" badge)
+  function canAffordNew() { const b = balance(); return CATALOG.some(c => c.price > 0 && c.price <= b && !isOwned(c.kind, c.skin)); }
   // test / QA helper: credit points straight into the lifetime blob (same field the run merge uses)
   function grant(n) { const b = Object.assign({ points: 0, spent: 0 }, life()); b.points = Math.round((b.points || 0) + n); saveLife(b); return balance(); }
   function reset() { mem = null; memLife = null; try { const s = ls(); if (s) s.removeItem(KEY); } catch (e) { /* ignore */ } }
 
-  IT.Shop = { CATALOG, KINDS, PRICING, find, total, minutesToUnlockAll, owned, equipped, stateOf, buy, equip, balance, earned, spent, grant, reset, price: (k, s) => (find(k, s) || {}).price };
+  IT.Shop = { CATALOG, KINDS, PRICING, find, total, minutesToUnlockAll, owned, equipped, stateOf, buy, equip, balance, canAffordNew, earned, spent, grant, reset, price: (k, s) => (find(k, s) || {}).price };
 })(typeof window !== 'undefined' ? window : globalThis);

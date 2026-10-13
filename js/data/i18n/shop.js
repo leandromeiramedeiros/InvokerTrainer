@@ -6,7 +6,7 @@
     en: {
       'pts.plus': '+{n} points', 'pts.run': '+{n} points this run',
       'pts.d': 'Points are the currency of the Skin Shop. Specials pay 5x. The medal rates how well you played; points are what you spend.',
-      'shop.tab': 'SHOP', 'shop.title': 'Skin Shop', 'shop.balance': 'Points', 'shop.pts': 'pts',
+      'shop.tab': 'SHOP', 'shop.tab.new': 'You can afford something new!', 'shop.title': 'Skin Shop', 'shop.balance': 'Points', 'shop.pts': 'pts',
       'shop.cat.player': 'Player', 'shop.cat.enemy': 'Enemy', 'shop.cat.dummy': 'Dummy',
       'shop.hint': 'Earn points from relic progress in Ranked runs (specials pay 5x). Medals rate how well you played; points are what you spend here.',
       'shop.buy': 'Buy', 'shop.owned': 'Owned', 'shop.equipped': 'Equipped', 'shop.equip': 'Equip', 'shop.free': 'Free',
@@ -25,7 +25,7 @@
     pt: {
       'pts.plus': '+{n} pontos', 'pts.run': '+{n} pontos nesta partida',
       'pts.d': 'Pontos são a moeda da Loja de Skins. Especiais valem 5x. A medalha avalia como você jogou; pontos são o que você gasta.',
-      'shop.tab': 'LOJA', 'shop.title': 'Loja de Skins', 'shop.balance': 'Pontos', 'shop.pts': 'pts',
+      'shop.tab': 'LOJA', 'shop.tab.new': 'Você pode comprar algo novo!', 'shop.title': 'Loja de Skins', 'shop.balance': 'Pontos', 'shop.pts': 'pts',
       'shop.cat.player': 'Jogador', 'shop.cat.enemy': 'Inimigo', 'shop.cat.dummy': 'Boneco',
       'shop.hint': 'Ganhe pontos com o progresso das relíquias nas partidas Ranked (especiais valem 5x). Medalhas avaliam seu desempenho; pontos são o que você gasta aqui.',
       'shop.buy': 'Comprar', 'shop.owned': 'Comprado', 'shop.equipped': 'Equipado', 'shop.equip': 'Equipar', 'shop.free': 'Grátis',

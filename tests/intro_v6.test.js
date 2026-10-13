@@ -40,21 +40,21 @@ test('13: the intro is 12 s; tour = hero -> foe groups -> gate -> hero, ends on 
   assert.equal(R.COUNTDOWN, 12);
   const m = build('river_guard', 'common'), I = m.run.intro;
   assert.ok(I, 'intro built');
-  assert.equal(I.T, 12); assert.equal(m.run.cd, 12); assert.equal(m.run.phase, 'countdown');
+  assert.equal(I.T, m.run.countdown); assert.equal(m.run.cd, m.run.countdown); assert.ok(I.T >= 12 && I.T <= 14, 'item 73: >= 12 s, stretched only for long reading holds: ' + I.T); assert.equal(m.run.phase, 'countdown');
   const kinds = I.stops.map(s => s.kind);
   assert.equal(kinds[0], 'hero'); assert.equal(kinds[kinds.length - 1], 'hero');
   assert.ok(kinds.includes('foes') && kinds.includes('gate'), kinds.join());
   assert.ok(kinds.indexOf('foes') < kinds.indexOf('gate'));
   const last = I.stops[I.stops.length - 1];
   assert.equal(last.x, m.h.x); assert.equal(last.y, m.h.y);
-  assert.ok(last.t + last.glide <= 12 - 0.5, 'arrives on the hero >= 0.5 s before go');
+  assert.ok(last.t + last.glide <= I.T - 0.5, 'arrives on the hero >= 0.5 s before go');
   // item 45: text first -- the camera stays on the hero through the text phase, the pan starts after it; <= 4 s on a foe stop
-  assert.ok(I.text.hold >= 4 && I.text.hold <= 7, 'text phase 4-7 s: ' + I.text.hold);
+  assert.ok(I.text.hold >= 4, 'text phase >= 4 s: ' + I.text.hold);
   assert.ok(I.stops[1].t >= I.text.hold - 1e-9, 'first pan stop after the text phase');
   I.stops.forEach((s, i) => { if (s.kind === 'foes') assert.ok(I.stops[i + 1].t - (s.t + s.glide) <= 4 + 1e-9, 'at most 4 s on the enemy'); });
   for (let i = 1; i < I.stops.length; i++) assert.ok(I.stops[i].t >= I.stops[i - 1].t + I.stops[i - 1].glide - 1e-9, 'no overlapping glides');
   // the clock emits each stop once, in order
-  for (let k = 0; k < 12 * 30 - 3; k++) m.run.tick(DT);
+  for (let k = 0; k < I.T * 30 - 3; k++) m.run.tick(DT);
   assert.equal(m.run.phase, 'countdown');
   const foc = m.ev.filter(e => e.ev === 'tourFocus');
   assert.deepEqual(foc.map(e => e.kind), kinds);
@@ -76,11 +76,11 @@ test('13: the camera tour visits the toured spots and ends exactly centred on th
   const fs = I.stops.find(s => s.kind === 'foes'), gate = I.stops.find(s => s.kind === 'gate');
   let tm = 0, farFoe = 1e9, farGate = 1e9;
   const GM = IT.GAME, off = 0.14 * GM.VIEW_W * GM.UNIT_PX;
-  while (m.run.phase === 'countdown' && tm < 13) {
+  while (m.run.phase === 'countdown' && tm < I.T + 1) {
     c.frame(DT); tm += DT;
     const mg = c.cam.margins(), vx = c.cam.x + mg.fx + off, vy = c.cam.y + mg.fy;
     farFoe = Math.min(farFoe, Math.hypot(vx - fs.x, vy - fs.y)); farGate = Math.min(farGate, Math.hypot(vx - gate.x, vy - gate.y));
-    if (Math.abs(tm - 11.5) < DT / 2) assert.ok(centred(c.cam, m.h) < 1, 'back on the hero before go: ' + centred(c.cam, m.h));
+    if (Math.abs(tm - (I.T - 0.5)) < DT / 2) assert.ok(centred(c.cam, m.h) < 1, 'back on the hero before go: ' + centred(c.cam, m.h));
   }
   assert.ok(farFoe < 60, 'camera reached the foe group: ' + farFoe);
   assert.ok(farGate < 60, 'camera reached the gate: ' + farGate);
@@ -104,7 +104,7 @@ test('13: move / attack / cast start the round (camera snaps to the hero); orbs 
   for (const ch of IT.GAME.SPELL_ORBS.sunstrike) IT.Invoke.orb(m.w, m.h, ch);
   IT.Invoke.invoke(m.w, m.h);
   const st1 = m.run.intro.stops[1];
-  while (12 - m.run.cd < st1.t + st1.glide * 0.6) c.frame(DT);
+  while (m.run.countdown - m.run.cd < st1.t + st1.glide * 0.6) c.frame(DT);
   assert.equal(m.run.phase, 'countdown'); assert.equal(m.run.touring(), true);
   assert.ok(centred(c.cam, m.h) > 200, 'camera away on the tour');
   const cx0 = c.cam.x, cy0 = c.cam.y;
@@ -145,9 +145,9 @@ test('45: the reveal exists at every tier incl. bambam; the clock starts when th
     assert.ok(at > I.text.hold, 'only after the text phase + the glide');
     assert.equal(reveals(m.w).length, 0);
     for (const id of I.unseen) assert.equal(m.w.get(id).visible, false);
-    while (12 - m.run.cd < at - 0.05) m.run.tick(DT);
+    while (m.run.countdown - m.run.cd < at - 0.05) m.run.tick(DT);
     assert.equal(reveals(m.w).length, 0, tier + ': nothing before the camera arrives');
-    while (12 - m.run.cd < at + DT) m.run.tick(DT);
+    while (m.run.countdown - m.run.cd < at + DT) m.run.tick(DT);
     const rv = reveals(m.w);
     assert.ok(rv.length > 0, tier + ': reveal spawned on arrival');
     for (const t of rv) {
@@ -166,19 +166,19 @@ test('45: linger from arrival per tier: ian 2.5, easy 2.0, common 1.5, hard 1.1,
     const m = build('river_guard', t), I = m.run.intro;
     assert.equal(I.linger, L[t]);
     const at = Math.min(...I.reveals.map(r => r.at));
-    while (12 - m.run.cd < at + DT) m.run.tick(DT);
+    while (m.run.countdown - m.run.cd < at + DT) m.run.tick(DT);
     assert.ok(reveals(m.w).length > 0, t + ': there');
     const thk = reveals(m.w)[0];
-    while (12 - m.run.cd < at + L[t] - 0.12) m.run.tick(DT);
+    while (m.run.countdown - m.run.cd < at + L[t] - 0.12) m.run.tick(DT);
     assert.ok(reveals(m.w).includes(thk), t + ': still there just before the linger ends');
     assert.ok(thk.age > L[t] - 0.4 && thk.age < L[t], t + ': aged from the arrival: ' + thk.age);
-    while (12 - m.run.cd < at + L[t] + 0.1) m.run.tick(DT);
+    while (m.run.countdown - m.run.cd < at + L[t] + 0.1) m.run.tick(DT);
     assert.equal(reveals(m.w).length, 0, t + ': gone after the linger');
     assert.equal(m.w.get(I.reveals[0].id).visible, false, 'the foe hides again');
   }
   // a cancel mid-linger: the rest of the linger runs on in play
   const m = build('river_guard', 'common'), I = m.run.intro, at = Math.min(...I.reveals.map(r => r.at));
-  while (12 - m.run.cd < at + 0.5) m.run.tick(DT);
+  while (m.run.countdown - m.run.cd < at + 0.5) m.run.tick(DT);
   const thk = reveals(m.w)[0]; m.run.skip();
   assert.ok(reveals(m.w).includes(thk));
   for (let k = 0; k < Math.round(0.8 / DT); k++) m.w.step();
@@ -192,45 +192,135 @@ test('45: linger from arrival per tier: ian 2.5, easy 2.0, common 1.5, hard 1.1,
   assert.equal(reveals(n.w).length, 0, 'bambam 0.8 s of play');
 });
 
-test('66: the text phase = one element centre-stage at a time (stage + fly each), length from the element count, 4-7 s', () => {
-  const fake = (name, win, lose, n) => ({ sc: { name: { en: name }, win: { en: win }, lose: { en: lose }, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
+test('73: reading hold = max(1.2 s, 0.35 s + words / 3.5) for the win / lose texts (EN and PT alike), the title floor is 0.8 s', () => {
   const EPS = 1e-9;
-  const short = R.textPlan(fake('A', 'B', 'C', 0), 12), three = R.textPlan(fake('A', 'B', 'C', 3), 12), long = R.textPlan(fake('word '.repeat(10), 'word '.repeat(30), 'word '.repeat(30), 7), 12);
-  assert.equal(R.TEXT_MIN, 4); assert.equal(R.TEXT_MAX, 7);
-  assert.equal(short.hold, 4, 'a bare title / win / lose still holds 4 s'); assert.equal(long.hold, 7, 'many elements clamp at 7 s');
-  assert.ok(three.hold >= 4 && three.hold <= 7);
-  for (const p of [short, three, long]) {
-    // order: title, VICTORY, DEFEAT, then the steps one by one; strictly one after the other (stage then fly), nothing overlaps
-    assert.deepEqual(p.blocks.slice(0, 3).map(b => b.id), ['title', 'win', 'lose']);
-    p.blocks.slice(3).forEach((b, i) => { assert.equal(b.id, 'step'); assert.equal(b.i, i); });
-    assert.equal(p.blocks[0].at, 0);
-    for (let i = 1; i < p.blocks.length; i++) assert.ok(Math.abs(p.blocks[i].at - (p.blocks[i - 1].at + p.blocks[i - 1].d)) < EPS, 'one after the other');
-    for (const b of p.blocks) assert.ok(Math.abs(b.d - (b.stage + b.fly)) < EPS, 'd = stage + fly');
-    const e = p.blocks[p.blocks.length - 1];
-    assert.ok(Math.abs(p.end - (e.at + e.d)) < EPS); assert.ok(p.end <= p.hold - 0.3 + EPS, 'the last fly lands >= 0.3 s before the pan: ' + p.end + ' vs ' + p.hold);
-  }
-  // per-element timings when nothing is squeezed: title 0.8 + 0.3, steps 0.5 + 0.3, win / lose 0.5-0.8 + 0.3
-  const b3 = three.blocks;
-  assert.ok(Math.abs(b3[0].stage - 0.8) < EPS && Math.abs(b3[0].fly - 0.3) < EPS, 'title');
-  for (const b of b3.slice(1, 3)) assert.ok(b.stage >= 0.5 - EPS && b.stage <= 0.8 + EPS && Math.abs(b.fly - 0.3) < EPS, b.id);
-  for (const b of b3.slice(3)) assert.ok(Math.abs(b.stage - 0.5) < EPS && Math.abs(b.fly - 0.3) < EPS, 'step');
-  assert.ok(Math.abs(three.raw - (0.8 + 0.3 + 2 * (0.5 + 0.3) + 0.3 + 3 * 0.8 + 0.2)) < 0.5, 'raw ~ sum of stages + flies: ' + three.raw);
-  // squeezed (7 steps, long texts): every stage / fly shrinks together, the plan still fits
-  assert.ok(long.blocks.every(b => b.stage < 0.8 + EPS && b.fly < 0.3 + EPS) && long.blocks[0].stage < 0.8);
-  assert.ok(long.end <= 7 - 0.3 + EPS);
-  assert.ok(R.textPlan(fake('a', 'b', 'c', 0), 6).hold <= 0.6 * 6 + EPS, 'a short countdown shortens the text phase');
-  // the real plan is on the intro for every scenario: element order, within bounds, the pan starts only after the text phase
+  assert.equal(R.READ_FLOOR, 1.2); assert.equal(R.TITLE_FLOOR, 0.8);
+  assert.ok(Math.abs(R.readHold(0) - 1.2) < EPS && Math.abs(R.readHold(2) - 1.2) < EPS, 'short text: the floor');
+  assert.ok(Math.abs(R.readHold(10) - (0.35 + 10 / 3.5)) < EPS && Math.abs(R.readHold(21) - 6.35) < EPS, '10 words 3.21 s, 21 words 6.35 s');
+  assert.ok(Math.abs(R.readHold(1, 0.8) - 0.8) < EPS, 'title floor');
+  const fake = (name, win, lose, n) => ({ sc: { name, win, lose, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
+  const words = n => Array.from({ length: n }, (_, i) => 'w' + i).join(' ');
+  const lang0 = IT.lang;
+  try {
+    for (const lang of ['en', 'pt']) {
+      IT.lang = lang;   // the SAME rate in both languages: the hold follows the word count of the shown language only
+      const sc = fake({ en: words(1), pt: words(9) }, { en: words(10), pt: words(7) }, { en: words(2), pt: words(14) }, 3);
+      const p = R.textPlan(sc, 12, false), n = lang === 'en' ? { t: 1, w: 10, l: 2 } : { t: 9, w: 7, l: 14 };
+      const [ti, wi, lo] = p.blocks;
+      assert.ok(Math.abs(ti.stage - Math.max(0.8, 0.35 + n.t / 3.5)) < EPS, lang + ' title ' + ti.stage);
+      assert.ok(Math.abs(wi.stage - Math.max(1.2, 0.35 + n.w / 3.5)) < EPS, lang + ' win ' + wi.stage);
+      assert.ok(Math.abs(lo.stage - Math.max(1.2, 0.35 + n.l / 3.5)) < EPS, lang + ' lose ' + lo.stage);
+      for (const b of [ti, wi, lo]) assert.ok(Math.abs(b.fly - 0.3) < EPS, 'fly 0.3 s');
+    }
+  } finally { IT.lang = lang0; }
+  // every real scenario: the stage of each text covers its reading time
   for (const sc of SC) {
-    const m = build(sc.id, 'common'), tp = m.run.intro.text;
-    assert.deepEqual(tp.blocks.slice(0, 3).map(b => b.id), ['title', 'win', 'lose'], sc.id);
-    assert.ok(tp.hold >= 4 - EPS && tp.hold <= 7 + EPS, sc.id + ': ' + tp.hold);
-    assert.ok(m.run.intro.stops[1].t >= tp.hold - EPS, sc.id + ': pan after the text phase');
-    assert.ok(tp.blocks.length <= 3 + 7, sc.id);
+    const m = build(sc.id, 'common'), tp = m.run.intro.text, wc = x => (String(x || '').trim().match(/\S+/g) || []).length;
+    const win = tp.blocks[1], lose = tp.blocks[2], loc = o => (o && typeof o === 'object' ? o.en : o);
+    assert.ok(win.stage >= R.readHold(wc(loc(sc.win || sc.goal))) - 1e-9, sc.id + ' win read time');
+    assert.ok(lose.stage >= R.readHold(wc(loc(sc.lose))) - 1e-9, sc.id + ' lose read time');
+    assert.ok(tp.blocks[0].stage >= R.readHold(wc(loc(sc.name)), 0.8) - 1e-9, sc.id + ' title read time');
   }
-  // frozen camera through the text phase: the first tourFocus after the hero stop starts at the end of the text phase
-  const m = build('river_guard', 'common');
-  for (let k = 0; k < Math.floor((m.run.intro.text.hold - 0.05) / DT); k++) m.run.tick(DT);
-  assert.equal(m.ev.filter(e => e.ev === 'tourFocus' && e.i > 0).length, 0, 'no pan during the text phase');
+});
+
+test('73: combo steps ~0.45 s per icon (stage + fly), then 1 s for the whole settled row before the pan; the intro stretches to fit', () => {
+  const EPS = 1e-9;
+  const fake = n => ({ sc: { name: { en: 'A' }, win: { en: 'B' }, lose: { en: 'C' }, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
+  assert.equal(R.STEP_D, 0.45); assert.equal(R.ROW_HOLD, 1);
+  for (const n of [1, 3, 7]) {
+    const p = R.textPlan(fake(n), 12, false), st = p.blocks.slice(3);
+    assert.equal(st.length, n);
+    for (const b of st) assert.ok(Math.abs(b.d - 0.45) < EPS && b.stage > 0 && b.fly > 0, 'each icon 0.45 s');
+    assert.ok(Math.abs((st[n - 1].at + st[n - 1].d - st[0].at) - 0.45 * n) < EPS, n + ' icons = 0.45 n s');
+    assert.ok(Math.abs(p.end - (st[n - 1].at + st[n - 1].d)) < EPS && Math.abs(p.hold - (p.end + 1)) < EPS, 'the settled row holds 1 s, then the pan (hold)');
+  }
+  assert.ok(Math.abs(R.textPlan(fake(0), 12, false).hold - R.textPlan(fake(0), 12, false).end - 0.3) < EPS, 'no row: just the short tail');
+  // the long texts of the real scenarios push the intro past 12 s (the pan keeps >= PAN_MIN s + the 2.5 s invoke tail); short ones stay at 12 s
+  let stretched = 0;
+  for (const sc of SC) {
+    const m = build(sc.id, 'common'), I = m.run.intro;
+    assert.equal(m.run.cd, I.T); assert.ok(I.T >= 12, sc.id);
+    assert.ok(I.T >= Math.min(I.T, I.text.hold + R.PAN_MIN + 2.5) - 1e-9 && I.T - I.text.hold >= R.PAN_MIN + 2.5 - 1e-9 || I.T === 12 && I.text.hold <= 12 - 2.5 - R.PAN_MIN + 1e-9 || I.T - I.text.hold >= R.PAN_MIN + 2.5 - 1e-9, sc.id + ': room for the pan');
+    if (I.T > 12) stretched++;
+    assert.ok(I.stops[1].t >= I.text.hold - 1e-9, sc.id + ': the pan starts after the text phase');
+    const last = I.stops[I.stops.length - 1]; assert.ok(last.t + last.glide <= I.T - 0.5 + 1e-9, sc.id + ': back on the hero before go');
+  }
+  assert.ok(stretched >= 0);
+  // a short countdown (infinite mode, 5 s) still squeezes the old way: hold <= 0.6 T
+  assert.ok(R.textPlan(fake(7), 5, false).hold <= 0.6 * 5 + EPS);
+});
+
+test('73: a key / click ADVANCES one piece (the clock jumps to the next block), Esc SKIPS all; the pan starts only after the last piece landed', () => {
+  const EPS = 1e-9, pan = ev => ev.filter(e => e.ev === 'tourFocus' && e.i > 0).length;
+  const m = build('river_guard', 'common'), I = m.run.intro, tb = I.text.blocks;
+  assert.equal(typeof m.run.advanceIntro, 'function'); assert.equal(typeof m.run.skipIntro, 'function');
+  m.run.tick(0.1); assert.ok(I.t < tb[1].at, 'the title is on stage');
+  // each advance = exactly one piece: the next block starts NOW, nothing else moves
+  for (let j = 1; j < tb.length; j++) {
+    assert.equal(m.run.advanceIntro(), true);
+    assert.ok(Math.abs(I.t - tb[j].at) < 1e-6, 'advance #' + j + ' -> block ' + j + ' starts: ' + I.t + ' vs ' + tb[j].at);
+    assert.equal(m.run.phase, 'countdown'); assert.equal(m.run.touring(), true, 'not a cancel: the tour stays armed'); assert.equal(pan(m.ev), 0, 'no pan yet');
+  }
+  // the last piece is on stage: the next press lands it (the row hold starts), still no pan
+  assert.equal(m.run.advanceIntro(), true); assert.ok(Math.abs(I.t - I.text.end) < 1e-6); assert.equal(pan(m.ev), 0, 'the pan waits for the row hold');
+  // the press during the row hold ends it: the pan starts exactly at the end of the text phase, never earlier
+  assert.equal(m.run.advanceIntro(), true); assert.ok(Math.abs(I.t - I.text.hold) < 1e-6);
+  assert.equal(pan(m.ev), 1, 'the pan starts after the last piece landed'); assert.ok(m.ev.find(e => e.ev === 'tourFocus' && e.i === 1) && I.t >= I.text.end);
+  assert.equal(m.run.advanceIntro(), false, 'nothing left to advance once the pan runs');
+  assert.equal(m.run.phase, 'countdown', 'advancing never starts the round');
+  assert.ok(Math.abs(m.run.cd - (I.T - I.t)) < 1e-6, 'the countdown clock followed the jump');
+  // without any press the pan also starts only at the end of the text phase
+  const q = build('river_guard', 'common');
+  for (let k = 0; k < Math.floor((q.run.intro.text.hold - 0.05) / DT); k++) q.run.tick(DT);
+  assert.equal(pan(q.ev), 0); for (let k = 0; k < 3; k++) q.run.tick(DT); assert.equal(pan(q.ev), 1);
+  // Esc = skip all: the text phase ends at once and so does the tour; the countdown (invoke time) keeps running; a second Esc has nothing to do
+  const e = build('river_guard', 'common'); e.run.tick(0.3);
+  const tf0 = e.ev.filter(x => x.ev === 'tourFocus').length;
+  assert.equal(e.run.skipIntro(), true);
+  assert.ok(Math.abs(e.run.intro.t - e.run.intro.text.hold) < 1e-6, 'the text phase is over'); assert.equal(e.run.touring(), false);
+  assert.ok(e.ev.some(x => x.ev === 'tourEnd' && x.skipped)); assert.equal(e.run.phase, 'countdown'); assert.ok(e.run.cd > 1);
+  assert.equal(e.ev.filter(x => x.ev === 'tourFocus').length, tf0, 'no pan stop after the skip');
+  for (let k = 0; k < 3 * 30; k++) e.run.tick(DT);
+  assert.equal(e.ev.filter(x => x.ev === 'tourFocus').length, tf0); assert.equal(e.run.skipIntro(), false); assert.equal(e.run.advanceIntro(), false);
+  // Esc during the pan ends the pan only
+  const f = build('river_guard', 'common');
+  while (f.run.intro.t < f.run.intro.stops[1].t + 0.2) f.run.tick(DT);
+  assert.equal(f.run.touring(), true); assert.equal(f.run.skipIntro(), true); assert.equal(f.run.touring(), false); assert.equal(f.run.phase, 'countdown');
+  // a game action (skip) still cancels everything and starts the round
+  const g = build('river_guard', 'common'); g.run.tick(0.3); assert.equal(g.run.skip(), true); assert.equal(g.run.phase, 'play');
+  assert.equal(g.run.advanceIntro(), false); assert.equal(g.run.skipIntro(), false);
+  // the Invoke cooldown keeps ticking through a jump (the countdown is invoke time)
+  const iv = build('river_guard', 'common');
+  for (const ch of IT.GAME.SPELL_ORBS.sunstrike) IT.Invoke.orb(iv.w, iv.h, ch);
+  IT.Invoke.invoke(iv.w, iv.h);
+  const cd0 = iv.h.inv.invokeCd; iv.run.advanceIntro();
+  assert.ok(cd0 > 0 ? iv.h.inv.invokeCd < cd0 : true);
+});
+
+test('73: settled sizes: title >= 22 px, VICTORY / DEFEAT >= 16 px, step icons >= 28 px at 1280x720 (scaled with the HUD unit --g, x1.5 at 1920x1080)', () => {
+  const fs = require('fs'), vm = require('vm'), path = require('path');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'briefing.css'), 'utf8');
+  const ctx = vm.createContext({ console, Math, Array, Object, String, Promise, Map, Set, RegExp }); ctx.window = ctx; ctx.globalThis = ctx; ctx.IT = {};
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js/ui/briefing.js'), 'utf8'), ctx, { filename: 'briefing.js' });
+  const SET = ctx.IT.Briefing.SET;
+  // the CSS carries exactly the numbers js exports (one source of truth) and the strip rules really use them
+  const blk = css.match(/\.bf-strip\{[^}]*\}/)[0], num = k => parseFloat(blk.match(new RegExp('--bs-' + k + ':([0-9.]+)'))[1]);
+  for (const k of Object.keys(SET)) assert.equal(num(k), SET[k], '--bs-' + k);
+  assert.ok(/\.bs-name\{[^}]*font-size:calc\(var\(--g\)\*var\(--bs-title\)/.test(css), 'title uses --g x --bs-title');
+  assert.ok(/\.bs-big\{[^}]*font-size:calc\(var\(--g\)\*var\(--bs-word\)/.test(css), 'VICTORY / DEFEAT use --g x --bs-word');
+  assert.ok(/\.bs-line\{[^}]*font-size:calc\(var\(--g\)\*var\(--bs-line\)/.test(css), 'lines use --g x --bs-line');
+  assert.ok(/\.bs-step canvas\.ico\{[^}]*width:calc\(var\(--g\)\*var\(--bs-ico\)[^}]*height:calc\(var\(--g\)\*var\(--bs-ico\)/.test(css), 'icons use --g x --bs-ico');
+  // --g exactly as main.js fit() sets it
+  const g = (iw, ih) => Math.max(11, Math.min(26, Math.min(iw / 1280, ih / 720) * 14));
+  const MIN = { title: 22, word: 16, line: 14, ico: 28 };
+  for (const [iw, ih, k] of [[1280, 720, 1], [1920, 1080, 1.5]]) {
+    for (const key of Object.keys(MIN)) {
+      const px = g(iw, ih) * SET[key];
+      assert.ok(px >= MIN[key] * k - 1e-6, iw + 'x' + ih + ' ' + key + ' = ' + px.toFixed(1) + ' px (min ' + (MIN[key] * k) + ')');
+    }
+  }
+  // the old HUD copy was far smaller (rkname 14 px, rkc icons 20-30 px, win / lose 12 px): the strip is clearly bigger than that at 1280x720
+  assert.ok(g(1280, 720) * SET.title > 14 * 1.5 && g(1280, 720) * SET.line > 12);
 });
 
 test('66: the briefing drives stage -> fly -> done per element from the intro clock; the cancel path drops everything at once', () => {

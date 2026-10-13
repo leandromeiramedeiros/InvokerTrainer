@@ -198,7 +198,7 @@
     R.ucore = coreBox(R.uc);   // v6: core stats under the portrait (damage / armor / move / attack speed)
     R.ustrip = stripBox(R.us, ['mr', 'hpr', 'mpr']);   // magic res + regen
     R.unote = h('div', { class: 'ustats', style: { display: 'none', color: '#ffd27a' } });   // buildings: team + invulnerable note
-    R.uitems = [0, 1, 2, 3, 4, 5].map(() => { const ic = h('span', { class: 'ic' }); return { el: h('div', { class: 'hbtn item' }, ic), ic }; });
+    R.uitems = [0, 1, 2, 3, 4, 5].map(() => btnEl('item'));   // v6 #74: full cells (cooldown sweep / mana cost / charges) for the enemy ability bar
     // v6: own Forge Spirit card -> its own Attack / Stop / Hold commands (with the bound keys) instead of item slots
     R.ucmd = ['attack', 'stop', 'hold'].map(a => { const b = btnEl('item cmd', () => IT.Input.doAction(a, { hud: true })); b.act = a; b.el.style.display = 'none'; return b; });
     return h('div', { class: 'hudp hbar hunit', style: { display: 'none' } },
@@ -1015,6 +1015,75 @@
   };
 
   // ---------------------------------------------------------------- per-frame
+  // ---- v6 #74 enemy ability bar. PURE model of what the selected enemy's card shows (tests/enemybar_v6.test.js): the innate blink first
+  // (when the unit has one), then its items in slot order (max 6 cells). Per slot: cost (mana), cd / cdMax (+ cdFrac 0..1 remaining),
+  // locked + lockRem / lockMax / lockFrac (Blink Dagger's 3 s damage lock; the innate blink's Cold Snap deny), charges (BKB uses), lowMana, ready.
+  H.enemyBar = function (e, w) {
+    const A = IT.Abilities, GM = IT.GAME, B = GM.ENEMY.blink, X = IT.Intent && IT.Intent.execOf ? IT.Intent.execOf(e) : {};
+    const mana = Math.max(0, e.mana || 0), maxMana = e.maxMana || 0, slots = [];
+    const mk = o => {
+      o.cd = Math.max(0, o.cd || 0); o.cdMax = Math.max(o.cdMax || 0, o.cd);
+      o.cdFrac = o.cd > 0 && o.cdMax > 0 ? Math.min(1, o.cd / o.cdMax) : 0;
+      o.lockRem = Math.max(0, o.lockRem || 0); o.locked = o.lockRem > 1e-9;
+      o.lockFrac = o.locked && o.lockMax > 0 ? Math.min(1, o.lockRem / o.lockMax) : 0;
+      o.lowMana = maxMana > 0 && o.cost > 0 && mana < o.cost - 1e-9;
+      o.ready = o.cd <= 1e-9 && !o.locked && !o.lowMana && !o.casting;
+      return o;
+    };
+    if (e.innate) {
+      const n = e.innate;
+      slots.push(mk({ id: 'blink', innate: true, cost: IT.Units.innateMana(e), cd: n.readyAt - w.t, cdMax: B.cd, lockRem: n.denyUntil - w.t, lockMax: B.deny, charges: 0, casting: !!n.wind, warn: X.blinkWarn || 0, cast: X.blinkCast || 0 }));
+    }
+    for (const it of e.items || []) {
+      if (!it || slots.length >= 6) continue;
+      const d = A.get(it.id);
+      if (!d) continue;
+      const cdv = Math.max(it.cd || 0, (e.cd && e.cd[it.id]) || 0), s = { id: it.id, innate: false, cost: d.manaCost(w, e) || 0, cd: cdv, cdMax: Math.max(cdv, d.cooldown(w, e) || 0), charges: it.charges || 0 };
+      if (it.id === 'blink') {
+        s.lockRem = e._blinkLock != null ? e._blinkLock - w.t : 0;
+        s.lockMax = IT.Values.item(GM.ITEM_DOTA.blink, 'blink_damage_cooldown') || 3;
+        s.warn = Math.max(e.telegraph || 0, X.blinkWarn || 0);
+      }
+      slots.push(mk(s));
+    }
+    return { mana, maxMana, manaFrac: maxMana > 0 ? mana / maxMana : 0, slots };
+  };
+  const fnum = n => (Math.round(n * 100) / 100).toString();
+  // tooltip text of one enemy-bar slot: name, description, cast point, range, cooldown, mana (EN / PT via the eb.* keys)
+  H.enemyTip = function (s, e, w) {
+    if (!s) return '';
+    const d = IT.Abilities.get(s.id), GM = IT.GAME, iv = k => IT.Values.item(GM.ITEM_DOTA[s.id], k);
+    const L = [s.innate ? t('eb.innate') : nmOf(s.id), t(s.innate ? 'eb.d.innate' : 'eb.d.' + s.id)];
+    const cast = s.innate ? s.cast : (d && d.castPoint ? d.castPoint(w, e) || 0 : 0);
+    L.push(t('eb.cast', { n: fnum(cast) }) + (s.warn > 0 ? ' ' + t('eb.warn', { n: fnum(s.warn) }) : ''));
+    const rng = s.innate ? GM.ENEMY.blink.range : s.id === 'blink' ? iv('blink_range') : s.id === 'dust' ? iv('radius') : d && d.target !== 'none' && d.range ? d.range(w, e) : 0;
+    if (rng > 0 && isFinite(rng)) L.push(t(s.id === 'dust' ? 'eb.radius' : 'eb.range', { n: Math.round(rng) }));
+    L.push(t('eb.cd', { n: fnum(s.cdMax) }));
+    L.push(t('eb.mana', { n: Math.round(s.cost) }));
+    if (s.charges > 0) L.push(t('eb.uses', { n: s.charges }));
+    if (s.locked) L.push(t(s.innate ? 'eb.denied' : 'eb.lock', { n: s.lockRem.toFixed(1) }));
+    else if (s.cd > 0) L.push(t('hud.cd', { n: Math.ceil(s.cd) }));
+    return L.join('\n');
+  };
+  // paint one enemy-bar cell (diffed through ca; key prefix k)
+  function paintEnemySlot(b, s, U, w, ca, k) {
+    const { icon } = IT.UI, key = s ? s.id + (s.innate ? '*' : '') : '';
+    if (ca[k + 'id'] !== key) {
+      ca[k + 'id'] = key; b.ic.textContent = '';
+      if (s && hasIcon(s.id)) b.ic.appendChild(icon(s.id));
+      b.el.classList.toggle('empty', !s); b.el.classList.toggle('innate', !!(s && s.innate));
+      setText(b.key, s && s.innate ? t('eb.tag') : '', ca, k + 'k');
+    }
+    if (!s) { setCd(b, 0, 0, ca, k); setText(b.lv, '', ca, k + 'm'); setText(b.ch, '', ca, k + 'c'); setTip(b.el, '', ca, k + 't'); return; }
+    const cdv = s.locked ? s.lockRem : s.cd, tot = s.locked ? s.lockMax : s.cdMax;
+    if (ca[k + 'lk'] !== s.locked) { ca[k + 'lk'] = s.locked; b.el.classList.toggle('locked', s.locked); }
+    setCd(b, cdv, tot, ca, k);
+    if (ca[k + 'lw'] !== s.lowMana) { ca[k + 'lw'] = s.lowMana; b.el.classList.toggle('lowmana', s.lowMana); }
+    setText(b.lv, s.cost > 0 ? String(Math.round(s.cost)) : '', ca, k + 'm');
+    setText(b.ch, s.charges > 0 ? String(s.charges) : '', ca, k + 'c');
+    setTip(b.el, H.enemyTip(s, U, w), ca, k + 't');
+  }
+
   // selected non-hero unit panel (red HP for enemies, green for allies)
   H.updUnit = function (U, R, ca, w) {
     const { h, icon } = IT.UI, t = IT.t;
@@ -1031,6 +1100,8 @@
       const note = bld ? [U.team === 0 ? 'Radiant' : U.team === 1 ? 'Dire' : ul('Neutral', 'Neutro'), U.invulnerable ? ul('Invulnerable', 'Invulnerável') : U.destroyed ? ul('Destroyed', 'Destruída') : ''].filter(Boolean).join('  |  ') : '';
       R.unote.textContent = note; R.unote.style.display = note ? '' : 'none';
       R.uitems.forEach(b => { b.el.style.display = own || bld ? 'none' : ''; });
+      for (const k of Object.keys(ca)) if (/^u[ei]\d/.test(k)) delete ca[k];
+      R.uitems.forEach(b => { b.el.classList.remove('locked', 'lowmana', 'innate', 'oncd'); b.cd.style.setProperty('--p', '0deg'); b.cdn.textContent = ''; b.lv.textContent = ''; b.ch.textContent = ''; b.key.textContent = ''; b.el.removeAttribute('data-tip'); });
       R.ucmd.forEach(b => {
         b.el.style.display = own ? '' : 'none';
         if (own && !b.ic.firstChild && hasIcon(UCMD_ICON[b.act])) b.ic.appendChild(icon(UCMD_ICON[b.act]));
@@ -1052,7 +1123,9 @@
     if (!U.building) {
       paintCells(R.uc, CORE, U, ca, 'uc'); paintCells(R.us, ['mr', 'hpr', 'mpr'], U, ca, 'us'); paintBuffs(R, U, w, ca, 'usc');
     }
+    const eb = U.kind === 'enemy' && !U.building ? H.enemyBar(U, w) : null;   // v6 #74 (selection only: the game has no hover state)
     R.uitems.forEach((b, i) => {
+      if (eb) { paintEnemySlot(b, eb.slots[i] || null, U, w, ca, 'ue' + i); return; }
       const it = U.items && U.items[i], id = it ? (typeof it === 'string' ? it : it.id) : null;
       if (ca['ui' + i] === id) return;
       ca['ui' + i] = id; b.ic.textContent = ''; if (id && hasIcon(id)) b.ic.appendChild(icon(id));

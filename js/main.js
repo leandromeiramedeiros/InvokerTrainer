@@ -64,6 +64,24 @@
   // per frame while frozen / playing: the tour owns the camera (lock / follow ignored); F1 (center: cam.follow) ends only the tour
   // v6 item 66: the title slam / VICTORY / DEFEAT punches shake the screen (js/ui/briefing.js calls this; the camera itself stays frozen)
   if (IT.Briefing) IT.Briefing.onShake = (a, d) => { if (g && g.R && g.R.shake) g.R.shake(a, d); };
+  // v6 item 73: the scenario intro is paced by the player. Space / Enter / a left click on the game ADVANCES one piece of the text phase (not a cancel);
+  // Esc SKIPS the rest (text + camera pan; the countdown keeps running; a second Esc pauses as before). A game action (move / cast / attack) still cancels it
+  // all (input.js -> hooks.skip). Capture phase, before input.js; orbs / Invoke / menus / typing are never touched.
+  const introLive = () => { const r = g && g.run; return !!(r && !g.menu && !g.ended && !settingsOver && r.phase === 'countdown' && r.intro && r.intro.text); };
+  const introText = () => introLive() && g.run.intro.t < g.run.intro.text.hold - 1e-9;
+  addEventListener('keydown', ev => {
+    if (ev.repeat || ev.ctrlKey || ev.metaKey || ev.altKey || !introLive()) return;
+    const tg = ev.target, tag = tg && tg.tagName;
+    if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (tg && tg.isContentEditable) || (tag === 'INPUT' && !/^(checkbox|radio|range|button|submit)$/.test(tg.type || ''))) return;
+    let done = false;
+    if (ev.key === 'Escape') done = g.run.skipIntro();
+    else if ((ev.key === ' ' || ev.key === 'Enter') && introText() && !(S.keyName && S.actionFor && S.keyName(ev) && S.actionFor(S.keyName(ev)))) done = g.run.advanceIntro();
+    if (done) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); }
+  }, true);
+  addEventListener('mousedown', ev => {
+    if (ev.button !== 0 || ev.target !== cv || !introText()) return;
+    if (g.run.advanceIntro()) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); }
+  }, true);
   function tourSync() {
     const r = g && g.run; if (!r || !r.touring) { if (g) g.cam.script = false; return; }
     if (r.touring() && g.cam.follow && !g.menu) r.skipTour();

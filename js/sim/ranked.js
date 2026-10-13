@@ -668,6 +668,10 @@
   // F1) appear at round start and linger in play.
   const INTRO_MIN = 5, GROUP_R = 900, TOUR_MAX = 4, REVEAL_LINGER = 1.5, REVEAL_R = 250, REVEAL_VIS = 260;
   const STAGE_MIN = 0.5, STAGE_MAX = 0.8, FLY_S = 0.3, TEXT_MIN = 4, TEXT_MAX = 7, TEXT_TAIL = 0.3, STAY_MAX = 4, STAY_OTHER = 1.0;
+  // item 73, reading time: a centre-stage text holds max(floor, READ_BASE + words / READ_WPS) s (~210 wpm, EN and PT alike; floor 1.2 s, the title 0.8 s);
+  // a combo step punches in for STEP_D s in all (icons need no reading) and the whole settled row then holds ROW_HOLD s before the pan
+  const READ_FLOOR = 1.2, TITLE_FLOOR = 0.8, READ_BASE = 0.35, READ_WPS = 3.5, STEP_D = 0.45, STEP_FLY = 0.2, ROW_HOLD = 1.0, PAN_MIN = 2.5, TAIL_S = 2.5;
+  const readHold = (words, floor) => Math.max(floor == null ? READ_FLOOR : floor, READ_BASE + words / READ_WPS);
   const revealOn = () => true;   // item 45: every tier gets the tiny start reveal
   const revealLinger = df => (df && df.revealLinger > 0 ? df.revealLinger : REVEAL_LINGER);
   const wordsOf = t => (String(t == null ? '' : t).trim().match(/\S+/g) || []).length;
@@ -676,19 +680,27 @@
     const l = IT.HudSteps && IT.HudSteps.derive ? IT.HudSteps.derive(sc) : (sc.steps || sc.sol || []).map(s => ({ k: 'spell', id: s && (s.a || s.ability) }));
     return l.filter((a, i, q) => !(i && q[i - 1].k === a.k && q[i - 1].id === a.id)).slice(0, 7);
   }
-  // item 66, the text phase = one element centre-stage at a time: STAGE s big in the middle (title 0.8, VICTORY / DEFEAT 0.5-0.8 by length, each step 0.5),
-  // then FLY 0.3 s to its HUD slot, then the next. hold = sum + TEXT_TAIL, clamped TEXT_MIN-TEXT_MAX (and <= 0.6 T); too long -> every stage / fly shrinks
-  // together, too short -> a settled tail. blocks[] = { id, i, at, stage, fly, d (= stage + fly) } read by js/ui/briefing.js
-  function textPlan(pr, T) {
-    const sc = pr.sc, wd = n => Math.min(STAGE_MAX, Math.max(STAGE_MIN, STAGE_MIN + n * 0.03));
-    const blocks = [{ id: 'title', i: 0, st: STAGE_MAX }, { id: 'win', i: 0, st: wd(wordsOf(loc(sc.win || sc.goal))) },
-      { id: 'lose', i: 0, st: wd(wordsOf(loc(sc.lose)) + 4) }];
-    introSteps(sc).forEach((a, i) => blocks.push({ id: 'step', i, st: STAGE_MIN }));
-    const raw = blocks.reduce((q, b) => q + b.st + FLY_S, 0);
-    const hold = Math.min(Math.max(raw + TEXT_TAIL, TEXT_MIN), TEXT_MAX, 0.6 * T);
-    const k = Math.min(1, Math.max(0.1, hold - TEXT_TAIL) / raw);
+  // item 66 + 73, the text phase = one element centre-stage at a time: the title / VICTORY / DEFEAT stay readHold(words) s big in the middle, then FLY
+  // 0.3 s to their slot; every combo step punches in for STEP_D s (stage + fly); the settled row then holds ROW_HOLD s; the pan starts after that.
+  // natural plan (countdown >= COUNTDOWN): hold = end + ROW_HOLD (the intro is stretched to fit, see buildIntro). A short countdown (infinite, 5 s)
+  // squeezes the old way (every stage / fly shrinks together, hold <= 0.6 T). blocks[] = { id, i, at, stage, fly, d (= stage + fly) } read by js/ui/briefing.js
+  function loseWords(sc, timed) {
+    let n = wordsOf(loc(sc.lose));
+    const HS = IT.HudSteps, tr = IT.t;
+    if (HS && HS.loseKeys && tr && IT.hasT) for (const k of HS.loseKeys(sc, timed).filter(q => !(sc.lose && q === 'method') && IT.hasT('f1.lose.' + q))) n += wordsOf(tr('f1.lose.' + k));
+    return n;
+  }
+  function textPlan(pr, T, timed) {
+    const sc = pr.sc, steps = introSteps(sc);
+    const blocks = [{ id: 'title', i: 0, st: readHold(wordsOf(loc(sc.name)), TITLE_FLOOR), fl: FLY_S }, { id: 'win', i: 0, st: readHold(wordsOf(loc(sc.win || sc.goal))), fl: FLY_S },
+      { id: 'lose', i: 0, st: readHold(loseWords(sc, timed !== false)), fl: FLY_S }];
+    steps.forEach((a, i) => blocks.push({ id: 'step', i, st: STEP_D - STEP_FLY, fl: STEP_FLY }));
+    const raw = blocks.reduce((q, b) => q + b.st + b.fl, 0), tail = steps.length ? ROW_HOLD : TEXT_TAIL;
+    let hold, k;
+    if (T >= COUNTDOWN) { hold = raw + tail; k = 1; }
+    else { hold = Math.min(Math.max(raw + TEXT_TAIL, TEXT_MIN), TEXT_MAX, 0.6 * T); k = Math.min(1, Math.max(0.1, hold - TEXT_TAIL) / raw); }
     let at = 0;
-    for (const b of blocks) { b.at = at; b.stage = b.st * k; b.fly = FLY_S * k; b.d = b.stage + b.fly; at += b.d; delete b.st; }
+    for (const b of blocks) { b.at = at; b.stage = b.st * k; b.fly = b.fl * k; b.d = b.stage + b.fly; at += b.d; delete b.st; delete b.fl; }
     return { hold, raw, end: at, blocks };
   }
   function focusSpot(w, f, base) {
@@ -701,7 +713,7 @@
     return null;
   }
   // -> { T, t, text, linger, stops:[{ kind:'hero'|'foes'|'gate'|'focus', x, y, r, ids, t (start), glide (s) }], reveals:[{ id, x, y, at (camera arrival; null = never toured), linger, done }], unseen:[ids], cur, tour }
-  function buildIntro(w, pr, foes, T) {
+  function buildIntro(w, pr, foes, T, timed) {
     const h = w.hero, sc = pr.sc, k = T / 12, live = foes.filter(e => !e.dead), linger = revealLinger(pr.df);
     const unseen = live.filter(e => !e.visible), rev = revealOn(sc, pr.df);
     const reveals = rev ? unseen.map(e => ({ id: e.id, x: e.x, y: e.y, at: null, linger, done: false, start: null, thk: null, gone: false })) : [];
@@ -716,7 +728,10 @@
     if (w.gate) mid.push({ kind: 'gate', x: w.gate.x, y: w.gate.y, r: w.gate.r, ids: [] });
     for (const f of sc.focus || []) { const p = focusSpot(w, f, h); if (p) mid.push({ kind: 'focus', focus: f, x: p.x, y: p.y, r: p.r, ids: [] }); }
     mid = mid.filter((s, i) => !mid.slice(0, i).some(q => Math.hypot(q.x - s.x, q.y - s.y) < 150)).slice(0, TOUR_MAX);
-    const text = textPlan(pr, T), back = T - 2.5 * k, avail = Math.max(0, back - text.hold);
+    // item 73: the reading holds stretch the intro when they need to (the pan keeps >= PAN_MIN s + the invoke tail); k scales the pan only
+    const text = textPlan(pr, T, timed);
+    if (T >= COUNTDOWN) T = Math.max(T, Math.ceil((text.hold + PAN_MIN + TAIL_S) * 2) / 2);
+    const back = T - TAIL_S * k, avail = Math.max(0, back - text.hold);
     // pan phase: glide + stay per stop (a foe stop stays the linger + 0.3 s, <= STAY_MAX; the others STAY_OTHER); too long -> glides + other stays shrink first, then all
     let gl = 1.1 * k;
     const stay = mid.map(s => (s.kind === 'foes' ? Math.min(STAY_MAX, linger + 0.3) : STAY_OTHER * k)), sum = () => mid.length * gl + stay.reduce((q, v) => q + v, 0);
@@ -770,8 +785,9 @@
       pr: null, dummies: [], intro: null, result: null, ended: false, summary: null, w: null, onSwap: null, recent: [], t0: 0, caught: false, bag: [], lastId: null, failId: null, maxLevel: 0,
       diffId: IT.DIFFICULTY.migrate(opts.diff || 'common'),
       // v6: a fixed sandbox scenario also gets the full countdown (nothing is pre-invoked: it is the time to invoke); item 13: the 12 s intro
-      countdown: ranked ? COUNTDOWN : infinite ? INF_COUNTDOWN : fixed && mode === 'sandbox' ? COUNTDOWN : SOLO_COUNTDOWN,
+      countdown: ranked ? COUNTDOWN : infinite ? INF_COUNTDOWN : fixed && mode === 'sandbox' ? COUNTDOWN : SOLO_COUNTDOWN, cd0: 0,
     };
+    run.cd0 = run.countdown;
     const DF = () => IT.DIFFICULTY;
 
     const infPool = () => { const l = IT.SCENARIOS.filter(s => (s.level || s.tier * 3) >= INF_MIN_LEVEL); return l.length ? l : IT.SCENARIOS.slice(); };
@@ -861,9 +877,10 @@
       // cannot finish the foe before the combo lands; an explicit attack / attack-move order still works
       if (w.hero) { if (run.pr.sc.obj.type === 'kill_with' || (run.pr.need && run.pr.need.length && KILL_TYPES[run.pr.sc.obj.type])) w.hero.autoAttack = false; else delete w.hero.autoAttack; }
       run.maxLevel = Math.max(run.maxLevel, run.pr.sc.level || 0);
-      run.phase = run.countdown > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
+      run.countdown = run.cd0; run.phase = run.cd0 > 0 ? 'countdown' : 'play'; run.cd = run.countdown;
       w.paused = run.phase !== 'play';
-      run.intro = run.phase === 'countdown' && run.countdown >= INTRO_MIN ? buildIntro(w, run.pr, run.dummies, run.countdown) : null;
+      run.intro = run.phase === 'countdown' && run.cd0 >= INTRO_MIN ? buildIntro(w, run.pr, run.dummies, run.cd0, run.mode !== 'sandbox') : null;
+      if (run.intro) run.countdown = run.cd = run.intro.T;   // item 73: the reading holds may stretch the countdown
       w.emit('scnStart', { id: run.pr.sc.id, n: run.n, diff: run.pr.df.id });
       introStep(w);
     }
@@ -1225,6 +1242,30 @@
       I.tour = false; run.w.emit('tourEnd', { skipped: true });
       return true;
     };
+    // item 73: the first key / click ADVANCES one piece of the text phase (the clock jumps to the next block's start; after the last piece landed, to the
+    // end of the row hold = the pan); Esc SKIPS all (the rest of the text phase + the pan; the countdown itself keeps running). false = nothing to do
+    function jump(d) {
+      if (d <= 0) return;
+      const w = run.w, inv = w.hero && w.hero.inv;
+      if (inv && inv.invokeCd > 0) { inv.invokeCd -= d; if (inv.invokeCd < 1e-9) inv.invokeCd = 0; }
+      run.cd = Math.max(1e-6, run.cd - d); introStep(w);
+    }
+    run.advanceIntro = () => {
+      const I = run.intro;
+      if (run.ended || !run.w || run.phase !== 'countdown' || !I || !I.text || I.t >= I.text.hold - 1e-9) return false;
+      const tp = I.text, nx = tp.blocks.find(b => b.at > I.t + 1e-9);
+      jump((nx ? nx.at : I.t < tp.end - 1e-9 ? tp.end : tp.hold) - I.t);
+      return true;
+    };
+    run.skipIntro = () => {
+      const I = run.intro;
+      if (run.ended || !run.w || run.phase !== 'countdown' || !I) return false;
+      const live = I.text && I.t < I.text.hold - 1e-9, tour = !!I.tour;
+      if (!live && !tour) return false;
+      if (tour) { I.tour = false; run.w.emit('tourEnd', { skipped: true }); }
+      if (live) jump(I.text.hold - I.t);
+      return true;
+    };
     run.touring = () => !!(run.intro && run.intro.tour && run.phase === 'countdown' && !run.ended);
     // playtest 2: leave the result card (any key / click). false while not in 'result' or before RESULT_MIN s have shown it
     run.cont = () => { if (run.ended || !run.w || run.phase !== 'result' || (run.held || 0) < RESULT_MIN) return false; nextScenario(); return true; };
@@ -1276,7 +1317,7 @@
   }
 
   IT.Ranked = {
-    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, STAGE_MIN, STAGE_MAX, FLY_S, TEXT_MIN, TEXT_MAX, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
+    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, readHold, STEP_D, ROW_HOLD, PAN_MIN, READ_FLOOR, TITLE_FLOOR, STAGE_MIN, STAGE_MAX, FLY_S, TEXT_MIN, TEXT_MAX, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,

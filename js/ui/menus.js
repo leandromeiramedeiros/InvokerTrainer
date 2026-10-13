@@ -151,6 +151,65 @@
         h('span', { text: IT.t('stats.bestMedal') }),
         h('b', { text: best ? best.name + (best.stars ? ' ' + best.stars : '') : IT.t('title.nomedal') })));
   }
+  // ---- v6 #72: SHOP side tab. Gold ornamented frame, pixel coin, relic-point balance badge, "!" badge when something new is affordable,
+  // idle shimmer + gentle pulse (CSS) + a tiny glow-sand sparkle canvas (IT.Sand.createGlow). Reduced motion: class .calm, no shimmer/pulse/sparkle; badges stay.
+  const reducedMotion = () => { try { return !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } };
+  function shopTabInfo() {
+    const S = IT.Shop;
+    if (!S) return null;
+    let bal = 0, bang = false;
+    try { bal = Math.max(0, Math.floor(S.balance() || 0)); bang = !!(S.canAffordNew && S.canAffordNew()); } catch (e) { /* storage denied: 0, no badge */ }
+    return { bal, text: String(bal), bang, calm: reducedMotion() };
+  }
+  function coinIcon() {   // 9x9 pixel coin, scaled by CSS (image-rendering:pixelated)
+    const c = doc.createElement('canvas'); c.width = 9; c.height = 9; c.className = 'st-coin';
+    const x = c.getContext && c.getContext('2d');
+    if (!x) return c;
+    const P = ['..KKKKK..', '.KGGGGGK.', 'KGWWGgdGK', 'KGWGGdgGK', 'KGWGdGdGK', 'KGGdGGdGK', 'KGgGdddGK', '.KGGggGK.', '..KKKKK..'];
+    const col = { K: '#8a5200', G: '#ffc22a', W: '#fff6bf', g: '#e09a10', d: '#b4780f' };
+    for (let y = 0; y < 9; y++) for (let i = 0; i < 9; i++) { const ch = P[y][i]; if (ch !== '.') { x.fillStyle = col[ch]; x.fillRect(i, y, 1, 1); } }
+    return c;
+  }
+  // sparkle: a few gold glow grains drifting down the tab. Runs only while the tab is in the document and the page is visible; stops for good when it leaves.
+  function shopSparkle(cv, tab) {
+    try {
+      if (!IT.Sand || !IT.Sand.createGlow || !G.requestAnimationFrame || !cv.getContext('2d')) return;
+      const w = cv.width, hh = cv.height, sand = IT.Sand.createGlow(cv, { floor: hh + 4, gravity: 14, pile: 1, max: 14, drain: 3, wind: 4 });
+      const cols = ['#fff4a8', '#f2c444', '#ffb020'];
+      sand.setEmitters([{ x0: 2, x1: w - 2, y: 1, pal: { h: cols[0], m: cols[1] }, rate: 2.2, vx: 0 }]);
+      let last = G.performance ? G.performance.now() : 0, wasHidden = false;
+      const step = now => {
+        if (!cv.isConnected) return;   // title left the document: the loop ends (a new title builds a new tab)
+        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+        const hid = !!(G.document && G.document.hidden) || tab.classList.contains('calm');
+        if (!hid) { sand.step(dt); sand.draw(); } else if (!wasHidden) sand.clear();
+        wasHidden = hid;
+        G.requestAnimationFrame(step);
+      };
+      G.requestAnimationFrame(step);
+    } catch (e) { /* decorative */ }
+  }
+  function shopTab() {
+    const info = shopTabInfo();
+    if (!info) return null;
+    const bal = h('span', { class: 'st-bal', 'aria-label': IT.t('shop.balance') + ': ' + info.text, text: info.text });
+    const bang = h('i', { class: 'st-bang', 'aria-hidden': 'true', 'data-tip': IT.t('shop.tab.new'), text: '!' });
+    bang.hidden = !info.bang;
+    const cv = h('canvas', { class: 'st-spark', width: 22, height: 40, 'aria-hidden': 'true' });
+    const tab = h('button', { type: 'button', class: 'shoptab' + (info.calm ? ' calm' : '') + (info.bang ? ' hot' : ''), 'data-snd': 'start', 'data-tip': IT.t('shop.title'), onclick: () => { if (IT.UI.shopOpen) IT.UI.shopOpen(); } },
+      cv, h('span', { class: 'st-shine', 'aria-hidden': 'true' }), coinIcon(), h('b', { text: IT.t('shop.tab') }), bal, bang);
+    // live balance: refreshed every half second while the title is in the document (the loop ends when the tab is removed)
+    if (G.setInterval) {
+      const iv = G.setInterval(() => {
+        if (!tab.isConnected) { G.clearInterval(iv); return; }
+        const n = shopTabInfo(); if (!n) return;
+        if (bal.textContent !== n.text) bal.textContent = n.text;
+        bang.hidden = !n.bang; tab.classList.toggle('hot', n.bang); tab.classList.toggle('calm', n.calm);
+      }, 500);
+    }
+    if (!info.calm) shopSparkle(cv, tab);
+    return tab;
+  }
   function title() {
     const A = IT.App;
     const fsOk = !!(IT.Input && IT.Input.toggleFullscreen);
@@ -176,7 +235,7 @@
         btn('ui.stats', () => A.go('stats'), 'slt sm'),
         btn('ui.settings', () => A.go('settings'), 'slt sm')),
       h('div', { class: 'lang-row' }, langToggle()),
-      IT.UI.shopTab ? IT.UI.shopTab() : null,    // v6 item 15: SHOP side tab (js/ui/shop.js)
+      shopTab(),    // v6 item 15 + #72: SHOP side tab (opens js/ui/shop.js)
       h('div', { class: 'foot', text: IT.t('title.hint') }));
   }
 
@@ -207,5 +266,5 @@
     A.back();
   });
 
-  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, bestMedal, title, pause };
+  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, bestMedal, title, pause, shopTab, shopTabInfo };
 })(typeof window !== 'undefined' ? window : globalThis);

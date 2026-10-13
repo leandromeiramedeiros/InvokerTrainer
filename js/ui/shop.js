@@ -323,11 +323,5 @@
   function open() { IT.UI.push(screen); }
   IT.UI.shop = screen;
   IT.UI.shopOpen = open;
-  // title side tab (js/ui/menus.js title()): "SHOP" + the balance
-  IT.UI.shopTab = function () {
-    const { h } = IT.UI;
-    if (!IT.Shop) return null;
-    return h('button', { type: 'button', class: 'shopside', 'data-snd': 'start', 'data-tip': IT.t('shop.title'), onclick: open },
-      gem(), h('b', { text: IT.t('shop.tab') }), h('span', { text: String(IT.Shop.balance()) }));
-  };
+  // the title SHOP side tab lives in js/ui/menus.js (v6 #72)
 })(typeof window !== 'undefined' ? window : globalThis);

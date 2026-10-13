@@ -1,10 +1,14 @@
-// v6 item 13 + 45 + 66: scenario briefing for the 12 s intro (ranked + practice scenarios with a camera tour; Free Play has none).
+// v6 item 13 + 45 + 66 + 73: scenario briefing for the 12 s intro (ranked + practice scenarios with a camera tour; Free Play has none).
 // Item 66, BIG with IMPACT, ONE element centre-stage at a time: the world is dimmed + blurred (an overlay with backdrop-filter), then the title SLAMS in
 // (scale 3 -> 1, screen shake, flash, sting), then VICTORY (green), DEFEAT (red), then every combo step punches in as a big icon (lighter sting). After its
 // stage each element FLIES / SHRINKS to its final slot in the HUD's countdown panel (rects read from #hud .rkp: .rkhd / .rkwin / .rklose / .rkcombo .rkc;
 // fallback: top centre) so the eye follows it. Nothing else animates meanwhile (the camera is frozen: the pan starts after the text phase). When the
 // text phase ends the dim lifts and the landed tokens cross-fade into the real panel. Timeline = run.intro.text (js/sim/ranked.js textPlan, intro clock
 // run.intro.t). Any action (the intro is cancelled, phase leaves 'countdown') drops everything at once; the camera stays where it is.
+// Item 73: each text stays centre-stage for its reading time (sim: ranked textPlan), then flies to its slot of the SETTLED STRIP (.bf-strip, built here,
+// medium readable sizes in --g units like the HUD: title 1.6 g, VICTORY / DEFEAT 1.2 g, step icons 2 g = 22 / 17 / 28 px at 1280x720, x1.5 at 1920x1080);
+// on landing the flying token cross-fades into the real strip piece, which stays up until the round starts. A key / click ADVANCES one piece (main.js ->
+// run.advanceIntro), Esc skips the rest (run.skipIntro): the clock jumps, this file just follows it (an unshown piece snaps in, a shown one flies fast).
 // Reads IT.Ranked.hud(w) + w.ranked.intro; writes no game state. body.briefing = overlay up; body.bf-text = HUD panel hidden while tokens fly.
 (function (G) {
   'use strict';
@@ -14,6 +18,10 @@
   const FIN_S = 0.25;      // the dim lifts + tokens cross-fade into the HUD this long before the text phase ends
   const FIT_W = 0.86, FIT_H = 0.5;   // a staged element fills at most this share of the stage width / height
   let el = null, lay = null, key = null, on = false;
+  const SET = { title: 1.6, word: 1.2, line: 1.1, ico: 2 };   // settled sizes, multiples of the HUD unit --g (css/briefing.css .bf-strip carries the same numbers)
+  const QUICK = 0.18;      // an advanced piece flies to its slot this fast (s)
+  const HINT = { en: 'Space / click: next      Esc: skip', pt: 'Espaço / clique: avançar      Esc: pular' };
+  let strip = null, pcs = null, landAt = null, landed = null;   // pcs = { title, win, lose, step: [] } settled pieces
   let toks = null, plan = null, fin = false, reduced = false;   // toks = { title, win, lose, step: [] } nodes; plan[j] = last state of text block j
 
   const t = (k, o) => (IT.t ? IT.t(k, o) : k);
@@ -50,7 +58,7 @@
   }
 
   // one big token per step: icon + the bound keys (spell: the recipe in orb keys when hints are on, legacy: its key; item: its slot key) + name
-  function stepToks(sc, hero, hints) {
+  function stepToks(sc, hero, hints, cls) {
     const { h, icon } = IT.UI, legacy = S().data && S().data.scheme === 'legacy';
     const acts = IT.HudSteps.derive(sc).filter((a, i, l) => !(i && l[i - 1].k === a.k && l[i - 1].id === a.id)).slice(0, 7);
     const KI = { attack: 'ui_atk', move: 'ui_move', stop: 'ui_stop', hold: 'ui_hold', pos: 'ui_pos' };
@@ -65,7 +73,7 @@
         if (j >= 0) k = h('span', { class: 'bf-k' }, keyLab('item' + (j + 1)));
       } else if (a.k === 'attack' || a.k === 'stop' || a.k === 'hold') k = h('span', { class: 'bf-k' }, keyLab(a.k));
       const ic = a.k === 'spell' || a.k === 'item' ? icon(a.id) : icon(KI[a.k] || 'ui_pos');
-      return h('div', { class: 'bf-t p bf-chip ' + a.k }, ic, k, h('span', { class: 'bf-cn', text: lab }));
+      return h('div', { class: cls + a.k }, ic, k, h('span', { class: 'bf-cn', text: lab }));
     });
   }
 
@@ -86,14 +94,26 @@
         h('div', { class: 'bf-meta' }, h('span', { class: 'bf-diff d-' + rk.diff, text: has('dtier.' + rk.diff) ? t('dtier.' + rk.diff) : rk.diff }), lv ? h('span', { class: 'bf-lv', text: lv }) : null, meta ? h('span', { text: meta }) : null)),
       win: win ? h('div', { class: 'bf-t p bf-win' }, h('div', { class: 'bf-big' }, pix('win'), h('em', { text: bigWord('win') })), h('div', { class: 'bf-line' }, emph(win))) : null,
       lose: lose ? h('div', { class: 'bf-t p bf-lose' }, h('div', { class: 'bf-big' }, pix('lose'), h('em', { text: bigWord('lose') })), h('div', { class: 'bf-line' }, emph(lose, gen))) : null,
-      step: stepToks(sc, w.hero, hints),
+      step: stepToks(sc, w.hero, hints, 'bf-t p bf-chip '),
     };
+    const ttl = loc(rk.scenario), ds = has('dtier.' + rk.diff) ? t('dtier.' + rk.diff) : rk.diff;
+    pcs = {
+      title: h('div', { class: 'bs bs-title' }, h('div', { class: 'bs-name', text: ttl }),
+        h('div', { class: 'bs-meta' }, h('span', { class: 'bf-diff d-' + rk.diff, text: ds }), lv ? h('span', { class: 'bf-lv', text: lv }) : null, meta ? h('span', { text: meta }) : null)),
+      win: win ? h('div', { class: 'bs bs-win' }, h('div', { class: 'bs-big' }, pix('win'), h('em', { text: bigWord('win') })), h('div', { class: 'bs-line' }, emph(win))) : null,
+      lose: lose ? h('div', { class: 'bs bs-lose' }, h('div', { class: 'bs-big' }, pix('lose'), h('em', { text: bigWord('lose') })), h('div', { class: 'bs-line' }, emph(lose, gen))) : null,
+      step: stepToks(sc, w.hero, hints, 'bs bs-step '),
+    };
+    strip = h('div', { class: 'bf-strip' }, pcs.title, h('div', { class: 'bs-wl' }, pcs.win, pcs.lose), pcs.step.length ? h('div', { class: 'bs-combo' }, pcs.step) : null);
+    if (strip.style && strip.style.setProperty) for (const k of Object.keys(SET)) strip.style.setProperty('--bs-' + k, SET[k]);
+    landAt = {}; landed = {};
     plan = null; fin = false;
     reduced = !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches);
     el.textContent = '';
     lay = h('div', { class: 'bf-lay' }, toks.title, toks.win, toks.lose, toks.step);
-    el.appendChild(h('div', { class: 'bf-dim' })); el.appendChild(h('div', { class: 'bf-flash' })); el.appendChild(lay);
-    doc.body.classList.add('bf-text');
+    el.appendChild(h('div', { class: 'bf-dim' })); el.appendChild(h('div', { class: 'bf-flash' })); el.appendChild(lay); el.appendChild(strip);
+    el.appendChild(h('div', { class: 'bf-hint', text: HINT[IT.lang] || HINT.en }));
+    doc.body.classList.add('bf-text'); doc.body.classList.add('bf-set');
   }
 
   // ---- geometry: a token is positioned by translate(centre - size / 2) scale(s) about its own centre
@@ -103,18 +123,14 @@
     const s0 = Math.min(1, FIT_W * W / w, FIT_H * H / h);
     return { w, h, s0, cx: W / 2, cy: H * 0.46 };
   }
-  // the final slot of a block, relative to the overlay: the matching element of the HUD's countdown panel (hidden, but laid out); fallback top centre
+  const pieceOf = (id, i) => (pcs ? (id === 'step' ? pcs.step[i] : pcs[id]) : null);
+  // the final slot of a block, relative to the overlay: its piece of the settled strip (laid out, still transparent); fallback top centre
   function slotRect(id, i) {
-    const B = el.getBoundingClientRect(), q = s => Array.from(doc.querySelectorAll('#hud .rkp ' + s));
-    let n = null;
-    if (id === 'title') n = q('.rkhd')[0] || q('.rkname')[0];
-    else if (id === 'win') n = q('.rkwin')[0];
-    else if (id === 'lose') n = q('.rklose')[0];
-    else { const c = q('.rkcombo .rkc'); n = c[Math.min(i, c.length - 1)] || q('.rkcombo')[0]; }
+    const B = el.getBoundingClientRect(), n = pieceOf(id, i);
     const r = n && n.getBoundingClientRect ? n.getBoundingClientRect() : null;
     if (r && r.width > 2 && r.height > 2) return { cx: r.left - B.left + r.width / 2, cy: r.top - B.top + r.height / 2, w: r.width, h: r.height };
     const W = B.width || el.offsetWidth, H = B.height || el.offsetHeight, sz = 0.06 * H;
-    return id === 'step' ? { cx: W * 0.5 + (i - 3) * sz * 1.3, cy: H * 0.085, w: sz, h: sz } : { cx: W * 0.5, cy: H * 0.05 + (id === 'title' ? 0 : id === 'win' ? 0.05 * H : 0.09 * H), w: 0.4 * W, h: 0.04 * H };
+    return id === 'step' ? { cx: W * 0.5 + (i - 3) * sz * 1.3, cy: H * 0.2, w: sz, h: sz } : { cx: W * 0.5, cy: H * 0.05 + (id === 'title' ? 0 : id === 'win' ? 0.07 * H : 0.12 * H), w: 0.4 * W, h: 0.05 * H };
   }
 
   // ---- impact: flash, shake, sting (all off the sim; a reduced-motion player gets only the fades)
@@ -148,12 +164,12 @@
     else if (b.id === 'lose') { flash('#ff3b4e', 0.45, 0.4); impact(b.id, 3, 'introLose', 0.9); }
     else impact(b.id, 0, 'introPunch', 0.7);
   }
-  function fly(b, snap) {
+  function fly(b, snap, quick) {
     const tok = tokOf(b); if (!tok) return;
     if (!tok._g) { tok.classList.remove('p'); tok.classList.add('on'); tok._g = stageXf(tok); }
     if (tok.getAnimations) tok.getAnimations().forEach(a => a.cancel());
     const g = tok._g, r = slotRect(b.id, b.i), s = Math.max(0.04, Math.min(g.s0, r.w / g.w, r.h / g.h));
-    tok.style.transition = snap ? 'none' : 'transform ' + (reduced ? 0.12 : Math.max(0.1, b.fly)).toFixed(3) + 's cubic-bezier(.55,0,.2,1)';
+    tok.style.transition = snap ? 'none' : 'transform ' + (quick ? QUICK : reduced ? 0.12 : Math.max(0.1, b.fly)).toFixed(3) + 's cubic-bezier(.55,0,.2,1)';
     tok.style.transform = xf(r.cx, r.cy, g.w, g.h, s);
     if (!snap && !reduced && IT.Sfx && IT.Sfx.sting && b.id !== 'step') IT.Sfx.sting('introWhoosh', 0.5);
   }
@@ -162,7 +178,18 @@
   // a block's state at intro time t0: 'p' (not yet), 'stage' (centre-stage), 'fly' (to its HUD slot), 'done' (landed)
   const stateAt = (b, t0) => (t0 < b.at - 1e-9 ? 'p' : t0 < b.at + b.stage ? 'stage' : t0 < b.at + b.d - 1e-9 ? 'fly' : 'done');
 
-  // drive the text phase from the intro clock (run.intro.t, the countdown seconds)
+  // the token has landed: it cross-fades into its real strip piece (which stays until the round starts)
+  function land(b, j) {
+    if (landed[j]) return;
+    landed[j] = true;
+    const tok = tokOf(b), pc = pieceOf(b.id, b.i);
+    if (tok) tok.classList.add('gone');
+    if (pc) pc.classList.add('in');
+    if (strip) strip.classList.add('up');
+  }
+
+  // drive the text phase from the intro clock (run.intro.t, the countdown seconds). The clock may jump (key = next piece, Esc = all): a piece never
+  // shown snaps into the strip, a piece on stage / in flight flies there fast
   function textStep(I) {
     if (!I || !I.text || !toks) return;
     const tp = I.text, t0 = I.t || 0;
@@ -171,12 +198,17 @@
       const st = stateAt(b, t0), was = plan[j];
       if (st === was) return;
       plan[j] = st;
-      if (st === 'stage') enter(b);
-      else if (st === 'fly') fly(b, was === '' || was === 'p');
-      else if (st === 'done') { if (was === 'stage' || was === '' || was === 'p') fly(b, true); }   // late frame: snap to the slot
+      if (st === 'stage') { enter(b); landAt[j] = b.at + b.d; }
+      else if (st === 'fly') { fly(b, was === '' || was === 'p'); landAt[j] = b.at + b.d; }
+      else if (st === 'done') {
+        if (was === '' || was === 'p') land(b, j);                    // never shown (Esc / a long hitch): straight into the strip
+        else if (was === 'stage') { fly(b, false, true); landAt[j] = t0 + QUICK; }   // advanced while centre-stage
+        else landAt[j] = Math.min(landAt[j] == null ? t0 : landAt[j], t0 + QUICK);   // advanced mid-flight (or the plain landing)
+      }
     });
-    if (!fin && t0 >= tp.hold - FIN_S) {
-      fin = true; el.classList.add('fin'); doc.body.classList.remove('bf-text');   // dim lifts, tokens cross-fade into the real panel
+    tp.blocks.forEach((b, j) => { if (landAt[j] != null && !landed[j] && t0 >= landAt[j] - 1e-9 && plan[j] === 'done') land(b, j); });
+    if (!fin && t0 >= tp.end - 1e-9) {
+      fin = true; el.classList.add('fin'); doc.body.classList.remove('bf-text');   // everything landed: the dim lifts, the HUD countdown number shows again
     }
   }
 
@@ -192,13 +224,13 @@
     if (on === v) return;
     on = v;
     doc.body.classList.toggle('briefing', v);
-    if (!v) doc.body.classList.remove('bf-text');
+    if (!v) { doc.body.classList.remove('bf-text'); doc.body.classList.remove('bf-set'); }
   }
 
   // the intro is over or was cancelled by an action: everything drops at once (the camera is not touched)
   function drop() {
     if (el) { el.className = 'brief'; el.textContent = ''; }
-    key = null; toks = null; plan = null; lay = null; fin = false; show(false);
+    key = null; toks = null; plan = null; lay = null; strip = null; pcs = null; landAt = null; landed = null; fin = false; show(false);
   }
 
   // per frame (main.js). frozen = a menu / end screen is up (the overlay stays as it is)
@@ -219,5 +251,5 @@
 
   function hide() { if (el) drop(); else show(false); }
 
-  IT.Briefing = { update, hide, emph, textStep, stateAt, onShake: null };
+  IT.Briefing = { update, hide, emph, textStep, stateAt, SET, QUICK, onShake: null };
 })(typeof window !== 'undefined' ? window : globalThis);

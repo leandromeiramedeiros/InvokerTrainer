@@ -40,3 +40,34 @@ b.pulse{color:#fff}
 .bf-cn{color:var(--ink);font-size:calc(var(--u)*7);line-height:1.05;text-align:center;white-space:nowrap;text-shadow:0 .08em 0 #000}
 
 @media (prefers-reduced-motion:reduce){.bf-dim{-webkit-backdrop-filter:none;backdrop-filter:none;background:#07030fd0}.bf-t{will-change:auto}}
+
+/* item 73: the SETTLED strip (js/ui/briefing.js builds it; the flying tokens cross-fade into its pieces). Sizes scale with the HUD unit --g (14 px at 1280x720,
+   21 px at 1920x1080): title 1.6 g = 22 / 34 px, VICTORY / DEFEAT 1.2 g = 17 / 25 px, step icons 2 g = 28 / 42 px. The numbers sit in --bs-* (set by js from Briefing.SET). */
+.bf-t.gone{opacity:0;transition:opacity .15s ease-out !important}
+body.bf-set #hud .rkp.cd .rkmain{visibility:hidden}   /* the HUD's tiny copy of the same texts: the strip replaces it until the round starts */
+.bf-strip{isolation:isolate;--bs-title:1.6;--bs-word:1.2;--bs-line:1.1;--bs-ico:2;position:absolute;left:calc(17.5% + var(--g)*12.2);width:calc(62% - var(--g)*13.4);top:calc(var(--g)*.7);box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:stretch;gap:calc(var(--g)*.55);padding:calc(var(--g)*.6) calc(var(--g)*1);color:var(--ink);text-align:center;font-weight:bold}
+.bf-strip::before{content:"";position:absolute;inset:0;z-index:-1;background:#150d27f2;border:calc(var(--g)*.2) solid var(--mag);box-shadow:0 0 0 .15em #000,0 .5em 1.4em #000a;opacity:0;transition:opacity .2s ease-out}
+.bf-strip.up::before{opacity:1}
+.bs{opacity:0;transition:opacity .18s ease-out}.bs.in{opacity:1}
+.bs-title{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.25)}
+.bs-name{color:var(--mag);font-size:calc(var(--g)*var(--bs-title));line-height:1.1;text-transform:uppercase;letter-spacing:.04em;text-shadow:0 .08em 0 #000}
+.bs-meta{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:0 calc(var(--g)*.8);color:var(--dim);font-size:calc(var(--g)*.85);letter-spacing:.06em;text-transform:uppercase}
+.bs-wl{display:flex;flex-direction:column;gap:calc(var(--g)*.4)}
+.bs-win,.bs-lose{display:grid;grid-template-columns:calc(var(--g)*8.6) minmax(0,1fr);align-items:center;column-gap:calc(var(--g)*.7);text-align:left}
+.bs-big{display:flex;align-items:center;gap:calc(var(--g)*.4);font-size:calc(var(--g)*var(--bs-word));line-height:1}
+.bs-big em{font-style:normal;text-transform:uppercase;letter-spacing:.04em;text-shadow:0 .08em 0 #000}
+.bs-big .bf-ico{width:1em;height:1em}
+.bs-win .bs-big{color:var(--good)}.bs-lose .bs-big{color:var(--bad)}
+.bs-line{font-size:calc(var(--g)*var(--bs-line));line-height:1.15;font-weight:normal}
+.bs-win .bs-line{color:#bff5cf}.bs-lose .bs-line{color:#ffc2c8}
+.bs-win b.pulse{text-shadow:0 0 .35em var(--good)}.bs-lose b.pulse{text-shadow:0 0 .35em var(--bad)}
+.bs-combo{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(var(--g)*.4) calc(var(--g)*.9)}
+.bs-step{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.15)}
+.bs-step canvas.ico{display:block;width:calc(var(--g)*var(--bs-ico));height:calc(var(--g)*var(--bs-ico));image-rendering:pixelated;background:#ffffff14;border:1px solid #ffffff55}
+.bs-step.item canvas.ico{border-color:var(--gold)}.bs-step.attack canvas.ico,.bs-step.stop canvas.ico{border-color:var(--bad)}
+.bs-step .bf-k{display:flex;gap:calc(var(--g)*.15);color:var(--gold);font-size:calc(var(--g)*.8);line-height:1}
+.bs-step .bf-k .o{font-style:normal;padding:0 .2em;background:#000a}
+.bs-step .bf-k .o.quas{color:var(--q)}.bs-step .bf-k .o.wex{color:var(--w)}.bs-step .bf-k .o.exort{color:var(--e)}.bs-step .bf-k .o.r{color:var(--gold)}
+.bs-step .bf-cn{color:var(--ink);font-size:calc(var(--g)*.8);line-height:1.05;white-space:nowrap}
+.bf-hint{position:absolute;left:0;right:0;bottom:calc(var(--g)*11);text-align:center;color:var(--dim);font-size:calc(var(--g)*.85);letter-spacing:.06em;text-shadow:0 .1em 0 #000;opacity:.85}

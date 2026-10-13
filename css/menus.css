@@ -76,3 +76,29 @@
 .fsbtn{border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
 .fsbtn:hover{border-image-source:var(--orn-mini-gold)}
 /* big buttons: a little more breathing room is not needed, the 8-px bracket fits inside the 2px border + padding */
+
+/* ---- v6 #72: SHOP side tab (title, right edge). Bigger gold-framed tab: coin, label, balance badge, "!" badge when something new is affordable.
+   Idle shimmer + gentle pulse + glow-sand sparkle canvas; .calm (reduced motion) keeps the badges and drops the motion. */
+.shoptab{position:absolute;right:0;top:30%;z-index:3;display:flex;flex-direction:column;align-items:center;gap:.35em;min-width:6em;padding:.8em .7em .75em 1em;overflow:visible;cursor:pointer;
+  color:#fff4c8;font-weight:bold;background:radial-gradient(120% 70% at 50% 0,#5a3aa0 0,#2d1a5a 55%,#1a0f32 100%);
+  border:calc(5*var(--fs)) solid #c9962a;border-right:0;border-image:var(--orn-mini-gold) 5/calc(5*var(--fs)) round;image-rendering:pixelated;
+  box-shadow:inset 0 0 0 2px #0008,inset 0 0 1.2em #f2c4442e,-.2em 0 1.2em #f2c44455;transition:transform .15s,filter .15s;animation:stPulse 2.4s ease-in-out infinite}
+.shoptab:hover{transform:translateX(-.35em);filter:brightness(1.18)}
+.shoptab:active{transform:translateX(-.2em) scale(.97)}
+.shoptab b{font-size:1.15em;letter-spacing:.2em;padding-left:.2em;text-shadow:0 .12em 0 #000,0 0 .6em #f2c44466}
+.shoptab .st-coin{width:calc(9*var(--fs)*1.5);height:calc(9*var(--fs)*1.5);image-rendering:pixelated;filter:drop-shadow(0 0 .35em #f2c444aa)}
+.shoptab .st-bal{min-width:3.2em;padding:.12em .55em;text-align:center;font-size:.95em;color:#ffe27a;background:#0b0618;border:2px solid #c9962a;border-radius:.9em;text-shadow:0 0 .5em #f2c44488;box-shadow:inset 0 0 .4em #000}
+.shoptab .st-bang{position:absolute;left:-.2em;top:-.5em;min-width:1.5em;height:1.5em;line-height:1.5em;border-radius:50%;text-align:center;font-style:normal;font-weight:bold;font-size:1em;
+  color:#fff;background:radial-gradient(circle at 35% 30%,#ff7a5a,#c8200f 70%);border:2px solid #ffe27a;box-shadow:0 2px 0 #000,0 0 .7em #ff6a4acc;animation:stBang 1.1s ease-in-out infinite}
+.shoptab .st-bang[hidden]{display:none}
+.shoptab .st-spark{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated;z-index:0}
+.shoptab>*{position:relative}.shoptab>.st-spark,.shoptab>.st-shine{position:absolute}
+.shoptab .st-shine{inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.shoptab .st-shine::after{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:40%;background:linear-gradient(100deg,#fff0 0,#fff6c8aa 50%,#fff0 100%);transform:skewX(-18deg);animation:stShine 4.2s ease-in-out infinite}
+.shoptab.hot{border-color:#ffe27a}
+@keyframes stPulse{0%,100%{box-shadow:inset 0 0 0 2px #0008,inset 0 0 1.2em #f2c4442e,-.2em 0 1.1em #f2c44444}50%{box-shadow:inset 0 0 0 2px #0008,inset 0 0 1.6em #f2c44466,-.2em 0 1.9em #f2c444aa}}
+@keyframes stShine{0%,55%{left:-60%}100%{left:130%}}
+@keyframes stBang{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+.shoptab.calm,.shoptab.calm .st-bang{animation:none}
+.shoptab.calm .st-shine,.shoptab.calm .st-spark{display:none}
+@media (prefers-reduced-motion:reduce){.shoptab,.shoptab .st-bang{animation:none;transition:none}.shoptab .st-shine,.shoptab .st-spark{display:none}}
