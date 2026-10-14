@@ -89,10 +89,10 @@ test('run: 12 s countdown freezes the world, then play; solving moves on to the 
   const m = mk(), { run, w } = m;
   assert.equal(run.phase, 'countdown'); assert.equal(w.paused, true);
   let hud = R.hud(w);
-  assert.equal(hud.phase, 'countdown'); assert.equal(hud.countdown, 12); assert.equal(hud.score, 0);
+  assert.equal(hud.phase, 'countdown'); assert.equal(hud.countdown, Math.ceil(run.countdown)); assert.ok(run.countdown >= 12, '12 s base, stretched to fit the intro reading holds'); assert.equal(hud.score, 0);
   const t0 = w.t; w.step(); assert.equal(w.t, t0);
   for (let i = 0; i < 31; i++) run.tick(1 / 30);
-  assert.equal(R.hud(w).countdown, 11);
+  assert.equal(R.hud(w).countdown, Math.ceil(run.countdown - 31 / 30));
   assert.equal(run.runLeft, null);   // ranked is turn-based (8 scenarios), no run clock
   thaw(run);
   assert.equal(run.phase, 'play'); assert.equal(w.paused, false);
@@ -171,7 +171,7 @@ test('practice: difficulty fixed, endless, no score; sandbox scenario: no countd
   const s = mk({ mode: 'sandbox', scenario: 'sun_snipe' });
   assert.equal(s.run.pr.sc.id, 'sun_snipe');
   // v6: nothing is pre-invoked, so a fixed sandbox scenario gets the full 12 s countdown (v6 intro) to invoke (no time limit after it)
-  assert.equal(s.run.phase, 'countdown'); assert.equal(R.hud(s.w).countdown, 12);
+  assert.equal(s.run.phase, 'countdown'); assert.equal(R.hud(s.w).countdown, Math.ceil(s.run.countdown)); assert.ok(s.run.countdown >= 12);
   thaw(s.run);
   assert.equal(s.run.phase, 'play'); assert.equal(s.w.paused, false);
   assert.equal(R.hud(s.w).timeLeft, null);

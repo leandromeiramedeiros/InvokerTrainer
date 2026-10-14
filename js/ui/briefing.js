@@ -20,8 +20,9 @@
   let el = null, lay = null, key = null, on = false;
   const SET = { title: 1.6, word: 1.2, line: 1.1, ico: 2 };   // settled sizes, multiples of the HUD unit --g (css/briefing.css .bf-strip carries the same numbers)
   const QUICK = 0.18;      // an advanced piece flies to its slot this fast (s)
+  const REDUCED_FLY = 0.3, FLAIR_LEAD = 0.14, EARLY = 0.72;   // reduced-motion fly (s); the title waits this long for its flair to fade; the strip piece starts fading in at this share of a fly
   const HINT = { en: 'Space / click: next      Esc: skip', pt: 'Espaço / clique: avançar      Esc: pular' };
-  let strip = null, pcs = null, landAt = null, landed = null;   // pcs = { title, win, lose, step: [] } settled pieces
+  let strip = null, pcs = null, landAt = null, landed = null, early = null;   // pcs = { title, win, lose, step: [] } settled pieces
   let toks = null, plan = null, fin = false, reduced = false;   // toks = { title, win, lose, step: [] } nodes; plan[j] = last state of text block j
 
   const t = (k, o) => (IT.t ? IT.t(k, o) : k);
@@ -88,10 +89,12 @@
     const win = sc && sc.win ? loc(sc.win) : loc(rk.objective);
     const gen = HS.loseKeys(sc, rk.timeLeft != null).filter(k => !(sc && sc.lose && k === 'method') && has('f1.lose.' + k)).map(k => t('f1.lose.' + k));
     const lose = (sc && sc.lose ? [loc(sc.lose)] : []).concat(gen).filter(Boolean).join(', ');
+    const flair = sc && sc.flair ? loc(sc.flair) : '';   // the tagline under the title (centre-stage only; the settled strip stays compact)
     const meta = [rk.level ? t('hud.rkLevel', { n: rk.level }) : '', loc(rk.mapName), rk.twistName ? t('hud.rkTwist') + ' ' + loc(rk.twistName) : ''].filter(Boolean).join('  |  ');
     toks = {
       title: h('div', { class: 'bf-t p bf-tt' }, h('div', { class: 'bf-title', text: loc(rk.scenario) }),
-        h('div', { class: 'bf-meta' }, h('span', { class: 'bf-diff d-' + rk.diff, text: has('dtier.' + rk.diff) ? t('dtier.' + rk.diff) : rk.diff }), lv ? h('span', { class: 'bf-lv', text: lv }) : null, meta ? h('span', { text: meta }) : null)),
+        h('div', { class: 'bf-meta' }, h('span', { class: 'bf-diff d-' + rk.diff, text: has('dtier.' + rk.diff) ? t('dtier.' + rk.diff) : rk.diff }), lv ? h('span', { class: 'bf-lv', text: lv }) : null, meta ? h('span', { text: meta }) : null),
+        flair ? h('div', { class: 'bf-flair', text: flair }) : null),
       win: win ? h('div', { class: 'bf-t p bf-win' }, h('div', { class: 'bf-big' }, pix('win'), h('em', { text: bigWord('win') })), h('div', { class: 'bf-line' }, emph(win))) : null,
       lose: lose ? h('div', { class: 'bf-t p bf-lose' }, h('div', { class: 'bf-big' }, pix('lose'), h('em', { text: bigWord('lose') })), h('div', { class: 'bf-line' }, emph(lose, gen))) : null,
       step: stepToks(sc, w.hero, hints, 'bf-t p bf-chip '),
@@ -106,7 +109,7 @@
     };
     strip = h('div', { class: 'bf-strip' }, pcs.title, h('div', { class: 'bs-wl' }, pcs.win, pcs.lose), pcs.step.length ? h('div', { class: 'bs-combo' }, pcs.step) : null);
     if (strip.style && strip.style.setProperty) for (const k of Object.keys(SET)) strip.style.setProperty('--bs-' + k, SET[k]);
-    landAt = {}; landed = {};
+    landAt = {}; landed = {}; early = {};
     plan = null; fin = false;
     reduced = !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches);
     el.textContent = '';
@@ -169,14 +172,26 @@
     if (!tok._g) { tok.classList.remove('p'); tok.classList.add('on'); tok._g = stageXf(tok); }
     if (tok.getAnimations) tok.getAnimations().forEach(a => a.cancel());
     const g = tok._g, r = slotRect(b.id, b.i), s = Math.max(0.04, Math.min(g.s0, r.w / g.w, r.h / g.h));
-    tok.style.transition = snap ? 'none' : 'transform ' + (quick ? QUICK : reduced ? 0.12 : Math.max(0.1, b.fly)).toFixed(3) + 's cubic-bezier(.55,0,.2,1)';
+    const dur = flyDur(b, quick), lead = !snap && !quick && !reduced && tok.querySelector && tok.querySelector('.bf-flair') ? Math.min(FLAIR_LEAD, dur * 0.4) : 0;
+    tok.classList.add('fo');   // the extra flair line fades out first (css .bf-tt.fo .bf-flair), then the rest glides, FLIP style, into the strip
+    tok.style.transition = snap ? 'none' : 'transform ' + (dur - lead).toFixed(3) + 's cubic-bezier(.65,0,.35,1) ' + lead.toFixed(3) + 's';
     tok.style.transform = xf(r.cx, r.cy, g.w, g.h, s);
     if (!snap && !reduced && IT.Sfx && IT.Sfx.sting && b.id !== 'step') IT.Sfx.sting('introWhoosh', 0.5);
   }
+  const flyDur = (b, quick) => (quick ? QUICK : reduced ? Math.min(REDUCED_FLY, b.fly) : Math.max(0.1, b.fly));
   function tokOf(b) { return b.id === 'step' ? toks.step[b.i] : toks[b.id]; }
 
   // a block's state at intro time t0: 'p' (not yet), 'stage' (centre-stage), 'fly' (to its HUD slot), 'done' (landed)
   const stateAt = (b, t0) => (t0 < b.at - 1e-9 ? 'p' : t0 < b.at + b.stage ? 'stage' : t0 < b.at + b.d - 1e-9 ? 'fly' : 'done');
+
+  // the token is nearly home: its strip piece starts fading in underneath, so the handover is a cross-fade, never a jump
+  function warm(b, j) {
+    if (early[j]) return;
+    early[j] = true;
+    const pc = pieceOf(b.id, b.i);
+    if (pc) pc.classList.add('in');
+    if (strip) strip.classList.add('up');
+  }
 
   // the token has landed: it cross-fades into its real strip piece (which stays until the round starts)
   function land(b, j) {
@@ -206,6 +221,7 @@
         else landAt[j] = Math.min(landAt[j] == null ? t0 : landAt[j], t0 + QUICK);   // advanced mid-flight (or the plain landing)
       }
     });
+    tp.blocks.forEach((b, j) => { if (plan[j] === 'fly' && !early[j] && t0 >= b.at + b.stage + EARLY * flyDur(b) - 1e-9) warm(b, j); });
     tp.blocks.forEach((b, j) => { if (landAt[j] != null && !landed[j] && t0 >= landAt[j] - 1e-9 && plan[j] === 'done') land(b, j); });
     if (!fin && t0 >= tp.end - 1e-9) {
       fin = true; el.classList.add('fin'); doc.body.classList.remove('bf-text');   // everything landed: the dim lifts, the HUD countdown number shows again
@@ -230,7 +246,7 @@
   // the intro is over or was cancelled by an action: everything drops at once (the camera is not touched)
   function drop() {
     if (el) { el.className = 'brief'; el.textContent = ''; }
-    key = null; toks = null; plan = null; lay = null; strip = null; pcs = null; landAt = null; landed = null; fin = false; show(false);
+    key = null; toks = null; plan = null; lay = null; strip = null; pcs = null; landAt = null; landed = null; early = null; fin = false; show(false);
   }
 
   // per frame (main.js). frozen = a menu / end screen is up (the overlay stays as it is)

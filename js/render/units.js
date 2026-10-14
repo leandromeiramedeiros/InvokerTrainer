@@ -175,7 +175,9 @@
       if ((s > 0) !== front) continue;
       const ox = Math.cos(th) * 12, oy = s * 5 - 12 + Math.sin(R.time * 5 + i) * 0.8;
       const cv = IT.Art.canvas('invoker', ORB_NAME[orbs[i]] || 'orb_q');
+      R.noSil = true;   // light emitters never cast: the orbs stay out of the hero's shadow silhouette (and out of its foot anchor)
       if (cv) cx.drawImage(cv, Math.round(sx + ox - cv.width / 2), Math.round(sy + oy - cv.height / 2));
+      R.noSil = false;
     }
   }
 

@@ -20,6 +20,9 @@ b.pulse{color:#fff}
 .bf-diff{padding:0 .45em;border:.15em solid var(--dim);background:#1d1236;color:var(--ink)}
 .bf-diff.d-ian,.bf-diff.d-easy{border-color:var(--good)}.bf-diff.d-common{border-color:var(--gold)}.bf-diff.d-hard,.bf-diff.d-bambam{border-color:var(--bad)}
 .bf-lv{color:var(--gold)}
+/* the scenario tagline: hangs under the title token without adding to its size (so the fly's scale is the title block's), fades out first when the title leaves */
+.bf-flair{position:absolute;left:50%;top:100%;width:calc(var(--u)*300);max-width:92vw;margin-top:calc(var(--u)*3.2);transform:translateX(-50%);text-align:center;color:var(--ink);font-size:calc(var(--u)*6.4);line-height:1.25;font-weight:normal;text-shadow:0 .08em 0 #000;opacity:.95;transition:opacity .22s ease-out}
+.bf-tt.fo .bf-flair{opacity:0}
 
 .bf-big{display:flex;align-items:center;justify-content:center;gap:calc(var(--u)*3.5);font-size:calc(var(--u)*17);line-height:1}
 .bf-big em{font-style:normal;text-transform:uppercase;letter-spacing:.06em;text-shadow:0 .07em 0 #000}
@@ -43,13 +46,13 @@ b.pulse{color:#fff}
 
 /* item 73: the SETTLED strip (js/ui/briefing.js builds it; the flying tokens cross-fade into its pieces). Sizes scale with the HUD unit --g (14 px at 1280x720,
    21 px at 1920x1080): title 1.6 g = 22 / 34 px, VICTORY / DEFEAT 1.2 g = 17 / 25 px, step icons 2 g = 28 / 42 px. The numbers sit in --bs-* (set by js from Briefing.SET). */
-.bf-t.gone{opacity:0;transition:opacity .15s ease-out !important}
+.bf-t.gone{opacity:0;transition:opacity .28s ease-in-out !important}   /* a long cross-fade with the strip piece that started fading in at ~72% of the fly */
 body.bf-set #hud .rkp.cd .rkmain{visibility:hidden}   /* the HUD's tiny copy of the same texts: the strip replaces it until the round starts */
 .bf-strip{isolation:isolate;--bs-title:1.6;--bs-word:1.2;--bs-line:1.1;--bs-ico:2;position:absolute;left:calc(17.5% + var(--g)*12.2);width:calc(62% - var(--g)*13.4);top:calc(var(--g)*.7);box-sizing:border-box;
   display:flex;flex-direction:column;align-items:stretch;gap:calc(var(--g)*.55);padding:calc(var(--g)*.6) calc(var(--g)*1);color:var(--ink);text-align:center;font-weight:bold}
 .bf-strip::before{content:"";position:absolute;inset:0;z-index:-1;background:#150d27f2;border:calc(var(--g)*.2) solid var(--mag);box-shadow:0 0 0 .15em #000,0 .5em 1.4em #000a;opacity:0;transition:opacity .2s ease-out}
 .bf-strip.up::before{opacity:1}
-.bs{opacity:0;transition:opacity .18s ease-out}.bs.in{opacity:1}
+.bs{opacity:0;transition:opacity .3s ease-in-out}.bs.in{opacity:1}
 .bs-title{display:flex;flex-direction:column;align-items:center;gap:calc(var(--g)*.25)}
 .bs-name{color:var(--mag);font-size:calc(var(--g)*var(--bs-title));line-height:1.1;text-transform:uppercase;letter-spacing:.04em;text-shadow:0 .08em 0 #000}
 .bs-meta{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:0 calc(var(--g)*.8);color:var(--dim);font-size:calc(var(--g)*.85);letter-spacing:.06em;text-transform:uppercase}

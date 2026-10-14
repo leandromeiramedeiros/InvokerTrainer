@@ -185,7 +185,7 @@ test('splash formatting + share data/filename (pure parts, no DOM)', () => {
 test('ranked is unaffected: 8 turns, 12 s countdown, rating recorded, no infinite fields', () => {
   R.reset(); R.resetInfinite();
   const m = mk({ mode: 'ranked' }), { run, w, ends } = m;
-  assert.equal(run.turns, 8); assert.equal(run.infinite, false); assert.equal(R.COUNTDOWN, 12); assert.equal(R.hud(w).countdown, 12);
+  assert.equal(run.turns, 8); assert.equal(run.infinite, false); assert.equal(R.COUNTDOWN, 12); assert.equal(R.hud(w).countdown, Math.ceil(run.countdown)); assert.ok(run.countdown >= 12);
   assert.equal(R.hud(w).cleared, null); assert.equal(R.hud(w).turns, 8);
   for (let i = 0; i < 8; i++) {
     assert.equal(run.ended, false, 'turn ' + i);

@@ -703,11 +703,11 @@
   // and runs on the countdown clock. The foe already faces the way it will move next (faceFoes). Reveals the pan never reached (a cancelled intro,
   // F1) appear at round start and linger in play.
   const INTRO_MIN = 5, GROUP_R = 900, TOUR_MAX = 4, REVEAL_LINGER = 1.5, REVEAL_R = 250, REVEAL_VIS = 260;
-  const STAGE_MIN = 0.5, STAGE_MAX = 0.8, FLY_S = 0.3, TEXT_MIN = 4, TEXT_MAX = 7, TEXT_TAIL = 0.3, STAY_MAX = 4, STAY_OTHER = 1.0;
-  // item 73, reading time: a centre-stage text holds max(floor, READ_BASE + words / READ_WPS) s (~210 wpm, EN and PT alike; floor 1.2 s, the title 0.8 s);
+  const STAGE_MIN = 0.5, STAGE_MAX = 0.8, FLY_S = 0.5, TEXT_MIN = 4, TEXT_MAX = 7, TEXT_TAIL = 0.3, STAY_MAX = 4, STAY_OTHER = 1.0;
+  // item 73, reading time: a centre-stage text holds clamp(READ_BASE + words / READ_WPS, floor, READ_MAX) s (~210 wpm, EN and PT alike; floor 1.8 s, the title card (name + flair) 4 s, cap 5 s);
   // a combo step punches in for STEP_D s in all (icons need no reading) and the whole settled row then holds ROW_HOLD s before the pan
-  const READ_FLOOR = 1.2, TITLE_FLOOR = 0.8, READ_BASE = 0.35, READ_WPS = 3.5, STEP_D = 0.45, STEP_FLY = 0.2, ROW_HOLD = 1.0, PAN_MIN = 2.5, TAIL_S = 2.5;
-  const readHold = (words, floor) => Math.max(floor == null ? READ_FLOOR : floor, READ_BASE + words / READ_WPS);
+  const READ_FLOOR = 1.8, TITLE_FLOOR = 4, READ_MAX = 5, READ_BASE = 0.6, READ_WPS = 3.5, STEP_D = 0.6, STEP_FLY = 0.3, ROW_HOLD = 1.0, PAN_MIN = 2.5, TAIL_S = 2.5;
+  const readHold = (words, floor) => Math.min(READ_MAX, Math.max(floor == null ? READ_FLOOR : floor, READ_BASE + words / READ_WPS));
   const revealOn = () => true;   // item 45: every tier gets the tiny start reveal
   const revealLinger = df => (df && df.revealLinger > 0 ? df.revealLinger : REVEAL_LINGER);
   const wordsOf = t => (String(t == null ? '' : t).trim().match(/\S+/g) || []).length;
@@ -717,7 +717,7 @@
     return l.filter((a, i, q) => !(i && q[i - 1].k === a.k && q[i - 1].id === a.id)).slice(0, 7);
   }
   // item 66 + 73, the text phase = one element centre-stage at a time: the title / VICTORY / DEFEAT stay readHold(words) s big in the middle, then FLY
-  // 0.3 s to their slot; every combo step punches in for STEP_D s (stage + fly); the settled row then holds ROW_HOLD s; the pan starts after that.
+  // 0.5 s to their slot; every combo step punches in for STEP_D s (stage + fly); the settled row then holds ROW_HOLD s; the pan starts after that.
   // natural plan (countdown >= COUNTDOWN): hold = end + ROW_HOLD (the intro is stretched to fit, see buildIntro). A short countdown (infinite, 5 s)
   // squeezes the old way (every stage / fly shrinks together, hold <= 0.6 T). blocks[] = { id, i, at, stage, fly, d (= stage + fly) } read by js/ui/briefing.js
   function loseWords(sc, timed) {
@@ -728,7 +728,7 @@
   }
   function textPlan(pr, T, timed) {
     const sc = pr.sc, steps = introSteps(sc);
-    const blocks = [{ id: 'title', i: 0, st: readHold(wordsOf(loc(sc.name)), TITLE_FLOOR), fl: FLY_S }, { id: 'win', i: 0, st: readHold(wordsOf(loc(sc.win || sc.goal))), fl: FLY_S },
+    const blocks = [{ id: 'title', i: 0, st: readHold(wordsOf(loc(sc.name)) + wordsOf(loc(sc.flair)), TITLE_FLOOR), fl: FLY_S }, { id: 'win', i: 0, st: readHold(wordsOf(loc(sc.win || sc.goal))), fl: FLY_S },
       { id: 'lose', i: 0, st: readHold(loseWords(sc, timed !== false)), fl: FLY_S }];
     steps.forEach((a, i) => blocks.push({ id: 'step', i, st: STEP_D - STEP_FLY, fl: STEP_FLY }));
     const raw = blocks.reduce((q, b) => q + b.st + b.fl, 0), tail = steps.length ? ROW_HOLD : TEXT_TAIL;
@@ -1377,7 +1377,7 @@
   }
 
   IT.Ranked = {
-    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, readHold, STEP_D, ROW_HOLD, PAN_MIN, READ_FLOOR, TITLE_FLOOR, STAGE_MIN, STAGE_MAX, FLY_S, TEXT_MIN, TEXT_MAX, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
+    TURNS, COUNTDOWN, INTRO_MIN, REVEAL_LINGER, REVEAL_R, REVEAL_VIS, revealOn, revealLinger, buildIntro, textPlan, readHold, STEP_D, ROW_HOLD, PAN_MIN, READ_FLOOR, READ_MAX, TITLE_FLOOR, STAGE_MIN, STAGE_MAX, FLY_S, TEXT_MIN, TEXT_MAX, faceFoes, RESULT_HOLD, RESULT_MIN, RESULT_AUTO,
     streakMult, scenarioScore, diffBonus, DIFF_BONUS_MAX, expected, ratingDelta, baseDiff, rampDiff, capDiff, TOP_LVL, rankKey, INF_MIN_LEVEL, INF_COUNTDOWN,
     infiniteProfile, infiniteResult, recordInfinite, resetInfinite, infDifficulty,
     GOAL_R, GEM_R, spotOf, jukeUnit, DETECT,

@@ -1584,11 +1584,8 @@
     for (const id of tour.ids || []) {
       const e = R.w.byId.get(id); if (!e || e.dead || !UD().visible(R, e)) continue;
       R.interp(e);
-      const x = pxs(R, R.ix), y = pys(R, R.iy) - 6, r = 11 + pul * 4, k = Math.round(r * 0.45);
-      dring(R, x, y, r, '#ff4a6a', 0.85 * fa); dring(R, x, y, r + 3 + pul * 2, '#ffd24a', 0.4 * fa);
-      R.cx.globalAlpha = fa; R.cx.fillStyle = '#ff4a6a';   // corner brackets
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) { const bx = Math.round(x + sx * (r + 4)), by = Math.round(y + sy * (r + 4)); R.cx.fillRect(Math.min(bx, bx - sx * k), by, k, 1); R.cx.fillRect(bx, Math.min(by, by - sy * k), 1, k); }
-      R.cx.globalAlpha = 1;
+      const x = pxs(R, R.ix), y = pys(R, R.iy) - 6, r = 11 + pul * 1.5;
+      dring(R, x, y, r, '#ff4a6a', 0.85 * fa);   // one thin red ring, gentle pulse: just "this one"
       const sx = pxs(R, R.ix), sy = pys(R, R.iy);
       if (sx < 0 || sy < 0 || sx >= R.VW || sy >= R.VH) R.edgeArrow(sx, sy, '#ff4a6a', '!');
     }

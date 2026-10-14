@@ -71,12 +71,11 @@ test('ground: dead units, off-screen units and off switch draw nothing', () => {
   assert.strictEqual(d.length, 0);
 });
 
-test('ground: chaos meteor shadow grows toward impact', () => {
-  const m = (rem) => ({ id: 9, kind: 'thinker', team: 0, fx: 'chaosmeteor', x: 600, y: 600, z: 0, age: 1.3 - rem, landed: false, dead: false, statuses: [], danger: { at: 1.3 } });
-  const R0 = mkR([m(1.2)], 3); R0.simT = 0.0; draws.length = 0; SH.ground(R0); const early = draws.slice();
-  const R1 = mkR([m(0.1)], 3); R1.simT = 1.2; draws.length = 0; SH.ground(R1); const late = draws.slice();
-  assert.ok(early.length <= 1 && late.length === 1);
-  if (early.length) { assert.ok(late[0].w > early[0].w); assert.ok(late[0].a >= early[0].a); }
+test('ground: light-emitting spells / attacks / Forge Spirits cast no ground blob; tower shots do', () => {
+  const th = (fx, o) => Object.assign({ id: 9, kind: 'thinker', team: 0, fx, x: 600, y: 600, z: 0, age: 0.5, landed: false, dead: false, statuses: [], danger: { at: 1.3 } }, o);
+  for (const fx of ['chaosmeteor', 'sunstrike', 'emp', 'tornado', 'attack', 'atos', 'deafeningblast']) { const R = mkR([th(fx, { front: 40, r: 100 })], 3); R.simT = 1.2; draws.length = 0; SH.ground(R); assert.strictEqual(draws.length, 0, fx); }
+  const R = mkR([th('tower', { kind: 'proj' })], 3); draws.length = 0; SH.ground(R); assert.strictEqual(draws.length, 1, 'tower shot');
+  assert.strictEqual(run([unit({ id: 12, kind: 'spirit' })]).length, 0, 'forge spirit');
 });
 
 test('shadows.js is wired before units.js in index.html and units.js has no inline shadow', () => {

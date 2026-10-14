@@ -108,13 +108,15 @@ test('uniform packing sizes and content', () => {
   L.enabled = false;
 });
 
-test('orb lights never cast; others do; flags reach the uniforms', () => {
+test('only spell / item / sand lights cast: orbs, towers, buildings, attacks, Forge Spirit never do; flags reach the uniforms; casters sort first', () => {
   L.enabled = true; L.begin();
   L.add(mk({ kind: 'orb', x: 1000 })); L.add(mk({ kind: 'alacrity', x: 1100 })); L.add(mk({ kind: 'tower', x: 1200 })); L.add(mk({ kind: 'orb', x: 1300, cast: true }));
-  const u = L.uniforms(CAM, 8), byX = {};
+  L.add(mk({ kind: 'spirit', x: 1400 })); L.add(mk({ kind: 'attack', x: 1500 })); L.add(mk({ kind: 'struct', x: 1600 })); L.add(mk({ kind: 'sand', x: 1700 })); L.add(mk({ kind: 'sunstrike', x: 1800 }));
+  const u = L.uniforms(CAM, 12), byX = {};
   for (let i = 0; i < u.count; i++) byX[u.pos[i * 3]] = u.cast[i];
-  assert.deepEqual([byX[1000], byX[1100], byX[1200], byX[1300]], [0, 0, 1, 1]);
-  assert.ok(u.cast instanceof Uint8Array && u.base instanceof Float32Array && u.cast.length === 8 && u.base.length === 8);
+  assert.deepEqual([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800].map(x => byX[x]), [0, 1, 0, 1, 0, 0, 0, 1, 1]);
+  for (let i = 1; i < u.count; i++) assert.ok(u.cast[i] <= u.cast[i - 1], 'casting lights first');
+  assert.ok(u.cast instanceof Uint8Array && u.base instanceof Float32Array && u.cast.length === 12 && u.base.length === 12);
   L.begin(); L.enabled = false;
 });
 

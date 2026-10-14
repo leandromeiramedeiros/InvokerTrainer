@@ -301,7 +301,7 @@
         case K_ROCK: {   // falling fragment: accelerating dive from up-right, cyan flame trail
           const s = a / plife[i], e = s * s;
           pz[i] = pvz[i] * (1 - e); px[i] = pox[i] + pvx[i] * (1 - e); py[i] = poy[i] + pvy[i] * (1 - e);
-          for (let n = rate(1000 + (i & 63), 150, dt); n-- > 0;) fly(K_FIRE, px[i] + rr(-1.5, 1.5), py[i], pz[i] + rr(-1, 4), rr(-6, 6) - pvx[i] * 0.3, rr(-3, 3), rr(5, 30), rr(0.25, 0.5), pm[i], 0);
+          for (let n = rate(1000 + (i & 63), 36, dt); n-- > 0;) fly(K_FIRE, px[i] + rr(-1.5, 1.5), py[i], pz[i] + rr(-1, 4), rr(-6, 6) - pvx[i] * 0.3, rr(-3, 3), rr(5, 30), rr(0.25, 0.5), pm[i], 0);
           if (rnd() < 14 * dt) fly(K_EMBER, px[i], py[i], pz[i], rr(-10, 10), rr(-6, 6), rr(0, 20), rr(0.5, 1.1), pm[i], 0);
           break;
         }
@@ -372,6 +372,7 @@
     L.cLo = lo; L.cHi = hi; L.uLo = lo; L.uHi = hi;
     R.cx.drawImage(L.cv, 0, lo, VW, hi - lo + 1, 0, lo, VW, hi - lo + 1);
   }
+  function rput(u, x, y, col) { if (x >= 0 && y >= 0 && x < VW && y < VH) u[y * VW + x] = col; }
   function glowAdd(sx, sy, col, w) {
     const k = (sy >> 2) * LWn + (sx >> 2), f = w / 255;
     er[k] += (col & 255) * f; eg[k] += ((col >> 8) & 255) * f; eb[k] += ((col >> 16) & 255) * f; emAny = true;
@@ -502,13 +503,31 @@
           break;
         }
         case K_GRAIN: col = pm[i] === ASH ? SH.ash[(c & 3) * 9 + 6] : DUSTSET[pm[i]][(c & 3) * 9 + 4]; if (pm[i] === ASH) w = 0.12, col = PALS[PAL_FIRE][2 + (c & 1)]; else if (pm[i] === GLASS) w = 0.2; break;
-        case K_ROCK: {
-          const sz = pg[i], cy = PALS[pm[i]];
-          col = SH.stone[(c & 3) * 9 + 5]; w = 0.8; u[o] = col;
-          if (x + 1 < VW) u[o + 1] = SH.stone[(c & 3) * 9 + 7];
-          if (sz > 1 && yy + 1 < VH) { u[o + VW] = cy[3]; if (x + 1 < VW) u[o + VW + 1] = SH.stone[(c & 3) * 9 + 3]; }
-          if (yy > 0) u[o - VW] = cy[2];
-          if (x > 0) u[o - 1] = cy[1];
+        case K_ROCK: {   // Meteor Hammer fragment: faceted blue rock with a white-hot core, a hard-pixel comet tail and a growing ground shadow
+          const sz = pg[i], cy = PALS[pm[i]], R2 = sz + 0.6, Ri = Math.ceil(R2), crack = (c + ((a * 9) | 0)) & 7, e = t * t;
+          // shadow where it will land (dithered, widens as it nears)
+          const sx = Math.round(pox[i]) - camX, sy = Math.round(poy[i]) - camY, sh = 1 + ((e * (sz + 1.5)) | 0);
+          for (let dx = -sh; dx <= sh; dx++) if (B4[(((sy + camY) & 3) << 2) | ((sx + dx + camX) & 3)] < 0.3 + 0.7 * t) rput(u, sx + dx, sy, cy[5]);
+          if (sy > hi) hi = sy;
+          // tail: one pixel per step back along the dive, fading blue -> navy, thinning out
+          for (let k = 1; k <= 11; k++) {
+            const ea = t - k * 0.022; if (ea <= 0) break;
+            const ek = ea * ea, tz = pvz[i] * (1 - ek), tx = Math.round(pox[i] + pvx[i] * (1 - ek)) - camX, ty = Math.round(poy[i] + pvy[i] * (1 - ek) - tz) - camY;
+            if (k > 5 && (k + c) & 1) continue;
+            const tc = cy[k < 3 ? 1 : k < 5 ? 2 : k < 8 ? 3 : 4];
+            rput(u, tx, ty, tc); if (k < 6) rput(u, tx + 1, ty, cy[k < 3 ? 2 : 3]);
+            if (ty < lo) lo = ty;
+          }
+          // body: lit from the upper-left, dark navy rim on the lower-right, a few crack pixels
+          for (let dy = -Ri; dy <= Ri; dy++) for (let dx = -Ri; dx <= Ri; dx++) {
+            const d2 = dx * dx + dy * dy; if (d2 > R2 * R2 + 0.6) continue;
+            const f = d2 / (R2 * R2) + (dx + dy) * 0.16 / R2;
+            let pc2 = f < 0.2 ? cy[0] : f < 0.5 ? cy[1] : f < 0.8 ? cy[2] : f < 1.1 ? cy[3] : cy[4];
+            if (d2 > (R2 - 0.9) * (R2 - 0.9) && dx + dy > 0) pc2 = cy[5];
+            else if (sz > 1 && ((dx * 5 + dy * 3 + crack) & 7) === 0 && d2 > 0.5) pc2 = cy[4];
+            rput(u, x + dx, yy + dy, pc2);
+          }
+          col = cy[0]; w = 1.1;
           break;
         }
         case K_PULL: col = DUSTSET[pm[i]][(c & 3) * 9 + 5]; w = 0.1; if (t > 0.7) col = WHITE; break;
@@ -551,8 +570,33 @@
 
   // feed emissive accumulation into lightmap + bloom canvas. Fog-gated for the bloom (light.compose handles fog for the lightmap).
   const LK = 0.105, GK = 0.12;
+  // glow-sand lights tracked across frames: each new cluster eases the nearest tracked light (position / colour / strength), unmatched ones fade out.
+  // The raw k-means clusters re-seed every frame (grains move), so feeding them straight in made every sand shadow and rim jump frame to frame.
+  const sTrk = [], S_MATCH = 260, S_MAXL = 4;
+  let sLastT = -1;
+  function sandLights(R, LT, cs) {
+    const dt = sLastT < 0 ? 1 / 60 : clamp(R.time - sLastT, 0, 0.1); sLastT = R.time;
+    const kp = 1 - Math.exp(-dt * 6), ki = 1 - Math.exp(-dt * 5), ko = 1 - Math.exp(-dt * 3);   // position / strength in / fade out
+    for (const t of sTrk) t.hit = false;
+    for (const c of cs) {
+      const m = Math.max(c.r, c.g, c.b) || 1, rad = 120 + Math.min(300, c.span * 0.6 + c.n * 2), inten = Math.min(0.9, 0.12 + Math.sqrt(c.weight) * 0.012);
+      let b = null, bd = S_MATCH * S_MATCH;
+      for (const t of sTrk) if (!t.hit) { const dx = t.x - c.x, dy = t.y - c.y, d = dx * dx + dy * dy; if (d < bd) { bd = d; b = t; } }
+      if (!b) { if (sTrk.length >= S_MAXL) continue; b = { x: c.x, y: c.y, r: c.r / m, g: c.g / m, b: c.b / m, rad, i: 0, ti: 0 }; sTrk.push(b); }
+      b.hit = true; b.ti = inten;
+      b.x += (c.x - b.x) * kp; b.y += (c.y - b.y) * kp; b.rad += (rad - b.rad) * kp;
+      b.r += (c.r / m - b.r) * kp; b.g += (c.g / m - b.g) * kp; b.b += (c.b / m - b.b) * kp;
+    }
+    for (let i = sTrk.length - 1; i >= 0; i--) {
+      const t = sTrk[i];
+      if (t.hit) t.i += (t.ti - t.i) * ki; else { t.i += (0 - t.i) * ko; if (t.i < 0.01) { sTrk.splice(i, 1); continue; } }
+    }
+    if (!sTrk.length) return;
+    LT.frame(R);
+    for (const t of sTrk) LT.add({ x: t.x, y: t.y, z: 40, r: t.r, g: t.g, b: t.b, radius: t.rad, intensity: t.i, base: t.ti > 0 ? Math.max(t.i, 0.01) : t.i, kind: 'sand' });
+  }
   function lights(R) {
-    if (!emAny) return;
+    if (!emAny) { const LT = IT.Lights && IT.Lights.enabled ? IT.Lights : null; if (LT && sTrk.length) sandLights(R, LT, []); return; }
     const lb = R.lightmap.buf, fog = R.fog, fogOn = R.w.fog !== false;
     const gu = glowU; gu.fill(0xff000000);
     const LT = IT.Lights && IT.Lights.enabled ? IT.Lights : null, lpts = [];
@@ -575,13 +619,7 @@
       if (gf <= 0) continue;
       gu[k] = A(ch(r * GK * 255 * gf), ch(gg * GK * 255 * gf), ch(b * GK * 255 * gf)); g = true;
     }
-    if (LT && lpts.length) {   // #76 L1: glow sand -> <= 4 clustered point lights (colour = weighted mean, normalised; strength from total emission)
-      LT.frame(R);
-      for (const c of LT.cluster(lpts, 4)) {
-        const m = Math.max(c.r, c.g, c.b) || 1;
-        LT.add({ x: c.x, y: c.y, z: c.z, r: c.r / m, g: c.g / m, b: c.b / m, radius: 120 + Math.min(300, c.span * 0.6 + c.n * 2), intensity: Math.min(0.9, 0.12 + Math.sqrt(c.weight) * 0.012), kind: 'sand' });
-      }
-    }
+    if (LT && (lpts.length || sTrk.length)) sandLights(R, LT, lpts.length ? LT.cluster(lpts, 4) : []);   // #76 L1: glow sand -> <= 4 clustered point lights, tracked (sandLights)
     er.fill(0); eg.fill(0); eb.fill(0); emAny = false;
     if (!g) return;
     glowC.putImageData(glowImg, 0, 0);
@@ -686,19 +724,20 @@
 
   // ---- Meteor Hammer: cyan-flamed rock fragments + channel circle emitters
   function rockLand(x, y, pal, sz) {
-    sparks(x, y, 16, 100, 130, pal, 1); sparks(x, y, 5, 70, 90, PAL_WHITE, 1);
+    sparks(x, y, 24, 100, 130, pal, 1); sparks(x, y, 8, 70, 90, PAL_WHITE, 1);   // the fragment bursts into blue splinters
+    for (let k = 0; k < 6 + 2 * sz; k++) fly(K_SPARK, x + rr(-2, 2), y + rr(-1, 1), rr(0, 3), rr(-34, 34), rr(-20, 20), rr(40, 95), rr(0.35, 0.7), k & 1 ? PAL_CYAN : PAL_WHITE, 0);
     motes(x, y, 6, 4, 40, pal, 0, 0.9);
     grains(x, y, 14, 3, 70, DUSTC, 2, 2, 50);
     for (let k = 0; k < 7; k++) fly(K_FIRE, x + rr(-3, 3), y + rr(-2, 2), rr(0, 3), rr(-8, 8), rr(-5, 5), rr(30, 90), rr(0.25, 0.55), pal, 0);
     for (let k = 0; k < 3; k++) dep(x + rr(-3, 3), y + rr(-2, 2), EMBER, 1, 70 + ri(60), pal);
     if (sz > 1) smoke(x, y, 3, 3, 30);
   }
-  function rocks(x, y, r, delay) {
-    const n = 8 + ri(3);
+  function rocks(x, y, r, delay) {   // 12-15 chunky fragments, landing in an even stagger across the fall window (no two together)
+    const n = 12 + ri(4);
     for (let k = 0; k < n; k++) {
       const a = rnd() * TAU, d = r * 0.92 * Math.sqrt(rnd()), tx = x + Math.cos(a) * d, ty = y + Math.sin(a) * d * 0.85;
-      const T = Math.min(rr(0.42, 0.62), delay * 0.85), land = delay * rr(0.6, 1), i = fly(K_ROCK, tx, ty, 0, rr(26, 52), rr(-12, -3), 150, T, PAL_CYAN, 1 + ri(2));
-      pox[i] = tx; poy[i] = ty; page[i] = -Math.max(0, land - T);
+      const T = Math.min(rr(0.5, 0.7), delay * 0.8), land = delay * (0.5 + 0.5 * (k + rnd() * 0.7) / n), i = fly(K_ROCK, tx, ty, 0, rr(26, 52), rr(-12, -3), 150, T, PAL_CYAN, 1 + ri(3));
+      pox[i] = tx; poy[i] = ty; page[i] = -Math.max(0, Math.min(land, delay) - T);
     }
   }
   const chans = [];   // active hammer channels { wx, wy, x, y, r, until }
@@ -890,6 +929,7 @@
 
   // ---------------------------------------------------------------- continuous emitters (thinkers, units, statuses)
   const accm = new Map();
+  const BLAST_BUDGET = 1, BLAST_RADIAL_LIFE = 1.4;   // Deafening Blast: sand budget per blast (split across the radial ring) and grain life (s) of a ring blast (normal blast: 3)
   function rate(key, r, dt) { const a = (accm.get(key) || 0) + r * dt, n = a | 0; accm.set(key, a - n); return n; }
   const S_ = (e, t) => { for (const s of e.statuses) if (s.type === t) return s; return null; };
 
@@ -982,17 +1022,18 @@
             const front = wp(e.front || 0);
             if (front < 2) break;
             const half = clamp((wp(e.r || 100) + front * 0.15) / Math.max(front, 6), 0.15, 0.9);
-            for (const a0 of e.dirs || [e.dir || 0]) {
-              for (let n = rate(id, 640, dt); n-- > 0;) {
+            const dirs = e.dirs || [e.dir || 0], share = BLAST_BUDGET / dirs.length, glife = dirs.length > 1 ? BLAST_RADIAL_LIFE : 3;   // radial talent: the same total sand, split over the ring and short-lived
+            for (const a0 of dirs) {
+              for (let n = rate(id, 640 * share, dt); n-- > 0;) {
                 const a = a0 + rr(-half, half), rad = Math.max(2, front - rr(0, 7)), gx = x + Math.cos(a) * rad, gy = y + Math.sin(a) * rad * 0.9;
                 const m = [DUSTG, DUSTP, DUSTC][ri(3)];
-                fly(K_GRAIN, gx, gy, rr(2, 8), Math.cos(a) * 25 + rr(-14, 14), Math.sin(a) * 18 + rr(-10, 10), rr(15, 80), 3, m, 3);
+                fly(K_GRAIN, gx, gy, rr(2, 8), Math.cos(a) * 25 + rr(-14, 14), Math.sin(a) * 18 + rr(-10, 10), rr(15, 80), glife, m, 3);
               }
-              for (let n = rate(id + 3, 300, dt); n-- > 0;) {   // the cone shoves existing sand along with it
+              for (let n = rate(id + 3, 300 * share, dt); n-- > 0;) {   // the cone shoves existing sand along with it
                 const a = a0 + rr(-half, half), rad = Math.max(2, front - rr(0, 16)), gx = x + Math.cos(a) * rad, gy = y + Math.sin(a) * rad * 0.9, m = lift(gx, gy);
-                if (m) fly(K_GRAIN, gx, gy, rr(1, 4), Math.cos(a) * rr(45, 100), Math.sin(a) * rr(30, 75), rr(25, 75), 3, m, 3);
+                if (m) fly(K_GRAIN, gx, gy, rr(1, 4), Math.cos(a) * rr(45, 100), Math.sin(a) * rr(30, 75), rr(25, 75), glife, m, 3);
               }
-              for (let n = rate(id + 1, 110, dt); n-- > 0;) {
+              for (let n = rate(id + 1, 110 * share, dt); n-- > 0;) {
                 const a = a0 + rr(-half, half), rad = Math.max(2, front - rr(0, 5));
                 fly(K_MOTE, x + Math.cos(a) * rad, y + Math.sin(a) * rad * 0.9, rr(2, 10), Math.cos(a) * 16, Math.sin(a) * 12, rr(10, 50), rr(0.4, 1), [PAL_GOLD, PAL_PURPLE, PAL_ICE][ri(3)], 0);
               }

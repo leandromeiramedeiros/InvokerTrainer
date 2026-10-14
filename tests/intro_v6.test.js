@@ -40,7 +40,7 @@ test('13: the intro is 12 s; tour = hero -> foe groups -> gate -> hero, ends on 
   assert.equal(R.COUNTDOWN, 12);
   const m = build('river_guard', 'common'), I = m.run.intro;
   assert.ok(I, 'intro built');
-  assert.equal(I.T, m.run.countdown); assert.equal(m.run.cd, m.run.countdown); assert.ok(I.T >= 12 && I.T <= 14, 'item 73: >= 12 s, stretched only for long reading holds: ' + I.T); assert.equal(m.run.phase, 'countdown');
+  assert.equal(I.T, m.run.countdown); assert.equal(m.run.cd, m.run.countdown); assert.ok(I.T >= 12 && I.T <= 24, 'item 73: >= 12 s, stretched to fit the reading holds (title card + win + lose + steps, then the pan): ' + I.T); assert.equal(m.run.phase, 'countdown');
   const kinds = I.stops.map(s => s.kind);
   assert.equal(kinds[0], 'hero'); assert.equal(kinds[kinds.length - 1], 'hero');
   assert.ok(kinds.includes('foes') && kinds.includes('gate'), kinds.join());
@@ -192,46 +192,54 @@ test('45: linger from arrival per tier: ian 2.5, easy 2.0, common 1.5, hard 1.1,
   assert.equal(reveals(n.w).length, 0, 'bambam 0.8 s of play');
 });
 
-test('73: reading hold = max(1.2 s, 0.35 s + words / 3.5) for the win / lose texts (EN and PT alike), the title floor is 0.8 s', () => {
+test('73: reading hold = clamp(0.6 s + words / 3.5, floor 1.8 s, cap 5 s) for win / lose (EN and PT alike); the title card (name + flair) floors at 4 s; every text flies 0.5 s', () => {
   const EPS = 1e-9;
-  assert.equal(R.READ_FLOOR, 1.2); assert.equal(R.TITLE_FLOOR, 0.8);
-  assert.ok(Math.abs(R.readHold(0) - 1.2) < EPS && Math.abs(R.readHold(2) - 1.2) < EPS, 'short text: the floor');
-  assert.ok(Math.abs(R.readHold(10) - (0.35 + 10 / 3.5)) < EPS && Math.abs(R.readHold(21) - 6.35) < EPS, '10 words 3.21 s, 21 words 6.35 s');
-  assert.ok(Math.abs(R.readHold(1, 0.8) - 0.8) < EPS, 'title floor');
-  const fake = (name, win, lose, n) => ({ sc: { name, win, lose, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
+  assert.equal(R.READ_FLOOR, 1.8); assert.equal(R.TITLE_FLOOR, 4); assert.equal(R.READ_MAX, 5); assert.equal(R.FLY_S, 0.5);
+  assert.ok(Math.abs(R.readHold(0) - 1.8) < EPS && Math.abs(R.readHold(2) - 1.8) < EPS, 'short text: the floor');
+  assert.ok(Math.abs(R.readHold(10) - (0.6 + 10 / 3.5)) < EPS, '10 words = 3.46 s');
+  assert.equal(R.readHold(21), 5, 'long text: capped at 5 s (a key / click skips anyway)');
+  assert.ok(Math.abs(R.readHold(1, 4) - 4) < EPS, 'title floor');
+  const fake = (name, win, lose, n, flair) => ({ sc: { name, flair, win, lose, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
   const words = n => Array.from({ length: n }, (_, i) => 'w' + i).join(' ');
+  const hold = (n, floor) => Math.min(5, Math.max(floor, 0.6 + n / 3.5));
   const lang0 = IT.lang;
   try {
     for (const lang of ['en', 'pt']) {
       IT.lang = lang;   // the SAME rate in both languages: the hold follows the word count of the shown language only
-      const sc = fake({ en: words(1), pt: words(9) }, { en: words(10), pt: words(7) }, { en: words(2), pt: words(14) }, 3);
-      const p = R.textPlan(sc, 12, false), n = lang === 'en' ? { t: 1, w: 10, l: 2 } : { t: 9, w: 7, l: 14 };
+      const sc = fake({ en: words(1), pt: words(2) }, { en: words(10), pt: words(7) }, { en: words(2), pt: words(14) }, 3, { en: words(8), pt: words(11) });
+      const p = R.textPlan(sc, 12, false), n = lang === 'en' ? { t: 1 + 8, w: 10, l: 2 } : { t: 2 + 11, w: 7, l: 14 };
       const [ti, wi, lo] = p.blocks;
-      assert.ok(Math.abs(ti.stage - Math.max(0.8, 0.35 + n.t / 3.5)) < EPS, lang + ' title ' + ti.stage);
-      assert.ok(Math.abs(wi.stage - Math.max(1.2, 0.35 + n.w / 3.5)) < EPS, lang + ' win ' + wi.stage);
-      assert.ok(Math.abs(lo.stage - Math.max(1.2, 0.35 + n.l / 3.5)) < EPS, lang + ' lose ' + lo.stage);
-      for (const b of [ti, wi, lo]) assert.ok(Math.abs(b.fly - 0.3) < EPS, 'fly 0.3 s');
+      assert.ok(Math.abs(ti.stage - hold(n.t, 4)) < EPS, lang + ' title (name + flair) ' + ti.stage);
+      assert.ok(Math.abs(wi.stage - hold(n.w, 1.8)) < EPS, lang + ' win ' + wi.stage);
+      assert.ok(Math.abs(lo.stage - hold(n.l, 1.8)) < EPS, lang + ' lose ' + lo.stage);
+      for (const q of [ti, wi, lo]) assert.ok(Math.abs(q.fly - 0.5) < EPS, 'fly 0.5 s');
     }
+    IT.lang = 'en';
+    // the flair counts toward the title card's reading time: 2-word name + 15-word flair = 0.6 + 17 / 3.5 = 5.46 -> capped; without it the floor
+    const noFlair = R.textPlan(fake({ en: 'A B' }, { en: 'x' }, { en: 'y' }, 0), 12, false).blocks[0].stage;
+    const withFlair = R.textPlan(fake({ en: 'A B' }, { en: 'x' }, { en: 'y' }, 0, { en: words(15) }), 12, false).blocks[0].stage;
+    assert.equal(noFlair, 4); assert.equal(withFlair, 5);
   } finally { IT.lang = lang0; }
-  // every real scenario: the stage of each text covers its reading time
+  // every real scenario: the stage of each text covers its reading time (the title includes its flair); the title card is never under 4 s
   for (const sc of SC) {
     const m = build(sc.id, 'common'), tp = m.run.intro.text, wc = x => (String(x || '').trim().match(/\S+/g) || []).length;
     const win = tp.blocks[1], lose = tp.blocks[2], loc = o => (o && typeof o === 'object' ? o.en : o);
     assert.ok(win.stage >= R.readHold(wc(loc(sc.win || sc.goal))) - 1e-9, sc.id + ' win read time');
     assert.ok(lose.stage >= R.readHold(wc(loc(sc.lose))) - 1e-9, sc.id + ' lose read time');
-    assert.ok(tp.blocks[0].stage >= R.readHold(wc(loc(sc.name)), 0.8) - 1e-9, sc.id + ' title read time');
+    assert.ok(Math.abs(tp.blocks[0].stage - R.readHold(wc(loc(sc.name)) + wc(loc(sc.flair)), 4)) < 1e-9, sc.id + ' title read time (name + flair)');
+    assert.ok(tp.blocks[0].stage >= 4 - 1e-9, sc.id + ' title card >= 4 s');
   }
 });
 
-test('73: combo steps ~0.45 s per icon (stage + fly), then 1 s for the whole settled row before the pan; the intro stretches to fit', () => {
+test('73: combo steps ~0.6 s per icon (stage + fly), then 1 s for the whole settled row before the pan; the intro stretches to fit', () => {
   const EPS = 1e-9;
   const fake = n => ({ sc: { name: { en: 'A' }, win: { en: 'B' }, lose: { en: 'C' }, steps: Array.from({ length: n }, (_, i) => ({ a: ['sunstrike', 'coldsnap', 'emp', 'tornado', 'forgespirit', 'icewall', 'alacrity'][i] })) } });
-  assert.equal(R.STEP_D, 0.45); assert.equal(R.ROW_HOLD, 1);
+  assert.equal(R.STEP_D, 0.6); assert.equal(R.ROW_HOLD, 1);
   for (const n of [1, 3, 7]) {
     const p = R.textPlan(fake(n), 12, false), st = p.blocks.slice(3);
     assert.equal(st.length, n);
-    for (const b of st) assert.ok(Math.abs(b.d - 0.45) < EPS && b.stage > 0 && b.fly > 0, 'each icon 0.45 s');
-    assert.ok(Math.abs((st[n - 1].at + st[n - 1].d - st[0].at) - 0.45 * n) < EPS, n + ' icons = 0.45 n s');
+    for (const b of st) assert.ok(Math.abs(b.d - 0.6) < EPS && b.stage > 0 && b.fly > 0, 'each icon 0.6 s');
+    assert.ok(Math.abs((st[n - 1].at + st[n - 1].d - st[0].at) - 0.6 * n) < EPS, n + ' icons = 0.6 n s');
     assert.ok(Math.abs(p.end - (st[n - 1].at + st[n - 1].d)) < EPS && Math.abs(p.hold - (p.end + 1)) < EPS, 'the settled row holds 1 s, then the pan (hold)');
   }
   assert.ok(Math.abs(R.textPlan(fake(0), 12, false).hold - R.textPlan(fake(0), 12, false).end - 0.3) < EPS, 'no row: just the short tail');
@@ -344,7 +352,7 @@ test('66: the briefing drives stage -> fly -> done per element from the intro cl
   const w = { ranked: { intro }, hero: { items: [] } }; let phase = 'countdown';
   ctx.IT = { t: k => k, hasT: () => false, lang: 'en', GAME: { SPELL_ORBS: {} }, Settings: { get: () => ({ hints: true }), data: { scheme: 'q' }, label: x => String(x), keyOf: x => x },
     HudSteps: { derive: () => [{ k: 'spell', id: 'sunstrike' }, { k: 'spell', id: 'coldsnap' }], loseKeys: () => [], heroLv: () => 'LV 1' },
-    SCENARIOS: { get: () => ({ win: { en: 'Kill it' }, lose: { en: 'Die' } }) },
+    SCENARIOS: { get: () => ({ win: { en: 'Kill it' }, lose: { en: 'Die' }, flair: { en: 'A tagline under the title' } }) },
     UI: { h: (tag, o, ...k) => { const n = mkNode(); n.className = String((o && o.class) || ''); flat(k).forEach(c => n.appendChild(typeof c === 'string' ? mkNode() : c)); return n; }, icon: () => mkNode() },
     Sfx: { sting: id => stings.push(id) }, Ranked: { hud: () => ({ phase, id: 'x', scenario: { en: 'Title' }, diff: 'common', countdown: 5, hints: true }) } };
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js/ui/briefing.js'), 'utf8'), ctx, { filename: 'briefing.js' });
@@ -360,9 +368,17 @@ test('66: the briefing drives stage -> fly -> done per element from the intro cl
   assert.ok(brief.className.includes('on') && body.className.includes('briefing') && body.className.includes('bf-text'), 'overlay up, HUD panel hidden while the tokens fly');
   assert.equal(toks.length, 5, 'title, win, lose, 2 steps');
   assert.ok(!toks[0].className.split(' ').includes('p') && toks.slice(1).every(n => n.className.split(' ').includes('p')), 'only the title is on stage');
+  assert.equal(toks[0].kids.length, 3, 'the title card = name + meta + the scenario flair (tagline) line');
+  assert.ok(toks[0].kids[2].className.includes('bf-flair'), 'the flair line is on the intro card');
+  const strip = brief.kids[3], piece = strip.kids[0];
   assert.deepEqual(stings, ['introSlam']); assert.deepEqual(shakes, [5]);
   intro.t = 0.9; B.update(w, 0, false);
   assert.ok(toks[0].style.transition.startsWith('transform'), 'the title flies to its slot');
+  assert.ok(toks[0].style.transition.includes('cubic-bezier(.65,0,.35,1)'), 'ease-in-out (symmetric curve), not the old accelerate-only one');
+  assert.ok(toks[0].className.split(' ').includes('fo') && /0\.120s$/.test(toks[0].style.transition), 'the flair fades out first (fo) and the glide waits for it');
+  assert.ok(!piece.className.split(' ').includes('in') && !toks[0].className.split(' ').includes('gone'), 'early in the fly: neither handover half has started');
+  intro.t = 1.05; B.update(w, 0, false);
+  assert.ok(piece.className.split(' ').includes('in') && !toks[0].className.split(' ').includes('gone'), 'nearly home: the strip piece fades in UNDER the still-visible token (no jump / flash)');
   intro.t = 1.2; B.update(w, 0, false);
   assert.deepEqual(stings.slice(0, 3), ['introSlam', 'introWhoosh', 'introWin']);
   intro.t = 2.1; B.update(w, 0, false); intro.t = 3.0; B.update(w, 0, false);
@@ -371,6 +387,7 @@ test('66: the briefing drives stage -> fly -> done per element from the intro cl
   assert.equal(stings.filter(s => s === 'introPunch').length, 2); assert.ok(stings.indexOf('introLose') > stings.indexOf('introWin'));
   intro.t = 4.8; B.update(w, 0, false);
   assert.ok(brief.className.includes('fin') && !body.className.includes('bf-text'), 'the dim lifts and the real panel shows once the text phase ends');
+  assert.ok(toks[0].className.split(' ').includes('gone'), 'landed: the token cross-fades out');
   // the cancel path: an action ends the countdown -> overlay + dim + tokens vanish at once (no out animation)
   phase = 'play'; B.update(w, 0, false);
   assert.equal(brief.className, 'brief'); assert.equal(brief.kids.length, 0); assert.ok(!body.className.includes('briefing') && !body.className.includes('bf-text'));
@@ -379,6 +396,14 @@ test('66: the briefing drives stage -> fly -> done per element from the intro cl
   assert.ok(stage.kids[0].className.includes('on') && body.className.includes('bf-text'));
   phase = 'play'; B.update(w, 0, false);
   assert.equal(stage.kids[0].className, 'brief'); assert.ok(!body.className.includes('bf-text') && !body.className.includes('briefing'));
+  // reduced motion: a short plain glide (0.3 s), not a hard cut and not the full 0.5 s; no flair lead-in
+  ctx.matchMedia = () => ({ matches: true });
+  phase = 'countdown'; w.ranked.intro = { t: 0, text: { hold: 5, end: 4, blocks: [{ id: 'title', i: 0, at: 0, stage: 0.8, fly: 0.5, d: 1.3 }, { id: 'win', i: 0, at: 1.3, stage: 0.6, fly: 0.5, d: 1.1 }] } };
+  B.update(w, 0, false);
+  const rt = stage.kids[0].kids[2].kids[0];
+  w.ranked.intro.t = 0.9; B.update(w, 0, false);
+  assert.ok(rt.style.transition.startsWith('transform 0.300s ') && !rt.style.transition.startsWith('none'), 'reduced motion: ' + rt.style.transition);
+  phase = 'play'; B.update(w, 0, false);
 });
 
 test('45: every moving foe already FACES the way it moves next (flee: away from the hero, march: toward the gate, chase: toward the hero)', () => {

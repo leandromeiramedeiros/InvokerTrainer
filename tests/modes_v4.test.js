@@ -32,7 +32,7 @@ test('countdown is 12 s (v6 intro), frozen, and skip() starts play at once', () 
 });
 
 test('skip() does nothing once ended; ticking alone still finishes the countdown', () => {
-  const a = mk(); a.run.tick(12.1); assert.equal(a.run.phase, 'play');
+  const a = mk(); a.run.tick(a.run.countdown + 0.1); assert.equal(a.run.phase, 'play');
   const b = mk(); b.run.finish('quit'); assert.equal(b.run.skip(), false);
 });
 

@@ -71,7 +71,7 @@
   // The sprite (local x = u, y = -height above the foot) is sheared away from the light: x' = sx*u + shear*height, y' = foot + ky*height.
   // len = shadow length per px of sprite height = distance / lightZ, clamped; shear = its x part; ky = its y part, floored so a light level with the
   // caster still gives the shadow some depth. Canvas matrix: setTransform(sx, 0, -shear, -ky, footX, footY).
-  const SH_LMAX = 1.2, SH_FLAT = 0.18, SH_ZMIN = 10;
+  const SH_LMAX = 2.2, SH_FLAT = 0.18, SH_ZMIN = 10;   // Lighting v3: spell shadows exaggerated (long, up to 2.2 px per px of height)
   function shadowXform(light, caster) {
     const dx = caster.x - light.x, dy = caster.y - light.y, d = Math.hypot(dx, dy), lz = Math.max(SH_ZMIN, light.z || 0);
     if (!(d > 1e-6)) return { sx: 1, shear: 0, len: 0, ky: 0 };
@@ -83,7 +83,7 @@
     const h = Math.hypot(dir[0], dir[1]);
     return h > 1e-6 ? shadowXform({ x: dir[0] / h * 1e4, y: dir[1] / h * 1e4, z: 1e4 / len }, { x: 0, y: 0 }) : { sx: 1, shear: 0, len: 0, ky: 0 };
   }
-  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 14, SH_REC = 600, SH_GAIN = 2.5, SH_BAKE = 16, SH_BAKE_ULTRA = 32;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
+  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 14, SH_REC = 600, SH_GAIN = 4, SH_BAKE = 16, SH_BAKE_ULTRA = 32;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
 
   // L5: lighting cost = G-buffer taps + shadow pass + present, averaged over LC_WIN lit frames. Logs once if 'high' averages > LC_WARN ms; never downgrades.
   const LC = { avg: 0, n: 0, sum: 0, level: 'off', warned: false };
@@ -341,7 +341,7 @@
       drawImg.apply(this, a);
       if (gMat < 0 || this.globalAlpha < 0.5 || this.globalCompositeOperation !== 'source-over') return;
       const tg = performance.now();   // L5: G-buffer cost = everything after the albedo draw
-      if (sOn && (gMat === 1 || gMat === 2)) record(img, a);
+      if (sOn && (gMat === 1 || gMat === 2) && !R.noSil) record(img, a);   // R.noSil: light emitters (hero orbs, Forge Spirits) never cast
       const n = gNormal(img, gMat); if (!n) { gT += performance.now() - tg; return; }
       if (a.length === 3) gCx.drawImage(n, a[1], a[2]);
       else if (a.length === 5) gCx.drawImage(n, a[1], a[2], a[3], a[4]);
@@ -500,8 +500,8 @@
       if (lit) {     // same order / rects into the G-buffer: tap the scene context's drawImage for the pass
         sceneCx.drawImage = gDraw;
         sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = comp.lighting === 'ultra' ? SH_BAKE_ULTRA : SH_BAKE; gT = 0;
-        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gUnit = it.k === 'unit'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
-        finally { gMat = -1; delete sceneCx.drawImage; }
+        try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gUnit = it.k === 'unit'; R.noSil = gUnit && it.a && it.a.kind === 'spirit'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
+        finally { gMat = -1; R.noSil = false; delete sceneCx.drawImage; }
       } else { sN = 0; for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); } }
       R.stats.items = items.length;
 

@@ -181,7 +181,7 @@ test('6: 12 s countdown (ranked + fixed sandbox); invoking does not start it; in
     const { run, w, h } = m;
     run.tick(0);
     assert.equal(run.phase, 'countdown', mode);
-    assert.ok(Math.abs(run.cd - 12) < 1e-6, mode + ' cd ' + run.cd);
+    assert.ok(run.cd >= 12 - 1e-6 && run.cd <= 24, mode + ' cd (12 s base, stretched to fit the reading holds) ' + run.cd);
     for (const ch of IT.GAME.SPELL_ORBS.sunstrike) IT.Invoke.orb(w, h, ch);
     IT.Invoke.invoke(w, h);
     assert.ok(h.inv.slots.includes('sunstrike'), mode + ' invoked during the countdown');

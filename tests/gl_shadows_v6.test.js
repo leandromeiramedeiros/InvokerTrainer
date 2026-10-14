@@ -48,12 +48,13 @@ test('FS_LIT: shadow sampling and a constant-bound 6-step march; GLSL ES 1.00', 
   for (const k of Object.keys(S)) if (k !== 'FS_LIT') assert.ok(!/uShadow|march/.test(S[k]), k);   // Off path untouched
 });
 
-test('FS_MAIN_LIT: key shadow = hard mask after the Bayer quantise; ground only, vision scaled, own sampler units', () => {
+test('FS_MAIN_LIT: spell-light shadow = hard 2-level mask after the Bayer quantise; ground only, vision scaled, own sampler units', () => {
   const m = S.FS_MAIN_LIT, q = m.indexOf('floor(min(l,1.)*kc*9.+bay)'), k = m.indexOf('if(uKS>0.)');
   assert.ok(q > 0 && k > q, 'mask applied after the quantise');
   assert.ok(m.includes('uSk') && m.includes('uG') && /col\*=1\.-uKS\*max\(k0,k1\*\.5\)\*gm\*texture2D\(uLight,c\)\.a/.test(m));
-  assert.ok(m.includes('step(.5,texture2D(uSk,c).a)'));                              // binary coverage, no dither
-  assert.equal((m.match(/texture2D\(uSk/g) || []).length, 5);                        // centre + 4 neighbours
+  assert.ok(m.includes('float sa=texture2D(uSk,c).a;') && m.includes('step(.15,sa)*.5+step(.5,sa)*.5'));   // 2 levels (penumbra / umbra), no dither
+  assert.equal((m.match(/texture2D\(uSk/g) || []).length, 5);
+  assert.equal(GL.PSK, 0.6);                        // centre + 4 neighbours
   assert.ok(!/uShadow|march/.test(m));
   assert.deepEqual([GL.SUN.sh, GL.MOON.sh], [0.42, 0.55]);
   const lit = S.FS_LIT;

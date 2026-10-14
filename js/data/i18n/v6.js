@@ -156,6 +156,6 @@
       'eb.cast': 'Cast point: {n}s', 'eb.warn': '(+{n}s de aviso)', 'eb.range': 'Alcance: {n}', 'eb.radius': 'Raio: {n}',
       'eb.cd': 'Recarga: {n}s', 'eb.mana': 'Mana: {n}', 'eb.uses': 'Usado {n}x',
       'eb.lock': 'Travado: {n}s (levou dano)', 'eb.denied': 'Bloqueado: {n}s',
-      'hint.dodged': 'Ele desviou: prenda-o antes', 'cfail.method.dodged': 'ele desviou: prenda-o antes', 'scn.fail.method.dodged': 'Ele desviou: prenda-o antes',
+      'hint.dodged': 'Ele desviou: dê disable antes', 'cfail.method.dodged': 'ele desviou: dê disable antes', 'scn.fail.method.dodged': 'Ele desviou: dê disable antes',
     },
   }); })(typeof window !== 'undefined' ? window : globalThis);

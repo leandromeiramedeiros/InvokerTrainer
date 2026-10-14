@@ -15,8 +15,9 @@
   };
   const pool = []; let n = 0, stamp = null;
   for (let i = 0; i < POOL; i++) pool.push({ x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, radius: 0, intensity: 0, base: 0, cast: true, kind: '', score: 0 });
-  // kinds that light the scene but never cast silhouette / march shadows (they orbit or ride a unit and flicker: their shadows would swing and pulse)
-  const NOCAST = { orb: 1, alacrity: 1 };
+  // kinds that light the scene but never cast shadows or rim light: hero orbs (orbit + flicker), Forge Spirit, attack projectiles, tower / building lamps.
+  // Everything else (spell / item FX, Alacrity while active, Ghost Walk / Cold Snap, TP, glow sand) casts.
+  const NOCAST = { orb: 1, spirit: 1, attack: 1, tower: 1, struct: 1 };
 
   // deterministic hash 0..1
   function hash(a, b) { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
@@ -140,7 +141,7 @@
         p.score = p.base * p.radius * p.radius / (1 + d);   // base, not the flickered intensity: the order is stable frame to frame
         out.push(p);
       }
-      out.sort((a, b) => b.score - a.score);
+      out.sort((a, b) => (b.cast - a.cast) || (b.score - a.score));   // casting lights first (strongest first within each group): the shader's rim / march slots and the shadow candidates go to them
       if (out.length > max) out.length = max;
       return out;
     },

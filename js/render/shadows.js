@@ -1,8 +1,7 @@
 // Ground shadows (v6 WP-render): one batched pass in the ground layer, under every sprite.
-//  - blob shadows for everything that stands or flies: units (own + visible foes), towers, spell/projectile entities;
+//  - blob shadows for everything that stands or flies: units (own + visible foes), towers, tower shots / stun bolts (spells, items, orbs and Forge Spirits emit light: no ground shadow);
 //  - airborne units keep their shadow on the GROUND at the real position; it shrinks + lightens with height (scaleByHeight);
 //  - Tornado-lifted units get a faint cyclone pillar from the ground shadow up to the unit;
-//  - falling spells (Chaos Meteor) cast a shadow that grows + darkens toward the landing point (reads the thinker's danger.at).
 // Fog: same gates as the sprites / bars (UnitDraw.visible for units, the vision level for team-1 entities); nothing for hidden things.
 // Blobs are cached ellipse sprites (two-tone: soft rim, darker core) blitted with globalAlpha: 1 drawImage per shadow, no per-frame allocation.
 (function (G) {
@@ -92,26 +91,9 @@
     }
   }
 
-  // Deafening Blast: faint ground copy of the front arcs (the wave itself is drawn 6 px up)
-  function blast(R, e, x, y) {
-    const front = e.front / R.P;
-    if (!(front >= 2)) return;
-    const cx = R.cx, dirs = e.dirs || [e.dir || 0], r0 = e.r / R.P;
-    cx.globalAlpha = 0.16 * night; cx.fillStyle = '#000';
-    for (let d = 0; d < dirs.length; d++) {
-      const a0 = dirs[d], r = Math.max(2, front), half = clamp((r0 + front * 0.15) / Math.max(r, 6), 0.15, 0.9), n = Math.max(8, Math.round(half * r * 1.6));
-      for (let i = 0; i < n; i += 1) {
-        const k = i / (n - 1) - 0.5, a = a0 + k * 2 * half;
-        cx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r * 0.9), 2, 1);
-      }
-    }
-  }
-
-  // sim projectile / thinker entities (key = fx || ability): [rx, ry, alpha] of the ground blob
-  const SPELL = {
-    attack: [3, 1, 0.34], tower: [3, 1, 0.34], bolt: [3, 1, 0.34], atos: [3, 1, 0.34], gleipnir: [3, 1, 0.34],
-    tornado: [6, 2, 0.34], emp: [5, 2, 0.3],
-  };
+  // sim projectile / thinker entities (key = fx || ability): [rx, ry, alpha] of the ground blob. Only the non-emissive ones: spells, items and orb
+  // attacks are light sources, so they never shadow the ground (Lighting v3); tower shots and enemy stun bolts keep a small blob.
+  const SPELL = { tower: [3, 1, 0.34], bolt: [3, 1, 0.34] };
 
   // Lighting levels with key shadows (R.sil = the active LEVELS row, set by render.js while the lit path runs) draw a sheared silhouette under every grounded
   // caster: its blob shrinks to a small contact shadow so feet stay anchored without a double shadow. Airborne units, projectiles, thinkers, pickups keep blobs.
@@ -137,16 +119,7 @@
         if (sp) {
           const k = hk(R.iz), s = scaleK(k);
           blob(R, x, y, sp[0] * s, sp[1] * s, sp[2] * alphaK(k) / A_GROUND);
-        } else if (key === 'chaosmeteor') {
-          if (e.landed) blob(R, x, y, 8, 3, 0.36);
-          else {      // falling: the shadow grows and darkens toward the impact point (landing time = danger.at)
-            const rem = e.danger ? Math.max(0, e.danger.at - R.simT) : 0, land = Math.max(0.1, e.age + rem), f = clamp(1 - rem / land, 0, 1);
-            blob(R, x, y, 2 + 7 * f, 1 + 2.6 * f, 0.1 + 0.4 * f * f);
-          }
-        } else if (key === 'sunstrike') {      // faint disc under the sky column, only while it builds up
-          const rem = e.danger ? Math.max(0, e.danger.at - R.simT) : 0;
-          if (rem < 0.5) { const f = 1 - rem / 0.5, rr = Math.max(4, (e.r || 100) / P * 0.3 * f); blob(R, x, y, rr, rr, 0.22 * f); }
-        } else if (key === 'deafeningblast') { blast(R, e, x, y); cx.globalAlpha = 1; }
+        }
         continue;
       }
       if (kind === 'pickup') {      // v6 item 28: rune / aegis float above the ground: small soft blob that breathes against the bob
@@ -162,13 +135,13 @@
       const x = Math.round(R.ix / P - R.camX), y = Math.round(R.iy / P - R.camY);
       if (x < -30 || x > VW + 30 || y < -20 || y > VH + 20) continue;
       const S = UD.state.get(e.id), Av = (e.team === 1 || e.kind === 'roshan') && S ? clamp(S.va, 0, 1) : 1;
-      if (Av < 0.02) continue;
+      if (Av < 0.02 || e.kind === 'spirit') continue;   // Forge Spirit: a light source, no ground shadow
       const L = e.statuses.length ? UD.liftOf(e) : null, eul = !!L && UD.isEuls(L);
       const zv = UD.visZ(L, eul, R.iz / P, S || NOS);                 // same visual lift as the sprite (px)
       const k = hk(zv * P / UD.LIFT_VIS);                              // tornado: k = z / LIFT_HEIGHT
       const rr = Math.max(3, Math.round(e.radius / P)), big = UD.isFoe(e) && (e.bkb || UD.has(e, 'magicImmune')), s = scaleK(k) * (big ? 1.1 : 1);
       const cs = cUnit && k < 0.02 && zv < 1.5 ? CONTACT : 1;           // grounded + casts a silhouette: contact shadow only
-      blob(R, x, y + 1, rr * (e.kind === 'spirit' ? 1.0 : 1.25) * s * (e.kind === 'roshan' ? 1.1 : 1) * cs, rr * 0.5 * s * (e.kind === 'roshan' ? 1.1 : 1) * cs, alphaK(k) * Av);
+      blob(R, x, y + 1, rr * 1.25 * s * (e.kind === 'roshan' ? 1.1 : 1) * cs, rr * 0.5 * s * (e.kind === 'roshan' ? 1.1 : 1) * cs, alphaK(k) * Av);
       if (L && !eul && zv > 6) pillar(R, x, y, zv, rr, Av);
     }
     if (IT.TowerDraw && IT.TowerDraw.shadows) IT.TowerDraw.shadows(R, castsStruct(R.sil) ? (R2, x, y, rx, ry, a) => blob(R2, x, y, rx * CONTACT, ry * CONTACT, a) : blob);

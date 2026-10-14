@@ -266,8 +266,8 @@
     stats() { if (g && !g.menu && !g.ended) IT.HUD.statsToggle(); },
     cheat() { IT.HUD.cheatToggle(); },
     debug() { if (g) { g.R.showDebug = !g.R.showDebug; IT.dev.debug = g.R.showDebug; } },
-    refresh() {
-      if (!g) return;
+    refresh() {   // Free Play / practice only: Ranked, Infinite and Scenarios are real runs, so the reset is ignored there
+      if (!g || g.menu || g.ended || App.playKind !== 'free') return;
       if (IT.Combo) IT.Combo.refreshAll(g.w, g.hero);
       else { g.hero.cd = {}; g.hero.inv.invokeCd = 0; g.hero.mana = g.hero.maxMana; }
       UI.toast(IT.t('toast.refreshed'), 'good');

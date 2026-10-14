@@ -44,17 +44,21 @@
     // lights: point-light cap (uniform array size of the level's shader); half: half-res light buffer; rim / glow: strength (0 = off);
     // shadows: point lights per caster for silhouette shadows; march: height-channel ray-march steps (0 = off) over range px toward marchL lights + the key;
     // casters / trees: per-frame shadow-draw budget (all casters / of which trees); structs: towers / buildings / trees cast (else units only);
-    // key: sun / moon key light (keyLight); keyLen: key shadow length per px of caster height (0 = no key shadows; one hard-edged draw per caster)
-    off:    { lights: 0,  half: false, rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0   },
-    low:    { lights: 8,  half: true,  rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 1, keyLen: 0   },
-    medium: { lights: 16, half: false, rim: 1,    glow: 1,   shadows: 1, march: 0,  range: 0,  marchL: 0, casters: 60,  trees: 0,   structs: false, key: 1, keyLen: 0.7 },
-    high:   { lights: 32, half: false, rim: 1,    glow: 1,   shadows: 2, march: 6,  range: 56, marchL: 2, casters: 120, trees: 40,  structs: true,  key: 1, keyLen: 1.0 },
-    ultra:  { lights: 48, half: false, rim: 1.35, glow: 1.4, shadows: 3, march: 12, range: 96, marchL: 4, casters: 400, trees: 400, structs: true,  key: 1, keyLen: 1.6 },
+    // key / keyLen: sun / moon key light + its shadow length (retired in Lighting v3: 0 at every level; keyLight() returns null)
+    off:    { lights: 0,  half: false, rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
+    low:    { lights: 8,  half: true,  rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
+    medium: { lights: 16, half: false, rim: 1,    glow: 1,   shadows: 1, march: 0,  range: 0,  marchL: 0, casters: 60,  trees: 0,   structs: false, key: 0, keyLen: 0 },
+    high:   { lights: 32, half: false, rim: 1,    glow: 1,   shadows: 2, march: 6,  range: 56, marchL: 2, casters: 120, trees: 40,  structs: true,  key: 0, keyLen: 0 },
+    ultra:  { lights: 48, half: false, rim: 1.35, glow: 1.4, shadows: 3, march: 12, range: 96, marchL: 4, casters: 400, trees: 400, structs: true,  key: 0, keyLen: 0 },
   };
   // L4 shadows: silhouette shadow buffer (alpha = shadowed) darkens the diffuse / glow on ground pixels only; the march walks <= range px toward a light
   const NAMES = Object.keys(LEVELS);
   const SHK = 1.0, MARCH_STEPS = 6, MARCH_RANGE = 56, MARCH_LIGHTS = 2;
   const RIMK = 0.9, GLOWK = 0.35;
+  // Lighting v3: no sun / moon (every level key 0). Only spell / item / sand lights cast and rim (sign of uLR.y; Lights NOCAST: orbs, towers, attacks,
+  // Forge Spirit never do). Their silhouette shadows also darken the lit scene by a hard 2-level mask in FS_MAIN_LIT (umbra PSK, penumbra PSK/2):
+  // exaggerated on purpose, they only live while the spell's light does.
+  const PSK = 0.6;
   // Lighting v2 S2: screen-space silhouette-edge rim (litFS uMode 2). Per light (first RIM_L strongest + the key) a pixel of material 1-2 steps 1 and 2 px
   // toward the light in screen xy and reads the G-buffer there: ground (material 0) or another material (unit vs tree / tower) = light-facing silhouette edge (1 px: 1, 2nd px: .5).
   // (A height-drop test is unusable: the pillow dome rises ~5 px of HZ per px from the silhouette, so it would fire across the sprite body.)
@@ -78,6 +82,15 @@
   // G-buffer B channel: height 0..1 (6 bits) + material 0..3
   const packB = (h, mat) => ((Math.max(0, Math.min(63, Math.round(h * 63))) << 2) | (mat & 3));
   // IT.Lights.uniforms(world cam) -> screen px in place: pos / P (z >= ZMIN px), radius / P. Returns u.
+  // uLR upload: intensity negated for lights that do not cast (u.cast 0) -> the shader skips them for rim + march (reused buffer)
+  let lrBuf = null;
+  function signed(u) {
+    if (!u.cast) return u.rad;
+    if (!lrBuf || lrBuf.length !== u.rad.length) lrBuf = new Float32Array(u.rad.length);
+    lrBuf.set(u.rad);
+    for (let i = 0; i < u.count; i++) if (!u.cast[i]) lrBuf[i * 2 + 1] = -Math.abs(lrBuf[i * 2 + 1]);
+    return lrBuf;
+  }
   function toScreen(u, P) {
     for (let i = 0; i < u.count; i++) {
       u.pos[i * 3] /= P; u.pos[i * 3 + 1] /= P; u.pos[i * 3 + 2] = Math.max(ZMIN, u.pos[i * 3 + 2] / P);
@@ -101,8 +114,8 @@
     'float o=ms<.5?1.:ms>2.5?0.:abs(ms-m)>.5?1.:0.;e=max(e,o/float(s));}return e;}' +   // ground or another material (unit vs tree / tower) = outside the silhouette
 
     'vec3 rimAt(vec3 P,float m){vec3 pr=vec3(0.);' +
-    'for(int j=0;j<' + Math.min(nl, RIM_L) + ';j++){if(j>=uN)break;vec3 D=uLP[j]-P;float a=clamp(1.-length(D)/uLR[j].x,0.,1.);float dl=max(abs(D.x),abs(D.y));' +
-    'if(a>0.&&dl>.5)pr+=mix(uLC[j],vec3(1.),' + f(RIM_MIX) + ')*(rimE(P.xy,D.xy/dl,m)*a*clamp(.5+uLR[j].y,0.,1.)*clamp(dl/4.,0.,1.));}' +
+    'for(int j=0;j<' + Math.min(nl, RIM_L) + ';j++){if(j>=uN)break;vec3 D=uLP[j]-P;float a=clamp(1.-length(D)/uLR[j].x,0.,1.)*step(0.,uLR[j].y);float dl=max(abs(D.x),abs(D.y));' +
+    'if(a>0.&&dl>.5)pr+=mix(uLC[j],vec3(1.),' + f(RIM_MIX) + ')*(rimE(P.xy,D.xy/dl,m)*a*clamp(.5+abs(uLR[j].y),0.,1.)*clamp(dl/4.,0.,1.));}' +
     'vec3 kr=uKP.w>0.?mix(uKT,vec3(1.),' + f(RIM_MIX) + ')*(rimE(P.xy,uK.xy/max(max(abs(uK.x),abs(uK.y)),.01),m)*uKP.w):vec3(0.);' +
     'return min(pr*uRim+kr,vec3(1.));}' +
     'void main(){' +
@@ -112,11 +125,11 @@
     'if(uMode>1.5){gl_FragColor=(mat<.5||mat>2.5)?vec4(0.):vec4(rimAt(P,mat)*texture2D(uLight,uv).a,1.);return;}' +   // rim only on units / trees (material 1-2), fog unlit
     'vec3 dif=vec3(0.),add=vec3(0.);' +
     'for(int i=0;i<' + nl + ';i++){if(i>=uN)break;' +
-    'vec3 D=uLP[i]-P;float d=length(D),r=uLR[i].x;float a=clamp(1.-d/r,0.,1.);a=a*a*uLR[i].y;' +
+    'vec3 D=uLP[i]-P;float d=length(D),r=uLR[i].x;float a=clamp(1.-d/r,0.,1.);a=a*a*abs(uLR[i].y);' +
     'float nl=max(0.,dot(N,D/max(d,.001)));' +
-    'if(uMarch>.5&&i<' + mlt + '&&mat<.5)nl*=1.-' + f(SHK) + '*march(P,uLP[i]);' +   // ground only: casters are not self-shadowed
+    'if(uMarch>.5&&i<' + mlt + '&&mat<.5&&uLR[i].y>0.)nl*=1.-' + f(SHK) + '*march(P,uLP[i]);' +   // ground only: casters are not self-shadowed
     'dif+=uLC[i]*(a*nl);' +
-    'if(uGlow>0.){float s=clamp(1.-length(D.xy)/(r*.6),0.,1.);add+=uLC[i]*(s*s*uLR[i].y*uGlow*' + f(GLOWK) + ');}' +
+    'if(uGlow>0.){float s=clamp(1.-length(D.xy)/(r*.6),0.,1.);add+=uLC[i]*(s*s*abs(uLR[i].y)*uGlow*' + f(GLOWK) + ');}' +
     '}' +
     'if(mat>2.5)dif=vec3(0.);' +                                        // emissive FX: own colour, no diffuse
     'float sa=clamp(texture2D(uShadow,uv).a,0.,1.)*step(mat,.5)*uShOn;float sh=' + f(SHK) + '*sa;dif*=1.-sh;add*=1.-sh;' +   // silhouette shadows: ground only (units / trees keep their light)
@@ -137,7 +150,7 @@
     'l=clamp(floor(min(l,1.)*kc*9.+bay)/9.,0.,1.5);' +
     'vec3 col=s*l;' +
     // key shadow: hard 2-level mask AFTER the quantise (not dithered): umbra 1, a 1 px ring (4-neighbour) 0.5; ground only, scaled by vision (fog unchanged)
-    'if(uKS>0.){vec2 o=1./uRes;float k0=max(km,step(.5,texture2D(uSk,c).a)*uSkOn);' +
+    'if(uKS>0.){vec2 o=1./uRes;float sa=texture2D(uSk,c).a;float k0=max(km,(step(.15,sa)*.5+step(.5,sa)*.5)*uSkOn);' +
     'float k1=max(max(step(.5,texture2D(uSk,c+vec2(o.x,0.)).a),step(.5,texture2D(uSk,c-vec2(o.x,0.)).a)),max(step(.5,texture2D(uSk,c+vec2(0.,o.y)).a),step(.5,texture2D(uSk,c-vec2(0.,o.y)).a)))*uSkOn;' +
     'float gm=step(mod(floor(texture2D(uG,c).b*255.+.5),4.),.5);' +
     'col*=1.-uKS*max(k0,k1*.5)*gm*texture2D(uLight,c).a;}' +
@@ -332,7 +345,7 @@
       gl.viewport(0, 0, dynW, dynH);
       gl.useProgram(progLit);
       gl.uniform1f(uL.flip, 0); gl.uniform1i(uL.g, 6); gl.uniform1i(uL.light, 1); gl.uniform2f(uL.res, VW, VH);
-      gl.uniform3fv(uL.lp, u.pos); gl.uniform3fv(uL.lc, u.col); gl.uniform2fv(uL.lr, u.rad); gl.uniform1i(uL.n, Math.min(u.count, L.lights));
+      gl.uniform3fv(uL.lp, u.pos); gl.uniform3fv(uL.lc, u.col); gl.uniform2fv(uL.lr, signed(u)); gl.uniform1i(uL.n, Math.min(u.count, L.lights));
       // L4: shadow canvas (alpha) on unit 3 (blur scratch, rebound before use). Always bound: a stale texAdd there would feed back into fboAdd.
       const shOn = !!(lit.shadow && L.shadows);
       bindTex(3, texSh);
@@ -347,7 +360,7 @@
       gl.uniform1f(uL.mode, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, fboDyn); gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (add) { gl.uniform1f(uL.mode, 1); gl.bindFramebuffer(gl.FRAMEBUFFER, fboAdd); gl.drawArrays(gl.TRIANGLES, 0, 3); }
       if (rim) { gl.uniform1f(uL.mode, 2); gl.bindFramebuffer(gl.FRAMEBUFFER, fboRim); gl.drawArrays(gl.TRIANGLES, 0, 3); }
-      return { cap, add, rim, kt: K.tint, ks: K.sh, kOn };
+      return { cap, add, rim, kt: K.tint, shOn };
     }
 
     // scene: 2D canvas (unlit, opaque); lightmap: Light instance (already folded); glowCv: additive glow canvas;
@@ -385,8 +398,8 @@
           gl.uniform1f(uML.flip, 1); gl.uniform1i(uML.scene, 0); gl.uniform1i(uML.light, 1); gl.uniform1i(uML.bloom, 2); gl.uniform1i(uML.dyn, 7); gl.uniform1i(uML.add, 3);
           gl.uniform2f(uML.res, VW, VH); gl.uniform2f(uML.cam, Math.floor(camX) & 3, Math.floor(camY) & 3); gl.uniform1f(uML.on, bloom ? 1 : 0);
           gl.uniform1i(uML.rimT, 5); gl.uniform1f(uML.rimOn, lp.rim ? 1 : 0); gl.uniform1f(uML.addOn, lp.add ? 1 : 0); gl.uniform1f(uML.cap, lp.cap); gl.uniform3fv(uML.kt, lp.kt);
-          bindTex(4, texSk);                                             // key shadow coverage (unit 4); G-buffer stays on unit 6 (ground test)
-          gl.uniform1i(uML.g, 6); gl.uniform1i(uML.sk, 4); gl.uniform1f(uML.skOn, lp.kOn ? 1 : 0); gl.uniform1f(uML.ks, lp.ks);
+          bindTex(4, texSh);                                             // spell / item / sand light shadow coverage (unit 4): hard 2-level mask; G-buffer stays on unit 6 (ground test)
+          gl.uniform1i(uML.g, 6); gl.uniform1i(uML.sk, 4); gl.uniform1f(uML.skOn, lp.shOn ? 1 : 0); gl.uniform1f(uML.ks, lp.shOn ? PSK : 0);
         } else {
           gl.useProgram(progMain);
           gl.uniform1f(uM.flip, 1); gl.uniform1i(uM.scene, 0); gl.uniform1i(uM.light, 1); gl.uniform1i(uM.bloom, 2);
@@ -411,7 +424,7 @@
   }
   IT.GL = {
     create(cv, VW, VH, LW, LH) { const C = create(cv, VW, VH, LW, LH); if (C) C.setLighting(wantLevel); return C; },
-    setSize, GW, LEVELS, NAMES, KEY_DIR, SUN, MOON, keyLight, litFS, SHK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, RIM_L, RIM_MIX, RIM_T1, RIM_T2, RIM_ON, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
+    setSize, GW, LEVELS, NAMES, KEY_DIR, SUN, MOON, keyLight, litFS, SHK, PSK, MARCH_STEPS, MARCH_RANGE, MAXL, HZ, ZMIN, RIMK, GLOWK, RIM_L, RIM_MIX, RIM_T1, RIM_T2, RIM_ON, lightCap, packB, toScreen, setLighting, lightingLevel: 'off',
     SHADERS: { FS_MAIN, FS_LIT, FS_MAIN_LIT, FS_BLUR_H, FS_BLUR_V, VS },
   };
 })(typeof window !== 'undefined' ? window : globalThis);
