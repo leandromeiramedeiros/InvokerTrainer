@@ -4,14 +4,11 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const IT = require('./_load')(['js/render/lights.js', 'js/render/gl.js', 'js/render/render.js']);
 const GL = IT.GL, L = GL.LEVELS, N = GL.NAMES;
 
-test('levels strictly increase: lights, shadow lights, casters; Ultra is the max', () => {
+test('levels strictly increase in lights; rim / glow grow; Ultra is the max', () => {
   assert.deepEqual(N, ['off', 'low', 'medium', 'high', 'ultra']);
   for (let i = 1; i < N.length; i++) assert.ok(L[N[i]].lights > L[N[i - 1]].lights, N[i] + ' lights');
-  for (let i = 2; i < N.length; i++) {
-    const a = L[N[i - 1]], b = L[N[i]];
-    assert.ok(b.shadows > a.shadows && b.casters > a.casters && b.march >= a.march, N[i]);
-  }
-  assert.ok(L.ultra.march > L.high.march && L.ultra.range > L.high.range && L.ultra.marchL > L.high.marchL && L.ultra.trees > L.high.trees);
+  for (let i = 1; i < N.length; i++) assert.ok(L[N[i]].rim >= L[N[i - 1]].rim && L[N[i]].glow >= L[N[i - 1]].glow, N[i]);
+  assert.ok(L.ultra.rim > L.high.rim && L.ultra.glow > L.high.glow);
   assert.ok(!L.ultra.half && L.ultra.lights === GL.MAXL && GL.MAXL === IT.Lights.MAX);
   assert.ok(GL.MAXL * 3 + 16 <= 224);   // uniform vectors: WebGL2 guarantees 224 fragment vec4s
   // each level differs from its neighbour in at least one feature

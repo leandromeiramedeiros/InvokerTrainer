@@ -4,11 +4,10 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const IT = require('./_load')(['js/render/lights.js', 'js/render/gl.js', 'js/render/render.js']);
 const GL = IT.GL, S = GL.SHADERS, R = IT.Render;
 
-test('level table: shadows per caster + march flag', () => {
+test('Lighting v4: no cast shadows at any level (blobs only): shadows / march / casters / trees all 0', () => {
   const L = GL.LEVELS;
-  assert.deepEqual([L.off.shadows, L.low.shadows, L.medium.shadows, L.high.shadows, L.ultra.shadows], [0, 0, 1, 2, 3]);
-  assert.deepEqual([L.off.march, L.low.march, L.medium.march, L.high.march, L.ultra.march], [0, 0, 0, 6, 12]);
-  assert.deepEqual([L.high.range, L.high.marchL, L.ultra.range, L.ultra.marchL], [56, 2, 96, 4]);
+  for (const k of Object.keys(L)) assert.deepEqual([L[k].shadows, L[k].march, L[k].range, L[k].marchL, L[k].casters, L[k].trees, L[k].structs], [0, 0, 0, 0, 0, 0, false], k);
+  assert.ok(L.medium.rim > 0 && L.high.rim > 0 && L.ultra.rim > L.high.rim, 'rim stays');
 });
 
 test('shadowXform: light above, side, distance, height, clamp', () => {

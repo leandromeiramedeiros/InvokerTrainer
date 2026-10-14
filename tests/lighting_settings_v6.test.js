@@ -50,13 +50,9 @@ test('settings.js does not read reduced-motion for lighting', () => {
   assert.doesNotMatch(require('fs').readFileSync(require('path').join(__dirname, '..', 'js/render/gl.js'), 'utf8'), /reducedMotion|prefers-reduced/);
 });
 
-test('LEVELS caster budgets: none below medium, medium 60 units only, high 120/40, ultra every tree', () => {
+test('LEVELS caster budgets: Lighting v4 casts no shadows, so every budget is 0', () => {
   const IT = load(['js/render/lights.js', 'js/render/gl.js']), L = IT.GL.LEVELS;
-  assert.deepEqual([L.off.casters, L.off.trees, L.low.casters, L.low.trees], [0, 0, 0, 0]);
-  assert.deepEqual([L.medium.casters, L.medium.trees, L.medium.structs], [60, 0, false]);
-  assert.deepEqual([L.high.casters, L.high.trees, L.high.structs], [120, 40, true]);
-  assert.ok(L.ultra.casters > L.high.casters && L.ultra.trees >= 400 && L.ultra.structs);
-  assert.ok(L.medium.casters > 0 === L.medium.shadows > 0 && L.low.shadows === 0);
+  for (const k of Object.keys(L)) assert.deepEqual([L[k].casters, L[k].trees, L[k].structs, L[k].shadows], [0, 0, false, 0], k);
 });
 
 test('render.js: shadow pass reads the level budget; lightingCost shape', () => {

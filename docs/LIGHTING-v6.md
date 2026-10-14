@@ -60,3 +60,7 @@ Problem: with no spell cast there were no emitters, and by day the ambient grid 
 - Point shadow canvas (unit 4) is a hard 2-level mask in FS_MAIN_LIT (`PSK` 0.6), exaggerated: `SH_LMAX` 2.2, `SH_GAIN` 4. Lives only while the spell light does.
 - Light emitters never shadow the ground: no blob under spells / items / orb attacks / Forge Spirits (tower shots and stun bolts keep one); hero orbs and Forge Spirits are excluded from silhouettes (`R.noSil`).
 - Anti-flicker: orbs were drawn first inside the hero item, so they set the hero's silhouette foot anchor -> the shadow swayed with the orbit every frame (fixed by `R.noSil`). Glow-sand clusters re-seeded every frame; `sand.js sandLights` now tracks them (eased position / colour / strength, fade-out).
+
+## Lighting v4: blobs only (2026-10-13)
+- No cast shadows at any level: `LEVELS[*].shadows = march = range = marchL = casters = trees = 0`, `structs` false. render.js records no silhouettes (`sOn` false), the light pass skips the shadow canvas + height march.
+- Ground shadows = the soft blobs (shadows.js) only. Spell / item / sand lights still light the scene and draw the silhouette rim (unchanged, casting lights only).

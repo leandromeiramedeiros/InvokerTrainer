@@ -42,14 +42,15 @@
   const MAXL = 48, HZ = 24, ZMIN = 10;   // HZ: px of height for G-buffer h = 1; ZMIN: lights sit >= 10 px above the ground (no grazing)
   const LEVELS = {
     // lights: point-light cap (uniform array size of the level's shader); half: half-res light buffer; rim / glow: strength (0 = off);
-    // shadows: point lights per caster for silhouette shadows; march: height-channel ray-march steps (0 = off) over range px toward marchL lights + the key;
+    // Lighting v4: no cast shadows at any level (shadows / march / casters / trees all 0): the ground keeps only the soft blobs; spell / item / sand lights
+    // still light the scene and draw the rim. shadows: point lights per caster for silhouette shadows; march: height-channel ray-march steps (0 = off) over range px toward marchL lights + the key;
     // casters / trees: per-frame shadow-draw budget (all casters / of which trees); structs: towers / buildings / trees cast (else units only);
     // key / keyLen: sun / moon key light + its shadow length (retired in Lighting v3: 0 at every level; keyLight() returns null)
     off:    { lights: 0,  half: false, rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
     low:    { lights: 8,  half: true,  rim: 0,    glow: 0,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
-    medium: { lights: 16, half: false, rim: 1,    glow: 1,   shadows: 1, march: 0,  range: 0,  marchL: 0, casters: 60,  trees: 0,   structs: false, key: 0, keyLen: 0 },
-    high:   { lights: 32, half: false, rim: 1,    glow: 1,   shadows: 2, march: 6,  range: 56, marchL: 2, casters: 120, trees: 40,  structs: true,  key: 0, keyLen: 0 },
-    ultra:  { lights: 48, half: false, rim: 1.35, glow: 1.4, shadows: 3, march: 12, range: 96, marchL: 4, casters: 400, trees: 400, structs: true,  key: 0, keyLen: 0 },
+    medium: { lights: 16, half: false, rim: 1,    glow: 1,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
+    high:   { lights: 32, half: false, rim: 1,    glow: 1,   shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
+    ultra:  { lights: 48, half: false, rim: 1.35, glow: 1.4, shadows: 0, march: 0,  range: 0,  marchL: 0, casters: 0,   trees: 0,   structs: false, key: 0, keyLen: 0 },
   };
   // L4 shadows: silhouette shadow buffer (alpha = shadowed) darkens the diffuse / glow on ground pixels only; the march walks <= range px toward a light
   const NAMES = Object.keys(LEVELS);
