@@ -834,11 +834,10 @@
       }
       const row = h('div', { class: 'ros-row ' + kind }, por, main, x);
       if (sb.pick === e.id) {
-        const pick = h('div', { class: 'ros-pick' }, Ro.skins(kind).map(s => h('button', {
-          type: 'button', class: 'ros-ps' + (s.id === e.ros.skin ? ' on' : '') + (s.locked ? ' lk' : ''), 'data-tip': s.locked ? t('ros.locked') : s.name,
+        const pick = h('div', { class: 'ros-pick' }, Ro.skins(kind).filter(s => !s.locked).map(s => h('button', {   // owned skins only
+          type: 'button', class: 'ros-ps' + (s.id === e.ros.skin ? ' on' : ''), 'data-tip': s.name,
           onclick: ev => {
             ev.currentTarget.blur();
-            if (s.locked) { IT.UI.toast(t('ros.locked'), 'warn'); return; }
             sb.pick = null; Ro.edit(w, e, { skin: s.id }); H.syncRoster(true);
           } }, skinPor(s.id, kind))));
         R.rosList.appendChild(h('div', { class: 'ros-blk' }, row, pick));
