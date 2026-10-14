@@ -107,3 +107,32 @@ test('uniform packing sizes and content', () => {
   L.begin(); assert.equal(L.uniforms(CAM).count, 0);
   L.enabled = false;
 });
+
+test('orb lights never cast; others do; flags reach the uniforms', () => {
+  L.enabled = true; L.begin();
+  L.add(mk({ kind: 'orb', x: 1000 })); L.add(mk({ kind: 'alacrity', x: 1100 })); L.add(mk({ kind: 'tower', x: 1200 })); L.add(mk({ kind: 'orb', x: 1300, cast: true }));
+  const u = L.uniforms(CAM, 8), byX = {};
+  for (let i = 0; i < u.count; i++) byX[u.pos[i * 3]] = u.cast[i];
+  assert.deepEqual([byX[1000], byX[1100], byX[1200], byX[1300]], [0, 0, 1, 1]);
+  assert.ok(u.cast instanceof Uint8Array && u.base instanceof Float32Array && u.cast.length === 8 && u.base.length === 8);
+  L.begin(); L.enabled = false;
+});
+
+test('sorting / culling uses the steady base intensity, not the flicker', () => {
+  L.enabled = true; L.begin();
+  const R = { time: 0 };
+  // two exort lights, same spot class: B is flickered down hard this frame but its base is higher -> stays first
+  L.add(mk({ x: 900, intensity: 0.2, base: 0.9 }));
+  L.add(mk({ x: 1100, intensity: 0.9, base: 0.5 }));
+  let l = L.list(CAM);
+  assert.equal(l[0].x, 900); assert.equal(l[0].base, 0.9); assert.equal(l[1].base, 0.5);
+  assert.ok(Math.abs(l[0].score - 0.9 * 200 * 200 / (1 + Math.hypot(900 - 1440, 800 - 810))) < 1e-6);
+  // addElem keeps base = the unflickered element intensity while intensity flickers
+  L.begin();
+  const fr = { time: 0.3 };
+  for (let sd = 0; sd < 8; sd++) L.addElem(fr, 1000 + sd, 800, 40, 200, 'exort', 1, sd, 'orb');
+  const all = L.list(CAM, 48);
+  assert.ok(all.length > 5 && all.every(p => p.base === L.ELEM.exort.base && !p.cast));
+  assert.ok(new Set(all.map(p => p.intensity.toFixed(4))).size > 1);
+  L.begin(); L.enabled = false; void R;
+});

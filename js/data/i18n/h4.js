@@ -16,14 +16,14 @@
     },
     pt: {
       'title.ranked': 'Ranqueada',
-      'title.sandbox': 'Sandbox',
-      'title.rating': 'Rating {n}',
+      'title.sandbox': 'Treino livre',
+      'title.rating': 'MMR {n}',
       'title.fullscreen': 'Tela cheia',
       'diffd.ianzinho': 'Aquecimento. Os bonecos quase não revidam.',
       'diffd.easy': 'Bonecos lentos, tempos generosos.',
       'diffd.normal': 'Bots de treino padrão.',
-      'diffd.hard': 'Reações rápidas. Erros são punidos.',
-      'diffd.bambam': 'Agressão máxima. Boa sorte.',
+      'diffd.hard': 'Reação rápida. Errou, pagou.',
+      'diffd.bambam': 'Agressividade máxima. Boa sorte.',
     },
   });
 })(typeof window !== 'undefined' ? window : globalThis);

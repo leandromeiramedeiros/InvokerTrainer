@@ -8,6 +8,6 @@
       'set.dummyChat': 'Dummy taunts', 'set.fpsCap': 'Frame rate cap', 'set.fpsDisplay': 'Display' },
     pt: { 'in.fullscreen': 'Tela cheia', 'in.fullscreenExit': 'Sair da tela cheia',
       'set.rmbRepeat': 'Segurar botão direito repete as ordens', 'set.comboOrder': 'Mostrar ordem das ações do combo (magias, itens, movimentos)',
-      'set.dummyChat': 'Provocações dos bonecos', 'set.fpsCap': 'Limite de quadros', 'set.fpsDisplay': 'Taxa da tela' },
+      'set.dummyChat': 'Provocações dos bonecos', 'set.fpsCap': 'Limite de FPS', 'set.fpsDisplay': 'Taxa da tela' },
   });
 })(typeof window !== 'undefined' ? window : globalThis);

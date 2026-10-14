@@ -211,7 +211,7 @@
   function side(a, b) { a.total += b.total; addMap(a.byType, b.byType); if (b.bySource) addMap(a.bySource, b.bySource); }
   // merge(lifetime|null, summary) -> new lifetime blob (inputs untouched)
   function merge(life, s) {
-    const L = life ? JSON.parse(JSON.stringify(life)) : Object.assign(blank(), { sessions: 0 });
+    const L = Object.assign(blank(), { sessions: 0 }, life ? JSON.parse(JSON.stringify(life)) : {});   // a blob holding only the Shop's points / spent (no session yet) gets the blank fields
     L.sessions = (L.sessions || 0) + 1;
     L.time += s.time; L.actions += s.actions;
     L.apm = L.time > 1 ? round(L.actions / (L.time / 60)) : 0;

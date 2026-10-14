@@ -14,7 +14,9 @@
     quas:  { r: 0.35, g: 0.68, b: 1.0, base: 0.2, rad: 0.6 },
   };
   const pool = []; let n = 0, stamp = null;
-  for (let i = 0; i < POOL; i++) pool.push({ x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, radius: 0, intensity: 0, kind: '', score: 0 });
+  for (let i = 0; i < POOL; i++) pool.push({ x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, radius: 0, intensity: 0, base: 0, cast: true, kind: '', score: 0 });
+  // kinds that light the scene but never cast silhouette / march shadows (they orbit or ride a unit and flicker: their shadows would swing and pulse)
+  const NOCAST = { orb: 1, alacrity: 1 };
 
   // deterministic hash 0..1
   function hash(a, b) { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
@@ -61,6 +63,8 @@
       const p = pool[n++];
       p.x = +o.x || 0; p.y = +o.y || 0; p.z = +o.z || 0; p.r = +o.r || 0; p.g = +o.g || 0; p.b = +o.b || 0;
       p.radius = radius; p.intensity = inten; p.kind = o.kind || '';
+      p.base = o.base > 0 ? +o.base : inten;                     // steady (pre flicker / strobe) intensity: sorting + shadow weights use it, so lights never swap or pop
+      p.cast = o.cast !== undefined ? !!o.cast : !NOCAST[p.kind];
     },
     // element light: el 'quas'|'wex'|'exort' or a blend() result; R.time drives flicker / strobe (quas steady); k scales intensity (fade)
     addElem(R, x, y, z, radius, el, k, seed, kind) {
@@ -77,7 +81,7 @@
         m = (el.e || 0) * flicker(t, sd) + ww * s / 0.5 + (el.q || 0);
         r += ww * (c[0] - ELEM.wex.r); g += ww * (c[1] - ELEM.wex.g); b += ww * (c[2] - ELEM.wex.b);
       }
-      Lights.add({ x, y, z, r, g, b, radius: radius * E.rad, intensity: E.base * m * (k == null ? 1 : k), kind });
+      Lights.add({ x, y, z, r, g, b, radius: radius * E.rad, intensity: E.base * m * (k == null ? 1 : k), base: E.base * (k == null ? 1 : k), kind });
     },
     // view-px emitter helper (the 2D lights are in view px): sx,sy screen px, hpx extra height px, rgb 0..255
     addPx(R, sx, sy, hpx, rgb, rpx, inten, kind) {
@@ -133,25 +137,25 @@
           if (p.x + m < cam.x || p.x - m > cam.x + cam.w || p.y + m < cam.y || p.y - m > cam.y + cam.h) continue;
         }
         const d = hasCam ? Math.hypot(p.x - cx, p.y - cy) : 0;
-        p.score = p.intensity * p.radius * p.radius / (1 + d);
+        p.score = p.base * p.radius * p.radius / (1 + d);   // base, not the flickered intensity: the order is stable frame to frame
         out.push(p);
       }
       out.sort((a, b) => b.score - a.score);
       if (out.length > max) out.length = max;
       return out;
     },
-    // flat shader uniforms: pos = (x - cam.x, y - cam.y, z) x max, col = rgb x max, rad = (radius, intensity) x max, count = live lights
+    // flat shader uniforms: pos = (x - cam.x, y - cam.y, z) x max, col = rgb x max, rad = (radius, intensity) x max, base = steady intensity x max, cast = 1 / 0 (orbs 0) x max, count = live lights
     uniforms(cam, max) {
       max = cl(max | 0 || MAXL, 1, MAXL);
-      const ls = Lights.list(cam, max), pos = new Float32Array(max * 3), col = new Float32Array(max * 3), rad = new Float32Array(max * 2);
+      const ls = Lights.list(cam, max), pos = new Float32Array(max * 3), col = new Float32Array(max * 3), rad = new Float32Array(max * 2), base = new Float32Array(max), cast = new Uint8Array(max);
       const ox = cam ? cam.x || 0 : 0, oy = cam ? cam.y || 0 : 0;
       for (let i = 0; i < ls.length; i++) {
         const p = ls[i];
         pos[i * 3] = p.x - ox; pos[i * 3 + 1] = p.y - oy; pos[i * 3 + 2] = p.z;
         col[i * 3] = p.r; col[i * 3 + 1] = p.g; col[i * 3 + 2] = p.b;
-        rad[i * 2] = p.radius; rad[i * 2 + 1] = p.intensity;
+        rad[i * 2] = p.radius; rad[i * 2 + 1] = p.intensity; base[i] = p.base; cast[i] = p.cast ? 1 : 0;
       }
-      return { pos, col, rad, count: ls.length, max };
+      return { pos, col, rad, base, cast, count: ls.length, max };
     },
   };
   IT.Lights = Lights;

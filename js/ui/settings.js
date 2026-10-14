@@ -10,6 +10,7 @@
   const LIGHTING = ['off', 'low', 'medium', 'high', 'ultra'];   // v6 #76 L5: IT.GL.LEVELS keys
   // keybind migration: stored bindings still equal to the pre-v6 default move to the new default (custom ones stay)
   const KEYS_VERSION = 2;
+  const GFX_VERSION = 1;          // v6: Lighting default High + 60 fps cap applied once over older saves
   const KEY_MIG = { center: ['Space', 'F1'], cheat: ['F1', 'I'], stats: ['K', 'O'] };
 
   function defaults() {
@@ -19,7 +20,7 @@
     for (let i = 1; i <= 6; i++) legacy['item' + i] = String(i);
     return {
       castMode: 'quick', scheme: 'slots', autoAttack: true, camLock: false, edgeScroll: true,
-      bloom: true, lighting: 'low', showFps: false, sound: true, hints: true, lang: 'en',
+      bloom: true, lighting: 'high', showFps: false, sound: true, hints: true, lang: 'en',
       camSpeed: 1,                 // 0.5..2 multiplier on camera scroll speed
       zoom: 1,                     // scroll-wheel zoom step (GAME.ZOOMS)
       doubleTap: true, doubleTapTimeout: 0.6,   // double-tap ability/item to self-cast (Dota "Double Tap ... to Self Cast")
@@ -32,6 +33,7 @@
       beliefUI: true,              // enemy belief markers (what each enemy thinks it knows about you)
       keysVersion: KEYS_VERSION,   // bump = run the KEY_MIG table over stored binds once
       fpsCap: 60,                  // 0 = display rate; otherwise render cap (paced to a divisor of the display rate)
+      gfxVersion: GFX_VERSION,     // bump = reset lighting / fpsCap to the current defaults once (old saves stored 'low')
       audio: { master: 0.8, music: 0.5, sfx: 0.8, ui: 0.6, musicOn: true, muteUnfocused: true },
       keys: {
         common: { orbQ: 'Q', orbW: 'W', orbE: 'E', invoke: 'R', attack: 'A', stop: 'S', hold: 'H', center: 'F1', camLock: 'L', cheat: 'I', stats: 'O', refresh: 'Backspace' },
@@ -74,7 +76,9 @@
     base.keysVersion = KEYS_VERSION;
     if (base.castMode !== 'quick' && base.castMode !== 'normal') base.castMode = 'quick';
     if (base.scheme !== 'slots' && base.scheme !== 'legacy') base.scheme = 'slots';
-    if (!LIGHTING.includes(base.lighting)) base.lighting = 'off';   // key missing in an old save keeps the default 'low' (merge skips it); an unknown value reads as off
+    if (!LIGHTING.includes(base.lighting)) base.lighting = 'off';   // key missing in an old save keeps the default (merge skips it); an unknown value reads as off
+    if ((Number(src.gfxVersion) || 0) < GFX_VERSION) { const d = defaults(); base.lighting = d.lighting; base.fpsCap = d.fpsCap; }
+    base.gfxVersion = GFX_VERSION;
     if (!IT.I18N[base.lang]) base.lang = 'en';
     if (base.heroSkin !== 'kid' && base.heroSkin !== 'dark') base.heroSkin = 'default';
     if (!(IT.GAME.ZOOMS || [1]).includes(base.zoom)) base.zoom = 1;
@@ -292,13 +296,6 @@
             row(t('set.fullscreen'), fs),
             chk(draft, 'pointerLock', t('set.pointerLock')),
             row(t('set.fpsCap'), rg('fpsCap', draft.fpsCap, [[30, '30'], [60, '60'], [120, '120'], [0, t('set.fpsDisplay')]], v => { draft.fpsCap = v; }))),
-          sh(t('set.heroSkin')),
-          h('div', { class: 'skin-pick' }, ['default', 'kid', 'dark'].map(k => {
-            const cv = IT.Art.canvas(IT.Art.HERO_SKINS[k], 'portrait');
-            const im = h('span', { class: 'skin-im' });
-            if (cv) { const c = G.document.createElement('canvas'); c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0); im.appendChild(c); }
-            return h('button', { type: 'button', class: 'skin-c' + (draft.heroSkin === k ? ' on' : ''), onclick: () => { draft.heroSkin = k; refresh(); } }, im, h('span', { class: 'skin-n', text: t('skin.' + k) }));
-          })),
         ];
       }],
       lang: ['set.nav.lang', () => [sh(t('set.h.lang')), list(row(t('ui.language'), langToggle()))]],

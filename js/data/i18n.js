@@ -41,25 +41,26 @@
   // ---- orbs / spells / items
   D('orb.quas', 'Quas', 'Quas'); D('orb.wex', 'Wex', 'Wex'); D('orb.exort', 'Exort', 'Exort');
   D('orb.Q', 'Quas', 'Quas'); D('orb.W', 'Wex', 'Wex'); D('orb.E', 'Exort', 'Exort');
-  D('spell.invoke', 'Invoke', 'Invocar');
+  D('spell.invoke', 'Invoke', 'Invoke');
   const spells = {
     coldsnap: 'Cold Snap', ghostwalk: 'Ghost Walk', icewall: 'Ice Wall', emp: 'E.M.P.', tornado: 'Tornado', alacrity: 'Alacrity',
     sunstrike: 'Sun Strike', forgespirit: 'Forge Spirit', chaosmeteor: 'Chaos Meteor', deafeningblast: 'Deafening Blast',
   };
   for (const k in spells) D('spell.' + k, spells[k]);
-  D('item.refresher', 'Refresher Orb', 'Orbe Refresher');
+  D('spell.emp', 'E.M.P.', 'EMP');
+  D('item.refresher', 'Refresher Orb', 'Refresher Orb');
   D('item.atos', 'Rod of Atos', 'Rod of Atos');
-  D('item.vyse', 'Scythe of Vyse', 'Foice de Vyse');
-  D('item.shiva', "Shiva's Guard", 'Guarda de Shiva');
-  D('item.meteorhammer', 'Meteor Hammer', 'Martelo Meteoro');
+  D('item.vyse', 'Scythe of Vyse', 'Scythe of Vyse');
+  D('item.shiva', "Shiva's Guard", "Shiva's Guard");
+  D('item.meteorhammer', 'Meteor Hammer', 'Meteor Hammer');
   D('item.bkb', 'Black King Bar', 'Black King Bar');
-  D('item.blink', 'Blink Dagger', 'Adaga Blink');
-  D('item.boots', 'Boots of Speed', 'Botas de Velocidade');
+  D('item.blink', 'Blink Dagger', 'Blink Dagger');
+  D('item.boots', 'Boots of Speed', 'Boots of Speed');
   D('item.orchid', 'Orchid Malevolence', 'Orchid Malevolence');
   D('item.gleipnir', 'Gleipnir', 'Gleipnir');
-  D('item.travels', 'Boots of Travel', 'Botas de Viagem');
-  D('item.scepter', "Aghanim's Scepter", 'Cetro de Aghanim');
-  D('item.shard', "Aghanim's Shard", 'Fragmento de Aghanim');
+  D('item.travels', 'Boots of Travel', 'Boots of Travel');
+  D('item.scepter', "Aghanim's Scepter", "Aghanim's Scepter");
+  D('item.shard', "Aghanim's Shard", "Aghanim's Shard");
   D('attack', 'Attack', 'Ataque');
 
   // ---- fail reasons (sim 'fail' events)
@@ -67,8 +68,8 @@
     cooldown: ['On cooldown', 'Em recarga'], mana: ['Not enough mana', 'Mana insuficiente'],
     silenced: ['Silenced', 'Silenciado'], disabled: ['Disabled', 'Incapacitado'], noTarget: ['No target', 'Sem alvo'],
     targetHidden: ['Target not visible', 'Alvo não visível'], targetInvalid: ['Invalid target', 'Alvo inválido'],
-    orbNotLearned: ['Orb not learned', 'Orbe não aprendido'], invokeCooldown: ['Invoke on cooldown', 'Invocar em recarga'],
-    noRecipe: ['No recipe: pick 3 orbs', 'Sem receita: escolha 3 orbes'], rooted: ['Rooted', 'Preso'], blinkDamaged: ['Blink locked after damage', 'Blink bloqueado após dano'],
+    orbNotLearned: ['Orb not learned', 'Orbe não aprendido'], invokeCooldown: ['Invoke on cooldown', 'Invoke em recarga'],
+    noRecipe: ['No recipe: pick 3 orbs', 'Sem receita: escolha 3 orbes'], rooted: ['Rooted', 'Enraizado'], blinkDamaged: ['Blink locked after damage', 'Blink bloqueado após dano'],
     immune: ['Target is magic immune', 'Alvo imune a magia'], noItem: ['Item not equipped', 'Item não equipado'],
     noAttack: ['Cannot attack', 'Não pode atacar'], gone: ['Target gone', 'Alvo sumiu'], unknown: ['Unknown order', 'Ordem desconhecida'],
   };
@@ -81,29 +82,29 @@
   const sf = { caught: ['Caught: a chaser saw you and reached you', 'Pego: um perseguidor te viu e te alcançou'], cross: ['A foe crossed the line', 'Um inimigo cruzou a linha'],
     seen: ['Spotted before your first hit', 'Visto antes do primeiro golpe'], method: ['Wrong method: {s}', 'Método errado: {s}'],
     escaped: ['The target got away', 'O alvo fugiu'], tower: ['You stepped into the enemy tower range', 'Você entrou no alcance da torre inimiga'],
-    died: ['You went down', 'Você caiu'], time: ['Time is up', 'Acabou o tempo'],
-    'method.attack': ['killed with auto-attacks, the scenario wanted {spells}', 'matou com ataques automáticos, o cenário pedia {spells}'],
-    'method.missing': ['{spells} never hit a foe', '{spells} não acertou nenhum inimigo'],
-    'method.burst': ['the kills did not come from one cast', 'as mortes não vieram de um só lançamento'],
+    died: ['You went down', 'Você morreu'], time: ['Time is up', 'Acabou o tempo'],
+    'method.attack': ['killed with auto-attacks, the scenario wanted {spells}', 'matou no ataque básico, o cenário pedia {spells}'],
+    'method.missing': ['{spells} never hit a foe', '{spells} não acertou ninguém'],
+    'method.burst': ['the kills did not come from one cast', 'as mortes não vieram de uma só magia'],
     'method.other': ['the kill did not meet the objective', 'a morte não cumpriu o objetivo'] };
   for (const k in sf) D('cfail.' + k, sf[k][0], sf[k][1]);
-  D('chint.order', 'Wrong order: {got} now, the combo wants {exp}', 'Ordem errada: o combo pede {exp}, n�o {got}');
+  D('chint.order', 'Wrong order: {got} now, the combo wants {exp}', 'Ordem errada: o combo pede {exp}, não {got}');
   D('chint.target', 'Wrong target for {got}', 'Alvo errado para {got}');
-  D('chint.extra', '{got} is not part of this combo', '{got} n�o faz parte deste combo');
+  D('chint.extra', '{got} is not part of this combo', '{got} não faz parte deste combo');
   D('toast.combo', 'COMBO! +{score}', 'COMBO! +{score}');
   D('toast.perfect', 'PERFECT! +{score}', 'PERFEITO! +{score}');
   D('toast.comboFail', 'FAILED: {why}', 'FALHOU: {why}');
   D('toast.locked', 'Combo locked: loadout lacks requirements', 'Combo bloqueado: a build não cumpre os requisitos');
-  D('toast.refreshed', 'Cooldowns refreshed', 'Recargas reiniciadas');
+  D('toast.refreshed', 'Cooldowns refreshed', 'Recargas resetadas');
   D('toast.spawned', 'Dummy spawned', 'Alvo criado');
-  D('toast.dummiesReset', 'Dummies reset', 'Alvos reiniciados');
+  D('toast.dummiesReset', 'Dummies reset', 'Alvos resetados');
   D('toast.cancelled', 'Cast cancelled', 'Lançamento cancelado');
 
   // ---- statuses
-  const sts = { stun: ['Stunned', 'Atordoado'], frozen: ['Frozen', 'Congelado'], root: ['Rooted', 'Preso'], hex: ['Hexed', 'Transformado'], lift: ['Lifted', 'Erguido'],
-    slow: ['Slowed', 'Lento'], disarm: ['Disarmed', 'Desarmado'], silence: ['Silenced', 'Silenciado'], magicImmune: ['Magic immune', 'Imune a magia'],
+  const sts = { stun: ['Stunned', 'Stunado'], frozen: ['Frozen', 'Congelado'], root: ['Rooted', 'Enraizado'], hex: ['Hexed', 'Hexado'], lift: ['Lifted', 'No ar'],
+    slow: ['Slowed', 'Slowado'], disarm: ['Disarmed', 'Desarmado'], silence: ['Silenced', 'Silenciado'], magicImmune: ['Magic immune', 'Imune a magia'],
     coldsnap: ['Cold Snap', 'Cold Snap'], ghost: ['Ghost Walk', 'Ghost Walk'], knockback: ['Knocked back', 'Empurrado'], atosRoot: ['Rod of Atos', 'Rod of Atos'],
-    alacrity: ['Alacrity', 'Alacrity'], burn: ['Burning', 'Queimando'], shivaAura: ['Shiva aura', 'Aura de Shiva'], icewall: ['Ice Wall', 'Ice Wall'], emp: ['E.M.P.', 'E.M.P.'] };
+    alacrity: ['Alacrity', 'Alacrity'], burn: ['Burning', 'Queimando'], shivaAura: ['Shiva aura', 'Aura do Shiva'], icewall: ['Ice Wall', 'Ice Wall'], emp: ['E.M.P.', 'EMP'] };
   for (const k in sts) D('status.' + k, sts[k][0], sts[k][1]);
 
   // ---- modes / presets
@@ -113,7 +114,7 @@
   D('beh.stationary', 'stationary', 'parado'); D('beh.wander', 'wanders', 'anda'); D('beh.evasive', 'evasive', 'esquivo');
 
   // ---- title
-  D('title.hint', 'Mouse + keyboard. Press Esc in game for the menu.', 'Mouse + teclado. Aperte Esc no jogo para o menu.');
+  D('title.hint', 'Mouse + keyboard. Press Esc in game for the menu.', 'Mouse + teclado. Aperte Esc na partida pro menu.');
 
   // ---- loadout
   D('lo.title', 'LOADOUT', 'BUILD');
@@ -134,7 +135,7 @@
   D('lo.skin', 'Skin', 'Skin');
   D('lo.count', 'Dummies', 'Alvos');
   D('lo.mode', 'Mode', 'Modo');
-  D('lo.grant', 'Grant missing items / Aghanim', 'Conceder itens / Aghanim faltantes');
+  D('lo.grant', 'Grant missing items / Aghanim', 'Dar itens / Aghanim que faltam');
   D('lo.fog', 'Fog of war', 'Névoa de guerra');
   D('lo.preview', 'Live stats', 'Estatísticas');
   D('lo.spells', 'Spell values', 'Valores das magias');
@@ -143,7 +144,7 @@
   D('lo.fix', 'Level lowered: allocation adjusted.', 'Nível reduzido: alocação ajustada.');
   D('lo.problems', 'Cannot start', 'Não é possível iniciar');
   D('lo.needsOrbs', 'needs {orbs}', 'precisa de {orbs}');
-  D('lo.itemSlotN', 'Slot {n}', 'Espaço {n}');
+  D('lo.itemSlotN', 'Slot {n}', 'Slot {n}');
   D('lo.itemsHint', 'Click an item to add or remove it.', 'Clique em um item para adicionar ou remover.');
   D('lo.talentSwap', 'Click to switch to this talent', 'Clique para trocar para este talento');
   D('lo.talentPick', 'Click to pick', 'Clique para escolher');
@@ -156,9 +157,9 @@
   D('tip.minOrb', 'Already at 0.', 'Já está em 0.');
   D('tip.talentLvl', 'Needs hero level {lvl}.', 'Exige herói nível {lvl}.');
   D('tip.talentSecond', 'The other talent of this tier unlocks at level {lvl}.', 'O outro talento deste nível libera no nível {lvl}.');
-  D('tip.scepterOrb', 'Aghanim\'s Scepter needs a chosen orb.', 'O Cetro de Aghanim exige um orbe escolhido.');
+  D('tip.scepterOrb', 'Aghanim\'s Scepter needs a chosen orb.', "O Aghanim's Scepter exige um orbe escolhido.");
   D('tip.boots', 'Only one pair of boots.', 'Apenas um par de botas.');
-  D('tip.itemsFull', 'All 6 slots are full.', 'Os 6 espaços estão cheios.');
+  D('tip.itemsFull', 'All 6 slots are full.', 'Os 6 slots estão cheios.');
   D('tip.autoQE', 'Quas / Exort first, Wex later', 'Quas / Exort primeiro, Wex depois');
   D('tip.autoQW', 'Quas / Wex first, Exort later', 'Quas / Wex primeiro, Exort depois');
   D('tip.keySlotsOnly', 'Item keys: see Settings', 'Teclas dos itens: veja Configurações');
@@ -168,10 +169,10 @@
   D('stat.hp', 'Health', 'Vida'); D('stat.mana', 'Mana', 'Mana'); D('stat.hpRegen', 'HP regen', 'Regen. de vida');
   D('stat.manaRegen', 'Mana regen', 'Regen. de mana'); D('stat.armor', 'Armor', 'Armadura'); D('stat.magicRes', 'Magic resist', 'Resist. mágica');
   D('stat.damage', 'Damage', 'Dano'); D('stat.as', 'Attack speed', 'Vel. de ataque'); D('stat.ms', 'Move speed', 'Vel. de movimento');
-  D('stat.invokeCd', 'Invoke cooldown', 'Recarga do Invocar'); D('stat.str', 'Strength', 'Força'); D('stat.agi', 'Agility', 'Agilidade'); D('stat.int', 'Intelligence', 'Inteligência');
+  D('stat.invokeCd', 'Invoke cooldown', 'Recarga do Invoke'); D('stat.str', 'Strength', 'Força'); D('stat.agi', 'Agility', 'Agilidade'); D('stat.int', 'Intelligence', 'Inteligência');
   D('v.mana', 'mana', 'mana'); D('v.cd', 'CD', 'CD');
-  D('v.duration', 'duration', 'duração'); D('v.freezeDmg', 'freeze dmg', 'dano congel.'); D('v.slow', 'slow', 'lentidão');
-  D('v.dps', 'dmg/s', 'dano/s'); D('v.wallDur', 'wall', 'parede'); D('v.manaBurn', 'mana burn', 'mana queimada'); D('v.delay', 'delay', 'atraso');
+  D('v.duration', 'duration', 'duração'); D('v.freezeDmg', 'freeze dmg', 'dano congel.'); D('v.slow', 'slow', 'slow');
+  D('v.dps', 'dmg/s', 'dano/s'); D('v.wallDur', 'wall', 'parede'); D('v.manaBurn', 'mana burn', 'mana queimada'); D('v.delay', 'delay', 'delay');
   D('v.lift', 'lift', 'elevação'); D('v.dist', 'range', 'alcance'); D('v.dmg', 'damage', 'dano'); D('v.as', 'atk speed', 'vel. atq.'); D('v.bonusDmg', 'bonus dmg', 'dano extra');
   D('v.spirits', 'spirits', 'espíritos'); D('v.spiritHp', 'spirit HP', 'vida espírito'); D('v.spiritDmg', 'spirit dmg', 'dano espírito');
   D('v.burn', 'burn dps', 'queima/s'); D('v.main', 'impact', 'impacto'); D('v.land', 'lands in', 'cai em');
@@ -188,7 +189,7 @@
   D('talent.special_bonus_unique_invoker_2', 'Deafening Blast also fires radially', 'Deafening Blast também dispara em círculo');
 
   // ---- HUD / combo
-  D('hud.invokeCd', 'Invoke', 'Invocar');
+  D('hud.invokeCd', 'Invoke', 'Invoke');
   D('hud.score', 'SCORE', 'PONTOS');
   D('hud.streak', 'STREAK x{n}', 'SEQUÊNCIA x{n}');
   D('hud.time', 'TIME', 'TEMPO');
@@ -196,7 +197,7 @@
   D('hud.retry', 'retry {n}', 'tentativa {n}');
   D('hud.dps', 'DPS', 'DPS');
   D('hud.total', 'Total damage', 'Dano total');
-  D('hud.refresh', 'Refresh', 'Reiniciar recargas');
+  D('hud.refresh', 'Refresh', 'Resetar recargas');
   D('hud.combos', 'Combos', 'Combos');
   D('hud.noneYet', 'No combo running. Pick one from the list.', 'Nenhum combo em andamento. Escolha um da lista.');
   D('hud.locked', 'locked', 'bloqueado');
@@ -208,7 +209,7 @@
   D('react.boltCancel', 'Cancel the stun bolt', 'Cancele o stun bolt'); D('react.boltBlocked', 'Block the stun bolt', 'Bloqueie o stun bolt');
   D('react.blinkPrevented', 'Stop the blink', 'Impeça o blink'); D('react.empPull', 'EMP pulls it', 'O EMP puxa o alvo');
   D('step.attackN', 'Attack x{n}', 'Ataque x{n}');
-  D('step.self', 'self', 'em si');
+  D('step.self', 'self', 'em você');
   D('cheat.title', 'RECIPES', 'RECEITAS');
   D('cheat.hint', '{key} to close', '{key} para fechar');
 
@@ -228,10 +229,10 @@
   D('end.prevented', 'Damage prevented', 'Dano evitado');
   D('end.cc', 'Dummy CC uptime', 'Tempo de CC no alvo');
   D('end.blind', 'Blind hits', 'Acertos às cegas');
-  D('end.bolts', 'Stun bolts', 'Raios de atordoamento');
-  D('end.boltsCountered', 'countered', 'contidos'); D('end.boltsBlocked', 'blocked (BKB)', 'bloqueados (BKB)'); D('end.boltsHit', 'hit you', 'te acertaram');
+  D('end.bolts', 'Stun bolts', 'Stun bolts');
+  D('end.boltsCountered', 'countered', 'cancelados'); D('end.boltsBlocked', 'blocked (BKB)', 'bloqueados (BKB)'); D('end.boltsHit', 'hit you', 'te acertaram');
   D('end.blinks', 'Blinks', 'Blinks'); D('end.blinksPrev', 'prevented', 'impedidos');
-  D('end.invoke', 'Invoke', 'Invocar'); D('end.invAvg', 'avg orb-to-invoke', 'média orbes até invocar'); D('end.invBest', 'best', 'melhor');
+  D('end.invoke', 'Invoke', 'Invoke'); D('end.invAvg', 'avg orb-to-invoke', 'média de orbes até invocar'); D('end.invBest', 'best', 'melhor');
   D('end.noData', 'No data yet.', 'Sem dados ainda.');
   D('end.saved', 'Saved to lifetime stats.', 'Salvo nas estatísticas gerais.');
   D('dmg.physical', 'Physical', 'Físico'); D('dmg.magical', 'Magical', 'Mágico'); D('dmg.pure', 'Pure', 'Puro');
@@ -242,14 +243,14 @@
 
   // ---- settings
   D('set.title', 'SETTINGS', 'CONFIGURAÇÕES');
-  D('set.castMode', 'Cast mode', 'Modo de lançamento');
-  D('set.quick', 'Quick cast (at cursor)', 'Lançamento rápido (no cursor)');
-  D('set.normal', 'Normal cast (key arms, click casts)', 'Lançamento normal (tecla mira, clique lança)');
+  D('set.castMode', 'Cast mode', 'Modo de cast');
+  D('set.quick', 'Quick cast (at cursor)', 'Quickcast (no cursor)');
+  D('set.normal', 'Normal cast (key arms, click casts)', 'Cast normal (tecla mira, clique lança)');
   D('set.scheme', 'Key scheme', 'Esquema de teclas');
   D('set.slots', 'Slots (D / F = invoked slots)', 'Slots (D / F = magias invocadas)');
   D('set.legacy', 'Legacy (one key per spell)', 'Clássico (uma tecla por magia)');
   D('set.autoAttack', 'Auto attack', 'Ataque automático');
-  D('set.camLock', 'Camera lock on hero', 'Câmera presa no herói');
+  D('set.camLock', 'Camera lock on hero', 'Câmera travada no herói');
   D('set.edgeScroll', 'Edge scroll', 'Rolagem pela borda');
   D('set.bloom', 'Bloom', 'Bloom');
   D('set.sound', 'Sound', 'Som');
@@ -262,7 +263,7 @@
   D('set.group.common', 'General', 'Geral');
   D('set.group.slots', 'Slots scheme', 'Esquema de slots');
   D('set.group.legacy', 'Legacy scheme', 'Esquema clássico');
-  D('set.group.misc', 'Sandbox & camera', 'Sandbox e câmera');
+  D('set.group.misc', 'Sandbox & camera', 'Treino livre e câmera');
   D('set.fixed', 'Fixed: Esc pause, Tab live stats, RMB move/attack, Shift queues.', 'Fixas: Esc pausa, Tab estatísticas, botão dir. move/ataca, Shift enfileira.');
   const act = {
     orbQ: 'Quas', orbW: 'Wex', orbE: 'Exort', invoke: 'Invoke', slot1: 'Spell slot 1', slot2: 'Spell slot 2',
@@ -270,13 +271,14 @@
     refresh: 'Refresh cooldowns',
   };
   const actPt = {
-    orbQ: 'Quas', orbW: 'Wex', orbE: 'Exort', invoke: 'Invocar', slot1: 'Slot de magia 1', slot2: 'Slot de magia 2',
-    stop: 'Parar', hold: 'Manter posição', center: 'Selecionar herói / Centralizar câmera', camLock: 'Alternar câmera presa', cheat: 'Folha de receitas',
-    refresh: 'Reiniciar recargas',
+    orbQ: 'Quas', orbW: 'Wex', orbE: 'Exort', invoke: 'Invoke', slot1: 'Slot de magia 1', slot2: 'Slot de magia 2',
+    stop: 'Parar', hold: 'Manter posição', center: 'Selecionar herói / Centralizar câmera', camLock: 'Alternar câmera travada', cheat: 'Folha de receitas',
+    refresh: 'Resetar recargas',
   };
   for (const k in act) D('act.' + k, act[k], actPt[k]);
   for (let i = 1; i <= 6; i++) D('act.item' + i, 'Item ' + i, 'Item ' + i);
   for (const k in spells) D('act.' + k, spells[k]);
+  D('act.emp', 'E.M.P.', 'EMP');
 
   IT.I18N = { en, pt };
   // per-agent string packs: IT.i18nAdd({ en: {k: v}, pt: {k: v} }); pt falls back to en

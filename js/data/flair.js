@@ -957,10 +957,11 @@
 
     // Vitinho (v6 #62 revised, human caricature: bearded, buzz cut, navy plaid shirt): works all day, stressed, off-meta heroes, exquisite items, loves America / Uncle Sam,
     // macho jabs ("you are not a man", "I am not scared of you"), "I do not even vote" apolitical, and a sprinkle of pseudo-philosophy (Stoics, Nietzsche, Socrates, respawn as existentialism).
-    // Weed: at most 2 lines in the whole set (idleLong + night). No primate / clan tics any more.
+    // Weed: at most 2 lines in the whole set (idleLong + night). No primate / clan tics any more. Calls people "maggots" / "vermes" (Ian most of all: see vitinian).
     vitinho: {
       cd: 4, chat: 0.85, lineCd: 40, fallback: 'default', lines: {
         gotJuked: [
+          ['Juked by a maggot. Unacceptable.', 'Driblado por um verme. Inaceitável.'],
           ['You juked me?! I have a deadline in five minutes!', 'Você me driblou?! Tenho um prazo em cinco minutos!'],
           ['Wrong spot! I should have read the spreadsheet!', 'Lugar errado! Devia ter lido a planilha!'],
           ['Uncle Sam did not teach me to chase shadows!', 'O tio Sam não me ensinou a perseguir sombra!'],
@@ -1011,6 +1012,7 @@
           ['Missed? I am not scared of you. I am scared of the quarterly.', 'Errei? Não tenho medo de você. Tenho medo do trimestral.'],
         ],
         spawn: [
+          ['Line up, maggots. Inspection time.', 'Em fila, vermes. Hora da inspeção.'],
           ['God bless America! And whoever is in this lobby!', 'Deus abençoe a América! E quem está nesse lobby!', { icon: 'star' }],
           ['I have a meeting in five minutes. This will take four.', 'Tenho reunião em cinco minutos. Isso leva quatro.'],
           ['Currently playing Chen carry mid. Do not ask.', 'Jogando Chen carry mid. Não pergunte.'],
@@ -1034,6 +1036,7 @@
           ['Bought another exquisite item today. My wallet filed a complaint.', 'Comprei mais um item requintado hoje. Minha carteira abriu reclamação.'],
         ],
         idleLong: [
+          ['Move it, maggot! I do not have all day!', 'Anda, verme! Não tenho o dia todo!'],
           ['Time is money, friend. Cast something.', 'Tempo é dinheiro, amigo. Lança algo.'],
           ['I could close three deals in the time you are taking.', 'Eu fecharia três negócios no tempo que você tá levando.'],
           ['My calendar is full and so is my patience. Almost.', 'Minha agenda tá cheia e minha paciência também. Quase.'],
@@ -1045,6 +1048,7 @@
           ['Waiting is a Stoic virtue. I am a terrible Stoic.', 'Esperar é virtude estoica. Eu sou um péssimo estoico.'],
         ],
         damaged: [
+          ['You hit me, maggot? Bold.', 'Você me bateu, verme? Ousado.'],
           ['Ow! This is not in the budget!', 'Ai! Isso não estava no orçamento!'],
           ['Hey! I am in the middle of a deadline!', 'Ei! Estou no meio de um prazo!'],
           ['Freedom is not free, and neither is that damage!', 'Liberdade não é de graça, e esse dano também não!', { icon: 'star' }],
@@ -1056,6 +1060,7 @@
           ['Ow! A Stoic does not flinch. I flinched. I am bad at it.', 'Ai! Estoico não se encolhe. Eu me encolhi. Sou ruim nisso.'],
         ],
         stunned: [
+          ['Stunned by a maggot. My career is over.', 'Atordoado por um verme. Minha carreira acabou.'],
           ['Stuck! My boss will understand! He will not!', 'Preso! Meu chefe vai entender! Não vai!'],
           ['Unplanned downtime! My nightmare!', 'Parada não planejada! Meu pesadelo!'],
           ['I like this. A forced break. Wait, no, deadline!', 'Gostei. Uma pausa forçada. Pera, não, prazo!'],
@@ -1086,6 +1091,7 @@
           ['Nietzsche said love your fate. I love fate. Fate does not love my build.', 'Nietzsche disse ame seu destino. Eu amo. O destino não ama minha build.'],
         ],
         killedHero: [
+          ['Down you go, maggot. Back to the dirt.', 'Pro chão, verme. De volta pra terra.'],
           ['Winner winner, chicken dinner! America!', 'Vencedor vencedor, jantar de frango! América!', { icon: 'star' }],
           ['You were not on my roadmap. Neither was I winning.', 'Você não estava no meu roadmap. Eu vencer também não.'],
           ['Good game! Send the invoice to my boss.', 'Bom jogo! Mande a fatura pro meu chefe.'],
@@ -1096,6 +1102,7 @@
           ['You died. Epictetus would say it was not up to you.', 'Você morreu. Epicteto diria que não dependia de você.'],
         ],
         playerMissed: [
+          ['Missed, maggot! Practice harder.', 'Errou, verme! Treina mais.'],
           ['Missed! That is a negative ROI!', 'Errou! Isso é ROI negativo!'],
           ['Wasted resources! A true tragedy!', 'Recurso desperdiçado! Uma verdadeira tragédia!'],
           ['Not even in the quarterly forecast!', 'Nem estava na previsão do trimestre!'],
@@ -1152,6 +1159,7 @@
           ['Heraclitus: you never jump in the same pit twice. I do it daily.', 'Heráclito: ninguém pula no mesmo fosso duas vezes. Eu pulo todo dia.'],
         ],
         caught: [
+          ['Gotcha, maggot!', 'Te peguei, verme!'],
           ['Got you! One more win for the quarter!', 'Te peguei! Mais uma vitória do trimestre!'],
           ['Caught! Efficient! Productive! American!', 'Pego! Eficiente! Produtivo! Americano!', { icon: 'star' }],
           ['Gotcha! Add it to my performance review!', 'Peguei! Põe na minha avaliação de desempenho!'],
@@ -1162,6 +1170,7 @@
           ['Descartes: I think, therefore I am. I caught you, therefore I win.', 'Descartes: penso, logo existo. Te peguei, logo venci.'],
         ],
         escaped: [
+          ['Crawl away, maggot. I will find you.', 'Rasteja, verme. Eu te acho.'],
           ['You escaped?! I have a deadline for catching you!', 'Você escapou?! Tenho prazo pra te pegar!'],
           ['Slippery like a wet-floor sign!', 'Escorregadio feito placa de piso molhado!'],
           ['Fine! Go! I have other meetings anyway!', 'Beleza! Vai! Tenho outras reuniões mesmo!'],
@@ -1187,6 +1196,7 @@
           ['Failed? Stand up. A man stands up.', 'Falhou? Levanta. Homem levanta.'],
         ],
         praise: [
+          ['Not bad, maggot. Not bad.', 'Nada mal, verme. Nada mal.'],
           ['Excellent! Promote this man!', 'Excelente! Promovam esse homem!'],
           ['That is what I call a synergy!', 'Isso é o que eu chamo de sinergia!'],
           ['God bless America! And God bless that combo!', 'Deus abençoe a América! E esse combo!', { icon: 'star' }],
@@ -2009,6 +2019,7 @@
     vitinian: {
       cd: 5, chat: 0.9, lineCd: 45, lines: {
         spawn: [
+          VX(['w', 'Ian, you maggot, stand up straight.', 'Ian, seu verme, fica reto.'], ['d', 'I have a herniated disc. Labor injury.', 'Tenho hérnia de disco. Acidente de trabalho.']),
           VX(['w', 'Two heads and not a single win between us.', 'Duas cabeças e nenhuma ganha partida.'], ['d', 'Speak for yourself. I lose fifteen a day. That is dedication.', 'Fala por você. Eu perco 15 por dia. É dedicação.']),
           VX(['w', 'The easiest difficulty is named after him, just for the record.', 'A dificuldade mais fácil tem o nome dele, só pra constar.'], ['d', 'At least I have one. What do you have?', 'Pelo menos eu tenho uma. Você tem o quê?'], ['w', 'MMR.', 'MMR.']),
           VX(['w', 'Fighting an Invoker. Easy. I have done harder things at work.', 'Enfrentar um Invoker. Fácil. Já fiz coisa mais difícil no trabalho.'], ['d', 'You mean sat through harder meetings.', 'Você quer dizer ficou em reunião mais difícil.'], ['w', 'Meetings ARE harder.', 'Reunião É mais difícil.']),
@@ -2019,6 +2030,7 @@
           VW('God bless America! And this lobby!', 'Deus abençoe a América! E esse lobby!', { icon: 'star' }),
         ],
         idle: [
+          VX(['w', 'Ian. Maggot. Did you read the report?', 'Ian. Verme. Leu o relatório?'], ['d', 'Name-calling is a crime, you know.', 'Injúria é crime, sabia?'], ['w', 'Sue me, maggot.', 'Me processa, verme.']),
           VX(['d', 'At this rate the dollar hits 8 before the end of the term.', 'Do jeito que tá, o dólar bate 8 até o fim do mandato.'], ['w', 'I do not care either way. I do not even vote.', 'Pra mim tanto faz, eu nem voto.'], ['d', 'That is why gas costs what it costs.', 'Por isso a gasolina tá desse jeito.']),
           VX(['w', 'I am apolitical, Ian.', 'Eu sou apolítico, Ian.'], ['d', 'Apolitical. In a patriotic jersey. Comedy.', 'Apolítico de camisa da seleção. Comédia.']),
           VX(['w', 'Nietzsche said: what does not kill me makes me stronger.', 'Nietzsche disse: o que não me mata me fortalece.'], ['d', 'Marx said philosophers only interpret the world. The point is to change it.', 'Marx disse que filósofos só interpretam o mundo. O ponto é mudá-lo.'], ['w', 'Ian, that is two different bars.', 'Ian, são dois bares diferentes.']),
@@ -2029,6 +2041,7 @@
           VD('Inflation is a ghost: you cannot see it, but it eats your lunch.', 'Inflação é um fantasma: você não vê, mas ela come seu almoço.'),
         ],
         idleLong: [
+          VX(['d', 'Fifteen matches today, Vitinho.', 'Quinze partidas hoje, Vitinho.'], ['w', 'Fifteen losses, maggot.', 'Quinze derrotas, verme.']),
           VX(['w', 'You run from obligations, Ian.', 'Foge de obrigação, Ian.'], ['d', 'Not obligations. This is leisure.', 'Obrigação não. Isso aqui é lazer.']),
           VX(['w', 'Hello? I bill for this wait.', 'Alô? Eu cobro por essa espera.'], ['d', 'Billing is MY department. I am the lawyer.', 'Cobrar é o MEU departamento. O advogado sou eu.'], ['w', 'Then send the invoice, Ian.', 'Então manda a fatura, Ian.']),
           VX(['d', 'I could file a motion while he decides.', 'Dava tempo de protocolar uma petição enquanto ele decide.'], ['w', 'You would lose that too.', 'Você perderia essa também.'], ['d', 'Comedy.', 'Comédia.']),
@@ -2039,6 +2052,7 @@
           VW('Waiting is a Stoic virtue. I am a terrible Stoic.', 'Esperar é virtude estoica. Eu sou um péssimo estoico.'),
         ],
         damaged: [
+          VX(['w', 'Ian, you maggot, you let him hit us!', 'Ian, seu verme, você deixou ele bater na gente!'], ['d', 'I was negotiating.', 'Eu estava negociando.']),
           VX(['w', '...But if anyone hits you, I am the one who kills them.', '...Mas se alguém bater em você, quem mata sou eu.'], ['d', 'I know. Now get off my shoulder.', 'Eu sei. Agora sai do meu ombro.']),
           VX(['d', 'Ow! That was police brutality!', 'Ai! Isso foi violência policial!'], ['w', 'It was one spark, Ian.', 'Foi uma faísca, Ian.'], ['d', 'Sparks are how it starts.', 'É assim que começa.']),
           VX(['w', 'Hit me again, weakling. I dare you.', 'Bate de novo, fracote. Duvido.'], ['d', 'Do not dare him. I am attached to you.', 'Não duvida dele. Eu tô ligado em você.']),
@@ -2049,6 +2063,7 @@
           VW('Stoic mode: pain is only a notification.', 'Modo estoico: dor é só uma notificação.'),
         ],
         stunned: [
+          VW('Stop crying, Ian, you maggot. It is just a stun.', 'Para de chorar, Ian, seu verme. É só um stun.'),
           VX(['w', 'I cannot move!', 'Não consigo me mexer!'], ['d', 'Welcome to my entire career.', 'Bem-vindo à minha carreira inteira.']),
           VX(['d', 'A forced break! Labor rights at last!', 'Uma pausa forçada! Direitos trabalhistas, enfim!'], ['w', 'I have a deadline!', 'Eu tenho prazo!'], ['d', 'Not anymore.', 'Não mais.']),
           VX(['w', 'Ian, do something!', 'Ian, faz alguma coisa!'], ['d', 'I am doing something. I am resting.', 'Tô fazendo algo. Tô descansando.']),
@@ -2059,6 +2074,7 @@
           VW('Stunned like a laptop at 1 percent battery!', 'Atordoado feito notebook com 1% de bateria!'),
         ],
         nearDeath: [
+          VX(['w', 'We are dying, maggot! Do something!', 'Estamos morrendo, verme! Faz alguma coisa!'], ['d', 'I am drafting our will.', 'Tô redigindo nosso testamento.']),
           VX(['w', 'We are going to die because of you. You are weak.', 'Vamo morrer por tua causa. Você é fraco.'], ['d', 'Who swapped the TP for Dust? You did.', 'Quem trocou o TP por Dust foi você.']),
           VX(['d', 'Low HP. Should I sign the will?', 'Vida baixa. Assino o testamento?'], ['w', 'You have nothing to leave.', 'Você não tem nada pra deixar.'], ['d', 'Debts. I have debts.', 'Dívidas. Eu tenho dívidas.']),
           VX(['w', 'Socrates faced death calmly.', 'Sócrates encarou a morte com calma.'], ['d', 'Socrates had no ranked queue to lose.', 'Sócrates não tinha fila ranqueada pra perder.']),
@@ -2069,6 +2085,7 @@
           VW('I did not survive five quarterlies for this!', 'Eu não sobrevivi a cinco trimestres pra isso!'),
         ],
         death: [
+          VX(['d', 'We died.', 'Morremos.'], ['w', 'You died. I was carrying, maggot.', 'Você morreu. Eu estava carregando, verme.']),
           VX(['d', 'We die together. Equality, at last.', 'Morremos juntos. Igualdade, finalmente.'], ['w', 'I died. You just came along.', 'Eu morri. Você só acompanhou.']),
           VX(['w', 'Tell my boss I was working.', 'Diz pro meu chefe que eu tava trabalhando.'], ['d', 'Tell the court I was innocent.', 'Diz pro juiz que eu era inocente.']),
           VX(['w', 'I told you to build armor.', 'Eu falei pra comprar armadura.'], ['d', 'I told YOU to stop buying Rapiers.', 'Eu falei pra VOCÊ parar de comprar Rapier.']),
@@ -2078,6 +2095,7 @@
           VD('At least in death everybody is equal. Even you.', 'Ao menos na morte todo mundo é igual. Até você.'),
         ],
         killedHero: [
+          VW('Look and learn, Ian, you maggot.', 'Olha e aprende, Ian, seu verme.'),
           VX(['w', 'Got him!', 'Matei!'], ['d', 'WE got him. It is collective, Vitinho.', 'Matamos. É coletivo, Vitinho.'], ['w', 'Here we go...', 'Lá vem...']),
           VX(['w', 'Nietzsche said God is dead. So is he. Good game.', 'Nietzsche disse que Deus morreu. Ele também. Bom jogo.'], ['d', 'That is not what Nietzsche meant.', 'Não foi isso que o Nietzsche quis dizer.'], ['w', 'Nobody asked, Ian.', 'Ninguém perguntou, Ian.']),
           VX(['d', 'Did we win a match?', 'A gente ganhou uma partida?'], ['w', 'We won a kill.', 'A gente ganhou um abate.'], ['d', 'I will take it. I take anything.', 'Eu aceito. Aceito qualquer coisa.']),
@@ -2088,6 +2106,7 @@
           VW('Mark the calendar: I won something!', 'Marca no calendário: eu ganhei uma coisa!'),
         ],
         playerMissed: [
+          VX(['w', 'Missed! Even Ian aims better. Right, maggot?', 'Errou! Até o Ian mira melhor. Né, verme?'], ['d', 'Leave me out of this.', 'Me deixa fora disso.']),
           VX(['w', 'My aim is better.', 'Minha mira é melhor.'], ['d', 'Your aim is a conspiracy theory.', 'Sua mira é teoria da conspiração.']),
           VX(['w', 'That aim is weak. Come back when you are a man.', 'Essa mira é fraca. Volta quando for homem.'], ['d', 'Aim is a social construct, Vitinho.', 'Mira é uma construção social, Vitinho.']),
           VW('Missed! Negative ROI!', 'Errou! ROI negativo!'),
@@ -2143,6 +2162,7 @@
           VW('Freedom! Dive! USA! USA!', 'Liberdade! Mergulho! EUA! EUA!', { icon: 'star' }),
         ],
         caught: [
+          VX(['w', 'Caught! See, maggot? That is how it is done.', 'Pegamos! Viu, verme? É assim que se faz.'], ['d', 'We. You said we.', 'A gente. Você disse a gente.']),
           VX(['w', 'Got him!', 'Peguei!'], ['d', 'WE got him.', 'A GENTE pegou.'], ['w', 'Do not start.', 'Nem começa.']),
           VX(['d', 'Do I get a share of the victory?', 'Eu fico com uma parte da vitória?'], ['w', 'You get a share of the blame.', 'Você fica com uma parte da culpa.']),
           VX(['w', 'Descartes: I think, therefore I caught you.', 'Descartes: penso, logo te peguei.'], ['d', 'You do not think. You hit.', 'Você não pensa. Você bate.'], ['w', 'Same thing.', 'Dá no mesmo.']),
@@ -2198,6 +2218,7 @@
           VW('Free will is wasted on this one.', 'Livre-arbítrio é desperdício com esse aí.'),
         ],
         comboFail: [
+          VW('That was worse than Ian. And Ian is a maggot.', 'Isso foi pior que o Ian. E o Ian é um verme.'),
           VX(['w', 'Failed combo.', 'Combo falhou.'], ['d', 'Systemic failure.', 'Falha sistêmica.'], ['w', 'Of course.', 'Claro.']),
           VX(['d', 'Try again.', 'Tenta de novo.'], ['w', 'Failing is how men learn.', 'Falhar é como homem aprende.'], ['d', 'Then I am the strongest man alive.', 'Então eu sou o homem mais forte do mundo.']),
           VW('Failed! Quick! Schedule a post-mortem!', 'Falhou! Rápido! Agende um post-mortem!'),

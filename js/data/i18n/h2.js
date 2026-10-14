@@ -17,9 +17,9 @@
       'err.shard': "Pick the spell that Aghanim's Shard upgrades.",
     },
     pt: {
-      'agh.scepter': 'Cetro de Aghanim: clique para alternar. Dá +1 nível a um orbe.',
-      'agh.shard': 'Fragmento de Aghanim: clique para alternar. Melhora uma magia.',
-      'lo.shardSpell': 'Magia do Fragmento',
+      'agh.scepter': "Aghanim's Scepter: clique para alternar. Dá +1 nível a um orbe.",
+      'agh.shard': "Aghanim's Shard: clique para alternar. Melhora uma magia.",
+      'lo.shardSpell': 'Magia do Shard',
       'lo.scenario': 'Cenário',
       'lo.freePlay': 'Treino livre',
       'lo.freePlay.d': 'Sem objetivo: treine livremente com os alvos.',
@@ -27,7 +27,7 @@
       'shard.ghostwalk': 'também causa o dano por segundo do Ice Wall a inimigos em sua área',
       'shard.emp': 'puxa inimigos para o centro e causa mais dano por mana drenada',
       'shard.sunstrike': 'cria um Forge Spirit onde causa dano a um herói inimigo',
-      'err.shard': 'Escolha a magia que o Fragmento de Aghanim melhora.',
+      'err.shard': "Escolha a magia que o Aghanim's Shard melhora.",
     },
   });
 })(typeof window !== 'undefined' ? window : globalThis);

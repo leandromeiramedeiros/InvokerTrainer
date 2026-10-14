@@ -16,7 +16,7 @@ test('shaders are GLSL ES 1.00 shaped', () => {
   }
   // loops use constant bounds; the light count breaks out
   const loops = S.FS_LIT.match(/for\(int i=0;i<[^;]+;/g);
-  assert.deepEqual(loops, ['for(int i=0;i<' + GL.MAXL + ';']);
+  assert.deepEqual(loops, ['for(int i=0;i<' + GL.MAXL + ';']);   // (the rim loop uses j)
   assert.ok(/if\(i>=uN\)break;/.test(S.FS_LIT));
   assert.ok(new RegExp('uniform vec3 uLP\\[' + GL.MAXL + '\\],uLC\\[' + GL.MAXL + '\\];uniform vec2 uLR\\[' + GL.MAXL + '\\]').test(S.FS_LIT));
   assert.equal(GL.MAXL, IT.Lights.MAX);
@@ -26,10 +26,11 @@ test('Off path is the untouched pre-L3 main shader; lit main keeps the 9-level B
   assert.ok(!/uDyn|uAdd/.test(S.FS_MAIN));
   assert.ok(S.FS_MAIN.includes('l=clamp(floor(l*9.+bay)/9.,0.,1.);vec3 col=s*l;'));
   assert.ok(S.FS_MAIN_LIT.includes('l=clamp(floor(min(l,1.)*kc*9.+bay)/9.,0.,1.5);'));   // key light scales the quantised grid
-  assert.ok(S.FS_MAIN_LIT.includes('texture2D(uLight,c).rgb*1.25+dy.rgb'));   // ambient grid stays the base
-  assert.ok(/\/4\.\*uCap/.test(S.FS_MAIN_LIT));                                              // rim/glow: 4 shade steps
+  assert.ok(S.FS_MAIN_LIT.includes('texture2D(uLight,c).rgb+dy.rgb'));        // ambient grid stays the base, no x1.25 pre-scale (day headroom)
+  assert.ok(!S.FS_MAIN_LIT.includes('*1.25') && S.FS_MAIN.includes('texture2D(uLight,c).rgb*1.25'));   // Off path keeps its x1.25
+  assert.ok(/\/4\.\*uCap/.test(S.FS_MAIN_LIT));                                              // glow: 4 shade steps
   // rim only on material 1..2, emissive (3) gets no diffuse, fog (light alpha) masks the dynamic light
-  assert.ok(S.FS_LIT.includes('step(.5,mat)*step(mat,2.5)'));
+  assert.ok(S.FS_LIT.includes('(mat<.5||mat>2.5)?vec4(0.)'));
   assert.ok(S.FS_LIT.includes('if(mat>2.5)dif=vec3(0.);'));
   assert.ok(S.FS_LIT.includes('texture2D(uLight,uv).a'));
 });
@@ -55,14 +56,14 @@ test('dev hook without a compositor stays off; lights disabled', () => {
   assert.equal(GL.setLighting('bogus'), 'off');
 });
 
-test('ambient scaling: dynamic term capped +15 % by day, +60 % at night', () => {
-  assert.equal(GL.lightCap(0), 0.15);
-  assert.ok(Math.abs(GL.lightCap(1) - 0.6) < 1e-9);
-  assert.ok(Math.abs(GL.lightCap(0.5) - 0.375) < 1e-9);
-  assert.equal(GL.lightCap(-1), 0.15); assert.ok(Math.abs(GL.lightCap(3) - 0.6) < 1e-9);
+test('ambient scaling: dynamic term capped +30 % by day, +90 % at night', () => {
+  assert.equal(GL.lightCap(0), 0.3);
+  assert.ok(Math.abs(GL.lightCap(1) - 0.9) < 1e-9);
+  assert.ok(Math.abs(GL.lightCap(0.5) - 0.6) < 1e-9);
+  assert.equal(GL.lightCap(-1), 0.3); assert.ok(Math.abs(GL.lightCap(3) - 0.9) < 1e-9);
   // the shader's soft saturation cap * (1 - e^-2x) never exceeds the cap
   const sat = (x, n) => GL.lightCap(n) * (1 - Math.exp(-2 * x));
-  assert.ok(sat(100, 0) <= 0.15 && sat(100, 1) <= 0.6 && sat(1, 1) > 0.5);
+  assert.ok(sat(100, 0) <= 0.3 && sat(100, 1) <= 0.9 && sat(1, 1) > 0.75);
 });
 
 test('toScreen: world uniforms -> screen px, z floored, radius scaled', () => {
@@ -106,4 +107,33 @@ test('lights.begin(R) stamps the frame so emitter frame(R) calls do not reset', 
   L.begin(R); L.add({ x: 0, y: 0, radius: 10, intensity: 1 }); L.frame(R);
   assert.equal(L.count, 1);
   L.enabled = false;
+});
+
+test('Lighting v2 S2: screen-space silhouette rim (mode 2), own uncapped buffer, 2-level quantise', () => {
+  const F = S.FS_LIT, M = S.FS_MAIN_LIT;
+  // edge sampling: steps 1 and 2 px toward the light, ground (material 0) or another material = edge (no height test: the pillow dome rises
+  // ~5 HZ-px per px from the silhouette); 1 px -> 1, 2nd px -> .5
+  assert.ok(/float rimE\(vec2 px,vec2 d,float m\)/.test(F) && /for\(int s=1;s<=2;s\+\+\)/.test(F));
+  assert.ok(F.includes('ms<.5?1.:ms>2.5?0.:abs(ms-m)>.5?1.:0.') && F.includes('e=max(e,o/float(s))'));
+  // JS mirror of rimE over a row ground | sprite(mat 1) | ground, light to the left (dominant-axis step -1): edge 1, second px .5, then 0
+  const row = [0, 0, 1, 1, 1, 1, 1, 0, 0], rimJS = (x, m) => { let e = 0; for (let k = 1; k <= 2; k++) { const ms = row[x - k] === undefined ? 0 : row[x - k]; e = Math.max(e, (ms === 0 ? 1 : ms > 2 ? 0 : Math.abs(ms - m) > 0.5 ? 1 : 0) / k); } return e; };
+  assert.deepEqual([2, 3, 4, 5, 6].map(x => rimJS(x, 1)), [1, 0.5, 0, 0, 0]);
+  // first RIM_L lights + key, light colour mixed toward white, mode 2 returns before the diffuse loop, units / trees only, fog unlit
+  assert.ok(F.includes('for(int j=0;j<' + Math.min(GL.MAXL, GL.RIM_L) + ';j++){if(j>=uN)break;vec3 D=uLP[j]-P;'));
+  assert.ok(F.includes('mix(uLC[j],vec3(1.),' + GL.RIM_MIX.toFixed(6) + ')') && F.includes('mix(uKT,vec3(1.),' + GL.RIM_MIX.toFixed(6) + ')'));
+  assert.ok(/if\(uMode>1\.5\)\{gl_FragColor=\(mat<\.5\|\|mat>2\.5\)\?vec4\(0\.\):vec4\(rimAt\(P,mat\)\*texture2D\(uLight,uv\)\.a,1\.\);return;\}/.test(F));
+  assert.ok(F.indexOf('uMode>1.5') < F.indexOf('vec3 dif=vec3(0.)'));
+  assert.ok(!F.includes('pow(1.-N.z,3.)'));                                  // pillow-normal rim retired
+  // rim buffer: not under uCap (no uCap in the rim path), 2 levels (on .6 / hot 1), screen blend after the light multiply and the glow
+  assert.ok(!/rimAt[^;]*uCap/.test(F));
+  assert.ok(/uRimT/.test(M) && M.includes('rs>' + GL.RIM_T2.toFixed(6) + '?1.:rs>' + GL.RIM_T1.toFixed(6) + '?' + GL.RIM_ON.toFixed(6) + ':0.'));
+  assert.ok(M.includes('col=1.-(1.-col)*(1.-rm/max(rs,.001)*rq)'));
+  assert.ok(M.indexOf('vec3 col=s*l;') < M.indexOf('uRimOn>.5') && M.indexOf('uRimOn>.5') < M.indexOf('uBloomOn>.5'));
+  assert.ok(!/uRimT|uRimOn/.test(S.FS_MAIN));
+  // strengths: key 0.55 day / 0.45 night, point up to 0.9 (x ultra 1.35), rim unit budget stays inside texture units 0-7
+  assert.equal(GL.SUN.rim, 0.55); assert.equal(GL.MOON.rim, 0.45); assert.equal(GL.RIMK, 0.9);
+  assert.deepEqual([GL.LEVELS.low.rim, GL.LEVELS.medium.rim, GL.LEVELS.high.rim, GL.LEVELS.ultra.rim], [0, 1, 1, 1.35]);
+  assert.ok(GL.RIM_L <= 8 && GL.RIM_T1 < GL.RIM_ON && GL.RIM_ON < GL.RIM_T2);
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'render', 'gl.js'), 'utf8');
+  assert.ok(!/bindTex\((?:[89]|\d\d)/.test(src));
 });

@@ -102,7 +102,9 @@ test('sun strike cataclysm (scepter): self-cast drops cataclysm_count strikes pe
   for (const s of strikes) {
     const d = [d1, d2, d3].map(u => Math.hypot(s.x - u.x, s.y - u.y));
     assert.ok(d.some(x => x >= lo - 1e-6 && x <= hi + 1e-6), 'range');
-    assert.ok(s.danger); assert.ok(s.vision > 0);
+    assert.ok(s.danger);
+    // each strike gives its own flying vision thinker over the same spot (it outlives the impact: tests/sunstrike_vision.test.js)
+    assert.strictEqual(e.w.query(t => t.kind === 'thinker' && t.flying && t.x === s.x && t.y === s.y && t.vision > 0).length, 1);
   }
   near(e.h.cd.sunstrike, e.V('sunstrike', 'cataclysm_cooldown'), 0.3);
   e.run(2.2);

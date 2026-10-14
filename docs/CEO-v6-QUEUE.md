@@ -128,3 +128,8 @@ Known open: see the line above. Bot-limited lists live in tests/levels_v6.test.j
 - #30 top-10 in docs/GAMEPLAY-REVIEW-v6.md (level 9-10 pool too small/too hard at bambam, juke escapes trivial at ian/easy, pit_in_out unclearable, Roshan stats vs KV, Cataclysm hits non-heroes).
 - Ian enemy skin: removed until a reference arrives (TODO slot). Combo Sandbox: folded into Free Play per #21.
 - ORB_MAX stays 7 (user rule); Dota's 467 MS needs Wex 8 (7 + scepter) — formulas verified.
+
+- [ ] #79 LIGHTING v2 (CEO: "shadows horrendous, rim not obvious, flickery"; refs The Last Night + Noita). Packages (main session orchestrates, one agent at a time):
+  [ ] S1 (sonnet) shadows + flicker: key shadow = hard 2-level multiplicative mask outside the cap / 9-level quantise, night darker than day; point shadows full strength + hard march; blobs off for grounded silhouette casters (small contact shadow kept); one key draw (no ghost copies); longer key shadows; orbs never cast; shadow weight from base (pre-flicker) intensity, smooth fade instead of light swaps; light sort by base intensity.
+  [ ] S2 (sonnet) rim: screen-space silhouette edge rim from the G-buffer on the light-facing side, light colour toward white, outside the cap, 2 levels; key rim (sun/moon) Medium+; day ambient headroom so light pools show by day; higher night cap.
+  [ ] H (haiku) tests + docs/LIGHTING-v6.md "v2" section.

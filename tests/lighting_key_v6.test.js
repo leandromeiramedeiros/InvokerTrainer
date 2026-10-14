@@ -9,7 +9,7 @@ test('levels strictly increase: lights, shadow lights, casters, key shadow lengt
   for (let i = 1; i < N.length; i++) assert.ok(L[N[i]].lights > L[N[i - 1]].lights, N[i] + ' lights');
   for (let i = 2; i < N.length; i++) {
     const a = L[N[i - 1]], b = L[N[i]];
-    assert.ok(b.shadows > a.shadows && b.casters > a.casters && b.keyLen > a.keyLen && b.soft > a.soft && b.march >= a.march, N[i]);
+    assert.ok(b.shadows > a.shadows && b.casters > a.casters && b.keyLen > a.keyLen && b.march >= a.march, N[i]);
   }
   assert.ok(L.ultra.march > L.high.march && L.ultra.range > L.high.range && L.ultra.marchL > L.high.marchL && L.ultra.trees > L.high.trees);
   assert.ok(!L.ultra.half && L.ultra.lights === GL.MAXL && GL.MAXL === IT.Lights.MAX);
@@ -32,20 +32,24 @@ test('key light: none at off, present at every other level with zero emitters; s
   IT.Lights.enabled = false;
   const sun = GL.keyLight(0, 'high'), moon = GL.keyLight(1, 'high');
   assert.ok(sun.tint[0] > sun.tint[2] && moon.tint[2] > moon.tint[0]);          // warm sun, cool moon
-  assert.ok(moon.down < sun.down && moon.sh < sun.sh && moon.up < sun.up);      // moon dimmer
-  // Low: diffuse only (no key rim / shadows); Medium+: rim + shadows; Ultra: strongest rim, longest / softest shadows
+  assert.ok(moon.down < sun.down && moon.up < sun.up);                           // moon dimmer
+  assert.ok(moon.sh > sun.sh && Math.abs(sun.sh - 0.42) < 1e-9 && Math.abs(moon.sh - 0.55) < 1e-9);   // key shadow: night darker than day
+  // Low: diffuse only (no key rim / shadows); Medium+: rim + shadows; Ultra: strongest rim, longest shadows
   const lo = GL.keyLight(0, 'low'), md = GL.keyLight(0, 'medium'), ul = GL.keyLight(0, 'ultra');
   assert.deepEqual([lo.rim, lo.sh, lo.len], [0, 0, 0]);
   assert.ok(md.rim > 0 && md.sh > 0 && md.len > 0);
-  assert.ok(ul.rim > sun.rim && ul.len > sun.len && ul.soft > sun.soft);
+  assert.ok(ul.rim > sun.rim && ul.len > sun.len);
+  assert.equal('soft' in L.high, false);                                         // one hard key-shadow draw per caster: no penumbra copies
+  assert.deepEqual([L.medium.keyLen, L.high.keyLen, L.ultra.keyLen], [0.7, 1.0, 1.6]);
 });
 
 test('key shader: flat ground = 1, alpha carries the key factor, fog stays unlit; per-level programs', () => {
   const s = GL.SHADERS.FS_LIT;
   assert.ok(s.includes('uniform vec3 uK,uKT;uniform vec4 uKP;'));
   assert.ok(s.includes('kd=kn-uK.z'));                                 // flat normal N = (0,0,1): kn = uK.z -> kf = 1
-  assert.ok(s.includes('clamp(mix(1.,kf,vis)*.5,0.,1.)'));
-  assert.ok(GL.SHADERS.FS_MAIN_LIT.includes('float kf=dy.a*2.;'));
+  assert.ok(s.includes('floor(clamp(mix(1.,kf,vis),0.,1.98)*64.+.5)') && s.includes('(kq+128.*km)/255.'));   // alpha = kf x 64 + 128 x key-march occlusion
+  assert.ok(!s.includes('kf*=1.-uKP.z'));                                         // key shadow never touches the dithered shade
+  assert.ok(GL.SHADERS.FS_MAIN_LIT.includes('kf=(av-128.*km)/64.'));
   assert.ok(!/uK/.test(GL.SHADERS.FS_MAIN));                           // Off untouched
   const u = GL.litFS(48, 12, 64, 4);
   assert.ok(u.includes('uLP[48]') && u.includes('for(int k=0;k<12;k++)') && u.includes('i<4&&mat<.5') && u.includes('min(dd,64.)'));

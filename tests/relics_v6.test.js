@@ -141,6 +141,8 @@ test('merge: relics add up, ranked runs count and keep the best medal / score', 
   assert.equal(L.bestScore, 300);
   const old = SC.merge({ sessions: 1, time: 1, actions: 0, apm: 0, spells: {}, invoke: SC.blank().invoke, damage: SC.blank().damage, cc: SC.blank().cc, combos: SC.blank().combos, blindHits: 0, boltsCountered: 0, boltsBlocked: 0, boltsHit: 0, blinksPrevented: 0, blinks: 0 }, s3);
   assert.equal(old.relics.emp_mana, 50, 'a pre-v6 lifetime blob gains a relics map');
+  const shopOnly = SC.merge({ points: 40, spent: 10 }, s3);   // the Shop wrote points / spent before any session was recorded
+  assert.equal(shopOnly.points, 40); assert.equal(shopOnly.spent, 10); assert.equal(shopOnly.sessions, 1); assert.equal(shopOnly.invoke.count, 0);
 });
 
 test('curated damage: total, physical / magical / pure split, damage by spell (only sources that hit, descending)', () => {

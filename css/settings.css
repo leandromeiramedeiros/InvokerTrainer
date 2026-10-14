@@ -89,12 +89,6 @@
   .settings .set-grid2{grid-template-columns:1fr}
   .settings .set-capg{border-right:0;margin-right:0;padding-right:0}
 }
-.settings .skin-pick{display:flex;gap:.8em;flex-wrap:wrap;padding:.4em 0}
-.settings .skin-c{display:flex;flex-direction:column;align-items:center;gap:.4em;padding:.5em;background:var(--s-key);border:2px solid #55626e;color:inherit;cursor:pointer}
-.settings .skin-c:hover{border-color:var(--s-acc)}
-.settings .skin-c.on{border-color:#ffd166;color:#fff;background:#26313b}
-.settings .skin-im canvas{width:96px;height:96px;image-rendering:pixelated;display:block}
-.settings .skin-n{font-size:.85em}
 
 /* ---- v6 WP9 ornaments */
 .settings .set-panel{position:relative}

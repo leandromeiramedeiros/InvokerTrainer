@@ -113,12 +113,16 @@
     tornado: [6, 2, 0.34], emp: [5, 2, 0.3],
   };
 
+  // Lighting levels with key shadows (R.sil = the active LEVELS row, set by render.js while the lit path runs) draw a sheared silhouette under every grounded
+  // caster: its blob shrinks to a small contact shadow so feet stay anchored without a double shadow. Airborne units, projectiles, thinkers, pickups keep blobs.
+  const CONTACT = 0.55;
+  const castsUnit = LV => !!(LV && LV.keyLen > 0 && LV.casters > 0), castsStruct = LV => castsUnit(LV) && LV.structs !== false;
   function ground(R) {
     if (IT.Shadows.off) return;
     const w = R.w, cx = R.cx, P = R.P, UD = IT.UnitDraw, A0 = cx.globalAlpha, ents = w.ents;
     const nf = IT.DayNight && IT.DayNight.factor ? IT.DayNight.factor(w) : 0;
     night = 1 + 0.45 * nf;
-    const VW = R.VW, VH = R.VH;
+    const VW = R.VW, VH = R.VH, cUnit = castsUnit(R.sil);
     for (let i = 0; i < ents.length; i++) {
       const e = ents[i];
       if (e.dead) continue;
@@ -163,10 +167,11 @@
       const zv = UD.visZ(L, eul, R.iz / P, S || NOS);                 // same visual lift as the sprite (px)
       const k = hk(zv * P / UD.LIFT_VIS);                              // tornado: k = z / LIFT_HEIGHT
       const rr = Math.max(3, Math.round(e.radius / P)), big = UD.isFoe(e) && (e.bkb || UD.has(e, 'magicImmune')), s = scaleK(k) * (big ? 1.1 : 1);
-      blob(R, x, y + 1, rr * (e.kind === 'spirit' ? 1.0 : 1.25) * s * (e.kind === 'roshan' ? 1.1 : 1), rr * 0.5 * s * (e.kind === 'roshan' ? 1.1 : 1), alphaK(k) * Av);
+      const cs = cUnit && k < 0.02 && zv < 1.5 ? CONTACT : 1;           // grounded + casts a silhouette: contact shadow only
+      blob(R, x, y + 1, rr * (e.kind === 'spirit' ? 1.0 : 1.25) * s * (e.kind === 'roshan' ? 1.1 : 1) * cs, rr * 0.5 * s * (e.kind === 'roshan' ? 1.1 : 1) * cs, alphaK(k) * Av);
       if (L && !eul && zv > 6) pillar(R, x, y, zv, rr, Av);
     }
-    if (IT.TowerDraw && IT.TowerDraw.shadows) IT.TowerDraw.shadows(R, blob);
+    if (IT.TowerDraw && IT.TowerDraw.shadows) IT.TowerDraw.shadows(R, castsStruct(R.sil) ? (R2, x, y, rx, ry, a) => blob(R2, x, y, rx * CONTACT, ry * CONTACT, a) : blob);
     cx.globalAlpha = A0;
   }
 

@@ -25,7 +25,7 @@
       'hud.mres': 'RES. MÁGICA',
       'hud.ms': 'VELOCIDADE',
       'step.pos': 'Fique no alcance', 'step.posIn': 'A até {d}', 'step.posOut': 'Mantenha {d} de distância', 'step.posBand': 'Entre {a} e {b}',
-      'step.move': 'Reposicione', 'step.moveAway': 'Afaste-se', 'step.moveToward': 'Aproxime-se',
+      'step.move': 'Reposicione', 'step.moveAway': 'Recue', 'step.moveToward': 'Chegue junto',
     },
   });
 })(typeof window !== 'undefined' ? window : globalThis);

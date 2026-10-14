@@ -240,18 +240,20 @@
   }
 
   // ---- pause
+  // Buttons per mode (IT.App.playKind): free = Free Play; scenario = one picked scenario; ranked / infinite = scored runs (no Restart / Loadout:
+  // a restart would reroll the run, and their loadout screen does not exist). Pure: [i18n key, action, class][].
+  function pauseItems(kind) {
+    const A = IT.App, R = ['ui.resume', () => A.resume(), 'grn'], S = ['pause.settings', () => A.pauseSettings(), 'slt'], Q = ['ui.quit', () => A.go('title'), 'slt dim'];
+    if (kind === 'ranked' || kind === 'infinite') return [R, S, ['ui.endRun', () => A.endRun(), 'slt'], Q];
+    if (kind === 'scenario') return [R, ['pause.restartScn', () => A.restart(), 'slt'], ['pause.scenarios', () => A.go('loadout'), 'slt'], S, Q];
+    return [R, ['ui.restart', () => A.restart(), 'slt'], ['ui.loadout', () => A.go('loadout'), 'slt'], S, ['pause.endSession', () => A.endRun(), 'slt'], Q];
+  }
   function pause() {
     const A = IT.App;
     return h('div', { class: 'scr pause' },
       h('div', { class: 'panel narrow' },
         h('h2', { class: 'ph', text: IT.t('ui.paused') }),
-        h('div', { class: 'menu' },
-          btn('ui.resume', () => A.resume(), 'grn'),
-          btn('ui.restart', () => A.restart(), 'slt'),
-          btn('ui.loadout', () => A.go('loadout'), 'slt'),
-          btn('pause.settings', () => A.pauseSettings(), 'slt'),
-          btn('ui.endRun', () => A.endRun(), 'slt'),
-          btn('ui.quit', () => A.go('title'), 'slt dim')),
+        h('div', { class: 'menu' }, ...pauseItems(A.playKind).map(([k, fn, cls]) => btn(k, fn, cls))),
         h('div', { class: 'ph-hint', text: IT.t('pause.hint') })));
   }
 
@@ -267,5 +269,5 @@
     A.back();
   });
 
-  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, bestMedal, title, pause, shopTab, shopTabInfo };
+  IT.UI = { h, icon, portrait, initTip, toast, clearToasts, set, push, pop, clear, depth, rebuild, btn, langToggle, panel, bestMedal, title, pause, pauseItems, shopTab, shopTabInfo };
 })(typeof window !== 'undefined' ? window : globalThis);

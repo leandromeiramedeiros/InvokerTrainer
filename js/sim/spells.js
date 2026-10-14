@@ -95,9 +95,16 @@
   // Global ground target, delay, pure damage split among units in the area. Scepter: self-cast = Cataclysm.
   function strike(w, c, x, y, r, delay, amount, tr, color) {
     w.emit('fx', { name: 'sunstrikeBeam', x, y, r, delay });
+    // KV vision_distance / vision_duration: flying vision over the target from the cast (sees over trees, cliffs and the pit), lingering past impact.
+    // Its own vision-only thinker (no damage, no danger); fx 'startReveal' is the render key for a plain faint vision ring (no light, no VFX).
+    const vr = val(c, D.sunstrike, 'vision_distance'), vd = val(c, D.sunstrike, 'vision_duration');
+    w.thinker({
+      x, y, r: vr, color: color || '#fc4', team: c.team, fx: 'startReveal', vision: vr, flying: true, linger: vd,
+      upd: (w2, t) => t.age >= t.linger - 1e-9,
+    });
     w.thinker({
       x, y, r, color: color || '#fc4', team: c.team, ability: 'sunstrike',
-      vision: val(c, D.sunstrike, 'vision_distance'), danger: { x, y, r, at: w.t + delay },
+      danger: { x, y, r, at: w.t + delay },
       upd(w, e) {
         if (e.age < delay - 1e-9) return false;
         const hit = foesNear(w, c, e.x, e.y, r);

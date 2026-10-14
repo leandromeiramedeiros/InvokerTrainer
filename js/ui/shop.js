@@ -53,7 +53,9 @@
   }
   const canAfford = (balance, price) => balance >= price;
   IT.ShopFx = { FX: TL, PHASES, isPremium, phaseAt, endAt, tickValue, gemStart, flyPos, createPurchase, canAfford };
-  const reduced = () => { try { return !!(G.matchMedia && G.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } };
+  // The purchase moment always animates: the OS reduced-motion flag (Windows "Animation effects" off is common) used to skip it, leaving a static coin
+  // that just vanished. IT.Shop.reducedFx = true (tests / QA) still forces the instant path.
+  const reduced = () => !!(IT.Shop && IT.Shop.reducedFx);
   const sfx = k => { try { if (IT.Sfx && IT.Sfx.shop) IT.Sfx.shop(k); } catch (e) { /* sound optional */ } };
   // god rays: drawn ONCE (radial streaks fading outward); CSS rotates it
   function raysCanvas(n, col) {

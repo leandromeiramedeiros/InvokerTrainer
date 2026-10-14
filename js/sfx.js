@@ -170,7 +170,7 @@
     try { const s = IT.Settings && IT.Settings.get && IT.Settings.get(); return !s || s.sound !== false; } catch (e) { return true; }
   }
   function darkSkin() {
-    try { const s = IT.Settings && IT.Settings.get && IT.Settings.get(); return !!s && s.heroSkin === 'dark'; } catch (e) { return false; }
+    try { return !!(IT.Art && IT.Art.playerSkin) && IT.Art.playerSkin() === 'dark'; } catch (e) { return false; }   // the Shop's equipped skin
   }
 
   // loop-group handle: several audio loops driven as one

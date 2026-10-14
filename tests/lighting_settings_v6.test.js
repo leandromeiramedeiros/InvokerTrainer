@@ -14,16 +14,20 @@ function rig(raw) {
   return { IT: ctx.IT, store };
 }
 
-test('default lighting is low; old save without the key migrates to low', () => {
-  assert.equal(rig(null).IT.Settings.get().lighting, 'low');
-  assert.equal(rig(JSON.stringify({ bloom: false, castMode: 'normal' })).IT.Settings.get().lighting, 'low');
-  assert.equal(rig('not json').IT.Settings.get().lighting, 'low');
-  assert.equal(rig(JSON.stringify({ lighting: 5 })).IT.Settings.get().lighting, 'low');
+test('default lighting is high + 60 fps; old saves (no gfxVersion) move to high / 60 once', () => {
+  assert.equal(rig(null).IT.Settings.get().lighting, 'high');
+  assert.equal(rig(null).IT.Settings.get().fpsCap, 60);
+  assert.equal(rig(JSON.stringify({ bloom: false, castMode: 'normal' })).IT.Settings.get().lighting, 'high');
+  assert.equal(rig('not json').IT.Settings.get().lighting, 'high');
+  const old = rig(JSON.stringify({ lighting: 'low', fpsCap: 120 })).IT.Settings.get();
+  assert.equal(old.lighting, 'high'); assert.equal(old.fpsCap, 60); assert.equal(old.gfxVersion, 1);
+  const cur = rig(JSON.stringify({ lighting: 'low', fpsCap: 120, gfxVersion: 1 })).IT.Settings.get();
+  assert.equal(cur.lighting, 'low'); assert.equal(cur.fpsCap, 120);   // a choice made after the migration sticks
 });
 
 test('every level is accepted, unknown reads as off', () => {
-  for (const lv of ['off', 'low', 'medium', 'high', 'ultra']) assert.equal(rig(JSON.stringify({ lighting: lv })).IT.Settings.get().lighting, lv);
-  assert.equal(rig(JSON.stringify({ lighting: 'mega' })).IT.Settings.get().lighting, 'off');
+  for (const lv of ['off', 'low', 'medium', 'high', 'ultra']) assert.equal(rig(JSON.stringify({ lighting: lv, gfxVersion: 1 })).IT.Settings.get().lighting, lv);
+  assert.equal(rig(JSON.stringify({ lighting: 'mega', gfxVersion: 1 })).IT.Settings.get().lighting, 'off');
   assert.deepEqual(Array.from(rig(null).IT.Settings.LIGHTING), ['off', 'low', 'medium', 'high', 'ultra']);
 });
 

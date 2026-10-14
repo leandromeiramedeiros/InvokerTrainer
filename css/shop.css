@@ -31,8 +31,11 @@
 .shop-grid{display:flex;flex-wrap:wrap;gap:.8em;justify-content:center;align-content:flex-start;min-height:0;overflow:auto;padding:.2em}
 .shop-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:.35em;padding:.55em .7em .7em;width:calc(48*var(--shop-s) + 1.6em);
   background:linear-gradient(#150d27,#0b0618);border:calc(5*var(--fs)) solid transparent;border-image:var(--orn-mini) 5/calc(5*var(--fs)) round;image-rendering:pixelated}
+.shop-card>.shop-price{margin-top:auto}   /* price + button always sit on the card bottom, whatever the desc length */
 .shop-card.owned{border-image-source:var(--orn-mini-grn)}
-.shop-card.on{border-image-source:var(--orn-mini-gold);box-shadow:0 0 1em #f2c44444}
+.shop-card.on{border-image-source:var(--orn-mini-gold);background:linear-gradient(#2a1a0c,#120a04);box-shadow:0 0 0 calc(3*var(--fs)) #ffd45a,0 0 0 calc(5*var(--fs)) #8a5200,0 0 0 calc(6*var(--fs)) #ffe9a0,0 0 1.4em #f2c444aa,inset 0 0 1.2em #f2c44433}
+/* equipped: thick stepped gold rim (gold / dark bronze / pale gold, pixel steps) + warm card fill, and a gold EQUIPPED pill on the action row */
+.shop-card.on .shop-state.eq{background:#ffd45a;color:#2a1600;padding:.15em .7em;box-shadow:0 0 0 calc(1*var(--fs)) #8a5200;text-shadow:none}
 .shop-card.poor .shop-prev{filter:saturate(.7) brightness(.85)}
 .shop-card.flash::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,transparent,#fff4a888,transparent);animation:shopFlash .8s ease-out both}
 @keyframes shopFlash{from{transform:translateX(-100%);opacity:1}to{transform:translateX(100%);opacity:0}}
@@ -80,4 +83,3 @@
   transform:translate(-50%,0);animation:shopUnl 1.7s ease-out both}
 .shop-unl.prem{color:#fff;text-shadow:0 0 .6em #ffb020,0 0 1.4em #ff6a3d,0 .1em 0 #5a3500;font-size:1.15em}
 @keyframes shopUnl{0%{opacity:0;transform:translate(-50%,10px) scale(.5)}15%{opacity:1;transform:translate(-50%,0) scale(1.25)}28%{transform:translate(-50%,0) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-14px) scale(1)}}
-@media (prefers-reduced-motion:reduce){.shop-act.sq,.shop-card.shake,.shop-card.fx-in,.shop-card.fx-out,.shop-raybox,.shop-raybox .shop-rays,.shop-unl{animation:none!important}.shop-raybox,.shop-unl{display:none}}

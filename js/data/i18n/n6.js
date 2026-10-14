@@ -8,7 +8,7 @@
       'dtier.ian': 'Ian', 'dtier.easy': 'Easy', 'dtier.common': 'Common', 'dtier.hard': 'Hard', 'dtier.bambam': 'Bam-Bam',
     },
     pt: {
-      'title.sandbox': 'Sandbox de Combos', 'hud.rkHint': 'Aja para começar', 'hud.rkTurn': 'TURNO', 'end.reason.turns': 'Os 8 cenários foram jogados',
+      'title.sandbox': 'Treino de Combos', 'hud.rkHint': 'Aja para começar', 'hud.rkTurn': 'TURNO', 'end.reason.turns': 'Os 8 cenários foram jogados',
       'dtier.ian': 'Ian', 'dtier.easy': 'Fácil', 'dtier.common': 'Comum', 'dtier.hard': 'Difícil', 'dtier.bambam': 'Bam-Bam',
     },
   });

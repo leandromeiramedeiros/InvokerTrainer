@@ -11,8 +11,8 @@ Goal: spells and glowing sand are light emitters; nearby sprites/terrain are lit
 - Settings (L5): Lighting Off/Low/Medium/High (+ Ultra, see Key light + Ultra) (#76b: 4 levels; settings.js, default Low; Off = today's 2D cell lights); perf budget 60 fps @1920x1080 with the full tree count: cap lights by distance to the camera, LOD: sprites below 6 px skip normals, tree shadows batched per chunk. Reduced-motion does not affect lighting.
 
 ## Art rules
-- Lights never exceed the orb palette (Quas cyan, Wex magenta, Exort orange), Sun Strike gold, Meteor orange-red, EMP violet, sand gold; intensity so that mid-day lighting is subtle (+15% max) and night is dramatic (+60%).
-- Rim only on units/trees (material 1-2), never on ground; keep readability: HP bars, status rows and text are drawn after lighting.
+- Lights never exceed the orb palette (Quas cyan, Wex magenta, Exort orange), Sun Strike gold, Meteor orange-red, EMP violet, sand gold; intensity so that mid-day lighting is readable (+30% max, Lighting v2 S2; was +15%) and night is dramatic (+90%; was +60%). The rim is not under this cap.
+- Rim only on units/trees (material 1-2), never on ground; v2 S2: a 1-2 px screen-space silhouette-edge rim (below); keep readability: HP bars, status rows and text are drawn after lighting.
 - Fog outside vision stays unlit (fog pass after lighting).
 
 ## Packages
@@ -49,3 +49,7 @@ Problem: with no spell cast there were no emitters, and by day the ambient grid 
   - Ultra: full-res, 48 lights (MAXL 48: 144 + ~10 uniform vectors, inside WebGL2's 224 minimum), rim x1.35, glow x1.4, 3 lights per caster, 400 casters / every visible tree (record cap 600), key 1.1 with 3-copy penumbra, 12-step march over 64 px toward 4 lights + key, 12 normal / silhouette bakes per frame. `lightingCost` warns for high and ultra above 6 ms.
 - Browser check (Chromium webgl2, Free Play day, idle, no orbs): all 5 level shaders compile, no console errors; pixels changed vs Off: low 3.8%, medium 4.7%, high 7%, ultra 8.5% (noise 0.2%); tree / tower / hero shadows fall down-right, longer per level.
 - Perf: last measured ~0.4 ms/frame at High (RTX 5070 Ti, 1080p, before the key light). Ultra adds per-frame: <= 400 x (1 + 3) silhouette draws on a 480x270 canvas, 12 + 12 march taps per ground pixel, 48-light loop: expected a few tenths of a ms more on that GPU; not yet re-measured.
+
+## Lighting v2 S2: silhouette rim + headroom (2026-10-13)
+- Rim (gl.js litFS `uMode` 2, own RGBA8 `texRim`, bound on unit 4 in the final pass; the normal atlases are not sampled in GL): a unit/tree pixel steps 1 and 2 px toward each light (first `RIM_L` = 8 + the key; dominant-axis unit step) and reads the G-buffer: ground or another material (no height test: the pillow dome rises ~5 HZ-px per px from the silhouette) = light-facing silhouette edge (1 px: 1, 2nd px: .5). Colour = light colour mixed 45 % to white x attenuation; key rim uses the sun / moon tint (strength .55 day / .45 night, always on at Medium+); points up to .9 (RIMK, Ultra x1.35). Output is not capped by `lightCap`; FS_MAIN_LIT quantises max-channel strength to 2 levels (< .3 off, < .7 on = .6, else hot = 1) and screen-blends it after the light multiply and glow. The pillow-normal rim (`pow(1-N.z,3)`) is retired; mode 1 is glow only.
+- Headroom: FS_MAIN_LIT ambient is `texture2D(uLight).rgb + dy` (no x1.25; Off keeps its x1.25), `lightCap` 0.3 day / 0.9 night.

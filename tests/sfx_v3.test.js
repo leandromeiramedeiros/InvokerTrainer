@@ -32,6 +32,7 @@ function setup(settings) {
   for (const f of ['js/audio.js', 'js/sfxvoices.js', 'js/sfx.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
   const IT = ctx.IT;
   if (settings) IT.Settings = { get: () => settings };
+  if (settings && settings.heroSkin) IT.Art = { playerSkin: () => settings.heroSkin };   // the equipped skin comes from the Shop (IT.Art.playerSkin)
   const errs = [], played = [];
   for (const k of Object.keys(IT.SFX.defs)) { const o = IT.SFX.defs[k]; IT.SFX.defs[k] = b => { played.push(k); try { o(b); } catch (e) { errs.push(k + ': ' + e.message); } }; }
   const ents = { 1: { id: 1, kind: 'hero', x: 0, y: 0 }, 2: { id: 2, kind: 'dummy', x: 300, y: 0 }, 3: { id: 3, kind: 'spirit', x: 100, y: 0 } };

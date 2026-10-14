@@ -83,7 +83,7 @@
     const h = Math.hypot(dir[0], dir[1]);
     return h > 1e-6 ? shadowXform({ x: dir[0] / h * 1e4, y: dir[1] / h * 1e4, z: 1e4 / len }, { x: 0, y: 0 }) : { sx: 1, shear: 0, len: 0, ky: 0 };
   }
-  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 10, SH_REC = 600;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
+  const SH_MAX = 120, SH_TREES = 40, LC_WIN = 60, LC_WARN = 6, SH_MINPX = 6, SH_MINSC = 0.03, SH_CAND = 14, SH_REC = 600, SH_GAIN = 2.5, SH_BAKE = 16, SH_BAKE_ULTRA = 32;   // default per-frame caps (the live ones are LEVELS[lv].casters / .trees); light candidates per caster; record cap; lighting-cost window (frames) + warn threshold (ms)
 
   // L5: lighting cost = G-buffer taps + shadow pass + present, averaged over LC_WIN lit frames. Logs once if 'high' averages > LC_WARN ms; never downgrades.
   const LC = { avg: 0, n: 0, sum: 0, level: 'off', warned: false };
@@ -222,14 +222,17 @@
     // frames, skins and scaled copies get their own correct normals), same rect, same order. Faint overlays (alpha < .5) and additive draws are skipped.
     let gCv = null, gCx = null, gMat = -1, gBudget = 0, gVis = null, gT = 0;
     // L4: casters recorded by the same drawImage tap (units / trees / buildings, >= 6 px), drawn once the frame's lights are known
-    let shCv = null, shCx = null, sN = 0, sOn = false, sBudget = 0, gFootX = NaN, gFootY = 0, gTree = false, gUnit = false, shDrawn = 0;
-    const sRec = [], sCache = new WeakMap(), bI = [], bS = [];
-    function shCanvas() {
-      if (!shCv) { shCv = document.createElement('canvas'); shCx = shCv.getContext('2d'); }
-      if (shCv.width !== VW || shCv.height !== VH) { shCv.width = VW; shCv.height = VH; shCx = shCv.getContext('2d'); }
-      shCx.imageSmoothingEnabled = false; shCx.setTransform(1, 0, 0, 1, 0, 0); shCx.globalAlpha = 1; shCx.globalCompositeOperation = 'source-over';
-      shCx.clearRect(0, 0, VW, VH);
-      return shCx;
+    let shCv = null, shCx = null, skCv = null, skCx = null, sN = 0, sOn = false, sBudget = 0, gFootX = NaN, gFootY = 0, gTree = false, gUnit = false, shDrawn = 0;
+    const sRec = [], sCache = new WeakMap(), bI = [], bS = [], cI = [], shOut = { p: null, k: null };
+    function shCanvas(key) {    // two view-size coverage canvases (alpha = shadowed): point lights (shCv) and the key light (skCv); cleared per use
+      let cv = key ? skCv : shCv;
+      if (!cv) { cv = document.createElement('canvas'); if (key) skCv = cv; else shCv = cv; }
+      if (cv.width !== VW || cv.height !== VH) { cv.width = VW; cv.height = VH; }
+      const x = cv.getContext('2d');
+      x.imageSmoothingEnabled = false; x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+      x.clearRect(0, 0, VW, VH);
+      if (key) skCx = x; else shCx = x;
+      return x;
     }
     function silhouette(src) {      // black copy of the source (cached per source canvas / atlas); null while the bake budget is spent
       let c = sCache.get(src);
@@ -254,57 +257,61 @@
       let r = sRec[sN++]; if (!r) r = sRec[sN - 1] = {};
       r.src = img; r.sx = sx; r.sy = sy; r.sw = sw; r.sh = sh; r.dx = dx; r.dy = dy; r.dw = dw; r.dh = dh; r.fx = gFootX; r.fy = gFootY; r.tree = gTree; r.unit = gUnit;
     }
-    // u: screen-px light uniforms (strongest first). Per caster: the `per` strongest lights whose radius reaches the foot, one sheared silhouette each,
-    // plus the key light (K = IT.GL.keyLight: sun / moon, fixed direction, K.len px per px of height, K.soft additive copies for a penumbra).
-    // LV.structs false: units only (towers / buildings / trees cast from High up).
+    // u: screen-px light uniforms (strongest first by steady `base` intensity). Per caster: ONE hard key-light (sun / moon, fixed direction, K.len px per
+    // px of height) silhouette into the key canvas, plus the `per` strongest CASTING lights (u.cast; hero orbs never cast) reaching the foot into the point
+    // canvas, each drawn with alpha = its steady contribution at the foot (a*a*base) faded by its margin over the first light left out, so a light entering
+    // or leaving the set grows from zero instead of popping. LV.structs false: units only (towers / buildings / trees cast from High up).
+    // Returns { p: point canvas | null, k: key canvas | null } (reused object).
     function drawShadows(u, per, LV, K) {
-      shDrawn = 0;
+      shDrawn = 0; shOut.p = shOut.k = null;
       const cMax = LV ? LV.casters : SH_MAX, tMax = LV ? LV.trees : SH_TREES, all = !LV || LV.structs !== false;
       const kX = K && K.len > 0 ? keyXform(K.dir, K.len) : null;
-      if (!sN || !per || (!u.count && !kX)) return null;
-      const g = shCanvas(), nL = Math.min(u.count, SH_CAND), P3 = u.pos, R2 = u.rad, ks = kX ? Math.max(1, K.soft | 0) : 0;
-      let trees = 0;
+      if (!sN || !per || (!u.count && !kX)) return shOut;
+      const P3 = u.pos, R2 = u.rad, BS = u.base || null, CA = u.cast || null;
+      let nC = 0;
+      for (let l = 0; l < u.count && nC < SH_CAND; l++) if (!CA || CA[l]) cI[nC++] = l;
+      let gk = null, gp = null, trees = 0;
       for (let i = 0; i < sN && shDrawn < cMax; i++) {
         const r = sRec[i];
         if (!all && !r.unit) continue;
         if (r.tree && trees >= tMax) continue;
-        if (kX) {
-          const sil = silhouette(r.src);
-          if (sil) {
-            g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1 / ks;   // black: alpha adds, so the copies' overlap is the umbra
-            for (let k = 0; k < ks; k++) {
-              const j = ks > 1 ? (k / (ks - 1) - 0.5) * 0.16 : 0;
-              g.setTransform(1, 0, -(kX.shear + j), -(kX.ky - j * 0.5), r.fx, r.fy);
-              g.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
-            }
-            g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
-            shDrawn++;
-          }
-        }
         if (r.tree) trees++;
-        let nb = 0;     // the `per` strongest lights reaching the foot (insertion into bI / bS, strongest first)
-        for (let l = 0; l < nL; l++) {
-          const d = Math.hypot(r.fx - P3[l * 3], r.fy - P3[l * 3 + 1]), rad = R2[l * 2];
+        const sil = silhouette(r.src); if (!sil) continue;
+        if (kX) {
+          if (!gk) gk = shCanvas(true);
+          gk.setTransform(1, 0, -kX.shear, -kX.ky, r.fx, r.fy);
+          gk.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
+          shDrawn++;
+        }
+        let nb = 0;     // the `per`+1 strongest casting lights reaching the foot (insertion into bI / bS, strongest first)
+        for (let q = 0; q < nC; q++) {
+          const l = cI[q], d = Math.hypot(r.fx - P3[l * 3], r.fy - P3[l * 3 + 1]), rad = R2[l * 2];
           if (d >= rad) continue;
-          const a = 1 - d / rad, sc = a * a * R2[l * 2 + 1];
-          if (sc <= SH_MINSC || (nb >= per && sc <= bS[nb - 1])) continue;
-          let j = Math.min(nb, per - 1);
+          const a = 1 - d / rad, sc = a * a * (BS ? BS[l] : R2[l * 2 + 1]);
+          if (sc <= SH_MINSC || (nb > per && sc <= bS[nb - 1])) continue;
+          let j = Math.min(nb, per);
           while (j > 0 && bS[j - 1] < sc) { bI[j] = bI[j - 1]; bS[j] = bS[j - 1]; j--; }
-          bI[j] = l; bS[j] = sc; if (nb < per) nb++;
+          bI[j] = l; bS[j] = sc; if (nb <= per) nb++;
         }
         if (!nb) continue;
-        const sil = silhouette(r.src); if (!sil) continue;
-        for (let k = 0; k < nb; k++) {
-          const l = bI[k];
+        const nxt = nb > per ? bS[per] : 0, nd = Math.min(nb, per);
+        for (let k = 0; k < nd; k++) {
+          const l = bI[k], sc = bS[k];
+          let t = nxt > 0 ? (sc - nxt) / (0.35 * sc) : 1; t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const wgt = Math.min(1, (sc - SH_MINSC) * SH_GAIN * t * t * (3 - 2 * t));
+          if (wgt < 0.02) continue;
           const X = shadowXform({ x: P3[l * 3], y: P3[l * 3 + 1], z: P3[l * 3 + 2] }, { x: r.fx, y: r.fy });
           if (X.len < 0.08) continue;
-          g.setTransform(X.sx, 0, -X.shear, -X.ky, r.fx, r.fy);
-          g.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
+          if (!gp) gp = shCanvas(false);
+          gp.globalAlpha = wgt;
+          gp.setTransform(X.sx, 0, -X.shear, -X.ky, r.fx, r.fy);
+          gp.drawImage(sil, r.sx, r.sy, r.sw, r.sh, r.dx - r.fx, r.dy - r.fy, r.dw, r.dh);
           shDrawn++;
         }
       }
-      g.setTransform(1, 0, 0, 1, 0, 0);
-      return shDrawn ? shCv : null;
+      if (gk) { gk.setTransform(1, 0, 0, 1, 0, 0); shOut.k = skCv; }
+      if (gp) { gp.setTransform(1, 0, 0, 1, 0, 0); gp.globalAlpha = 1; shOut.p = shCv; }
+      return shOut;
     }
     const gCache = new WeakMap(), drawImg = typeof CanvasRenderingContext2D !== 'undefined' ? CanvasRenderingContext2D.prototype.drawImage : null;
     function gCanvas() {
@@ -444,6 +451,7 @@
       if (LT) LT.begin(R);
       const lit = !!(useGL && drawImg && comp.lighting && comp.lighting !== 'off' && LT && LT.enabled && IT.Normals);
       gBudget = lit && comp.lighting === 'ultra' ? 12 : 6;
+      R.sil = lit ? comp.levelInfo() : null;       // shadows.js: which grounded casters already get a silhouette shadow (blob -> small contact shadow)
       fog.update(w, R.fogSnap ? 1 : dtReal, R.camX, R.camY, VW, VH);
       IT.Particles.update(dtReal);
       const tf0 = performance.now();
@@ -491,7 +499,7 @@
       items.sort((a, b) => a.y - b.y);
       if (lit) {     // same order / rects into the G-buffer: tap the scene context's drawImage for the pass
         sceneCx.drawImage = gDraw;
-        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = comp.lighting === 'ultra' ? 12 : 6; gT = 0;
+        sN = 0; sOn = comp.levelInfo().shadows > 0; sBudget = comp.lighting === 'ultra' ? SH_BAKE_ULTRA : SH_BAKE; gT = 0;
         try { for (let i = 0; i < items.length; i++) { const it = items[i]; gMat = gMatOf(it.k); gTree = it.k === 'tree'; gUnit = it.k === 'unit'; gFootY = it.y; gFootX = gTree ? it.a.x - R.camX : NaN; it.fn(it.a, R); } }
         finally { gMat = -1; delete sceneCx.drawImage; }
       } else { sN = 0; for (let i = 0; i < items.length; i++) { const it = items[i]; it.fn(it.a, R); } }
@@ -536,7 +544,8 @@
           const lb = light.buf, n = lb.w * lb.h;
           if (!gVis || gVis.length !== n) gVis = new Uint8Array(n);
           const u = IT.GL.toScreen(LT.uniforms({ x: R.camX * P, y: R.camY * P, w: VW * P, h: VH * P }, comp.levelInfo().lights), P);
-          litArg = { gbuf: gCv, shadow: sOn ? drawShadows(u, comp.levelInfo().shadows, comp.levelInfo(), IT.GL.keyLight(light.night, comp.lighting)) : null, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
+          const sh = sOn ? drawShadows(u, comp.levelInfo().shadows, comp.levelInfo(), IT.GL.keyLight(light.night, comp.lighting)) : null;
+          litArg = { gbuf: gCv, shadow: sh && sh.p, keyShadow: sh && sh.k, u, night: light.night, vis: visMask(gVis, lb.w, lb.h, 4, R.camX, R.camY, fogOn ? (x, y) => fog.sample(x, y) : null) };
           S.dyn = u.count; S.shd = shDrawn; 
         }
         const ok = comp.present(comp.scene, light, glowCv, R.camX, R.camY, !document.body.classList.contains('nobloom'), litArg);

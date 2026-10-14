@@ -8,7 +8,7 @@ test('level table: shadows per caster + march flag', () => {
   const L = GL.LEVELS;
   assert.deepEqual([L.off.shadows, L.low.shadows, L.medium.shadows, L.high.shadows, L.ultra.shadows], [0, 0, 1, 2, 3]);
   assert.deepEqual([L.off.march, L.low.march, L.medium.march, L.high.march, L.ultra.march], [0, 0, 0, 6, 12]);
-  assert.deepEqual([L.high.range, L.high.marchL, L.ultra.range, L.ultra.marchL], [40, 2, 64, 4]);
+  assert.deepEqual([L.high.range, L.high.marchL, L.ultra.range, L.ultra.marchL], [56, 2, 96, 4]);
 });
 
 test('shadowXform: light above, side, distance, height, clamp', () => {
@@ -39,9 +39,23 @@ test('FS_LIT: shadow sampling and a constant-bound 6-step march; GLSL ES 1.00', 
   assert.ok(s.includes('texture2D(uShadow,uv).a') && s.includes('step(mat,.5)'));     // ground only, casters keep their light
   assert.ok(/for\(int k=0;k<6;k\+\+\)/.test(s));
   assert.equal(GL.MARCH_STEPS, 6);
+  assert.ok(s.includes('step(zr+1.,hs)') && !s.includes('(hs-zr)/3.'));              // hard per-pixel occlusion, no ramp
+  assert.equal(GL.SHK, 1.0);
   assert.ok(s.includes('uMarch>.5&&i<2&&mat<.5'));
   assert.ok(s.includes('floor(bs/4.)/63.'));                                          // height channel B >> 2
   // the light loop is still the only i-loop with a break on uN
   assert.deepEqual(s.match(/for\(int i=0;i<[^;]+;/g), ['for(int i=0;i<' + GL.MAXL + ';']);
   for (const k of Object.keys(S)) if (k !== 'FS_LIT') assert.ok(!/uShadow|march/.test(S[k]), k);   // Off path untouched
+});
+
+test('FS_MAIN_LIT: key shadow = hard mask after the Bayer quantise; ground only, vision scaled, own sampler units', () => {
+  const m = S.FS_MAIN_LIT, q = m.indexOf('floor(min(l,1.)*kc*9.+bay)'), k = m.indexOf('if(uKS>0.)');
+  assert.ok(q > 0 && k > q, 'mask applied after the quantise');
+  assert.ok(m.includes('uSk') && m.includes('uG') && /col\*=1\.-uKS\*max\(k0,k1\*\.5\)\*gm\*texture2D\(uLight,c\)\.a/.test(m));
+  assert.ok(m.includes('step(.5,texture2D(uSk,c).a)'));                              // binary coverage, no dither
+  assert.equal((m.match(/texture2D\(uSk/g) || []).length, 5);                        // centre + 4 neighbours
+  assert.ok(!/uShadow|march/.test(m));
+  assert.deepEqual([GL.SUN.sh, GL.MOON.sh], [0.42, 0.55]);
+  const lit = S.FS_LIT;
+  assert.ok(lit.includes('float sh=' + GL.SHK.toFixed(6) + '*sa'));                  // point-light shadows at full strength
 });

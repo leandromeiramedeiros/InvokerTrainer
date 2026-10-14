@@ -249,6 +249,8 @@
       App.go('title');
     },
     get state() { return state; },
+    // pause-menu kind of the match in play: 'ranked' | 'infinite' | 'scenario' (one picked scenario) | 'free' (Free Play); null outside a match
+    get playKind() { if (!g) return null; const m = g.mode; return m === 'ranked' || m === 'infinite' ? m : g.opts && g.opts.scenario ? 'scenario' : 'free'; },
   };
 
   const hooks = {
@@ -368,5 +370,10 @@
   IT.dev = { w: null, hero: null, cam: null, R: null, paused: false, render: devRender, debug: false };
   IT.hooks = hooks;
   App.go('title');
+  // dev: index.html?scn=<id>[&diff=<tier>] jumps straight into one scenario (review.html's Play link)
+  try {
+    const q = new URLSearchParams(location.search), id = q.get('scn'), sc = id && IT.SCENARIOS.get(id);
+    if (sc) { const o = IT.UI.LoadoutScreen.scenarioOpts(sc.id); if (q.get('diff')) o.diff = q.get('diff'); App.start(o); }
+  } catch (e) { console.warn('scn param', e); }
   requestAnimationFrame(frame);
 })(window);

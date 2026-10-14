@@ -54,6 +54,19 @@
     for (const m of MULT) cast(map, vis, cx, cy, 1, 1.0, 0.0, r, r2, m[0], m[1], m[2], m[3]);
   }
 
+  // Flying vision (Sun Strike's vision thinker, source flag `flying`): every tile inside the radius is seen, whatever stands between: no shadowcast
+  // occlusion, no elevation or pit rule. Map bounds still apply.
+  function flyShadow(map, vis, x, y, radius) {
+    const cx = map.toTile(x), cy = map.toTile(y), rt = radius / map.tile, r = Math.ceil(rt), r2 = (rt + 0.5) * (rt + 0.5);
+    for (let dy = -r; dy <= r; dy++) {
+      const Y = cy + dy; if (Y < 0 || Y >= map.h) continue;
+      for (let dx = -r; dx <= r; dx++) {
+        const X = cx + dx; if (X < 0 || X >= map.w) continue;
+        if (dx * dx + dy * dy <= r2) vis[Y * map.w + X] = 1;
+      }
+    }
+  }
+
   // true if no sight-blocking tile lies strictly between the endpoint tiles (grid traversal)
   function los(map, ax, ay, bx, by) {
     if (map.pitMask && !pitOk(map, ax, ay, bx, by)) return false;   // v6 item 55: the pit wall of vision
@@ -100,6 +113,7 @@
     if (target.building) return true;
     if (isHidden(target) && !revealed(target) && !trueSighted(w, viewer.team, target)) return false;
     if (Math.hypot(target.x - viewer.x, target.y - viewer.y) > viewer.vision) return false;
+    if (viewer.flying) return true;   // flying vision: no elevation / line-of-sight / pit rule
     const m = w.map; if (!m) return true;
     if (m.elevAt && m.elevAt(target.x, target.y) > m.elevAt(viewer.x, viewer.y)) return false;   // high ground hides its units from below
     return los(m, viewer.x, viewer.y, target.x, target.y);
@@ -134,7 +148,7 @@
       for (const e of w.ents) {
         if (e.dead || e.team !== 0 || !(e.vision > 0)) continue;
         if (e.kind !== 'thinker' && e.hp != null && e.hp <= 0) continue;
-        src.push(e); shadow(m, vis, e.x, e.y, e.vision);
+        src.push(e); if (e.flying) flyShadow(m, vis, e.x, e.y, e.vision); else shadow(m, vis, e.x, e.y, e.vision);
       }
     }
     for (const e of w.ents) {
@@ -144,7 +158,7 @@
       else if (!v) {
         const tx = m.toTile(e.x), ty = m.toTile(e.y);
         v = tx >= 0 && ty >= 0 && tx < m.w && ty < m.h && vis[ty * m.w + tx] === 1;
-        if (!v) for (const s of src) if (Math.hypot(e.x - s.x, e.y - s.y) <= SIGHT && (!m.elevAt || m.elevAt(e.x, e.y) <= m.elevAt(s.x, s.y)) && pitOk(m, s.x, s.y, e.x, e.y)) { v = true; break; }
+        if (!v) for (const s of src) if (Math.hypot(e.x - s.x, e.y - s.y) <= SIGHT && (s.flying || ((!m.elevAt || m.elevAt(e.x, e.y) <= m.elevAt(s.x, s.y)) && pitOk(m, s.x, s.y, e.x, e.y)))) { v = true; break; }
       }
       if (v && !e.building && isHidden(e) && !revealed(e) && !trueSighted(w, 0, e)) v = false;   // invisible: needs detection
       const prev = !!e.visible;
@@ -159,5 +173,5 @@
     if (w._visT === undefined || w.t - w._visT >= per - 1e-9) { w._visT = w.t; update(w); }
   });
 
-  IT.Vision = { los, canSee, trueSighted, teamSees, visibleAt, update, shadow, isHidden, pitOk, pitSees, SIGHT };
+  IT.Vision = { los, canSee, trueSighted, teamSees, visibleAt, update, shadow, flyShadow, isHidden, pitOk, pitSees, SIGHT };
 })(typeof window !== 'undefined' ? window : globalThis);
