@@ -236,6 +236,7 @@
         btn('ui.settings', () => A.go('settings'), 'slt sm')),
       h('div', { class: 'lang-row' }, langToggle()),
       shopTab(),    // v6 item 15 + #72: SHOP side tab (opens js/ui/shop.js)
+      IT.Shop ? h('button', { type: 'button', class: 'devcoins', onclick: () => IT.Shop.grant(9999) }, '+9999') : null,   // DEV: free points
       h('div', { class: 'foot', text: IT.t('title.hint') }));
   }
 
